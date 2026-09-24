@@ -1,21 +1,29 @@
-# Handover — steadyhand
+# Handover: steadyhand
 
-**Updated:** 2026-09-24 06:05 UTC
-**State:** local repo only (nothing on GitHub yet). Branches: `main` (b8820e6, spec commit), `develop` (same commit).
+**Updated:** 2026-09-24 06:11 UTC
+**Local:** `~/Developer/Repos/steadyhand`, branches `main` and `develop` at the same commit (licence + README on top of the spec).
+**GitHub:** https://github.com/ShydenMcM/steadyhand. Public, created 2026-09-24, **still empty: nothing has been pushed yet** (see step 1).
 
 ## Done
-- Brainstorming for sub-project A is complete and every design section is approved (decisions are recorded in the memory file `project-trading-bot.md`).
-- Spec: `docs/superpowers/specs/2026-09-24-steadyhand-core-design.md`, reviewed to zero (3 passes, logged in Appendix B) and committed on `main`.
+- Brainstorming for sub-project A is complete. Every design section is approved, and the decisions are recorded in the memory file `project-trading-bot.md` (steadyhand's own memory folder).
+- Spec `docs/superpowers/specs/2026-09-24-steadyhand-core-design.md` was reviewed to zero (Appendix B). **Operator approved it on 2026-09-24** ("yes do it").
+- Apache-2.0 `LICENSE` and a design-phase `README.md` are committed.
+- The GitHub repo is created. Dependabot alerts are ON, automated security fixes are enabled=true paused=false, and private vulnerability reporting is ON. All three were read back after enabling.
 
-## Waiting on Shyden
-1. Review the spec and approve it or request changes.
-2. OP-2: approve creating the public repo `ShydenMcM/steadyhand` plus a Projects board.
+## Blocked: needs Shyden
+**The agent cannot push.** `~/.claude/scripts/github-app/git_credential.py` only lets an agent session push to repos that have the agent App installed, and it refuses by design (`quit=1`, never a fallback). Do not work around it. Either:
+- **(a)** Shyden pushes from a normal terminal tab, not a Claude session:
+  `cd ~/Developer/Repos/steadyhand && git push -u origin main develop`
+- **(b)** Shyden installs the agent App on `ShydenMcM/steadyhand`, if that App can be installed on a personal account.
 
-## Resume steps (cold session)
-1. `cd ~/Developer/Repos/steadyhand && git log --oneline -3` should show b8820e6.
-2. If Shyden asked for changes: edit the spec, run review passes to zero again, log them in Appendix B, commit.
-3. Once the spec is approved: invoke `superpowers:writing-plans` for **M1 Foundations** (§13). Review that plan to zero, then self-approve it (global rule).
-4. Once OP-2 is approved: `gh repo create ShydenMcM/steadyhand --public --license apache-2.0` (**note: the license flag conflicts with an existing local repo**, so add the LICENSE file locally instead and use `--source . --push`). Push `main` and `develop`, set the default branch to `develop`, add branch protection, enable Dependabot alerts and security updates and read them back, and create the Projects board with M1 stories carrying full acceptance criteria.
-5. Research-first tasks before M2: T-RULES, T-TAX, T-LQ45, T-PAY (§12).
+## Resume steps (cold session, started INSIDE this folder)
+1. Check the push landed: `git ls-remote --heads origin` should list `main` and `develop`. If not, stop and ask Shyden (see Blocked above).
+2. Set the default branch to `develop`: `gh repo edit ShydenMcM/steadyhand --default-branch develop`, then read it back.
+3. Branch protection on `main` and `develop`: require a PR, no force pushes, no deletions. **Do not add required status checks yet.** A CI job must exist on `develop` before it can be required, so add them in M1 after the CI PR merges, with `strict: true`, then re-read the protection.
+4. Create the Projects board on the ShydenMcM account (`gh project create --owner ShydenMcM --title steadyhand`), link it to the repo, and **assert the board's TITLE before any write**.
+5. Invoke `superpowers:writing-plans` for **M1 Foundations** (spec §13). Review that plan to zero, then self-approve it. Then file M1 stories on the board, each with full acceptance criteria, before any code.
+6. Research tasks before M2: T-RULES, T-TAX, T-LQ45, T-PAY (spec §12).
 
-Research notes (temporary, may be gone): the session scratchpad file `research-indonesia-trading.md`. Its key findings and sources are already in spec §3 and Appendix A.
+## Notes
+- This is a personal project: not Shyden Ltd, not ShyTalk. Never touch the ShyTalk board or roadmap.
+- Separately, `~/CLAUDE.md` (the ShyTalk context) was moved to `~/Developer/Repos/ShyTalk/CLAUDE.md`. It is uncommitted there, and committing it is a job for a ShyTalk session. Nothing to do here.
