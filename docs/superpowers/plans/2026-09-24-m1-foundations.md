@@ -694,7 +694,7 @@ Expected: `git status --short` shows only the files named in this task.
 - [ ] **Step 12: Push, open the PR, verify, merge**
 
 Ask Shyden to run `git push -u origin m1/s1-workspace-ci`, then check that it landed with `git ls-remote --heads origin m1/s1-workspace-ci`. Open the PR:
-`gh pr create --base develop --head m1/s1-workspace-ci --title "S1: workspace, quality gates and CI" --body "Refs #<S1 issue>"`. Follow **Merging a story**. All five jobs must appear by name: `lint`, `test (py3.12)`, `test (py3.13)`, `audit` and `build`.
+`gh pr create --base develop --head m1/s1-workspace-ci --title "S1: workspace, quality gates and CI" --body "Refs #1"`. Follow **Merging a story**. All five jobs must appear by name: `lint`, `test (py3.12)`, `test (py3.13)`, `audit` and `build`.
 
 - [ ] **Step 13: Require the five checks on `develop` and `main`, then read them back**
 
@@ -991,7 +991,7 @@ Record each mutation and its observed result in the PR body.
 
 - [ ] **Step 8: Push, PR, verify, merge**
 
-Ask Shyden to run `git push -u origin m1/s2-supply-chain`, and confirm it with `git ls-remote`. Open the PR into `develop` with `Refs #<S2 issue>` and follow **Merging a story**.
+Ask Shyden to run `git push -u origin m1/s2-supply-chain`, and confirm it with `git ls-remote`. Open the PR into `develop` with `Refs #2` and follow **Merging a story**.
 
 ---
 
@@ -1461,7 +1461,7 @@ Expected: all pass, 100% branch coverage including `money.py`, and ruff and mypy
 git add packages/steadyhand/src/steadyhand/money.py tests/engine/test_money.py
 git commit -m "feat(engine): Money in integer minor units with explicit rounding (S3)"
 ```
-Ask Shyden to run `git push -u origin m1/s3-money`, and confirm with `git ls-remote`. Open the PR with `Refs #<S3 issue>` and follow **Merging a story**.
+Ask Shyden to run `git push -u origin m1/s3-money`, and confirm with `git ls-remote`. Open the PR with `Refs #3` and follow **Merging a story**.
 
 ---
 
@@ -2303,7 +2303,7 @@ Expected: all pass, 100% branch coverage, and ruff and mypy are clean.
 git add packages/steadyhand/src/steadyhand/_validate.py packages/steadyhand/src/steadyhand/types.py tests/engine/test_validate.py tests/engine/test_types.py
 git commit -m "feat(engine): self-validating trading value types (S4)"
 ```
-Ask Shyden to run `git push -u origin m1/s4-types`, and confirm with `git ls-remote`. Open the PR with `Refs #<S4 issue>` and follow **Merging a story**.
+Ask Shyden to run `git push -u origin m1/s4-types`, and confirm with `git ls-remote`. Open the PR with `Refs #4` and follow **Merging a story**.
 
 ---
 
@@ -3066,7 +3066,7 @@ Expected: all pass, 100% branch coverage including `portfolio.py`, and ruff and 
 git add packages/steadyhand/src/steadyhand/portfolio.py tests/engine/test_portfolio.py tests/engine/test_portfolio_properties.py
 git commit -m "feat(engine): immutable cash-only Portfolio with T+2 proceeds (S5)"
 ```
-Ask Shyden to run `git push -u origin m1/s5-portfolio`, and confirm with `git ls-remote`. Open the PR with `Refs #<S5 issue>` and follow **Merging a story**.
+Ask Shyden to run `git push -u origin m1/s5-portfolio`, and confirm with `git ls-remote`. Open the PR with `Refs #5` and follow **Merging a story**.
 
 ---
 
@@ -3396,7 +3396,7 @@ In `tests/engine/test_protocols.py`, change `_MinimalRules.lot_size` to `-> str`
 
 - [ ] **Step 7: Push, PR, verify, merge**
 
-Ask Shyden to run `git push -u origin m1/s6-protocols`, and confirm with `git ls-remote`. Open the PR with `Refs #<S6 issue>` and follow **Merging a story**.
+Ask Shyden to run `git push -u origin m1/s6-protocols`, and confirm with `git ls-remote`. Open the PR with `Refs #6` and follow **Merging a story**.
 
 ---
 
@@ -3894,7 +3894,7 @@ Record each result in the PR body.
 
 - [ ] **Step 8: Push, PR, verify, merge**
 
-Ask Shyden to run `git push -u origin m1/s7-meta-guards`, and confirm with `git ls-remote`. Open the PR with `Refs #<S7 issue>` and follow **Merging a story**.
+Ask Shyden to run `git push -u origin m1/s7-meta-guards`, and confirm with `git ls-remote`. Open the PR with `Refs #7` and follow **Merging a story**.
 
 ---
 
@@ -4204,7 +4204,7 @@ Expected: all pass, and `test_supply_chain.py` now counts the three `uses` of `p
 git add scripts/set_dev_version.py tests/scripts/test_set_dev_version.py .github/workflows/ci.yml pyproject.toml
 git commit -m "ci: publish develop to TestPyPI as X.Y.Z.devN and verify the install (S8)"
 ```
-Confirm OP-1 with Shyden (`AskUserQuestion`), ask for the push, open the PR with `Refs #<S8 issue>`, and follow **Merging a story**. After the merge, find the push run by SHA: `gh run list --branch develop --json databaseId,headSha,status --limit 5`, and match `headSha` to `git rev-parse origin/develop` yourself. Poll `gh run view <id> --json status,jobs` until `status` is `completed`. Then read every job by name. Expected: all six are `success`, including the `Verify both packages install from TestPyPI` step. Open `https://test.pypi.org/project/steadyhand/` and `https://test.pypi.org/project/steadyhand-idx/` and check that the run's version is listed.
+Confirm OP-1 with Shyden (`AskUserQuestion`), ask for the push, open the PR with `Refs #8`, and follow **Merging a story**. After the merge, find the push run by SHA: `gh run list --branch develop --json databaseId,headSha,status --limit 5`, and match `headSha` to `git rev-parse origin/develop` yourself. Poll `gh run view <id> --json status,jobs` until `status` is `completed`. Then read every job by name. Expected: all six are `success`, including the `Verify both packages install from TestPyPI` step. Open `https://test.pypi.org/project/steadyhand/` and `https://test.pypi.org/project/steadyhand-idx/` and check that the run's version is listed.
 
 From this task on, every merge into `develop` is a deploy, and it is verified the same way.
 
