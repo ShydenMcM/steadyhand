@@ -1,6 +1,6 @@
 # steadyhand — Sub-project A: Core Engine, IDX Rules, Backtester and Paper Trading
 
-- **Status:** Draft for operator review
+- **Status:** Approved by the operator on 2026-09-24
 - **Date:** 2026-09-24
 - **Owner:** Shyden (personal project, github.com/ShydenMcM/steadyhand)
 - **Licence:** Apache-2.0
@@ -152,7 +152,7 @@ class Broker(Protocol):
    - the newest bar is not dated to the most recent IDX trading day (stale data);
    - any held stock is missing a bar;
    - a close-to-close move lies outside that day's auto-reject band and no split explains it (impossible data);
-   - a price or volume is non-positive or malformed.
+   - a price is non-positive, or a price or volume is malformed or negative. A zero volume is valid data (the stock did not trade), and §5.1 rejects orders on that day.
 
    Good cached data is never overwritten by data that fails validation.
 2. **Corporate actions.**
@@ -193,7 +193,7 @@ A halt is recorded in state and survives a restart. `resume` requires the operat
 
 ### 6.2 Sizing
 
-- **`CompoundingSizer` (default):** position sizes are computed from **current** portfolio value, meaning settled cash plus holdings at the last close, times the target weights. Gains and reinvested dividends increase future sizes automatically. This is the "start small, reinvest profits" behaviour.
+- **`CompoundingSizer` (default):** position sizes are computed from **current** portfolio value, meaning all cash (settled and unsettled) plus holdings at the last close, times the target weights. Only settled cash can be spent, so a buy is still cut to the settled cash available. The same value is used for the daily loss limit and drawdown, so selling a stock never looks like a loss while its proceeds settle. Gains and reinvested dividends increase future sizes automatically. This is the "start small, reinvest profits" behaviour.
 - **Top-ups:** `monthly_contribution` in config adds cash on the first trading day of each month, in backtest and paper modes. It is optional and defaults to 0.
 - **Reinvestment:** dividend cash is spent on the next day's targets. Its deadline tag means income reports can show how much dividend cash still needs reinvesting for the tax exemption (once T-TAX confirms the rule).
 
@@ -324,7 +324,7 @@ Every decision writes one plain-English line, stored in the state DB and shown i
 
 ### 9.8 Disclaimers
 
-The README, every strategy guide, `init` and every report footer carry the disclaimer: *steadyhand is example software you run yourself; it is not financial advice; you can lose money.* The disclaimer is written once in a shared constant and tested for presence (§10.1).
+The README, every package README, every strategy guide, `init` and every report footer carry the disclaimer, verbatim: *steadyhand is example software that you run yourself, on your own account, and you make your own decisions with it. It is not financial advice. You can lose money.* It is written once, in the constant `steadyhand.DISCLAIMER`, and tested for presence (§10.1).
 
 ## 10. Testing
 
@@ -398,13 +398,13 @@ TDD throughout: a test is written, and shown failing, before any production code
 
 ## 13. Implementation milestones (one plan each)
 
-1. **M1 Foundations:** repo, CI, meta-guards, supply chain, `money`, `types`, `portfolio`, `MarketRules`/`DataSource`/`Broker` protocols.
+1. **M1 Foundations:** repo, CI, meta-guards, supply chain, `money`, `types`, `portfolio`, `MarketRules`/`DataSource`/`Broker` protocols, and TestPyPI dev publishing from `develop` (§11).
 2. **M2 IDX rules and data:** `rules.py` and data files (after T-RULES), calendar, Yahoo source, cache, fixtures.
 3. **M3 Engine and backtester:** `run_day`, SimulatedBroker, RiskManager, CompoundingSizer, corporate actions, metrics, golden tests, performance test.
 4. **M4 Income:** dividend ledger, income goal tracker, projection, calendar.
 5. **M5 Paper trading and CLI:** state DB, idempotency and atomicity, halts and resume, all CLI commands, CLI journeys.
 6. **M6–M9 Strategy waves 1–4**, each with its guides.
-7. **M10 First release:** docs, TestPyPI → PyPI.
+7. **M10 First release:** docs, and the first PyPI release from `main`.
 
 ## 14. Acceptance criteria for sub-project A
 
@@ -444,3 +444,5 @@ TDD throughout: a test is written, and shown failing, before any production code
 - **Pass 1 (2026-09-24):** placeholder scan found 0. Findings, all fixed: (1) engine dependency rule didn't separate runtime from dev deps; (2) the performance-test data source was ambiguous; (3) AC1 needed live data with no CI equivalent; (4) "uncut dividends" was undefined; (5–7) top-N defaults were unspecified for high-yield, momentum-rotation and low-volatility; (8–9) Dependabot ecosystem was ambiguous ("uv (or pip)").
 - **Pass 2 (2026-09-24):** 1 finding, fixed: §8 still referred to "N" after pass 1 removed it.
 - **Pass 3 (2026-09-24):** mechanical checks: placeholders 0; leftover `top-N`/`pip` ambiguity 0; every §12 ID referenced in the body exists in §12 (T-TAX, T-RULES, T-LQ45, T-PAY, OP-1..3); every milestone in §13 maps to spec sections; the 11 strategies in §8 match AC2's count. Full read: **0 findings. Loop closed.**
+- **Pass 4 (2026-09-24, while planning M1):** 5 findings, all fixed: (1) §5 step 1 said a non-positive volume stops the run, which contradicts §5.1 rejecting orders on a zero-volume day; zero volume is now valid data. (2) §6.2 defined portfolio value as settled cash plus holdings, so every sale would look like a loss to the daily loss limit until its proceeds settled; it is now all cash plus holdings, with spending still limited to settled cash. (3) §9.8 paraphrased the disclaimer; it now quotes the exact text of `steadyhand.DISCLAIMER`, which is the README's wording. (4) §13 put TestPyPI publishing in M10, against §11 and the rule that every `develop` merge deploys; it moves to M1. (5) The status line still said draft.
+- **Pass 5 (2026-09-24):** mechanical: grep for every term pass 4 touched (settled cash, portfolio value, TestPyPI, non-positive, the disclaimer, zero volume, M10, Draft) found no contradicting wording left. Full read of §5, §6, §9.8, §11, §13 and §14: **0 findings. Loop closed.**
