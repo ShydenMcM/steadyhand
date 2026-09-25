@@ -83,7 +83,7 @@ Each task below is one story on the `steadyhand` board, filed with its acceptanc
 
 **Merging a story (every task):** push the branch, and open a PR into `develop` whose body says `Refs #<story>` (never `close`/`fix`/`resolve` next to a number). Write the PR head SHA to a file, so it is never retyped: `gh pr view <pr> --json headRefOid --jq .headRefOid > "${TMPDIR}/head-sha"`. Find the CI run for exactly that SHA with `gh run list --branch <branch> --json databaseId,headSha,status,conclusion`, matching `headSha` against the file yourself. Poll `gh run view <id> --json status,jobs` until `status` is `completed`, then read every job by name: each must be `success`. `gh pr view --json statusCheckRollup` is not enough on its own, because it carries no commit SHA per check. Only then merge with `gh pr merge <pr> --squash --delete-branch`, and close the story with a comment linking the PR.
 
-**Pushing:** agent sessions cannot push to `ShydenMcM/steadyhand` (see `HANDOVER.md`). Until that changes, each "push" step means asking Shyden to run the printed `git push` command in a normal terminal.
+**Pushing:** agent sessions push, open PRs and merge as the `steadyhand-agent` GitHub App (#10). The credential helper and the `gh` router pick it for this repository. The App may **read** administration but not write it, so two steps are Shyden's: Task 1 step 13 (required checks) and Task 8 step 1 (the `testpypi` environment). For each, write the step's commands to a file, print its path, and ask him to run `! env -u CLAUDECODE bash <path>`, then read the result back as the agent. The board stays on the operator's login, because GitHub gives an App no permission for a board a user owns.
 
 ---
 
@@ -697,6 +697,8 @@ Ask Shyden to run `git push -u origin m1/s1-workspace-ci`, then check that it la
 `gh pr create --base develop --head m1/s1-workspace-ci --title "S1: workspace, quality gates and CI" --body "Refs #1"`. Follow **Merging a story**. All five jobs must appear by name: `lint`, `test (py3.12)`, `test (py3.13)`, `audit` and `build`.
 
 - [ ] **Step 13: Require the five checks on `develop` and `main`, then read them back**
+
+Shyden runs the first loop, which writes administration. The App cannot (see **Pushing**, #10). The read-back loop runs as the agent.
 
 ```bash
 for branch in develop main; do
@@ -3919,6 +3921,8 @@ Ask Shyden to run `git push -u origin m1/s7-meta-guards`, and confirm with `git 
 - Produces: `set_dev_version(run_number: int, engine: Path | None = None, idx: Path | None = None) -> str`, `main(argv: list[str]) -> int` and `VersionError(RuntimeError)`.
 
 - [ ] **Step 1: Branch, extend mypy, and create the GitHub environment**
+
+Shyden runs the `PUT` and the `POST` below, which write administration. The App cannot (see **Pushing**, #10). The final `GET` runs as the agent.
 
 ```bash
 git switch develop && git pull && git switch -c m1/s8-dev-publish
