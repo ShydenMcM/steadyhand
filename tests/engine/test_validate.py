@@ -1,10 +1,11 @@
 """The shared checks refuse the look-alike types that Python's subclassing lets through."""
 
+import re
 from datetime import UTC, date, datetime
 
 import pytest
 
-from steadyhand._validate import require_date, require_int
+from steadyhand._validate import require_date, require_int, require_type
 
 
 def test_require_date_accepts_a_date() -> None:
@@ -34,3 +35,28 @@ def test_require_int_refuses_one_below_the_minimum() -> None:
 def test_require_int_refuses_non_ints(value: object, name: str) -> None:
     with pytest.raises(TypeError, match=f"quantity must be an int, got {name}"):
         require_int(value, "quantity", minimum=1)
+
+
+def test_require_type_accepts_an_instance() -> None:
+    require_type("BBRI", str, "symbol")
+    require_type(True, bool, "accepted")
+
+
+@pytest.mark.parametrize(
+    ("value", "expected", "message"),
+    [
+        (None, str, "symbol must be a str, got NoneType"),
+        (1, bool, "symbol must be a bool, got int"),
+        ("x", date, "symbol must be a date, got str"),
+    ],
+)
+def test_require_type_names_the_field_and_the_type(
+    value: object, expected: type, message: str
+) -> None:
+    with pytest.raises(TypeError, match=f"^{re.escape(message)}$"):
+        require_type(value, expected, "symbol")
+
+
+def test_require_type_uses_an_before_a_vowel() -> None:
+    with pytest.raises(TypeError, match=r"^order must be an int, got str$"):
+        require_type("1", int, "order")

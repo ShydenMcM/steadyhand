@@ -1,6 +1,9 @@
 """Portfolio: an immutable cash ledger plus positions, with T+2 on sale proceeds."""
 
+import re
+from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 import pytest
 
@@ -258,3 +261,37 @@ class TestDirectConstruction:
     def test_movement_dates_refuse_datetime(self) -> None:
         with pytest.raises(TypeError, match="movement day must be a date"):
             CashMovement(datetime(2026, 1, 5, tzinfo=UTC), MovementKind.DEPOSIT, rp(1), D0)
+
+
+def wrong(value: object) -> Any:  # noqa: ANN401 - hands a deliberately mistyped value past mypy
+    """Mark the argument a test passes with the wrong type on purpose."""
+    return value
+
+
+class TestFieldTypes:
+    """A snapshot rebuilt from stored data refuses wrong types where they enter (#21)."""
+
+    @pytest.mark.parametrize(
+        ("build", "message"),
+        [
+            (
+                lambda: CashMovement(D0, wrong("deposit"), rp(1), D0),
+                "kind must be a MovementKind, got str",
+            ),
+            (
+                lambda: CashMovement(D0, MovementKind.DEPOSIT, wrong(1), D0),
+                "amount must be a Money, got int",
+            ),
+            (lambda: Portfolio(wrong("IDR")), "currency must be a Currency, got str"),
+            (lambda: Portfolio(IDR, wrong([])), "positions must be a tuple, got list"),
+            (lambda: Portfolio(IDR, (), wrong([])), "ledger must be a tuple, got list"),
+            (lambda: Portfolio(IDR, wrong(("BBRI",))), "position must be a Position, got str"),
+            (
+                lambda: Portfolio(IDR, (), wrong((1,))),
+                "ledger entry must be a CashMovement, got int",
+            ),
+        ],
+    )
+    def test_a_wrong_type_is_refused(self, build: Callable[[], object], message: str) -> None:
+        with pytest.raises(TypeError, match=f"^{re.escape(message)}$"):
+            build()

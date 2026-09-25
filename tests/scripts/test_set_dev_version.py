@@ -70,10 +70,29 @@ def test_refuses_an_idx_without_the_engine_dependency_line(copies: tuple[Path, P
     assert project(engine)["version"] == "0.1.0"  # nothing is written unless both rewrite
 
 
-@pytest.mark.parametrize("argv", [["set_dev_version.py"], ["set_dev_version.py", "x"]])
-def test_main_refuses_bad_usage(argv: list[str], capsys: pytest.CaptureFixture[str]) -> None:
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["set_dev_version.py"],
+        ["set_dev_version.py", "x"],
+        # Unicode digits: isdigit() accepts both; int() rejects one and silently reads the other.
+        ["set_dev_version.py", "\u00b2"],
+        ["set_dev_version.py", "\u0661"],
+    ],
+)
+def test_main_refuses_bad_usage(
+    argv: list[str],
+    copies: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Point the script at copies: a regression here must never rewrite the real pyprojects.
+    monkeypatch.setattr(set_dev_version, "ENGINE", copies[0])
+    monkeypatch.setattr(set_dev_version, "IDX", copies[1])
     assert main(argv) == 2
     assert "usage: set_dev_version.py <run-number>" in capsys.readouterr().err
+    assert project(copies[0])["version"] == "0.1.0"
+    assert project(copies[1])["version"] == "0.1.0"
 
 
 def test_main_prints_the_version(

@@ -22,3 +22,12 @@ def require_int(value: object, what: str, *, minimum: int) -> None:
     if value < minimum:
         msg = f"{what} must be at least {minimum}, got {value}"
         raise ValueError(msg)
+
+
+def require_type(value: object, expected: type, what: str) -> None:
+    """Raise ``TypeError`` unless *value* is an instance of *expected*, naming the field."""
+    if not isinstance(value, expected):
+        name = expected.__name__
+        article = "an" if name[0].lower() in "aeiou" else "a"
+        msg = f"{what} must be {article} {name}, got {type(value).__name__}"
+        raise TypeError(msg)

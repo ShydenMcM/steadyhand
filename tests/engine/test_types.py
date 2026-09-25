@@ -1,7 +1,10 @@
 """Value types validate themselves on construction, so bad data fails where it enters."""
 
+import re
+from collections.abc import Callable
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
@@ -75,6 +78,10 @@ class TestInstrument:
     def test_refuses_a_non_string_symbol(self) -> None:
         with pytest.raises(TypeError, match="symbol must be a str, got NoneType"):
             Instrument(None, "IDX", IDR)  # type: ignore[arg-type]
+
+    def test_refuses_a_non_currency_currency(self) -> None:
+        with pytest.raises(TypeError, match="currency must be a Currency, got str"):
+            Instrument("BBRI", "IDX", "IDR")  # type: ignore[arg-type]
 
     def test_refuses_a_non_string_market(self) -> None:
         with pytest.raises(TypeError, match="market must be a str, got int"):
@@ -175,6 +182,10 @@ class TestCorporateActions:
         ):
             OtherAction(bbri(), DAY, "  ")
 
+    def test_other_action_refuses_a_non_string_description(self) -> None:
+        with pytest.raises(TypeError, match="description must be a str, got NoneType"):
+            OtherAction(bbri(), DAY, None)  # type: ignore[arg-type]
+
     def test_other_action_keeps_its_description(self) -> None:
         assert OtherAction(bbri(), DAY, "rights issue 1:4").description == "rights issue 1:4"
 
@@ -199,6 +210,11 @@ class TestOrders:
     def test_a_rejection_must_say_why(self) -> None:
         with pytest.raises(ValueError, match="a rejected buy order for BBRI must say why"):
             OrderAck(order(), accepted=False, reason=" ")
+
+    @pytest.mark.parametrize("accepted", [True, False])
+    def test_a_reason_must_be_a_string(self, *, accepted: bool) -> None:
+        with pytest.raises(TypeError, match="reason must be a str, got NoneType"):
+            OrderAck(order(), accepted=accepted, reason=None)  # type: ignore[arg-type]
 
     def test_a_rejection_with_a_reason_is_accepted(self) -> None:
         ack = OrderAck(order(), accepted=False, reason="outside the auto-reject band")
@@ -279,3 +295,61 @@ class TestPosition:
     def test_cost_basis_cannot_be_negative(self) -> None:
         with pytest.raises(ValueError, match="cost basis cannot be negative, got IDR -1"):
             Position(bbri(), 1, rp(-1))
+
+
+def wrong(value: object) -> Any:  # noqa: ANN401 - hands a deliberately mistyped value past mypy
+    """Mark the argument a test passes with the wrong type on purpose."""
+    return value
+
+
+class TestFieldTypes:
+    """Every field refuses a wrong type where it enters, naming the field (#21)."""
+
+    @pytest.mark.parametrize(
+        ("build", "message"),
+        [
+            (lambda: bar(instrument=None), "instrument must be an Instrument, got NoneType"),
+            (lambda: bar(open=4_100), "open must be a Money, got int"),
+            (lambda: bar(close=4_150), "close must be a Money, got int"),
+            (
+                lambda: Split(wrong(None), DAY, 1, 5),
+                "instrument must be an Instrument, got NoneType",
+            ),
+            (
+                lambda: CashDividend(wrong(None), DAY, Decimal(1)),
+                "instrument must be an Instrument, got NoneType",
+            ),
+            (
+                lambda: OtherAction(wrong(None), DAY, "x"),
+                "instrument must be an Instrument, got NoneType",
+            ),
+            (
+                lambda: Order(wrong("BBRI"), Side.BUY, 1, DAY),
+                "instrument must be an Instrument, got str",
+            ),
+            (lambda: Order(bbri(), wrong("buy"), 1, DAY), "side must be a Side, got str"),
+            (lambda: OrderAck(wrong(None), True), "order must be an Order, got NoneType"),
+            (lambda: OrderAck(order(), wrong("no"), "x"), "accepted must be a bool, got str"),
+            (lambda: OrderAck(order(), wrong(1)), "accepted must be a bool, got int"),
+            (lambda: Costs(wrong(0), rp(0), rp(0)), "fee must be a Money, got int"),
+            (lambda: Costs(rp(0), wrong(0), rp(0)), "levy must be a Money, got int"),
+            (lambda: Costs(rp(0), rp(0), wrong(0)), "tax must be a Money, got int"),
+            (
+                lambda: Fill(wrong(None), DAY, 1, rp(1), costs()),
+                "order must be an Order, got NoneType",
+            ),
+            (lambda: Fill(order(), DAY, 1, wrong(1), costs()), "price must be a Money, got int"),
+            (
+                lambda: Fill(order(), DAY, 1, rp(1), wrong(None)),
+                "costs must be a Costs, got NoneType",
+            ),
+            (
+                lambda: Position(wrong(None), 1, rp(1)),
+                "instrument must be an Instrument, got NoneType",
+            ),
+            (lambda: Position(bbri(), 1, wrong(1)), "cost_basis must be a Money, got int"),
+        ],
+    )
+    def test_a_wrong_type_is_refused(self, build: Callable[[], object], message: str) -> None:
+        with pytest.raises(TypeError, match=f"^{re.escape(message)}$"):
+            build()

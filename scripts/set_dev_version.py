@@ -70,7 +70,9 @@ def set_dev_version(run_number: int, engine: Path | None = None, idx: Path | Non
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2 or not argv[1].isdigit():  # noqa: PLR2004 - program name plus one argument
+    # isdigit() alone accepts non-ASCII digits: int() rejects some and silently reads others.
+    usable = len(argv) == 2 and argv[1].isascii() and argv[1].isdigit()  # noqa: PLR2004 - program name plus one argument
+    if not usable:
         print(USAGE, file=sys.stderr)
         return 2
     print(set_dev_version(int(argv[1])))
