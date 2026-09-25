@@ -131,6 +131,16 @@ II-A 2023 had the same Session I and Session II hours. The auction windows are w
 1. The AC1 backtest starts on 2016-01-01, but verified rules start on 2020-12-07 and verified holidays start in 2026. For earlier years the M2 plan must do one of two things: source them (IDX holiday announcements are listed back to 2024 on the announcements page, and older ones may need TICMI), or have the backtester refuse dates it has no rules for, as §9.1 already requires for holidays.
 2. The reference price (previous close or opening price) changed at some date between 2023-04-03 and 2024-12-09. It only matters if the backtester models auto-rejection before 2025.
 
+## 7. Settlement cycle (added by the M2 plan, 2026-09-25)
+
+No earlier research doc verified T+2, and spec §3.6 had it from an IDX news page. The rule is an OJK regulation, read on BPK (`peraturan.bpk.go.id/Details/128635`, status *Berlaku*; PDF `/Download/119571/pojk%2021-2018.pdf`, accessed 2026-09-25):
+
+> Pasal 2 (2): *"Penyelesaian atas Transaksi Bursa di pasar reguler dilaksanakan pada Hari Bursa ke-2 (kedua) setelah hari pelaksanaan Transaksi Bursa (T+2)."*
+>
+> Pasal 13: *"Peraturan Otoritas Jasa Keuangan ini mulai berlaku pada tanggal diundangkan."* It was promulgated on 21 November 2018.
+
+Pasal 11 has trades made before it took effect settle under the old rule. Its elucidation says T+3 had applied since 9 Sep 2002. The press (Bareksa, 26 Nov 2018, and Hukumonline; **secondary**) reports the market's first T+2 trade day as Monday 26 Nov 2018, with the first T+2 settlement on 28 Nov 2018. Trades from 26 Nov 2018 settle at T+2 under either date, so `tick_sizes.toml`'s `[[settlement]]` row starts on 26 Nov 2018.
+
 ## Review log
 
 - **Pass 1 (2026-09-25):** a full read against the extracted texts. Two findings, both fixed. (1) The doc claimed the spec excludes the Acceleration Board; §3.2 names only the Special Monitoring Board. (2) The doc claimed the 2026 announcement's notes name Vesak; the notes as read name Eid al-Fitr and Easter.
