@@ -59,7 +59,7 @@ This is based on web research carried out on 2026-09-24. Sources and unverified 
    - Domestic dividends to resident individuals are taxed at **10% final** (UU PPh Pasal 17(2c) as restated by UU HPP; PP 19/2009). **Nothing is withheld:** the issuer pays the dividend gross (PP 55/2022 Pasal 9(2)(l)). The dividend is **exempt if it is invested in Indonesia by the end of the third month after the tax year of receipt** (for example, a 2026 dividend by 31 March 2027) and **held in qualifying forms for at least 3 tax years counted from that year**. IDX shares qualify, and switching between qualifying forms is allowed (PMK 18/2021 Pasal 35–36). The investor must also file a yearly investment-realisation report (PMK 81/2024 Pasal 370 and 374). If the condition is missed, the 10% is owed as of the day of receipt and the investor pays it themselves by the 15th of the next month (PMK 81/2024 Pasal 372–373). Partial reinvestment exempts the invested part only. *Verified from the regulation text by T-TAX (§12); the details, quotes and unverified points are in `docs/research/t-tax.md`. The tax treatment stays a config switch, and the default is the conservative 10%.*
 6. **Market mechanics.**
    - A lot is 100 shares, and regular-market orders must be in whole lots.
-   - Settlement is T+2.
+   - Settlement is T+2: POJK 21/POJK.04/2018 Pasal 2(2), in force on promulgation, 21 Nov 2018. The market's first T+2 trade day is reported as 26 Nov 2018 (press, secondary), so the data row starts on that date (`docs/research/t-rules.md` §7).
    - Regular-market sessions (IDX Rule II-A, Kep-00003/BEI/04-2025, in force 8 Apr 2025, and unchanged in Kep-00136/BEI/09-2026): Session I 09:00–12:00 WIB Monday to Thursday (09:00–11:30 on Friday); Session II 13:30–15:49:59 (14:00–15:49:59 on Friday); pre-closing auction 15:50–15:59:59. The continuous-session hours were the same in the 2023 rule. *Corrected by T-RULES: an earlier draft dated this change to 15 Dec 2025, from a news source.*
    - The auto-rejection revision is **adopted** (Kep-00136/BEI/09-2026, issued 21 Sep 2026). From 28 Sep 2026 the minimum price falls from Rp50 to Rp1, stocks at Rp1–10 get a fixed ±Rp1 band, and ARB stays at 15%. From 1 Jan 2027 the bands are symmetric: 35% for Rp11–200, 25% for over Rp200–5,000, and 20% above Rp5,000. The full dated history is in `docs/research/t-rules.md`.
    - For these reasons, every one of these values is **dated data in a file**, never a constant in code.
@@ -91,6 +91,9 @@ steadyhand/                      # uv workspace, public monorepo
 │   └── steadyhand-idx/          # IDX distribution (PyPI: steadyhand-idx)
 │       └── src/steadyhand_idx/
 │           ├── rules.py         # IdxMarketRules (reads data/*.toml)
+│           ├── ticks.py         # tick tiers, board lot, settlement cycle
+│           ├── bands.py         # auto-rejection bands, minimum price
+│           ├── fees.py          # levy, VAT, sale tax, stamp duty, dividend tax, presets
 │           ├── calendar.py      # IDX trading days and holidays
 │           ├── yahoo.py         # YahooDataSource (.JK)
 │           ├── cache.py         # local price/action cache (SQLite)
@@ -99,7 +102,7 @@ steadyhand/                      # uv workspace, public monorepo
 │           ├── config.py        # TOML config loading + validation
 │           ├── cli.py           # `steadyhand-idx` entry point
 │           └── data/            # tick_sizes.toml, auto_reject.toml, fees.toml,
-│                                # holidays.toml, exclusions.csv (no LQ45 lists: §9.4)
+│                                # holidays.toml (no LQ45 lists or exclusions: §9.4)
 ├── docs/                        # strategy guide, getting started, specs, plans
 └── tests/                       # per-package test suites + cross-package golden tests
 ```
@@ -115,10 +118,13 @@ These signatures are illustrative. Their final form is fixed in the implementati
 ```python
 class MarketRules(Protocol):
     currency: Currency
+    verified_from: date                                                         # first day every rule is verified
+    def require_supported(self, day: date) -> None: ...                         # UnsupportedDateError naming the table
     def lot_size(self, instrument: Instrument, on: date) -> int: ...
     def round_to_tick(self, instrument: Instrument, price: Money, side: Side, on: date) -> Money: ...
     def price_band(self, instrument: Instrument, reference: Money, on: date) -> tuple[Money, Money]: ...
     def costs(self, side: Side, gross: Money, on: date) -> Costs: ...        # fee, levy, sell tax
+    def daily_costs(self, traded: Money, on: date) -> Money: ...               # once a day on buys + sells: stamp duty
     def settlement_date(self, trade_date: date) -> date: ...                   # T+2 on trading days
     def dividend_tax(self, gross: Money, reinvested_by_deadline: bool, on: date) -> Money: ...  # reshaped in M4 (§6.2)
     def is_trading_day(self, day: date) -> bool: ...
@@ -172,7 +178,7 @@ class Broker(Protocol):
 - The fill price is the next session's **open**, adjusted by slippage (default 0.10%: buys pay more, sells receive less) and then rounded to a valid tick **against the trader** (buys round up, sells round down).
 - An order is **rejected** if the fill price falls outside that day's auto-reject band, if the stock did not trade that day (zero volume), or if the stock is frozen.
 - An order larger than **10% of that day's traded volume** (configurable) is cut down to 10% of volume, rounded down to whole lots, and the cut is logged. This stops a backtest assuming it could trade unlimited size in a thinly traded stock.
-- Costs, all from `fees.toml` with effective dates (`docs/research/t-fees.md`): the broker commission (per preset, different for buys and sells, with VAT on it); the exchange levy on both sides (IDX 0.018%, KPEI 0.009% and KSEI 0.003%, VAT on those three, and KPEI's 0.01% guarantee fund, which carries no VAT: 0.0433% today); the 0.1% sale tax on sales; and, from 2021, the Rp10,000 stamp duty on each trade confirmation, which brokers issue once per trading day: every confirmation until 11 Jan 2022, and from 12 Jan 2022 only one over Rp10,000,000 (PP 3/2022; `t-verify.md` §3.2). How M2 charges it is a plan decision (`t-fees.md` §6, `t-verify.md` §5). A preset whose quoted rate is all-in says what it includes, so nothing is charged twice. The costs of a trade are summed and rounded once, against the trader.
+- Costs, all from `fees.toml` with effective dates (`docs/research/t-fees.md`): the broker commission (per preset, different for buys and sells, with VAT on it); the exchange levy on both sides (IDX 0.018%, KPEI 0.009% and KSEI 0.003%, VAT on those three, and KPEI's 0.01% guarantee fund, which carries no VAT: 0.0433% today); the 0.1% sale tax on sales; and, from 2021, the Rp10,000 stamp duty on each trade confirmation, which brokers issue once per trading day: every confirmation until 11 Jan 2022, and from 12 Jan 2022 only one over Rp10,000,000 (PP 3/2022; `t-verify.md` §3.2). It is charged once per trading day, through `MarketRules.daily_costs` on that day's buys plus sells, as the law imposed it rather than from each broker's collection date (Shyden, 2026-09-25). A preset whose quoted rate is all-in says what it includes, so nothing is charged twice. The costs of a trade are summed and rounded once, against the trader.
 - Sale proceeds are **unsettled** until T+2 trading days. Only settled cash plus dividend cash can be spent.
 
 ## 6. Risk controls and sizing
@@ -245,9 +251,10 @@ The universe is the **LQ45** (IDX's list of 45 large, liquid stocks) as it stood
 
 - `tick_sizes.toml`: the IDX price-tier tick table, as sourced by T-RULES (`docs/research/t-rules.md` §1), with its history in `docs/research/t-hist.md` §3 (primary-verified from 13 Mar 2020). The tier is chosen by the order price, and each tier's lower bound is inclusive. Boundary tests are written against that source, not against memory.
 - `auto_reject.toml`: ARA/ARB bands by price tier, with **effective-from dates**, as sourced by T-RULES (`docs/research/t-rules.md` §3), including the 28 Sep 2026 and 1 Jan 2027 changes, with the 2020 changes in `docs/research/t-hist.md` §4. The reference price is in `docs/research/t-verify.md` §4: the opening price from 13 Mar to 6 Sep 2020, and the previous close from 7 Sep 2020. The tier edges differ from the tick table (200 and 5,000 fall in the lower auto-reject tier), so the two tables never share a tier function.
-- `fees.toml`: effective-dated levy rows (each component and the VAT rate), the sale tax, the stamp duty, and broker presets (`ajaib`, `stockbit`, `ipot`) plus `custom`, in the shape `docs/research/t-fees.md` §5 recommends. Every row is primary-verified (see below the list). The defaults are marked "check against your broker's fee schedule".
+- `fees.toml`: effective-dated levy rows (each component), the VAT rate, the sale tax, the stamp duty, and broker presets `ajaib` and `custom`, in the shape `docs/research/t-fees.md` §5 recommends. Stockbit and Indo Premier do not state what their all-in rates include, so a preset for them would rest on a guess; their users set up `custom` (M2 plan, scope decision 4). VAT is its own dated table, charged on the levy's three fees and on a broker's commission. Every row is primary-verified (see below the list). The defaults are marked "check against your broker's fee schedule".
 - `holidays.toml`: IDX non-trading days by year. `calendar.py` refuses to run for a year that has no holiday data, instead of assuming no holidays. Every year from 2016 to 2027 is verified from an IDX calendar: 2016–2024 (`docs/research/t-hist.md` §1), 2025 (`docs/research/t-pay.md` §2) and 2026–2027 (`docs/research/t-rules.md` §4).
-- `sessions.toml`: trading sessions with effective dates, used for scheduling and reports.
+- `tick_sizes.toml` also carries the board lot and the settlement cycle (T+2 from 26 Nov 2018), so both count towards the start-date rule below.
+- `sessions.toml`: trading sessions with effective dates, used for scheduling and reports. Deferred to M5, its first reader.
 
 When a rule changes, the change is a data-file edit with a new effective date. Backtests over past dates keep using the rules that applied on those dates.
 
@@ -256,7 +263,7 @@ When a rule changes, the change is a data-file edit with a new effective date. B
 ### 9.2 Yahoo data source
 
 - `yfinance` is pinned to an exact version, and Dependabot proposes upgrades.
-- It fetches unadjusted OHLCV plus dividends and splits.
+- It fetches OHLCV plus dividends and splits. Yahoo's prices are split-adjusted even with `auto_adjust=False` (`t-hist.md` §6), so the source reverses every reported split using the stock's whole split history. An adjustment Yahoo does not report, such as a rights issue, leaves prices that are not whole rupiah after reversal. Those days cannot be recovered and are refused with `UnrecoverablePricesError`, naming them (measured on 2026-09-25: BBRI to 2021-09-07, SMGR to 2022-12-12, MDKA to 2022-04-13, five INCO days in June 2024). A zero-volume bar on a trading day is kept as "did not trade"; a flat empty bar on a holiday is dropped; trading on a holiday is refused.
 - Yahoo's dividends carry the **ex date only**, with no pay or recording date (`docs/research/t-pay.md` §5). Trading days come from `holidays.toml`, never from which days have bars: `^JKSE` has no bar for 22 Sep 2026, which was a trading day (`t-pay.md` §2).
 - Retries use exponential backoff: 3 attempts, then `DataUnavailableError` (fail closed).
 - It is rate-limited and polite, and fetches only what the cache is missing.
@@ -273,7 +280,7 @@ When a rule changes, the change is a data-file edit with a new effective date. B
 - `lq45_members.toml` holds dated LQ45 membership: one record per IDX document (a review, or a mid-period replacement), each with `effective`, `announced`, `source`, `kind` and the full list of 45 `members`. Membership on a date is the latest record whose `effective` is on or before it. The format and the loader's checks are in `docs/research/t-lq45.md` §4.
 - **The file is supplied by the user, never shipped.** IDX's Terms of Use bar redistributing its data for commercial use without written permission, and bar scraping. Apache-2.0 would pass on commercial rights we do not hold (`docs/research/t-lq45.md` §5). So the file lives in the user's data directory, at the path in `[universe] lq45_members` (§9.5). The package ships only the loader and a guide to where IDX publishes each list. Tests use a synthetic file. A missing file is an error that names the key. Nothing downloads from idx.co.id.
 - Historical coverage is best-effort. **A backtest that starts before the file's first record, or spans a gap between records, prints a survivorship-bias warning** in its report and output. A gap is two consecutive records more than one review apart: reviews were semi-annual until January 2024 and quarterly from May 2024. Primary lists exist for 19 of the 24 reviews taking effect in 2016–2025 (`t-lq45.md` §3).
-- `exclusions.csv` lists stocks excluded by the operator or known to be on the Special Monitoring Board. Yahoo cannot tell us board status, so this file is maintained by hand and dated.
+- `exclusions.csv` lists stocks excluded by the operator or known to be on the Special Monitoring Board. Yahoo cannot tell us board status, so this file is maintained by hand and dated. Like the LQ45 file it is supplied by the user, in the data directory, and never shipped: board membership is IDX data, and an operator's exclusions are their own. No file means no exclusions.
 
 ### 9.5 Configuration (`steadyhand.toml`)
 
@@ -412,7 +419,7 @@ TDD throughout: a test is written, and shown failing, before any production code
 ## 13. Implementation milestones (one plan each)
 
 1. **M1 Foundations:** repo, CI, meta-guards, supply chain, `money`, `types`, `portfolio`, `MarketRules`/`DataSource`/`Broker` protocols, and TestPyPI dev publishing from `develop` (§11).
-2. **M2 IDX rules and data:** `rules.py` and data files (after T-RULES), calendar, Yahoo source, cache, fixtures.
+2. **M2 IDX rules and data:** `rules.py` and data files (after T-RULES), calendar, Yahoo source, cache, fixtures, and `universe.py`.
 3. **M3 Engine and backtester:** `run_day`, SimulatedBroker, RiskManager, CompoundingSizer, corporate actions, metrics, golden tests, performance test.
 4. **M4 Income:** dividend ledger, income goal tracker, projection, calendar.
 5. **M5 Paper trading and CLI:** state DB, idempotency and atomicity, halts and resume, all CLI commands, CLI journeys.
@@ -472,3 +479,4 @@ TDD throughout: a test is written, and shown failing, before any production code
 - **Pass 11 (2026-09-25, T-FEES #38):** §3, §5.1, §9.1, §12 and Appendix A were brought into line with `docs/research/t-fees.md`. Findings, all fixed: (1) §5.1 named "exchange levy" as one number, while it is four components plus VAT, with VAT not charged on the guarantee fund; (2) §5.1 and §9.1 had no stamp duty, a fixed Rp10,000 per trading day from 2021 that outweighs every rate on small trades; (3) §9.1 did not say that an all-in broker quote must declare what it includes, without which the levy and sale tax are charged twice; (4) §3's sale-tax bullet cited no regulation, and Appendix A's only fee sources were blogs; (5) §12's T-FEES row was still open. Recorded for the M2 plan, not changed here: §4.3's `costs(side, gross, on)` is per trade, and stamp duty is per trading day, so the interface cannot charge it as written; and whether M2 ships stamp duty and the `stockbit` and `ipot` presets at all (`t-fees.md` §6). A grep for `sell tax`, `levy`, `broker fee`, `fees.toml` and `stamp` across the spec finds no contradicting wording left.
 - **Pass 12 (2026-09-25, T-VERIFY #41):** §5.1, §9.1, §12, §14 and Appendix A were brought into line with `docs/research/t-verify.md` and Shyden's decision that backtests refuse unverified rows. Findings, all fixed: (1) §9.1's fees bullet shipped `verified = false` rows, which the decision rules out. (2) §14 AC1 started on 2016-01-01, before the earliest verified date. (3) §9.1 cited `t-hist.md` §5 for the reference price, which read the II-A attachments and missed the cover decisions' interim *Harga Previous*. (4) §12's T-HIST row placed the reference switch in 2023–2024, while it was 7 Sep 2020. (5) §12's T-FEES row gave the guarantee-fund window as ending about 16 Dec 2020 from a secondary source, while KPEI's notes say 17 Dec. (6) §5.1 and §12 called the Rp10,000,000 threshold broker practice and charged it from 2021, while it is PP 3/2022's exemption from 12 Jan 2022. (7) §9.1 stated no rule for the start date, so a hard-coded date could drift from the data files; the date is now derived from them.
 - **Pass 13 (2026-09-25, review of Pass 12):** a read of Pass 12's diff. Two findings, fixed: (1) §12's T-HIST row still called the verified reference the opening price, while it was the previous close from 7 Sep 2020; (2) §9.1's start-date rule said "the latest of the data files' first dates", which is ambiguous for `fees.toml`, whose tables start on different dates, and did not name the files. It now names the four files and takes the latest first date of any table.
+- **Pass 14 (2026-09-25, the M2 plan):** §3.6, §4.1, §4.3, §5.1, §9.1, §9.2, §9.4 and §13 were brought into line with the M2 plan's scope decisions (`docs/superpowers/plans/2026-09-25-m2-idx-rules-and-data.md`). Findings, all fixed: (1) T+2 had no primary source, and POJK 21/POJK.04/2018 Pasal 2(2) is now cited, with the row starting 26 Nov 2018; (2) §4.3 had no way to charge a per-day amount or to state the first verified day, so `MarketRules` gains `daily_costs`, `verified_from` and `require_supported`; (3) §5.1 left stamp duty's charging to the plan, and it is now per trading day through `daily_costs`, as the law imposed it; (4) §9.1 shipped `stockbit` and `ipot` presets whose `includes` would be a guess; (5) §9.1's `sessions.toml` has no reader before M5; (6) §9.2 called Yahoo's prices unadjusted, and they are split-adjusted, with rights issues unrecoverable; (7) §4.1 and §9.4 shipped `exclusions.csv` in the package; (8) §13 did not name `universe.py`. A grep for `stockbit`, `ipot`, `exclusions.csv`, `Settlement is T+2` and `plan decision` finds no contradicting wording left, and neither does one for `VAT rate`.
