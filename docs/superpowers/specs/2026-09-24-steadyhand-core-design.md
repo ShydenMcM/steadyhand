@@ -56,7 +56,7 @@ This is based on web research carried out on 2026-09-24. Sources and unverified 
 4. **Broker APIs.** No OJK-licensed broker researched (Stockbit, IPOT, Mandiri MOST, BNI, Ajaib, Mirae, Phillip, Trimegah, Valbury, RHB, MNC, Sinarmas) offers a public, documented retail order API. Their "robo" features are closed rules engines inside their own apps. Unofficial access would likely breach the broker's terms of service, which is a civil matter (the account can be frozen). Hence the manual-execution decision.
 5. **Tax.**
    - A **0.1% final tax on the gross value of every sale**, on top of broker fees.
-   - Dividends to resident individuals carry a **10% final withholding tax**. Under PP 9/2021 this can be **exempted if the dividend is reinvested in Indonesia by the end of the third month after the tax year** (for example, a 2026 dividend must be reinvested by 31 March 2027). *The exact exemption conditions, including any minimum holding period, must be confirmed against the regulation text before this feature is built (task T-TAX in §12). Until then the tax treatment is a config switch, and the default is the conservative 10%.*
+   - Domestic dividends to resident individuals are taxed at **10% final** (UU PPh Pasal 17(2c) as restated by UU HPP; PP 19/2009). **Nothing is withheld:** the issuer pays the dividend gross (PP 55/2022 Pasal 9(2)(l)). The dividend is **exempt if it is invested in Indonesia by the end of the third month after the tax year of receipt** (for example, a 2026 dividend by 31 March 2027) and **held in qualifying forms for at least 3 tax years counted from that year**. IDX shares qualify, and switching between qualifying forms is allowed (PMK 18/2021 Pasal 35–36). The investor must also file a yearly investment-realisation report (PMK 81/2024 Pasal 370 and 374). If the condition is missed, the 10% is owed as of the day of receipt and the investor pays it themselves by the 15th of the next month (PMK 81/2024 Pasal 372–373). Partial reinvestment exempts the invested part only. *Verified from the regulation text by T-TAX (§12); the details, quotes and unverified points are in `docs/research/t-tax.md`. The tax treatment stays a config switch, and the default is the conservative 10%.*
 6. **Market mechanics.**
    - A lot is 100 shares, and regular-market orders must be in whole lots.
    - Settlement is T+2.
@@ -120,7 +120,7 @@ class MarketRules(Protocol):
     def price_band(self, instrument: Instrument, reference: Money, on: date) -> tuple[Money, Money]: ...
     def costs(self, side: Side, gross: Money, on: date) -> Costs: ...        # fee, levy, sell tax
     def settlement_date(self, trade_date: date) -> date: ...                   # T+2 on trading days
-    def dividend_tax(self, gross: Money, reinvested_by_deadline: bool, on: date) -> Money: ...
+    def dividend_tax(self, gross: Money, reinvested_by_deadline: bool, on: date) -> Money: ...  # reshaped in M4 (§6.2)
     def is_trading_day(self, day: date) -> bool: ...
 
 class DataSource(Protocol):
@@ -158,7 +158,7 @@ class Broker(Protocol):
 2. **Corporate actions.**
    - A **split** or **reverse split** adjusts the share count and the average cost of the position.
    - Holding a stock on the day before its **ex-date** creates a dividend **entitlement**.
-   - On the **pay date**, cash net of dividend tax is credited as *dividend cash*, tagged with its reinvestment deadline.
+   - On the **pay date**, the dividend is credited as *dividend cash*, tagged with its reinvestment deadline. The broker pays it gross (§3.5). With `dividend_reinvestment_exemption` off (the default), the engine books 10% as tax on the pay date, which models an investor who self-pays it, so the spendable dividend cash is the net amount.
    - Yahoo gives ex-dates, not pay dates, so the pay date is `ex_date + pay_lag_trading_days`. The default lag is a config value, and a per-stock override file (`dividend_pay_dates.csv`) wins when a row exists for that stock.
    - Any **other** action on a held stock, such as a rights issue or a merger, **freezes** that stock (no orders in or out) and raises a flag for the operator to resolve.
 3. **Fill yesterday's orders.** Orders queued on the previous trading day fill at **today's open** (§5.1).
@@ -195,7 +195,7 @@ A halt is recorded in state and survives a restart. `resume` requires the operat
 
 - **`CompoundingSizer` (default):** position sizes are computed from **current** portfolio value, meaning all cash (settled and unsettled) plus holdings at the last close, times the target weights. Only settled cash can be spent, so a buy is still cut to the settled cash available. The same value is used for the daily loss limit and drawdown, so selling a stock never looks like a loss while its proceeds settle. Gains and reinvested dividends increase future sizes automatically. This is the "start small, reinvest profits" behaviour.
 - **Top-ups:** `monthly_contribution` in config adds cash on the first trading day of each month, in backtest and paper modes. It is optional and defaults to 0.
-- **Reinvestment:** dividend cash is spent on the next day's targets. Its deadline tag means income reports can show how much dividend cash still needs reinvesting for the tax exemption (once T-TAX confirms the rule).
+- **Reinvestment:** dividend cash is spent on the next day's targets. Its deadline tag means income reports can show how much dividend cash still needs reinvesting for the tax exemption. With the exemption switch on, each dividend also carries an exemption claim: the amount reinvested by the deadline, and a protection end date (31 December of the third tax year counted from the year of the qualifying purchase, the stricter reading). If share holdings at cost fall below the amount still protected, the claim breaks, and 10% of the shortfall is booked as tax dated to the original pay date (`docs/research/t-tax.md` §7). The M4 plan replaces `dividend_tax`'s `reinvested_by_deadline: bool` with a read of that claim. The yearly reports and any self-payment are the investor's own paperwork, so exemption figures are labelled as estimates.
 
 ## 7. Income goal (the primary objective)
 
@@ -293,7 +293,7 @@ max_drawdown = "0.25"
 max_volume_participation = "0.10"
 
 [tax]
-dividend_reinvestment_exemption = false   # enable only after T-TAX confirms the rule
+dividend_reinvestment_exemption = false   # rule confirmed by T-TAX (docs/research/t-tax.md); on = estimated exemption
 ```
 
 Config is validated on load. An unknown key, wrong type or out-of-range value is an error that names the key. Numbers used as rates are strings parsed to `Decimal`, so no floats are involved.
@@ -388,7 +388,7 @@ TDD throughout: a test is written, and shown failing, before any production code
 
 | ID | Item | Blocks |
 |---|---|---|
-| T-TAX | Confirm the PP 9/2021 dividend-reinvestment exemption conditions (deadline, holding period, qualifying investments) from the regulation text | enabling `dividend_reinvestment_exemption`; default stays 10% |
+| T-TAX | **Done (#25):** `docs/research/t-tax.md`. The exemption now rests on UU HPP, PP 55/2022, PMK 18/2021 Pasal 15–16 and 33–36, and PMK 81/2024 Pasal 370–374 (PP 9/2021's provision was revoked). Deadline, 3-tax-year holding, qualifying forms (IDX shares count) and reporting are verified. No withholding for resident individuals | `dividend_reinvestment_exemption` may be enabled; default stays 10% |
 | T-RULES | **Done (#24):** `docs/research/t-rules.md`. The tick table, ARA/ARB bands and minimum price are verified from 2020-12-07, the holidays for 2026–2027, and the sessions from 2023-04-03. Earlier years are listed there as open for M2 | `rules.py` data files and their boundary tests |
 | T-LQ45 | Assemble dated LQ45 membership from IDX announcements as far back as available | survivorship coverage of backtests |
 | T-PAY | Decide the default dividend pay-lag from a sample of real IDX dividend announcements | pay-date modelling default |
@@ -427,6 +427,7 @@ TDD throughout: a test is written, and shown failing, before any production code
 - Market manipulation and Art. 104: https://siplawfirm.id/mengenal-pump-and-dump ; OJK enforcement 2026: https://aktual.com/ojk-percepat-pengusutan-32-kasus-manipulasi-saham-di-2026/
 - Bareksa licensed robo-advisor: https://investasi.kontan.co.id/news/bareksa-luncurkan-robo-advisor-berlisensi-penasihat-investasi-dari-ojk
 - Tax on share sales and dividends: https://pajakstartup.com/2025/03/11/skema-pajak-untuk-investor-pasar-modal-pph-final-atas-saham-dan-obligasi/ ; https://www.heygotrade.com/id/blog/pajak-saham-investor-indonesia/ ; https://help.stockbit.com/id/article/ketentuan-pajak-dividen-untuk-keperluan-spt-1r8j1zt/
+- Dividend tax and the reinvestment exemption (primary regulation texts from peraturan.bpk.go.id, verified 2026-09-25 by T-TAX): UU 7/2021 (HPP) https://peraturan.bpk.go.id/Details/185162 ; PP 55/2022 https://peraturan.bpk.go.id/Details/233488 ; PP 19/2009 https://peraturan.bpk.go.id/Details/4933 ; PMK 18/PMK.03/2021 https://peraturan.bpk.go.id/Details/162653 ; PMK 81/2024 https://peraturan.bpk.go.id/Details/306614 ; the full list is in `docs/research/t-tax.md`
 - Trading hours, tick table, minimum price and ARA/ARB bands (IDX primary documents, verified 2026-09-25 by T-RULES): Rule II-A Kep-00136/BEI/09-2026 https://www.idx.co.id/Media/bgqhucr0/signed_perubahan_peraturan_nomor-_ii_a__tentang_perdagangan_efek_bersifat_ekuitas.pdf ; Kep-00003/BEI/04-2025 https://www.idx.co.id/Media/mrekbmz3/signed_peraturan_ii_a_perdagangan_efek_bersifat_ekuitas.pdf ; the earlier versions and the 2026–2027 holiday announcements are listed in `docs/research/t-rules.md`
 - Special Monitoring Board revision (secondary): https://www.idnfinancials.com/news/65578/idx-to-revise-special-monitoring-board-and-auto-rejection-rules ; https://www.abnrlaw.com/news/indonesia-stock-exchange-revisits-equity-trading-rules
 - T+2 settlement: https://www.idx.co.id/en/news/tplus2-settlement/
@@ -435,7 +436,7 @@ TDD throughout: a test is written, and shown failing, before any production code
 - Yahoo data terms: https://scrapfly.io/blog/posts/guide-to-yahoo-finance-api
 - IBKR availability in Indonesia: https://brokerchooser.com/broker-reviews/interactive-brokers-review/interactive-brokers-indonesia
 
-**Unverified (to confirm before relying on):** whether each broker's terms explicitly ban automation; IDX coverage and pricing from EODHD, Twelve Data and Polygon; IDX official data pricing; direct eligibility for Alpaca and Saxo; whether IBKR covers IDX; tax treatment of foreign-regulated accounts; the PP 9/2021 exemption conditions (T-TAX).
+**Unverified (to confirm before relying on):** whether each broker's terms explicitly ban automation; IDX coverage and pricing from EODHD, Twelve Data and Polygon; IDX official data pricing; direct eligibility for Alpaca and Saxo; whether IBKR covers IDX; tax treatment of foreign-regulated accounts. The dividend exemption conditions were verified by T-TAX; its own open points are listed in `docs/research/t-tax.md`.
 
 ## Appendix B: Spec review log
 
@@ -447,3 +448,4 @@ TDD throughout: a test is written, and shown failing, before any production code
 - **Pass 4 (2026-09-24, while planning M1):** 5 findings, all fixed: (1) §5 step 1 said a non-positive volume stops the run, which contradicts §5.1 rejecting orders on a zero-volume day; zero volume is now valid data. (2) §6.2 defined portfolio value as settled cash plus holdings, so every sale would look like a loss to the daily loss limit until its proceeds settled; it is now all cash plus holdings, with spending still limited to settled cash. (3) §9.8 paraphrased the disclaimer; it now quotes the exact text of `steadyhand.DISCLAIMER`, which is the README's wording. (4) §13 put TestPyPI publishing in M10, against §11 and the rule that every `develop` merge deploys; it moves to M1. (5) The status line still said draft.
 - **Pass 5 (2026-09-24):** mechanical: grep for every term pass 4 touched (settled cash, portfolio value, TestPyPI, non-positive, the disclaimer, zero volume, M10, Draft) found no contradicting wording left. Full read of §5, §6, §9.8, §11, §13 and §14: **0 findings. Loop closed.**
 - **Pass 6 (2026-09-25, T-RULES #24):** §3.6, §9.1, §12 and Appendix A were brought into line with the IDX primary documents in `docs/research/t-rules.md`. Two findings, both fixed: (1) §3.6 dated the trading-hours change to 15 Dec 2025 under Kep-00003/BEI/04-2025, but that decision took effect on 8 Apr 2025 and the continuous-session hours have been the same since the 2023 rule; (2) §3.6 called the auto-rejection revision "proposed, no date", but it was adopted as Kep-00136/BEI/09-2026, in force from 28 Sep 2026 with symmetric bands from 1 Jan 2027. A grep for "15 Dec", "under revision", "no implementation date" and "bidiknews" now finds only the correction note. **0 further findings.**
+- **Pass 7 (2026-09-25, T-TAX #25):** §3.5, §4, §5, §6.2, §9, §12 and Appendix A were brought into line with the regulation texts in `docs/research/t-tax.md`. Findings, all fixed: (1) §3.5 called the dividend tax a withholding tax, but PP 55/2022 Pasal 9(2)(l) has resident individuals paid gross, and the tax is self-paid only when the investment condition is missed; (2) §3.5 cited PP 9/2021, whose dividend provision PP 55/2022 revoked; (3) §3.5 left the holding period open, and it is 3 tax years (PMK 18/2021 Pasal 36(2)), with a yearly report that is itself a condition (PMK 81/2024 Pasal 370 and 374); (4) §5 said cash arrives net of tax, and it arrives gross, with the default-off switch booking the 10%; (5) `dividend_tax`'s `reinvested_by_deadline: bool` cannot express a holding, a partial claim or a broken one, so §6.2 defines an exemption claim and §4 marks the signature for M4; (6) Appendix A still listed the exemption conditions as unverified. The same wording error in code (`market.py`'s `dividend_tax` docstring said "withheld") was fixed in the same change. A grep for `withholding`, `PP 9/2021`, `once T-TAX`, `net of dividend tax` and `T-TAX confirms` across the repo finds no contradicting wording left.
