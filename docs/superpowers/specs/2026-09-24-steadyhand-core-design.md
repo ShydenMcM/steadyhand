@@ -60,8 +60,8 @@ This is based on web research carried out on 2026-09-24. Sources and unverified 
 6. **Market mechanics.**
    - A lot is 100 shares, and regular-market orders must be in whole lots.
    - Settlement is T+2.
-   - Trading hours changed on 15 Dec 2025 (Kep-00003/BEI/04-2025): Session I 09:00–12:00 WIB Monday to Thursday, with a shorter Friday session; Session II 13:30–15:49:59; pre-closing auction 15:50–15:59:59.
-   - The auto-rejection bands (ARA/ARB) are **under revision**. The proposed bands are 35% for stocks at Rp 10–200, 25% for Rp 200–5,000 and 20% above Rp 5,000, with no implementation date yet.
+   - Regular-market sessions (IDX Rule II-A, Kep-00003/BEI/04-2025, in force 8 Apr 2025, and unchanged in Kep-00136/BEI/09-2026): Session I 09:00–12:00 WIB Monday to Thursday (09:00–11:30 on Friday); Session II 13:30–15:49:59 (14:00–15:49:59 on Friday); pre-closing auction 15:50–15:59:59. The continuous-session hours were the same in the 2023 rule. *Corrected by T-RULES: an earlier draft dated this change to 15 Dec 2025, from a news source.*
+   - The auto-rejection revision is **adopted** (Kep-00136/BEI/09-2026, issued 21 Sep 2026). From 28 Sep 2026 the minimum price falls from Rp50 to Rp1, stocks at Rp1–10 get a fixed ±Rp1 band, and ARB stays at 15%. From 1 Jan 2027 the bands are symmetric: 35% for Rp11–200, 25% for over Rp200–5,000, and 20% above Rp5,000. The full dated history is in `docs/research/t-rules.md`.
    - For these reasons, every one of these values is **dated data in a file**, never a constant in code.
 7. **Data licensing.** Yahoo Finance `.JK` is reached through the community library `yfinance`, which is Apache-2.0 licensed. Yahoo's terms make anything beyond personal, non-commercial use a grey area. Each self-hoster fetches their own data for their own use, and the project never redistributes data. `DataSource` is a plugin, so a licensed feed such as EODHD or Twelve Data can replace Yahoo.
 
@@ -243,8 +243,8 @@ The universe is the **LQ45** (IDX's list of 45 large, liquid stocks) as it stood
 
 ### 9.1 Market rules data (`data/*.toml`, all effective-dated)
 
-- `tick_sizes.toml`: the IDX price-tier tick table. **Implementation must source the current table from an IDX primary document** (task T-RULES). Boundary tests are written against that source, not against memory.
-- `auto_reject.toml`: ARA/ARB bands by price tier, with **effective-from dates**. The current bands and the proposed revision (§3.6) are both entered once their dates are confirmed from IDX primary sources (T-RULES).
+- `tick_sizes.toml`: the IDX price-tier tick table, as sourced by T-RULES (`docs/research/t-rules.md` §1). The tier is chosen by the order price, and each tier's lower bound is inclusive. Boundary tests are written against that source, not against memory.
+- `auto_reject.toml`: ARA/ARB bands by price tier, with **effective-from dates**, as sourced by T-RULES (`docs/research/t-rules.md` §3), including the 28 Sep 2026 and 1 Jan 2027 changes. The tier edges differ from the tick table (200 and 5,000 fall in the lower auto-reject tier), so the two tables never share a tier function.
 - `fees.toml`: broker fee (buy/sell), levy and sell tax, as named broker presets plus `custom`. The defaults are marked "check against your broker's fee schedule".
 - `holidays.toml`: IDX non-trading days by year. `calendar.py` refuses to run for a year that has no holiday data, instead of assuming no holidays.
 - `sessions.toml`: trading sessions with effective dates, used for scheduling and reports.
@@ -389,7 +389,7 @@ TDD throughout: a test is written, and shown failing, before any production code
 | ID | Item | Blocks |
 |---|---|---|
 | T-TAX | Confirm the PP 9/2021 dividend-reinvestment exemption conditions (deadline, holding period, qualifying investments) from the regulation text | enabling `dividend_reinvestment_exemption`; default stays 10% |
-| T-RULES | Source the current IDX tick table, current ARA/ARB bands, the revision's effective date, and the 2026–2027 holiday calendar from IDX primary documents | `rules.py` data files and their boundary tests |
+| T-RULES | **Done (#24):** `docs/research/t-rules.md`. The tick table, ARA/ARB bands and minimum price are verified from 2020-12-07, the holidays for 2026–2027, and the sessions from 2023-04-03. Earlier years are listed there as open for M2 | `rules.py` data files and their boundary tests |
 | T-LQ45 | Assemble dated LQ45 membership from IDX announcements as far back as available | survivorship coverage of backtests |
 | T-PAY | Decide the default dividend pay-lag from a sample of real IDX dividend announcements | pay-date modelling default |
 | OP-1 | Operator: set up trusted publishers on PyPI and TestPyPI for `steadyhand` and `steadyhand-idx` | first publish |
@@ -427,8 +427,8 @@ TDD throughout: a test is written, and shown failing, before any production code
 - Market manipulation and Art. 104: https://siplawfirm.id/mengenal-pump-and-dump ; OJK enforcement 2026: https://aktual.com/ojk-percepat-pengusutan-32-kasus-manipulasi-saham-di-2026/
 - Bareksa licensed robo-advisor: https://investasi.kontan.co.id/news/bareksa-luncurkan-robo-advisor-berlisensi-penasihat-investasi-dari-ojk
 - Tax on share sales and dividends: https://pajakstartup.com/2025/03/11/skema-pajak-untuk-investor-pasar-modal-pph-final-atas-saham-dan-obligasi/ ; https://www.heygotrade.com/id/blog/pajak-saham-investor-indonesia/ ; https://help.stockbit.com/id/article/ketentuan-pajak-dividen-untuk-keperluan-spt-1r8j1zt/
-- Trading hours 2026: https://bidiknews.co.id/jadwal-perdagangan-bursa-efek-indonesia-2026-lengkap-untuk-investor-dan-trader-saham/
-- ARA/ARB and Special Monitoring Board revision: https://www.idnfinancials.com/news/65578/idx-to-revise-special-monitoring-board-and-auto-rejection-rules ; https://www.abnrlaw.com/news/indonesia-stock-exchange-revisits-equity-trading-rules
+- Trading hours, tick table, minimum price and ARA/ARB bands (IDX primary documents, verified 2026-09-25 by T-RULES): Rule II-A Kep-00136/BEI/09-2026 https://www.idx.co.id/Media/bgqhucr0/signed_perubahan_peraturan_nomor-_ii_a__tentang_perdagangan_efek_bersifat_ekuitas.pdf ; Kep-00003/BEI/04-2025 https://www.idx.co.id/Media/mrekbmz3/signed_peraturan_ii_a_perdagangan_efek_bersifat_ekuitas.pdf ; the earlier versions and the 2026–2027 holiday announcements are listed in `docs/research/t-rules.md`
+- Special Monitoring Board revision (secondary): https://www.idnfinancials.com/news/65578/idx-to-revise-special-monitoring-board-and-auto-rejection-rules ; https://www.abnrlaw.com/news/indonesia-stock-exchange-revisits-equity-trading-rules
 - T+2 settlement: https://www.idx.co.id/en/news/tplus2-settlement/
 - SID/RDN: https://help.bions.id/docs/apa-itu-sid-rdn-sre-dan-kartu-akses/
 - Broker APIs: IPOT in-app robo trading (indopremier.com), unofficial community bots (github.com/mascahyo1/trading-bot)
@@ -446,3 +446,4 @@ TDD throughout: a test is written, and shown failing, before any production code
 - **Pass 3 (2026-09-24):** mechanical checks: placeholders 0; leftover `top-N`/`pip` ambiguity 0; every §12 ID referenced in the body exists in §12 (T-TAX, T-RULES, T-LQ45, T-PAY, OP-1..3); every milestone in §13 maps to spec sections; the 11 strategies in §8 match AC2's count. Full read: **0 findings. Loop closed.**
 - **Pass 4 (2026-09-24, while planning M1):** 5 findings, all fixed: (1) §5 step 1 said a non-positive volume stops the run, which contradicts §5.1 rejecting orders on a zero-volume day; zero volume is now valid data. (2) §6.2 defined portfolio value as settled cash plus holdings, so every sale would look like a loss to the daily loss limit until its proceeds settled; it is now all cash plus holdings, with spending still limited to settled cash. (3) §9.8 paraphrased the disclaimer; it now quotes the exact text of `steadyhand.DISCLAIMER`, which is the README's wording. (4) §13 put TestPyPI publishing in M10, against §11 and the rule that every `develop` merge deploys; it moves to M1. (5) The status line still said draft.
 - **Pass 5 (2026-09-24):** mechanical: grep for every term pass 4 touched (settled cash, portfolio value, TestPyPI, non-positive, the disclaimer, zero volume, M10, Draft) found no contradicting wording left. Full read of §5, §6, §9.8, §11, §13 and §14: **0 findings. Loop closed.**
+- **Pass 6 (2026-09-25, T-RULES #24):** §3.6, §9.1, §12 and Appendix A were brought into line with the IDX primary documents in `docs/research/t-rules.md`. Two findings, both fixed: (1) §3.6 dated the trading-hours change to 15 Dec 2025 under Kep-00003/BEI/04-2025, but that decision took effect on 8 Apr 2025 and the continuous-session hours have been the same since the 2023 rule; (2) §3.6 called the auto-rejection revision "proposed, no date", but it was adopted as Kep-00136/BEI/09-2026, in force from 28 Sep 2026 with symmetric bands from 1 Jan 2027. A grep for "15 Dec", "under revision", "no implementation date" and "bidiknews" now finds only the correction note. **0 further findings.**
