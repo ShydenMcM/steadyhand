@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import date
 from enum import Enum
 
-from steadyhand._validate import require_date
+from steadyhand._validate import require_date, require_type
 from steadyhand.money import Currency, CurrencyMismatchError, Money
 from steadyhand.types import Fill, Instrument, Position, Side
 
@@ -38,6 +38,8 @@ class CashMovement:
 
     def __post_init__(self) -> None:
         require_date(self.day, "movement day")
+        require_type(self.kind, MovementKind, "kind")
+        require_type(self.amount, Money, "amount")
         require_date(self.settles_on, "settles_on")
         if self.settles_on < self.day:
             raise _settlement_before_trade(self.settles_on, self.day)
@@ -99,6 +101,13 @@ class Portfolio:
     ledger: tuple[CashMovement, ...] = ()
 
     def __post_init__(self) -> None:
+        require_type(self.currency, Currency, "currency")
+        require_type(self.positions, tuple, "positions")
+        require_type(self.ledger, tuple, "ledger")
+        for position in self.positions:
+            require_type(position, Position, "position")
+        for movement in self.ledger:
+            require_type(movement, CashMovement, "ledger entry")
         keys = [_sort_key(p) for p in self.positions]
         if keys != sorted(set(keys)):
             msg = "positions must be unique and sorted by market, then symbol"

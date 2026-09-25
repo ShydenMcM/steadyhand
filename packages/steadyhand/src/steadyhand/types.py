@@ -13,7 +13,7 @@ from datetime import date
 from decimal import Decimal
 from enum import Enum
 
-from steadyhand._validate import require_date, require_int
+from steadyhand._validate import require_date, require_int, require_type
 from steadyhand.money import Currency, CurrencyMismatchError, Money
 
 _SYMBOL = re.compile(r"[A-Z0-9][A-Z0-9.\-]{0,19}")
@@ -48,9 +48,7 @@ class Instrument:
         if _MARKET.fullmatch(self.market) is None:
             msg = f"market must be 2-10 capital letters, got {self.market!r}"
             raise ValueError(msg)
-        if not isinstance(self.currency, Currency):
-            msg = f"currency must be a Currency, got {type(self.currency).__name__}"
-            raise TypeError(msg)
+        require_type(self.currency, Currency, "currency")
 
 
 class InvalidBarError(ValueError):
@@ -70,11 +68,13 @@ class Bar:
     volume: int
 
     def __post_init__(self) -> None:
+        require_type(self.instrument, Instrument, "instrument")
         require_date(self.day, "bar day")
         where = f"{self.instrument.symbol} {self.day.isoformat()}"
         expected = self.instrument.currency
         prices = {"open": self.open, "high": self.high, "low": self.low, "close": self.close}
         for name, price in prices.items():
+            require_type(price, Money, name)
             if price.currency != expected:
                 msg = f"{where}: {name} is in {price.currency.code}, expected {expected.code}"
                 raise InvalidBarError(msg)
@@ -106,6 +106,7 @@ class Split:
     new_shares: int
 
     def __post_init__(self) -> None:
+        require_type(self.instrument, Instrument, "instrument")
         require_date(self.ex_date, "split ex_date")
         require_int(self.old_shares, "old_shares", minimum=1)
         require_int(self.new_shares, "new_shares", minimum=1)
@@ -130,6 +131,7 @@ class CashDividend:
     per_share: Decimal
 
     def __post_init__(self) -> None:
+        require_type(self.instrument, Instrument, "instrument")
         require_date(self.ex_date, "dividend ex_date")
         if not isinstance(self.per_share, Decimal):
             msg = f"per_share must be a Decimal, got {type(self.per_share).__name__}"
@@ -148,10 +150,9 @@ class OtherAction:
     description: str
 
     def __post_init__(self) -> None:
+        require_type(self.instrument, Instrument, "instrument")
         require_date(self.ex_date, "action ex_date")
-        if not isinstance(self.description, str):
-            msg = f"description must be a str, got {type(self.description).__name__}"
-            raise TypeError(msg)
+        require_type(self.description, str, "description")
         if not self.description.strip():
             msg = (
                 f"{self.instrument.symbol} {self.ex_date.isoformat()}: "
@@ -173,6 +174,8 @@ class Order:
     placed_on: date
 
     def __post_init__(self) -> None:
+        require_type(self.instrument, Instrument, "instrument")
+        require_type(self.side, Side, "side")
         require_int(self.quantity, "order quantity", minimum=1)
         require_date(self.placed_on, "placed_on")
 
@@ -186,9 +189,9 @@ class OrderAck:
     reason: str = ""
 
     def __post_init__(self) -> None:
-        if not isinstance(self.reason, str):
-            msg = f"reason must be a str, got {type(self.reason).__name__}"
-            raise TypeError(msg)
+        require_type(self.order, Order, "order")
+        require_type(self.accepted, bool, "accepted")
+        require_type(self.reason, str, "reason")
         if not self.accepted and not self.reason.strip():
             msg = (
                 f"a rejected {self.order.side.value} order for "
@@ -207,6 +210,7 @@ class Costs:
 
     def __post_init__(self) -> None:
         for name, part in (("fee", self.fee), ("levy", self.levy), ("tax", self.tax)):
+            require_type(part, Money, name)
             if part.currency != self.fee.currency:
                 raise CurrencyMismatchError(self.fee.currency, part.currency)
             if part.amount < 0:
@@ -234,6 +238,9 @@ class Fill:
     costs: Costs
 
     def __post_init__(self) -> None:
+        require_type(self.order, Order, "order")
+        require_type(self.price, Money, "price")
+        require_type(self.costs, Costs, "costs")
         require_date(self.day, "fill day")
         if self.day < self.order.placed_on:
             msg = (
@@ -268,7 +275,9 @@ class Position:
     cost_basis: Money
 
     def __post_init__(self) -> None:
+        require_type(self.instrument, Instrument, "instrument")
         require_int(self.quantity, "position quantity", minimum=1)
+        require_type(self.cost_basis, Money, "cost_basis")
         if self.cost_basis.currency != self.instrument.currency:
             raise CurrencyMismatchError(self.instrument.currency, self.cost_basis.currency)
         if self.cost_basis.amount < 0:
