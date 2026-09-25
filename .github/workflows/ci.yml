@@ -99,3 +99,54 @@ jobs:
           uv venv "${RUNNER_TEMP}/engine-only"
           uv pip install --python "${RUNNER_TEMP}/engine-only" dist/steadyhand-*.whl
           "${RUNNER_TEMP}/engine-only/bin/python" -c "import steadyhand; print(steadyhand.__version__)"
+
+  publish-dev:
+    name: publish-dev
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    needs: [lint, test, audit, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/steadyhand/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+      - name: Set the development version
+        id: version
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          version="$(uv run --no-project python scripts/set_dev_version.py "${RUN_NUMBER}")"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+      - run: uv build --all-packages --out-dir dist
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: dist/
+      - name: Verify both packages install from TestPyPI
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            rm -rf "${RUNNER_TEMP}/verify"
+            uv venv "${RUNNER_TEMP}/verify"
+            if uv pip install --refresh --python "${RUNNER_TEMP}/verify" \
+                --default-index https://test.pypi.org/simple/ \
+                "steadyhand==${VERSION}" "steadyhand-idx==${VERSION}"; then
+              "${RUNNER_TEMP}/verify/bin/python" -c 'import sys, steadyhand, steadyhand_idx; assert steadyhand.__version__ == steadyhand_idx.__version__ == sys.argv[1], (steadyhand.__version__, steadyhand_idx.__version__)' "${VERSION}"
+              exit 0
+            fi
+            echo "attempt ${attempt}: not installable yet"
+            sleep 30
+          done
+          echo "steadyhand ${VERSION} never became installable from TestPyPI" >&2
+          exit 1

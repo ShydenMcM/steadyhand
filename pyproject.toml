@@ -43,11 +43,12 @@ known-first-party = ["steadyhand", "steadyhand_idx", "set_dev_version"]
 [tool.mypy]
 strict = true
 python_version = "3.12"
-files = ["packages", "tests"]
+files = ["packages", "tests", "scripts"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
+pythonpath = ["scripts"]
 addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-ra"]
 filterwarnings = ["error"]
 xfail_strict = true
