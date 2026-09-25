@@ -76,6 +76,10 @@ class TestInstrument:
         with pytest.raises(TypeError, match="symbol must be a str, got NoneType"):
             Instrument(None, "IDX", IDR)  # type: ignore[arg-type]
 
+    def test_refuses_a_non_currency_currency(self) -> None:
+        with pytest.raises(TypeError, match="currency must be a Currency, got str"):
+            Instrument("BBRI", "IDX", "IDR")  # type: ignore[arg-type]
+
     def test_refuses_a_non_string_market(self) -> None:
         with pytest.raises(TypeError, match="market must be a str, got int"):
             Instrument("BBRI", 1, IDR)  # type: ignore[arg-type]
@@ -175,6 +179,10 @@ class TestCorporateActions:
         ):
             OtherAction(bbri(), DAY, "  ")
 
+    def test_other_action_refuses_a_non_string_description(self) -> None:
+        with pytest.raises(TypeError, match="description must be a str, got NoneType"):
+            OtherAction(bbri(), DAY, None)  # type: ignore[arg-type]
+
     def test_other_action_keeps_its_description(self) -> None:
         assert OtherAction(bbri(), DAY, "rights issue 1:4").description == "rights issue 1:4"
 
@@ -199,6 +207,11 @@ class TestOrders:
     def test_a_rejection_must_say_why(self) -> None:
         with pytest.raises(ValueError, match="a rejected buy order for BBRI must say why"):
             OrderAck(order(), accepted=False, reason=" ")
+
+    @pytest.mark.parametrize("accepted", [True, False])
+    def test_a_reason_must_be_a_string(self, *, accepted: bool) -> None:
+        with pytest.raises(TypeError, match="reason must be a str, got NoneType"):
+            OrderAck(order(), accepted=accepted, reason=None)  # type: ignore[arg-type]
 
     def test_a_rejection_with_a_reason_is_accepted(self) -> None:
         ack = OrderAck(order(), accepted=False, reason="outside the auto-reject band")

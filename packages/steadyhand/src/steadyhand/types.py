@@ -48,6 +48,9 @@ class Instrument:
         if _MARKET.fullmatch(self.market) is None:
             msg = f"market must be 2-10 capital letters, got {self.market!r}"
             raise ValueError(msg)
+        if not isinstance(self.currency, Currency):
+            msg = f"currency must be a Currency, got {type(self.currency).__name__}"
+            raise TypeError(msg)
 
 
 class InvalidBarError(ValueError):
@@ -146,6 +149,9 @@ class OtherAction:
 
     def __post_init__(self) -> None:
         require_date(self.ex_date, "action ex_date")
+        if not isinstance(self.description, str):
+            msg = f"description must be a str, got {type(self.description).__name__}"
+            raise TypeError(msg)
         if not self.description.strip():
             msg = (
                 f"{self.instrument.symbol} {self.ex_date.isoformat()}: "
@@ -180,6 +186,9 @@ class OrderAck:
     reason: str = ""
 
     def __post_init__(self) -> None:
+        if not isinstance(self.reason, str):
+            msg = f"reason must be a str, got {type(self.reason).__name__}"
+            raise TypeError(msg)
         if not self.accepted and not self.reason.strip():
             msg = (
                 f"a rejected {self.order.side.value} order for "
