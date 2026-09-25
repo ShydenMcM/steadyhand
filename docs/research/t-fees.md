@@ -67,11 +67,15 @@ KEP-0005, however, revokes both that list and a later circular: *"Surat Edaran K
 
 **Verdict:** 0.003% from 2016 to 19 Jan 2021 is **probable, unverified**. It fits the industry levy of 0.043% (§1.5) exactly, and 0.006% would make it 0.0463%. The difference is 0.003% per side, far smaller than any broker commission.
 
+**Superseded in part by T-VERIFY (#41):** KSEI's audited statements for FY2019 and FY2020 quote SE-0002/DIR-EKS/KSEI/1211 at 0.003%, so the rate is **verified from FY2019** to 19 Jan 2021 (`t-verify.md` §1). Before FY2019 it stays probable.
+
 ### 1.3 The 2020 guarantee-fund relaxation
 
 KEP-019/DIR/KPEI/0620 cut the guarantee-fund contribution from 0.01% to 0.005% of equity trade value as a COVID-19 stimulus. The decision itself was not found on KPEI's site or in the Archive. Hukumonline records it as *"Ditetapkan: 17 Juni 2020"*, *"Berlaku s.d.: 16 Desember 2020"*, status *"Habis Masa Berlaku"*. Press reports of the SRO stimulus package date it 18 Jun 2020. No extension was found, and KPEI's page captured in June 2021 states 0.01% again.
 
 **Verdict:** 0.005% from about 17–18 Jun 2020 to 16 Dec 2020, **secondary** (the window matches KSEI's parallel stimulus KEP-0020, which ran from 19 Jun to 17 Dec 2020 and cut only the custody fee, from 0.005% to 0.0045%, not the settlement fee). Outside that window, 0.01%.
+
+**Superseded by T-VERIFY (#41):** KPEI's audited FY2021 notes give KEP-019/DIR/KPEI/0620 as in force *"sejak 18 Juni 2020 sampai 17 Desember 2020"*, so the window is **18 Jun – 17 Dec 2020, verified** (`t-verify.md` §2).
 
 ### 1.4 VAT rate history
 
@@ -90,8 +94,8 @@ Per side, as a percentage of trade value. A sale also pays the 0.1% sale tax (§
 | Period | IDX + KPEI + KSEI | VAT on those | Guarantee fund | Levy |
 |---|---|---|---|---|
 | 2016-01-01 – 2020-06-17 | 0.030% | 0.0030% (10%) | 0.010% | **0.0430%** |
-| 2020-06-18 – 2020-12-16 | 0.030% | 0.0030% | 0.005% | **0.0380%** (secondary, §1.3) |
-| 2020-12-17 – 2022-03-31 | 0.030% | 0.0030% | 0.010% | **0.0430%** |
+| 2020-06-18 – 2020-12-17 | 0.030% | 0.0030% | 0.005% | **0.0380%** (`t-verify.md` §2) |
+| 2020-12-18 – 2022-03-31 | 0.030% | 0.0030% | 0.010% | **0.0430%** |
 | 2022-04-01 onward | 0.030% | 0.0033% (11%, then 12% × 11/12) | 0.010% | **0.0433%** |
 
 IPOT's notice of 30 Mar 2022 confirms that the April 2022 VAT step applied to the levy, though IPOT chose not to pass it on: *"PT Indo Premier Sekuritas memutuskan untuk menyerap kenaikan PPN 1 persen"*.
@@ -109,8 +113,8 @@ IPOT's notice of 30 Mar 2022 confirms that the April 2022 VAT step applied to th
 This was not in #38's AC, but it is a real per-day cost, and on small trades it outweighs every rate in §1.
 
 - **Law:** UU 10/2020, in force 1 Jan 2021. Pasal 3(2)e makes *"Dokumen transaksi surat berharga, termasuk Dokumen transaksi kontrak berjangka, dengan nama dan dalam bentuk apa pun"* dutiable, and its elucidation names *"trade confirmation"*. Pasal 5 sets *"tarif tetap sebesar Rp10.000,00 (sepuluh ribu rupiah)"*.
-- **Threshold, unverified:** Stockbit and Ajaib both charge it once per day, on the day's trade confirmation, only when the day's total exceeds Rp10,000,000 (Stockbit: *"dengan total nilai transaksi jual, beli, maupun jual dan beli di atas Rp10.000.000"*). Stockbit cites PMK 134/2021, but neither PMK 134/2021 nor UU 10/2020 contains that amount (UU 10/2020's only value threshold is Pasal 3(2)g's Rp5,000,000, for documents acknowledging receipt of money). The threshold's primary source was not found.
-- **Before 2021:** under the earlier stamp-duty law (UU 13/1985), **unverified**, and not researched.
+- **Threshold, unverified:** Stockbit and Ajaib both charge it once per day, on the day's trade confirmation, only when the day's total exceeds Rp10,000,000 (Stockbit: *"dengan total nilai transaksi jual, beli, maupun jual dan beli di atas Rp10.000.000"*). Stockbit cites PMK 134/2021, but neither PMK 134/2021 nor UU 10/2020 contains that amount (UU 10/2020's only value threshold is Pasal 3(2)g's Rp5,000,000, for documents acknowledging receipt of money). The threshold's primary source was not found. **Found by T-VERIFY (#41):** it is an exemption in PP 3/2022 Pasal 5 huruf b, in force 12 Jan 2022. From 1 Jan 2021 to 11 Jan 2022 every confirmation was dutiable (`t-verify.md` §3.2).
+- **Before 2021:** under the earlier stamp-duty law (UU 13/1985), **unverified**. T-VERIFY (#41) researched it and found no primary text saying whether a trade confirmation was dutiable (`t-verify.md` §3.1).
 
 ## 4. Broker fee schedules (AC4)
 
@@ -130,6 +134,8 @@ The three brokers with commission schedules (Ajaib, Stockbit and Indo Premier) a
 ## 5. Recommended `fees.toml` shape (AC5)
 
 Four tables: the exchange levy, the sale tax and the stamp duty, each effective-dated like the other `data/*.toml` files, and the broker presets. Rates are strings parsed to `Decimal` (spec §4.4), in percent.
+
+**Superseded in part (Shyden, 2026-09-25; #41):** backtests refuse unverified rows, so no `verified = false` row ships. The earliest date every row is verified is 2021-01-01 (`t-verify.md` §5). The `verified` field, the unverified comments below, and the last bullet after the example are research record, not the shipped design. The guarantee-fund window ends on 17 Dec 2020, and the stamp-duty threshold comes from PP 3/2022, from 12 Jan 2022.
 
 ```toml
 # Exchange-side charges per side, effective-dated (docs/research/t-fees.md §1).
@@ -219,17 +225,17 @@ note = "check against your broker's fee schedule"
 |---|---|---|
 | IDX fee 0.018% | FY2016–2017; 13 Mar 2020 onward | 2018 – 12 Mar 2020 (no change found) |
 | KPEI clearing 0.009% | FY2019 onward | 2016–2018 |
-| KSEI settlement 0.003% | 20 Jan 2021 onward (Rule VI-A) | 2016 – 19 Jan 2021: 0.003% probable, 0.006% possible (§1.2) |
-| Guarantee fund 0.01% | 27 Aug 2015 onward | the 0.005% window of 2020 (secondary) |
+| KSEI settlement 0.003% | FY2019 onward (`t-verify.md` §1) | 2016–2018: 0.003% probable, 0.006% possible (§1.2) |
+| Guarantee fund 0.01% | 27 Aug 2015 onward, with 0.005% from 18 Jun to 17 Dec 2020 (`t-verify.md` §2) | — |
 | VAT on the levy | 2016 onward (10%, 11%, 12% × 11/12) | — |
 | Sale tax 0.1% | 1997 onward | — |
-| Stamp duty Rp10,000 | 1 Jan 2021 onward | the Rp10,000,000 threshold; everything before 2021 |
+| Stamp duty Rp10,000 | 1 Jan 2021 onward, with the Rp10,000,000 exemption from 12 Jan 2022 (PP 3/2022; `t-verify.md` §3.2) | everything before 2021 |
 | Broker commissions | published rates: Ajaib and Stockbit as of 2026-09-25, IPOT as of 30 Mar 2022 | any other date |
 
 **Open for the M2 plan** (decisions, not research gaps):
 1. Whether the fees task ships stamp duty in M2, or records it as a known omission. Spec §5.1 now lists it and leaves this to the plan, and §4.3's per-trade `costs(side, gross, on)` cannot charge a per-day amount as written.
 2. Whether `stockbit` and `ipot` ship as presets with an assumed `includes` list, or only `ajaib` (whose page states it) plus `custom`.
-3. How unverified fee rows interact with T-HIST's open decision on unverified rule rows (`t-hist.md` §6 item 1). One answer for both keeps the report's caveats consistent.
+3. How unverified fee rows interact with T-HIST's open decision on unverified rule rows (`t-hist.md` §6 item 1). One answer for both keeps the report's caveats consistent. **Answered (Shyden, 2026-09-25):** refuse unverified rows. T-VERIFY (#41) then moved the earliest verified date to 2021-01-01 (`t-verify.md` §5).
 
 ## Review log
 

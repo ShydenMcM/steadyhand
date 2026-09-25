@@ -111,8 +111,10 @@ The 7% down band ran until the 2023 normalisation. IDX's 2023 annual report conf
 |---|---|---|
 | before 13 Mar 2020 | not found | **unverified** |
 | **13 Mar 2020** onwards | *"Harga Pembukaan di Pasar Reguler"* (VI.7.3.1); *"Harga Previous apabila Harga Pembukaan tidak terbentuk"* (VI.7.3.2); the theoretical price after a corporate action; the IPO price | verified (Kep-00025 attachment) |
-| 3 Apr 2023 | opening price, previous close as fallback | verified (II-A 2023, `t-rules.md` §3) |
+| 3 Apr 2023 | opening price, previous close as fallback | **wrong: see below** (II-A 2023's attachment, `t-rules.md` §3) |
 | **9 Dec 2024** onwards | *Harga Previous* (the previous close) | verified (II-A 2025, which re-issues Kep-00196/BEI/12-2024, in force 9 Dec 2024; `t-rules.md` §3) |
+
+**Superseded by T-VERIFY (#41), `t-verify.md` §4.** The opening price applied only from 13 Mar to 6 Sep 2020. Kep-00063/BEI/09-2020 switched to the previous close on 7 Sep 2020. Every II-A from Kep-00108 (7 Dec 2020) through Kep-00055 (3 Apr 2023) held its attachment's VI.7.3 back and set *"Harga Previous"* as the interim rule, and Kep-00196 made that the rule itself on 9 Dec 2024. The rows above read the attachments, not the cover decisions. The original finding follows as record.
 
 **The switch lies between 3 Apr 2023 and 9 Dec 2024. It was not narrowed.** IDX's 2024 annual report names two II-A changes in 2024: *"perubahan Peraturan II-A dan II-P Perluasan Saham Pre-Opening"* (widening the set of stocks in the pre-opening auction), and the amendment *"yang diberlakukan pada tanggal 9 Desember 2024"*. Neither text was found, and IDX's announcement feed does not carry rule decisions (a search of it for 2023-07 to 2024-12 returned no rule decision).
 
@@ -124,11 +126,11 @@ The 7% down band ran until the 2023 normalisation. IDX's 2023 annual report conf
 | Tick table | 13 Mar 2020 | 2 May 2016 – 12 Mar 2020 five tiers (supported by Yahoo prices); 6 Jan 2014 – 1 May 2016 three tiers (date from IDX's annual report, values from the news, consistent with Yahoo) |
 | Auto-rejection bands | 13 Mar 2020 | the 10% band's start (9 or 10 Mar 2020); everything before 9 Mar 2020 |
 | Minimum price | 9 Mar 2020 (Rp50) | before 9 Mar 2020 |
-| Reference price | 13 Mar 2020 (opening price) and 9 Dec 2024 (previous close) | before 13 Mar 2020; the switch between 3 Apr 2023 and 9 Dec 2024 |
+| Reference price | 13 Mar 2020: the opening price to 6 Sep 2020, the previous close from 7 Sep 2020 (`t-verify.md` §4) | before 13 Mar 2020 |
 
 **Open for the M2 plan** (decisions, not research gaps):
-1. The acceptance backtest (spec §14 AC1) starts on 2016-01-01. Holidays now cover it. Ticks and bands are primary-verified only from 13 Mar 2020. The plan must decide between refusing a backtest before that date, or shipping the older rows marked unverified with the backtest report saying so.
-2. The reference price matters to the band itself, so to both the "impossible data" check (spec §5 step 1), which compares close-to-close moves with the band, and to rejecting a fill outside the band (§5.1). With the opening price as reference, a genuine close can sit further from the previous close than the band, so over the untraced 2023–2024 window the check must not assume the previous close.
+1. The acceptance backtest (spec §14 AC1) starts on 2016-01-01. Holidays now cover it. Ticks and bands are primary-verified only from 13 Mar 2020. The plan must decide between refusing a backtest before that date, or shipping the older rows marked unverified with the backtest report saying so. **Answered (Shyden, 2026-09-25):** refuse. With the fee rows included, the earliest verified date is 2021-01-01 (`t-verify.md` §5).
+2. The reference price matters to the band itself, so to both the "impossible data" check (spec §5 step 1), which compares close-to-close moves with the band, and to rejecting a fill outside the band (§5.1). With the opening price as reference, a genuine close can sit further from the previous close than the band, so over the untraced 2023–2024 window the check must not assume the previous close. **Updated by T-VERIFY (#41):** the previous close is the reference on every day from 7 Sep 2020 (`t-verify.md` §4.2).
 3. **Yahoo's zero-volume placeholder rows.** On 16–18 trading days in 2016–2024, each sampled stock has a flat bar at the previous close with volume 0 while the market traded. The spec (§5, §5.1) reads zero volume as "the stock did not trade" and rejects orders that day. The data source must decide whether a flat zero-volume bar is data or a gap.
 4. **Yahoo's prices are adjusted even with `auto_adjust=False`.** BBCA.JK's 2016 bars read about 2,610: divided by 5 for its 5-for-1 split of 13 Oct 2021 (Yahoo's own split record), where the unadjusted price was about 13,050, and some stocks carry fractional prices from adjustments that are not listed as splits. Spec §4.3 needs **unadjusted** prices, so the data source must reverse the adjustments, and must detect the ones it cannot explain.
 
