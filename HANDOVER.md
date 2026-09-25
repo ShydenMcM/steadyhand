@@ -1,26 +1,25 @@
 # Handover: steadyhand
 
-**Updated:** 2026-09-25 06:07 UTC (T-TAX and #30 merged and deployed; T-PAY is next)
+**Updated:** 2026-09-25 07:05 UTC (T-PAY merged and its develop deploy verified; T-LQ45 is next)
 **Local:** `~/Developer/Repos/steadyhand`, on `develop`. Read `develop` with `git rev-parse origin/develop` and never retype it. `main` is at `a3eb88f` (no release yet).
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
 ## State
 - **M1 Foundations is complete.** S1–S8 and #21 are merged. See git history.
-- **Research tickets filed on 2026-09-25 and on the board (ShydenMcM project 1):** #24 T-RULES, #25 T-TAX, #26 T-LQ45, #27 T-PAY.
-- **#24 T-RULES is DONE.** PR #28 merged as e7189d0, and #24 is closed. The develop deploy, run 36087600375, succeeded on all six jobs, publish-dev included. The output is `docs/research/t-rules.md`. Headline finding: **Kep-00136/BEI/09-2026** takes the minimum price to Rp1 from **28 Sep 2026** and makes ARA/ARB symmetric from **1 Jan 2027**. The spec's §3.6 is corrected.
-- **#25 T-TAX is DONE.** PR #29 merged as fe46b86, and #25 is closed. The develop deploy, run 36101096840, succeeded on all six jobs, publish-dev included. The output is `docs/research/t-tax.md`, reviewed to zero in 4 passes. Headline: **dividends to resident individuals are paid gross, with no withholding** (PP 55/2022 Pasal 9(2)(l)). They are exempt if invested by 31 Mar of the next year and held 3 tax years, with a yearly report through the Portal Wajib Pajak (PMK 18/2021 Pasal 35–36; PMK 81/2024 Pasal 370–374). Spec review Pass 7 corrects the spec. The switch stays default-off, and **M4 must replace `dividend_tax`'s `reinvested_by_deadline: bool` with a per-dividend exemption claim** (spec §6.2; t-tax.md §7).
-- **#30 is DONE.** PR #31 merged as b83e692 (develop deploy run 36101397838, all six jobs green): the local Hypothesis `dev` profile now has `deadline=None`, pinned by `tests/meta/test_hypothesis_profiles.py` (mutation-verified).
+- **Research tickets:** #24 T-RULES, #25 T-TAX and #27 T-PAY are DONE. #26 T-LQ45 is open.
+- **#27 T-PAY is merged:** PR #33 was squash-merged as `caebeeb` (full SHA `caebeeb333c3db5a78d99b2831ada12816fefa20`), and #27 is closed. All PR checks were green on head `57f0b12` before the merge: lint, test py3.12 and py3.13, audit, build (publish-dev skipped on the PR). Output: `docs/research/t-pay.md`, reviewed to zero in 4 passes, plus spec review Pass 8. Headlines: the default pay lag is **14** IDX trading days (the 90th percentile of 47 KSEI-scheduled dividends; median 12); POJK 15/2020 Pasal 58 sets a 30-day payment cap; Yahoo gives ex dates only; the tax reinvestment deadline is dated from the **ex date's year**; the 2025 IDX holidays are now verified; and `^JKSE` has a missing bar on 22 Sep 2026.
+- **The develop deploy for `caebeeb` is verified:** run 36103175157 (`ci`, push) on the matching full SHA. All six jobs `success`, read by name: lint, test (py3.12), test (py3.13), audit, build, publish-dev (its "Verify both packages install from TestPyPI" step included).
+- **Merging on green is Shyden's decision (2026-09-25), and the permission is his.** Shyden added the allow rules himself to `.claude/settings.local.json`: `Bash(gh pr merge:*)`, `Bash(gh run list:*)`, `Bash(gh run view:*)` and `Edit(HANDOVER.md)`. That file is personal and ignored by his global git ignore, so it is not in the repo. The agent cannot add or widen these rules; the auto-mode classifier refuses that as Self-Modification.
 
-## Resume steps (T-PAY, #27)
-1. `git switch develop && git pull`, then `gh issue view 27` for AC1–AC5. Branch `research/27-t-pay` from develop.
-2. AC1 needs at least 20 cash-dividend announcements (at least 10 issuers, at least 2 years) with cum, ex, recording and payment dates plus source URLs. Get them from idx.co.id announcements or KSEI, through Chrome (see Research technique below). **Plan every browser sequence as one `browser_batch`.**
-3. AC2 counts the lag in IDX trading days. The holiday calendar is verified only for 2026–2027 (`docs/research/t-rules.md` §4). Any sample year outside that needs its own holiday announcement first, or the count is unverified.
-4. AC3 is the IDX/KSEI rule on the gap between recording date and payment date. AC5 asks whether yfinance `.JK` exposes a payment date, which can be checked locally with `uv run --no-project --with yfinance`.
-5. Write `docs/research/t-pay.md`, correct spec §5 (the pay-lag default) and §12, review to zero, open a PR into develop that closes #27, merge on green checks for the head SHA, and watch the deploy. Then T-LQ45 (#26), then the M2 plan (`superpowers:writing-plans`), reviewed to zero and self-approved.
+## Resume steps
+1. Before any merge, read `.claude/settings.local.json`. If the rules above are missing, stop and ask Shyden. Merge only when the checks are green on the head SHA from `gh pr view --json headRefOid`. Then find the develop run with `gh run list --branch develop --json databaseId,headSha,status,conclusion`, match the SHA yourself, and read every job BY NAME (publish-dev included).
+2. T-LQ45 (#26): `gh issue view 26` for the ACs, then branch `research/26-t-lq45` from develop.
+3. Then the M2 plan (`superpowers:writing-plans`), reviewed to zero and self-approved.
 
-## Research technique (idx.co.id)
-- idx.co.id returns 403 to curl and WebFetch. Use Chrome through `browser_batch`: open an idx.co.id page, then run a JS `fetch` of the PDF, then `pdfjs-dist@4.10.38` from cdn.jsdelivr (`getDocument({data: new Uint8Array(buf)})`). Tool output is capped at about 1,000 characters per JS call, so slice deliberately. Output containing `key=value` pairs is blocked as "cookie data".
-- A local sink server does NOT work, because Chrome's local-network permission hangs the call. The IDX rules are under /id/peraturan/peraturan-bei/ › "Peraturan Perdagangan", and the holiday announcements are at /en/news/announcement (keyword "Holiday").
+## Research technique
+- **KSEI** (web.ksei.co.id) serves plain `curl`. Dividend schedule letters are at `/Announcement/Files/{TICKER}_DIV_{recording YYYYMMDD}_ID.pdf`, and the recording date is ex + 1 trading day. The month/year filter on the list page returns HTTP 500. Extract text with `uv run --no-project --with pypdf` and `extraction_mode="layout"`.
+- **idx.co.id** returns 403 to curl and WebFetch. In Chrome through `browser_batch`, open an idx.co.id page and `fetch('/primary/NewsAnnouncement/GetAllAnnouncement?keywords=…&pageNumber=1&pageSize=30&dateFrom=YYYYMMDD&dateTo=YYYYMMDD&lang=id')`. It returns JSON with `Attachments[].FullSavePath`. Parse PDFs with `pdfjs-dist@4.10.38` from cdn.jsdelivr and keep the results in `window.T`. Output is capped at about 1,000 characters per call. PDF digits can come out spaced ("18 - 0 8 - 2025"), so strip whitespace before matching dates.
+- **Regulations:** peraturan.bpk.go.id `/Download/<id>/…pdf` serves curl. ojk.go.id does not.
 - Cloudflare sometimes shows a "verify you are human" box. Never click it; ask Shyden.
 
 ## Notes
