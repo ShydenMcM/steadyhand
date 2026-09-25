@@ -1,37 +1,40 @@
 # Handover: steadyhand
 
-**Updated:** 2026-09-25 07:45 UTC (all four research tickets done and deployed; the M2 plan is next)
-**Local:** `~/Developer/Repos/steadyhand`, on `develop`. Read `develop` with `git rev-parse origin/develop` and never retype it. `main` is at `a3eb88f` (no release yet).
+**Updated:** 2026-09-25 11:55 UTC (T-HIST merged and deployed; T-FEES research done and in a PR; the M2 plan is next)
+**Local:** `~/Developer/Repos/steadyhand`, on branch `research/38-t-fees`. `origin/develop` is at `48e0dc2` (the #39 merge). Read SHAs with `git rev-parse`, never retype them. `main` is at `a3eb88f` (no release yet).
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
 ## State
-- **M1 Foundations is complete.** S1–S8 and #21 are merged. See git history.
-- **Research tickets are all DONE:** #24 T-RULES, #25 T-TAX, #27 T-PAY and #26 T-LQ45. Each has `docs/research/t-*.md` and a spec review pass (6 to 9).
-- **#26 T-LQ45 is merged:** PR #35 was squash-merged as `014f7ec` (full SHA `014f7ec861c16b67828a13cde8d602a695d0db02`), and #26 is closed. Checks were green on head `9a32b4e` before the merge. The develop deploy, run 36108411710 on the matching SHA, had all six jobs `success` by name, with publish-dev's TestPyPI install check included. Output: `docs/research/t-lq45.md`, reviewed to zero in 6 passes, plus spec Pass 9.
-  - **Sources:** IDX review announcements (on idx.co.id from 2024), plus Internet Archive copies of IDX's 2004–2018 announcements and its 2013–2025 LQ45 fact-sheet booklets.
-  - **Coverage:** the earliest list found is Feb–Jul 2004. For 2016–2025, 19 of 24 reviews have a primary list. The gaps are Feb 2019, Feb and Aug 2021, Aug 2022 and Feb 2023. Reviews are quarterly from May 2024.
-  - **Format:** `lq45_members.toml`, one record per IDX document with the full 45 codes.
-  - **Licensing:** IDX's Terms of Use bar commercial redistribution and scraping, so the file is user-supplied, never shipped. Spec §9.4 and the `[universe] lq45_members` key in §9.5 reflect this.
-- **Merging on green is Shyden's decision (2026-09-25), and the permission is his.** He added the allow rules himself to `.claude/settings.local.json`: `Bash(gh pr merge:*)`, `Bash(gh run list:*)`, `Bash(gh run view:*)` and `Edit(HANDOVER.md)`. That file is personal and ignored by his global git ignore, so it is not in the repo. PRs #34 and #35 merged under them. The agent cannot add or widen these rules; the auto-mode classifier refuses that as Self-Modification.
+- **M1 is complete.** Research tickets #24 T-RULES, #25 T-TAX, #26 T-LQ45, #27 T-PAY and #37 T-HIST are done and deployed.
+- **#37 T-HIST: merged** as PR #39 (squash `48e0dc2`), on Shyden's explicit instruction in this session. Develop run 36129855580 on that SHA passed all six jobs by name (lint, test py3.12, test py3.13, audit, build, publish-dev). **Issue #37 may still be open**: check it and close it with a comment naming PR #39, as #26 was.
+- **#38 T-FEES: research done**, on branch `research/38-t-fees`, in a PR to `develop` (see `gh pr list --head research/38-t-fees`). It holds `docs/research/t-fees.md` (reviewed to zero in 7 passes), spec §3, §5.1, §9.1, §12 and Appendix A, spec review Pass 11, and this handover.
+  - Levy: IDX 0.018%, KPEI 0.009%, KSEI 0.003%, VAT on those three (10%, then 11% from 1 Apr 2022, and 12% × 11/12 from 2025, which is also 11%), and KPEI's 0.01% guarantee fund, which carries **no VAT**. That makes 0.043%, then 0.0433%. The fund was 0.005% from about 18 Jun to 16 Dec 2020 (**secondary** source only).
+  - Unverified: IDX for 2018 – 12 Mar 2020, KPEI for 2016–2018, and KSEI before 20 Jan 2021 (the 2009 list says 0.006%; 0.003% is probable).
+  - Sale tax: 0.1%, PP 41/1994 as amended by PP 14/1997, collected by the exchange.
+  - **Stamp duty (new):** Rp10,000 per trade confirmation from 2021 (UU 10/2020). The Rp10 million daily threshold is broker practice only; no primary source was found.
+  - Brokers: Ajaib 0.1513%/0.2513% all-in, stated. Stockbit 0.15%/0.25%. IPOT 0.19%/0.29% (as of Mar 2022). None publishes a minimum fee.
+- **Merging:** the auto-mode classifier denied the agent's merge of #39 last session ("Merge Without Review"). With Shyden's explicit "merge it" in this session it went through. **Approval is per PR**: ask Shyden with `AskUserQuestion` before merging the T-FEES PR.
 
 ## Resume steps
-1. **Merges:** before any merge, read `.claude/settings.local.json`. If the rules above are missing, stop and ask Shyden. Merge only when the checks are green on the head SHA from `gh pr view --json headRefOid`, with `gh pr merge --match-head-commit <that SHA>`. Then find the develop run with `gh run list --branch develop --json databaseId,headSha,status,conclusion`, match the SHA yourself, and read every job BY NAME (publish-dev included).
-2. **The M2 plan:** use `superpowers:writing-plans`. Read the spec's §13 for M2's scope and the four research docs for its data. Review the plan to zero, then self-approve it.
-3. **Open for the M2 plan, not decided:**
-   - §8 says the universe is the LQ45 "unless the operator configures otherwise", but no config key exists for another universe (recorded in spec Pass 9).
-   - The M2 plan decides whether `steadyhand-idx` gets a local importer for PDFs the user saved (never a downloader; `t-lq45.md` §5).
+1. **The T-FEES PR.** Read its head with `gh pr view <n> --json headRefOid,statusCheckRollup`, and wait for CI on that SHA, reading every job by name. When it is green, ask Shyden (`AskUserQuestion`) whether to merge. After the merge, find the develop run for the merge SHA with `gh run list --branch develop --json databaseId,headSha,status,conclusion` (match the SHA yourself), and read every job, publish-dev included. Then close #38 and #37 with a comment naming each PR (the PR bodies say `Refs`, so neither closes on merge).
+2. **Then the M2 plan** (`superpowers:writing-plans`), from spec §13 and the six research docs. The plan is reviewed on a loop to zero findings, then self-approved (global rule). Decisions it must take, and which to ask Shyden about:
+   - **Ask Shyden:** whether a backtest may run before 13 Mar 2020 on unverified rule rows, or must refuse (`t-hist.md` §6 item 1). One answer should also cover the unverified fee rows (`t-fees.md` §6 item 3).
+   - **Take in the plan:** how the Yahoo source treats flat zero-volume bars, and how it un-adjusts prices (`t-hist.md` §6 items 3–4); the reference price over the 2023–2024 window (§6 item 2); whether an LQ45 PDF importer is built (the lean choice is no); the §8 "another universe" key (defer to M5's config); whether stamp duty ships in M2, given that §4.3's `costs(side, gross, on)` is per trade and stamp duty is per day (`t-fees.md` §6 item 1); and whether the `stockbit` and `ipot` presets ship with an assumed `includes` list (item 2).
+   - M2 scope: `rules.py` and data files, `calendar.py`, `fees.toml` and the fees task, the Yahoo source, the cache, fixtures, and probably `universe.py` (no milestone names it; say so in the plan).
 
 ## Research technique
-- **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid "web scrapping/crawling". Try the Internet Archive, KSEI or BPK first. Use the idx.co.id browser technique below only when no other source has the document, and say in the research doc which documents came that way.
-- **Internet Archive:** `curl -G https://web.archive.org/cdx/search/cdx --data-urlencode "url=idx.co.id" --data-urlencode "matchType=domain" --data-urlencode "filter=original:.*lq45.*" --data-urlencode "filter=mimetype:application/pdf" --data-urlencode "collapse=urlkey" --data-urlencode "fl=timestamp,original"`. Download raw files from `https://web.archive.org/web/<ts>id_/<original>`. Space the downloads about 4 s apart: a burst of 57 lost 32 to throttling.
-- **Scanned PDFs:** `scratchpad/lq45/ocr.swift` (macOS Vision; `swiftc -O -o ocr ocr.swift`) reads them, and needs no installs. It is session scratch, so rewrite it if the scratchpad is gone. The OCR reads Latin capitals as Cyrillic look-alikes and misreads about 2 codes per 45 while keeping the count at 45. Never trust a count; cross-check against a second source.
-- **KSEI** (web.ksei.co.id) serves plain `curl`. Dividend schedule letters are at `/Announcement/Files/{TICKER}_DIV_{recording YYYYMMDD}_ID.pdf`, and the recording date is ex + 1 trading day. The month/year filter on the list page returns HTTP 500. Extract text with `uv run --no-project --with pypdf` and `extraction_mode="layout"`.
-- **idx.co.id (fallback only)** returns 403 to curl and WebFetch. In Chrome through `browser_batch`, open an idx.co.id page and `fetch('/primary/NewsAnnouncement/GetAllAnnouncement?keywords=…&pageNumber=1&pageSize=100&dateFrom=YYYYMMDD&dateTo=YYYYMMDD&lang=id')`. Its archive starts in **July 2023**. It returns JSON with `Attachments[].FullSavePath`; some attachments are `.zip` (unzip with `fflate@0.8.2` from cdn.jsdelivr). Parse PDFs with `pdfjs-dist@4.10.38`. Output is capped at about 1,000 characters per call, and `localStorage` keeps results across navigations within the site. PDF digits can come out spaced, so strip whitespace before matching dates.
-- **Regulations:** peraturan.bpk.go.id `/Download/<id>/…pdf` serves curl. ojk.go.id does not.
+- **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid scraping. Try the Internet Archive, KSEI, KPEI (idclear) or BPK first. Use idx.co.id only when none has a readable copy, and say so in the research doc.
+- **Internet Archive:** use the CDX API (`web.archive.org/cdx/search/cdx`, `matchType=prefix` or `domain`, `filter=`, `collapse=urlkey`; pass `curl -g` when the filter has brackets), then `https://web.archive.org/web/<ts>id_/<original>`, spaced about 4 s apart. Some indexed captures 404 on replay, and some are **truncated at exactly 1 MiB**: check the PDF's EOF marker.
+- **SRO annual reports state fee rates** in their revenue notes: IDX AR 2017 (0.018%), KPEI AR 2019 (0.009%, fund 0.01%). Useful for dating a rate when the rule text is missing.
+- **idx.co.id (fallback only):** in Chrome through `browser_batch`. Parse PDFs in the page with `pdfjs-dist@4.10.38` from cdn.jsdelivr; output is capped at about 1,000 characters per call.
+- **Pages that refuse curl** (403, such as ajaib.co.id): read them in Chrome with `browser_batch` (`navigate` + `get_page_text`).
+- **Scanned PDFs:** render them with `uv run --no-project --with pypdfium2 --with pillow` and read the image. Text PDFs: `uv run --no-project --with pypdf`.
+- **KSEI, KPEI and BPK serve curl** (KSEI needs `-A "Mozilla/5.0"`). ojk.go.id does not.
 - Cloudflare sometimes shows a "verify you are human" box. Never click it; ask Shyden.
 
 ## Notes
-- This is a personal project: not Shyden Ltd, and not ShyTalk. Never touch the ShyTalk board or roadmap. The steadyhand board is **ShydenMcM project 1**, node `PVT_kwHOCQ_jzM4BkhEb`. Assert the title "steadyhand" before writing to it. New issues do NOT auto-add; use `addProjectV2ItemById`.
+- This is a personal project: not Shyden Ltd, and not ShyTalk. Never touch the ShyTalk board or roadmap. The steadyhand board is **ShydenMcM project 1**, node `PVT_kwHOCQ_jzM4BkhEb`. Assert the title "steadyhand" before writing to it. New issues do NOT auto-add: use `gh project item-add 1 --owner ShydenMcM --url …`, and read it back with `gh project item-list`.
 - Agent git and gh act as the `steadyhand-agent` App (administration: read). An admin write is Shyden's decision.
 - The `python3` on this machine is Xcode's 3.9, which has no `tomllib`. The code uses uv's Python 3.12 and 3.13, and uv is pinned to 0.12.18.
 - **A TestPyPI publish failure is not always ours.** An OIDC or TLS timeout goes away with `gh run rerun <id> --failed`, and `skip-existing` makes that safe.
+- **Timestamps:** stamp status lines only from a `date -u` read.
