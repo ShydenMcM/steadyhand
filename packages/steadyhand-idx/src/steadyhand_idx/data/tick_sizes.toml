@@ -1,0 +1,36 @@
+# IDX price fractions (fraksi harga), the board lot and the settlement cycle, effective-dated.
+# Spec §3.6 and §9.1.
+#
+# The tier is chosen by the order price itself, and each tier's lower bound is inclusive:
+# II-A VI.5.2 sets the tiers and VI.5.4 moves them with the order price (docs/research/t-rules.md
+# §1). So 199 is on a Rp1 grid, 200 on Rp2, 500 on Rp5, 2,000 on Rp10 and 5,000 on Rp25.
+# These tiers differ from the auto-rejection tiers in auto_reject.toml, where 200 and 5,000 sit
+# in the LOWER tier; the two files never share a tier rule.
+#
+# Only primary-verified rows are shipped (spec §9.1). The five-tier table is verified from
+# 13 Mar 2020 (Kep-00025/BEI/03-2020; docs/research/t-hist.md §3) and unchanged in every II-A
+# since. Its earlier history is supported by prices but has no IDX text, so it is not here.
+
+schema = 1
+
+[[ticks]]
+from = 2020-03-13
+source = "Kep-00025/BEI/03-2020, Rule II-A VI.4.2 and VI.5.2 (unchanged through Kep-00136/BEI/09-2026)"
+lot_size = 100
+tiers = [
+    { from_price = 1, tick = 1 },
+    { from_price = 200, tick = 2 },
+    { from_price = 500, tick = 5 },
+    { from_price = 2000, tick = 10 },
+    { from_price = 5000, tick = 25 },
+]
+
+# Settlement in IDX trading days after the trade day. POJK 21/POJK.04/2018 Pasal 2(2): "Penyelesaian
+# atas Transaksi Bursa di pasar reguler dilaksanakan pada Hari Bursa ke-2 (kedua) setelah hari
+# pelaksanaan Transaksi Bursa (T+2)". It was in force on promulgation, 21 Nov 2018 (Pasal 13), and
+# the market's first T+2 trade day is reported as 26 Nov 2018. The row starts on the later date,
+# the one both readings agree on.
+[[settlement]]
+from = 2018-11-26
+source = "POJK 21/POJK.04/2018 Pasal 2(2) (peraturan.bpk.go.id/Details/128635, status Berlaku)"
+trading_days = 2

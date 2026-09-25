@@ -1,0 +1,79 @@
+# IDX auto-rejection (ARA/ARB) bands and the minimum price, effective-dated. Spec §9.1.
+#
+# An order is rejected when its price is MORE than the stated amount above or below the
+# reference price (Acuan Harga), so a price exactly on the limit is accepted. The tier is chosen
+# by the reference price, and `up_to` is inclusive: 200 and 5,000 sit in the LOWER tier here,
+# unlike the tick table (docs/research/t-rules.md §3). A tier gives either percentages or, for
+# the lowest prices from 28 Sep 2026, a fixed number of rupiah either way.
+#
+# The reference price is the previous close from 7 Sep 2020, and the opening price from 13 Mar to
+# 6 Sep 2020 (docs/research/t-verify.md §4). The caller supplies it; this file only says how far
+# a price may move from it. Rows repeat every field, so no row depends on the one before it.
+#
+# Only primary-verified rows are shipped (spec §9.1): the bands are verified from 13 Mar 2020
+# (docs/research/t-hist.md §4). Kep-00108 (7 Dec 2020), Kep-00061 (26 Jul 2021) and Kep-00055's
+# first phase (3 Apr 2023) kept the same values, so they need no row of their own.
+
+schema = 1
+
+[[bands]]
+from = 2020-03-13
+source = "Kep-00025/BEI/03-2020, Memutuskan 1 and II-A VI.7.1.1"
+min_price = 50
+tiers = [
+    { up_to = 200, up_percent = "35", down_percent = "7" },
+    { up_to = 5000, up_percent = "25", down_percent = "7" },
+    { up_percent = "20", down_percent = "7" },
+]
+
+[[bands]]
+from = 2023-06-05
+source = "Kep-00055/BEI/03-2023, Memutuskan 4.b"
+min_price = 50
+tiers = [
+    { up_to = 200, up_percent = "35", down_percent = "15" },
+    { up_to = 5000, up_percent = "25", down_percent = "15" },
+    { up_percent = "20", down_percent = "15" },
+]
+
+[[bands]]
+from = 2023-09-04
+source = "Kep-00055/BEI/03-2023, Memutuskan 4.c and II-A VI.7.1.2"
+min_price = 50
+tiers = [
+    { up_to = 200, up_percent = "35", down_percent = "35" },
+    { up_to = 5000, up_percent = "25", down_percent = "25" },
+    { up_percent = "20", down_percent = "20" },
+]
+
+[[bands]]
+from = 2025-04-08
+source = "Kep-00003/BEI/04-2025, Memutuskan 2 and II-A VI.6.1"
+min_price = 50
+tiers = [
+    { up_to = 200, up_percent = "35", down_percent = "15" },
+    { up_to = 5000, up_percent = "25", down_percent = "15" },
+    { up_percent = "20", down_percent = "15" },
+]
+
+[[bands]]
+from = 2026-09-28
+source = "Kep-00136/BEI/09-2026, Memutuskan 2-3 and II-A VI.6"
+min_price = 1
+tiers = [
+    { up_to = 10, up_rupiah = 1, down_rupiah = 1 },
+    { up_to = 200, up_percent = "35", down_percent = "15" },
+    { up_to = 5000, up_percent = "25", down_percent = "15" },
+    { up_percent = "20", down_percent = "15" },
+]
+
+[[bands]]
+from = 2027-01-01
+source = "Kep-00136/BEI/09-2026, II-A VI.7.1.1"
+min_price = 1
+tiers = [
+    { up_to = 10, up_rupiah = 1, down_rupiah = 1 },
+    { up_to = 200, up_percent = "35", down_percent = "35" },
+    { up_to = 5000, up_percent = "25", down_percent = "25" },
+    { up_percent = "20", down_percent = "20" },
+]
