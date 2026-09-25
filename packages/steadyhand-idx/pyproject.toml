@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling>=1.32,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "steadyhand-idx"
+version = "0.1.0"
+description = "The Indonesia Stock Exchange distribution of steadyhand: IDX rules, Yahoo .JK data, paper trading and a CLI."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Shyden" }]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Typing :: Typed",
+]
+dependencies = [
+    "steadyhand",
+]
+
+[project.urls]
+Homepage = "https://github.com/ShydenMcM/steadyhand"
+Issues = "https://github.com/ShydenMcM/steadyhand/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/steadyhand_idx"]
