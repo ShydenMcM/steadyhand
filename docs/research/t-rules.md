@@ -125,6 +125,8 @@ II-A 2023 had the same Session I and Session II hours. The auction windows are w
 | `holidays.toml` | 2026 and 2027 | every year before 2026 (not researched in this ticket) |
 | `sessions.toml` | 2023-04-03 onwards | before 2023-04-03 |
 
+**Extended by T-HIST (#37, `docs/research/t-hist.md` §6):** holidays are now verified for every year from 2016, and ticks, bands and the opening-price reference from 13 Mar 2020. That doc's verdict supersedes the "unverified before" column above where the two differ.
+
 **Open for M2** (decisions for the M2 plan, not research gaps in this ticket):
 1. The AC1 backtest starts on 2016-01-01, but verified rules start on 2020-12-07 and verified holidays start in 2026. For earlier years the M2 plan must do one of two things: source them (IDX holiday announcements are listed back to 2024 on the announcements page, and older ones may need TICMI), or have the backtester refuse dates it has no rules for, as §9.1 already requires for holidays.
 2. The reference price (previous close or opening price) changed at some date between 2023-04-03 and 2024-12-09. It only matters if the backtester models auto-rejection before 2025.
