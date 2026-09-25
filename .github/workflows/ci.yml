@@ -132,6 +132,8 @@ jobs:
         with:
           repository-url: https://test.pypi.org/legacy/
           packages-dir: dist/
+          # A re-run reuses the run number, so the version: skip what the first attempt uploaded.
+          skip-existing: true
       - name: Verify both packages install from TestPyPI
         env:
           VERSION: ${{ steps.version.outputs.version }}
