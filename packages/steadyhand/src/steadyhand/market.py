@@ -43,7 +43,10 @@ class MarketRules(Protocol):
         ...
 
     def dividend_tax(self, gross: Money, *, reinvested_by_deadline: bool, on: date) -> Money:
-        """The tax withheld from a *gross* dividend paid on *on*."""
+        """The tax due on a *gross* dividend paid on *on*.
+
+        IDX issuers withhold nothing from resident individuals; see docs/research/t-tax.md.
+        """
         ...
 
     def is_trading_day(self, day: date) -> bool:
