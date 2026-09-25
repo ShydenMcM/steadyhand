@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      python-minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # Dependabot treats actions/cache, actions/cache/restore and actions/cache/save as
+      # separate dependencies. This group moves every sub-path of one repo together. It must
+      # stay above the patch group, because the first matching group wins.
+      actions-cache:
+        patterns: ["actions/cache*"]
+      actions-patch:
+        update-types: ["patch"]
