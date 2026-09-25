@@ -5,7 +5,7 @@ from importlib.metadata import version
 from steadyhand.broker import Broker
 from steadyhand.data import DataSource, DataUnavailableError
 from steadyhand.disclaimer import DISCLAIMER
-from steadyhand.market import MarketRules
+from steadyhand.market import MarketRules, UnsupportedDateError
 from steadyhand.money import (
     IDR,
     MAX_MINOR_UNITS,
@@ -75,5 +75,6 @@ __all__ = [
     "Rounding",
     "Side",
     "Split",
+    "UnsupportedDateError",
     "__version__",
 ]

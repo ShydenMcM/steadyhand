@@ -9,6 +9,14 @@ from steadyhand.money import Currency, Money
 from steadyhand.types import Costs, Instrument, Side
 
 
+class UnsupportedDateError(LookupError):
+    """A market's rule data does not cover a date.
+
+    Raised instead of guessing: a year with no holiday data, or a day before a rule table's
+    first verified row, must stop the run. It is never read as "no holidays" or "today's rules".
+    """
+
+
 @runtime_checkable
 class MarketRules(Protocol):
     """One market's trading rules. Every rule is looked up for a date, because rules change.
