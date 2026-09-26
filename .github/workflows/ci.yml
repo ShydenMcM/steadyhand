@@ -94,6 +94,12 @@ jobs:
           ls dist
           test "$(ls dist/*.whl | wc -l)" -eq 2
           test "$(ls dist/*.tar.gz | wc -l)" -eq 2
+      - name: The IDX wheel carries its rule data
+        run: |
+          unzip -l dist/steadyhand_idx-*.whl > "${RUNNER_TEMP}/idx-wheel.txt"
+          for table in tick_sizes auto_reject fees holidays; do
+            grep -q "steadyhand_idx/data/${table}.toml" "${RUNNER_TEMP}/idx-wheel.txt"
+          done
       - name: The engine wheel installs and imports with nothing else
         run: |
           uv venv "${RUNNER_TEMP}/engine-only"
