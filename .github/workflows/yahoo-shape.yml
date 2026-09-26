@@ -1,0 +1,55 @@
+name: yahoo-shape
+
+# Spec §9.2: once a day, ask Yahoo for the recorded fixture ranges and check that the answer still
+# converts to the same unadjusted prices. A changed format, changed prices or a new unreported
+# adjustment opens an issue, so it is noticed before it breaks a user's run. It is not a PR gate:
+# Yahoo being down must not block a merge.
+
+on:
+  schedule:
+    - cron: "30 1 * * *" # 08:30 WIB, before the market opens
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yahoo-shape
+  cancel-in-progress: false
+
+env:
+  UV_VERSION: "0.12.18"
+
+jobs:
+  shape:
+    name: shape
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Yahoo still gives what the fixtures recorded
+        run: uv run --locked pytest -W error -m live -p no:cacheprovider tests/idx/test_yahoo_live.py
+      - name: Open an issue, unless one is already open
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Yahoo response check failed"
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq length)
+          if [ "$open" = "0" ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "The daily yahoo-shape run failed: $RUN_URL. Yahoo's answer for a recorded fixture range no longer converts to the recorded unadjusted prices. Read the failing test's diff before trusting new data (spec §9.2)."
+          else
+            echo "An issue is already open; not opening another."
+          fi

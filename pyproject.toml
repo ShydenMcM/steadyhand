@@ -45,11 +45,20 @@ strict = true
 python_version = "3.12"
 files = ["packages", "tests", "scripts"]
 
+[[tool.mypy.overrides]]
+# yfinance ships no type information. It is imported in one place, yahoo.download_history, whose
+# result is converted at once into steadyhand's own typed values.
+module = ["yfinance"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
 pythonpath = ["scripts"]
-addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-ra"]
+addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-ra", "-m", "not live"]
+markers = [
+    "live: talks to Yahoo; run by the daily yahoo-shape workflow with -m live, never on a PR",
+]
 filterwarnings = ["error"]
 xfail_strict = true
 
@@ -68,6 +77,7 @@ exclude_also = ['^\s*\.\.\.$']
 dev = [
     "hypothesis>=6.168.1",
     "mypy>=2.3.1",
+    "pandas-stubs>=3.0.5.260914",
     "pip-audit>=2.10.1",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
