@@ -17,6 +17,7 @@ from steadyhand._validate import require_date, require_type
 from steadyhand.data import DataSource, UnavailableDaysError
 from steadyhand.engine import DayInputs, DayReport, EngineSettings, EngineState, run_day
 from steadyhand.market import MarketRules
+from steadyhand.metrics import Metrics, measure
 from steadyhand.money import Money
 from steadyhand.risk import Halt
 from steadyhand.strategies.buy_and_hold import BuyAndHold
@@ -71,11 +72,13 @@ class BacktestSettings:
 
 @dataclass(frozen=True, slots=True)
 class RunResult:
-    """One strategy's run: every day's report, in order, and the state after the last day."""
+    """One strategy's run: every day's report, in order, the state after the last day, and what
+    the run achieved (M3 spec §8)."""
 
     strategy: str
     reports: tuple[DayReport, ...]
     final: EngineState
+    metrics: Metrics
 
     @property
     def halt(self) -> Halt | None:
@@ -223,7 +226,7 @@ def _run(
         )
         state, report = run_day(state, inputs, strategy, rules, settings.engine)
         reports.append(report)
-    return RunResult(strategy.name, tuple(reports), state)
+    return RunResult(strategy.name, tuple(reports), state, measure(reports, state))
 
 
 def _resumed(window: _Window, day: date) -> frozenset[Instrument]:

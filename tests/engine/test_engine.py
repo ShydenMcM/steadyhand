@@ -375,6 +375,16 @@ def test_the_monthly_contribution_arrives_on_the_months_first_trading_day() -> N
     assert report.deposit == rp(0)
 
 
+def test_each_report_carries_the_unit_price_at_the_close() -> None:
+    _, first = day_one()
+    assert first.unit_price == Decimal(1)
+    state, second = day_two()
+    # Rp10,000,000 bought 10,000,000 units at 1, so a unit is worth a ten-millionth of the value.
+    assert second.unit_price == Decimal(second.value.amount) / Decimal(10_000_000)
+    assert second.unit_price != Decimal(1)
+    assert second.unit_price == state.units.price
+
+
 def test_settings_and_state_check_their_parts() -> None:
     with pytest.raises(ValueError, match=r"^a monthly contribution must be positive, got IDR 0$"):
         EngineSettings(monthly_contribution=rp(0))

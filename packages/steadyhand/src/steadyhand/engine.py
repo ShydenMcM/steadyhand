@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
+from decimal import Decimal
 
 from steadyhand._validate import require_date, require_int, require_type
 from steadyhand.broker.simulated import FillResult, FillSettings, Opening, SimulatedBroker
@@ -129,6 +130,8 @@ class DayReport:
     unsettled: Money
     holdings_value: Money
     value: Money
+    unit_price: Decimal
+    """The price of one unit at today's close, which a deposit leaves unchanged (M3 spec §6.3)."""
     warnings: tuple[str, ...]
 
 
@@ -208,6 +211,7 @@ def run_day(
         unsettled=portfolio.unsettled_cash(day),
         holdings_value=holdings_value,
         value=value,
+        unit_price=units.price,
         warnings=(*corporate.warnings, *warnings),
     )
     return EngineState(new_holdings, units, halt, day, memory), report
