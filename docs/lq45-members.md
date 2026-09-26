@@ -41,7 +41,7 @@ The loader refuses a record that does not have exactly 45 different four-letter 
 
 ## Gaps and survivorship bias
 
-A backtest that starts before your first record, or runs across two records more than one review apart, prints a **survivorship-bias warning**. Reviews were every six months until January 2024 and every three months from May 2024. A gap means stocks that joined and left the LQ45 inside it never appear in the backtest, so its results look better than a real investor's would have. Five reviews between 2016 and 2025 have no primary list anyone has found (`t-lq45.md` §3).
+A backtest refuses to start before your first record, and names the first date it can start on. One that runs across two records more than one review apart prints a **survivorship-bias warning**. Reviews were every six months until January 2024 and every three months from May 2024. A gap means stocks that joined and left the LQ45 inside it never appear in the backtest, so its results look better than a real investor's would have. Five reviews between 2016 and 2025 have no primary list anyone has found (`t-lq45.md` §3).
 
 ## Exclusions
 

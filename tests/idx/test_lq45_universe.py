@@ -61,3 +61,18 @@ def test_exclusions_are_instruments_with_their_reasons() -> None:
 
 def test_no_exclusions_by_default() -> None:
     assert Lq45Universe(membership()).excluded_on(FIRST) == {}
+
+
+def test_survivorship_warnings_are_the_memberships() -> None:
+    gapped = Lq45Membership(
+        [
+            Lq45Record(FIRST, date(2021, 1, 25), "Peng-1", "review", frozenset(CODES[:45])),
+            Lq45Record(
+                date(2022, 2, 1), date(2022, 1, 25), "Peng-3", "review", frozenset(CODES[1:])
+            ),
+        ]
+    )
+    warnings = Lq45Universe(gapped).survivorship_warnings(FIRST, date(2022, 6, 30))
+    assert warnings == tuple(gapped.survivorship_warnings(FIRST, date(2022, 6, 30)))
+    assert len(warnings) == 1
+    assert "between 2021-02-01 (Peng-1) and 2022-02-01 (Peng-3)" in warnings[0]

@@ -69,15 +69,17 @@ def test_gaps_are_records_more_than_one_review_apart(membership: Lq45Membership)
     ]
 
 
-def test_warnings_for_an_early_start_and_each_gap_spanned(membership: Lq45Membership) -> None:
-    warnings = membership.survivorship_warnings(date(2021, 1, 4), date(2023, 12, 29))
-    assert len(warnings) == 2
-    assert warnings[0].startswith(
-        "Survivorship bias: the backtest starts on 2021-01-04, before the first LQ45 list in "
-        "lq45_members.toml (2022-08-01, Peng-test/2022-08-01)."
-    )
-    assert "no LQ45 list between 2022-08-01" in warnings[1]
-    assert "and 2023-08-01 (Peng-test/2023-08-01), more than one review apart" in warnings[1]
+def test_a_warning_for_each_gap_spanned(membership: Lq45Membership) -> None:
+    # A start before the first list needs no warning: the backtest refuses it (M3 spec §7.2).
+    warnings = membership.survivorship_warnings(date(2022, 8, 1), date(2023, 12, 29))
+    assert warnings == [
+        (
+            "Survivorship bias: lq45_members.toml has no LQ45 list between 2022-08-01 "
+            "(Peng-test/2022-08-01) and 2023-08-01 (Peng-test/2023-08-01), more than one review "
+            "apart. The backtest uses the earlier list until the later one."
+        )
+    ]
+    assert membership.survivorship_warnings(date(2021, 1, 4), date(2022, 7, 29)) == []
     assert membership.survivorship_warnings(date(2024, 2, 1), date(2024, 7, 31)) == []
     later = membership.survivorship_warnings(date(2024, 9, 2), date(2025, 3, 3))
     assert [w.split(" between ")[1][:10] for w in later] == ["2024-08-01"]

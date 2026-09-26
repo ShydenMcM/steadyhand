@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from steadyhand._validate import require_date, require_int, require_type
+from steadyhand.risk import UnitValue
 
 
 def test_require_date_accepts_a_date() -> None:
@@ -60,3 +61,8 @@ def test_require_type_names_the_field_and_the_type(
 def test_require_type_uses_an_before_a_vowel() -> None:
     with pytest.raises(TypeError, match=r"^order must be an int, got str$"):
         require_type("1", int, "order")
+
+
+def test_require_type_uses_a_before_a_u_that_sounds_like_you() -> None:
+    with pytest.raises(TypeError, match=r"^units must be a UnitValue, got int$"):
+        require_type(1, UnitValue, "units")
