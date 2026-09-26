@@ -29,10 +29,15 @@ def project(path: Path) -> dict[str, object]:
 
 def test_rewrites_both_versions_and_pins_the_engine(copies: tuple[Path, Path]) -> None:
     engine, idx = copies
+    before = project(idx)["dependencies"]
+    assert isinstance(before, list)
+    assert "steadyhand" in before
     assert set_dev_version.set_dev_version(7, engine, idx) == "0.1.0.dev7"
     assert project(engine)["version"] == "0.1.0.dev7"
     assert project(idx)["version"] == "0.1.0.dev7"
-    assert project(idx)["dependencies"] == ["steadyhand==0.1.0.dev7"]
+    # Only the engine entry changes; every other dependency (yfinance) is left as it was.
+    pinned = ["steadyhand==0.1.0.dev7" if entry == "steadyhand" else entry for entry in before]
+    assert project(idx)["dependencies"] == pinned
 
 
 def test_refuses_a_run_number_below_one(copies: tuple[Path, Path]) -> None:
