@@ -12,6 +12,15 @@ from steadyhand.corporate import (
 )
 from steadyhand.data import DataSource, DataUnavailableError, UnavailableDaysError
 from steadyhand.disclaimer import DISCLAIMER
+from steadyhand.engine import (
+    DataValidationError,
+    DayInputs,
+    DayOrderError,
+    DayReport,
+    EngineSettings,
+    EngineState,
+    run_day,
+)
 from steadyhand.market import MarketRules, UnsupportedDateError
 from steadyhand.money import (
     IDR,
@@ -84,7 +93,13 @@ __all__ = [
     "Cut",
     "DataSource",
     "DataUnavailableError",
+    "DataValidationError",
+    "DayInputs",
+    "DayOrderError",
+    "DayReport",
     "Decision",
+    "EngineSettings",
+    "EngineState",
     "Entitlement",
     "Fill",
     "FillResult",
@@ -128,4 +143,5 @@ __all__ = [
     "UnsupportedDateError",
     "__version__",
     "apply_actions",
+    "run_day",
 ]
