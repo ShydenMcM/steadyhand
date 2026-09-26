@@ -161,6 +161,7 @@ def test_missing_skips_stored_ranges_and_non_trading_gaps(cache: BarCache) -> No
         (date(2021, 9, 20), date(2021, 9, 24)),
         (date(2021, 10, 1), date(2021, 10, 5)),
         (date(2021, 11, 1), date(2021, 11, 5)),
+        (date(2021, 11, 8), date(2021, 11, 12)),
     ]:
         cache.store(BBCA, span, [], [])
     source = CachedDataSource(YahooDataSource(calendar()), cache, calendar())
@@ -169,6 +170,8 @@ def test_missing_skips_stored_ranges_and_non_trading_gaps(cache: BarCache) -> No
         (date(2021, 9, 27), date(2021, 9, 30)),  # 25-26 Sep is a weekend
         (date(2021, 10, 6), date(2021, 10, 15)),  # after the last range that overlaps
     ]
+    # A hole holding no trading day at all (6-7 Nov is a weekend) is not missing.
+    assert source.missing(BBCA, date(2021, 11, 1), date(2021, 11, 12)) == []
 
 
 class Counting:
