@@ -123,6 +123,10 @@ def test_gross_must_be_a_non_negative_rupiah_amount() -> None:
         fees().trade_costs(custom(), Side.BUY, rp(-1), TODAY)
     with pytest.raises(ValueError, match=r"got USD 1\.00"):
         fees().trade_costs(custom(), Side.BUY, Money(100, Currency("USD", 2)), TODAY)
+    with pytest.raises(ValueError, match=r"^gross must be a non-negative IDR amount, got IDR -1$"):
+        fees().dividend_tax(rp(-1), reinvested_by_deadline=False, on=TODAY)
+    with pytest.raises(ValueError, match=r"got USD 1\.00"):
+        fees().dividend_tax(Money(100, Currency("USD", 2)), reinvested_by_deadline=True, on=TODAY)
 
 
 def test_costs_before_the_levy_is_verified_are_refused() -> None:

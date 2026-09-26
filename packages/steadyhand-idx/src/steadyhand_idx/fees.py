@@ -130,9 +130,7 @@ class FeeSchedule:
 
     def trade_costs(self, preset: BrokerPreset, side: Side, gross: Money, on: date) -> Costs:
         """The costs of one trade worth *gross*, rounded once, against the trader."""
-        if gross.currency != IDR or gross.amount < 0:
-            msg = f"gross must be a non-negative IDR amount, got {gross}"
-            raise ValueError(msg)
+        _require_rupiah(gross, "gross")
         rates = self.percentages(preset, side, on)
         total = gross.times((rates.fee + rates.levy + rates.tax) / _HUNDRED, Rounding.UP)
         levy = gross.times(rates.levy / _HUNDRED, Rounding.DOWN)
@@ -141,9 +139,7 @@ class FeeSchedule:
 
     def daily_costs(self, traded: Money, on: date) -> Money:
         """Stamp duty on the day's trade confirmation, given the day's buys plus sells."""
-        if traded.currency != IDR or traded.amount < 0:
-            msg = f"traded must be a non-negative IDR amount, got {traded}"
-            raise ValueError(msg)
+        _require_rupiah(traded, "traded")
         duty = self.stamp_duty.on(on)
         if traded.amount <= duty.exempt_up_to:
             return Money.zero(IDR)
@@ -154,6 +150,7 @@ class FeeSchedule:
 
         M4 replaces the flag with a read of the dividend's exemption claim (spec §6.2).
         """
+        _require_rupiah(gross, "gross")
         rate = self.dividend_tax_rate.on(on)
         if reinvested_by_deadline:
             return Money.zero(gross.currency)
@@ -172,6 +169,12 @@ class FeeSchedule:
                         f"than the costs it says it includes on {day.isoformat()}"
                     )
                     raise DataFileError(msg)
+
+
+def _require_rupiah(money: Money, name: str) -> None:
+    if money.currency != IDR or money.amount < 0:
+        msg = f"{name} must be a non-negative IDR amount, got {money}"
+        raise ValueError(msg)
 
 
 def _dated[T](
