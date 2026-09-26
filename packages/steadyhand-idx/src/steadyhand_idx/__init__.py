@@ -5,6 +5,7 @@ from importlib.metadata import version
 from steadyhand_idx._datafile import DataFileError
 from steadyhand_idx.calendar import IdxCalendar
 from steadyhand_idx.fees import BrokerPreset, FeeSchedule
+from steadyhand_idx.rules import IdxMarketRules, RuleTables
 
 __version__: str = version("steadyhand-idx")
 
@@ -13,5 +14,7 @@ __all__ = [
     "DataFileError",
     "FeeSchedule",
     "IdxCalendar",
+    "IdxMarketRules",
+    "RuleTables",
     "__version__",
 ]

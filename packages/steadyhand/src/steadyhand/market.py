@@ -30,6 +30,18 @@ class MarketRules(Protocol):
         """The currency every price and cost in this market is quoted in."""
         ...
 
+    @property
+    def verified_from(self) -> date:
+        """The first day on which every rule is verified. A backtest may not start earlier."""
+        ...
+
+    def require_supported(self, day: date) -> None:
+        """Raise ``UnsupportedDateError`` for a day the rule data does not cover.
+
+        The message names the rule table that sets the limit. Every other method checks this.
+        """
+        ...
+
     def lot_size(self, instrument: Instrument, on: date) -> int:
         """Shares per board lot. Orders are whole lots."""
         ...
@@ -44,6 +56,14 @@ class MarketRules(Protocol):
 
     def costs(self, side: Side, gross: Money, on: date) -> Costs:
         """Fee, levy and tax for one trade of *gross* value. Never negative."""
+        ...
+
+    def daily_costs(self, traded: Money, on: date) -> Money:
+        """Charges made once per trading day, given the day's buys plus sells.
+
+        Stamp duty on a trade confirmation is the example: brokers issue one confirmation a day,
+        so it cannot be charged per trade. Never negative, and nothing when nothing traded.
+        """
         ...
 
     def settlement_date(self, trade_date: date) -> date:

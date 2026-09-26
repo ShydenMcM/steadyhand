@@ -22,6 +22,13 @@ class _MinimalRules:
     def currency(self) -> Currency:
         return IDR
 
+    @property
+    def verified_from(self) -> date:
+        return date(2021, 1, 1)
+
+    def require_supported(self, day: date) -> None:
+        return None
+
     def lot_size(self, instrument: Instrument, on: date) -> int:
         return 100
 
@@ -33,6 +40,9 @@ class _MinimalRules:
 
     def costs(self, side: Side, gross: Money, on: date) -> Costs:
         return Costs.zero(gross.currency)
+
+    def daily_costs(self, traded: Money, on: date) -> Money:
+        return Money.zero(traded.currency)
 
     def settlement_date(self, trade_date: date) -> date:
         return trade_date + timedelta(days=2)
@@ -76,6 +86,12 @@ def test_a_minimal_class_satisfies_market_rules() -> None:
 
 def test_a_class_missing_methods_is_not_market_rules() -> None:
     assert not isinstance(_RulesWithoutTax(), MarketRules)
+
+
+@pytest.mark.parametrize("member", ["verified_from", "require_supported", "daily_costs"])
+def test_each_member_added_in_m2_is_required(member: str) -> None:
+    members = {name: value for name, value in vars(_MinimalRules).items() if name != member}
+    assert not isinstance(type("Partial", (), members)(), MarketRules)
 
 
 def test_a_minimal_class_satisfies_data_source() -> None:
