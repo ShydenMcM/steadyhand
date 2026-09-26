@@ -3,6 +3,13 @@
 from importlib.metadata import version
 
 from steadyhand.broker import Broker, FillResult, FillSettings, Opening, SimulatedBroker
+from steadyhand.corporate import (
+    PAY_LAG_TRADING_DAYS,
+    CorporateOutcome,
+    Entitlement,
+    Holdings,
+    apply_actions,
+)
 from steadyhand.data import DataSource, DataUnavailableError, UnavailableDaysError
 from steadyhand.disclaimer import DISCLAIMER
 from steadyhand.market import MarketRules, UnsupportedDateError
@@ -59,6 +66,7 @@ __all__ = [
     "DISCLAIMER",
     "IDR",
     "MAX_MINOR_UNITS",
+    "PAY_LAG_TRADING_DAYS",
     "STRATEGIES",
     "Bar",
     "Broker",
@@ -69,6 +77,7 @@ __all__ = [
     "ChronologyError",
     "CompoundingSizer",
     "CorporateAction",
+    "CorporateOutcome",
     "Costs",
     "Currency",
     "CurrencyMismatchError",
@@ -76,10 +85,12 @@ __all__ = [
     "DataSource",
     "DataUnavailableError",
     "Decision",
+    "Entitlement",
     "Fill",
     "FillResult",
     "FillSettings",
     "Halt",
+    "Holdings",
     "Instrument",
     "InsufficientCashError",
     "InsufficientSharesError",
@@ -116,4 +127,5 @@ __all__ = [
     "Universe",
     "UnsupportedDateError",
     "__version__",
+    "apply_actions",
 ]
