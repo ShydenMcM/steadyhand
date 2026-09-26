@@ -6,7 +6,9 @@ parsed values so that no ``uses`` can hide from it.
 """
 
 import re
+import shlex
 from collections.abc import Iterator
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -117,3 +119,41 @@ def test_sub_path_actions_are_grouped_above_the_patch_group() -> None:
     assert patch, "no patch group"
     # Dependabot puts an update in the first group that matches, so order matters.
     assert names.index(sub_path[0]) < names.index(patch[0])
+
+
+INDEX_FLAGS = ("--index", "--default-index", "--index-url", "--extra-index-url", "-i")
+
+
+def shell_words(script: str) -> list[str]:
+    """A ``run`` script as the shell splits it: continuations joined, ``--flag=value`` split."""
+    words = shlex.split(script.replace("\\\n", " "))
+    return [part for word in words for part in (word.split("=", 1) if word[:2] == "--" else [word])]
+
+
+def index_flags(words: list[str]) -> list[tuple[str, str]]:
+    return [(flag, value) for flag, value in pairwise(words) if flag in INDEX_FLAGS]
+
+
+def test_the_testpypi_check_takes_every_dependency_from_pypi_first() -> None:
+    """Anyone can upload to TestPyPI, and a ``yfinance`` that is not the real one lives there.
+
+    PyPI is searched first, so a name PyPI carries never comes from TestPyPI; only steadyhand's
+    own dev builds, which PyPI does not have, fall through to it (#57). No strategy flag may
+    widen that to a best-match across both indexes.
+    """
+    ci = yaml.safe_load((WORKFLOWS / "ci.yml").read_text())
+    steps = [
+        step
+        for step in ci["jobs"]["publish-dev"]["steps"]
+        if step.get("name") == "Verify both packages install from TestPyPI"
+    ]
+    assert len(steps) == 1, steps
+    scopes = (ci, ci["jobs"]["publish-dev"], steps[0])
+    # UV_INDEX, UV_DEFAULT_INDEX, UV_INDEX_STRATEGY, PIP_INDEX_URL...: all spell INDEX.
+    assert [name for scope in scopes for name in scope.get("env", {}) if "INDEX" in name] == []
+    words = shell_words(steps[0]["run"])
+    assert index_flags(words) == [
+        ("--index", "https://pypi.org/simple/"),
+        ("--default-index", "https://test.pypi.org/simple/"),
+    ]
+    assert "--index-strategy" not in words

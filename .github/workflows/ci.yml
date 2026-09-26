@@ -147,7 +147,11 @@ jobs:
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
             rm -rf "${RUNNER_TEMP}/verify"
             uv venv "${RUNNER_TEMP}/verify"
+            # PyPI first: uv takes each name from the first index that has it, so real
+            # dependencies (yfinance) come from PyPI and only our dev builds, which PyPI lacks,
+            # from TestPyPI. Anyone can upload to TestPyPI, so it must never be asked first.
             if uv pip install --refresh --python "${RUNNER_TEMP}/verify" \
+                --index https://pypi.org/simple/ \
                 --default-index https://test.pypi.org/simple/ \
                 "steadyhand==${VERSION}" "steadyhand-idx==${VERSION}"; then
               "${RUNNER_TEMP}/verify/bin/python" -c 'import sys, steadyhand, steadyhand_idx; assert steadyhand.__version__ == steadyhand_idx.__version__ == sys.argv[1], (steadyhand.__version__, steadyhand_idx.__version__)' "${VERSION}"
