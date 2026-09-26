@@ -13,12 +13,16 @@ settles later, such as a day's stamp duty netted with its trades, is held back t
 Each snapshot also keeps its cash balance and the few movements that settle after its last day,
 so the day's cash is read without summing the ledger, and booking a movement checks only that
 movement. A ten-year backtest books over a hundred thousand of them (M3 spec §9).
+
+The ledger is kept as a chain of links, newest first, that every later snapshot shares, so
+booking adds one link instead of copying the ledger (#84). ``Portfolio.ledger`` is still a
+tuple: it is built from the chain the first time a snapshot's ledger is read, then kept.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from enum import Enum
 
@@ -105,37 +109,100 @@ def _sort_key(position: Position) -> tuple[str, str]:
     return (position.instrument.market, position.instrument.symbol)
 
 
-@dataclass(frozen=True, slots=True)
+type _Chain = tuple[CashMovement, _Chain] | None
+"""A ledger, newest movement first: the latest movement and the chain booked before it."""
+
+
+# ``slots=True`` would rebuild the class, and the rebuilt class's frozen ``__setattr__`` then
+# fails with a TypeError, not FrozenInstanceError, for a name that is not a field (``ledger``).
+@dataclass(frozen=True, init=False, repr=False, eq=False)
 class Portfolio:
     """An immutable snapshot of cash (as a ledger) and positions (sorted by market, symbol)."""
 
+    __slots__ = ("_balance", "_chain", "_ledger", "_open", "currency", "positions")
+
     currency: Currency
-    positions: tuple[Position, ...] = ()
-    ledger: tuple[CashMovement, ...] = ()
-    _balance: Money = field(init=False, repr=False, compare=False)
+    positions: tuple[Position, ...]
+    _chain: _Chain
+    """Every movement, newest first, sharing its links with the snapshots it was built from."""
+    _ledger: tuple[CashMovement, ...] | None
+    """The ledger in booking order: the tuple the snapshot was built from, or the chain walked
+    the first time it is read. ``None`` until then."""
+    _balance: Money
     """The sum of every movement in the ledger."""
-    _open: tuple[CashMovement, ...] = field(init=False, repr=False, compare=False)
+    _open: tuple[CashMovement, ...]
     """Every movement that settles after the last day, in ledger order."""
 
-    def __post_init__(self) -> None:
-        require_type(self.currency, Currency, "currency")
-        require_type(self.ledger, tuple, "ledger")
+    def __init__(
+        self,
+        currency: Currency,
+        positions: tuple[Position, ...] = (),
+        ledger: tuple[CashMovement, ...] = (),
+    ) -> None:
+        require_type(currency, Currency, "currency")
+        require_type(ledger, tuple, "ledger")
+        object.__setattr__(self, "currency", currency)
+        object.__setattr__(self, "positions", positions)
         self._check_positions()
-        for movement in self.ledger:
+        for movement in ledger:
             require_type(movement, CashMovement, "ledger entry")
         previous: date | None = None
-        for movement in self.ledger:
-            if movement.amount.currency != self.currency:
-                raise CurrencyMismatchError(self.currency, movement.amount.currency)
+        chain: _Chain = None
+        for movement in ledger:
+            if movement.amount.currency != currency:
+                raise CurrencyMismatchError(currency, movement.amount.currency)
             if previous is not None and movement.day < previous:
                 raise ChronologyError(movement.day, previous)
             previous = movement.day
-        balance = sum((m.amount for m in self.ledger), start=Money.zero(self.currency))
-        still_open = tuple(
-            m for m in self.ledger if previous is not None and m.settles_on > previous
+            chain = (movement, chain)
+        balance = sum((m.amount for m in ledger), start=Money.zero(currency))
+        still_open = tuple(m for m in ledger if previous is not None and m.settles_on > previous)
+        for name, value in (
+            ("_chain", chain),
+            ("_ledger", ledger),
+            ("_balance", balance),
+            ("_open", still_open),
+        ):
+            object.__setattr__(self, name, value)
+
+    @property
+    def ledger(self) -> tuple[CashMovement, ...]:
+        """Every movement in booking order.
+
+        The first read walks the chain, so it costs the ledger's length; later reads are free.
+        """
+        ledger = self._ledger
+        if ledger is None:
+            newest_first: list[CashMovement] = []
+            link = self._chain
+            while link is not None:
+                movement, link = link
+                newest_first.append(movement)
+            ledger = tuple(reversed(newest_first))
+            object.__setattr__(self, "_ledger", ledger)
+        return ledger
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Portfolio):
+            return NotImplemented
+        return (self.currency, self.positions, self.ledger) == (
+            other.currency,
+            other.positions,
+            other.ledger,
         )
-        object.__setattr__(self, "_balance", balance)
-        object.__setattr__(self, "_open", still_open)
+
+    def __hash__(self) -> int:
+        return hash((self.currency, self.positions, self.ledger))
+
+    def __repr__(self) -> str:
+        return (
+            f"Portfolio(currency={self.currency!r}, positions={self.positions!r}, "
+            f"ledger={self.ledger!r})"
+        )
+
+    def __reduce__(self) -> tuple[type[Portfolio], tuple[object, ...]]:
+        """Pickle and copy the ledger as a tuple: link by link, a long chain is too deep."""
+        return (Portfolio, (self.currency, self.positions, self.ledger))
 
     def _check_positions(self) -> None:
         require_type(self.positions, tuple, "positions")
@@ -155,7 +222,7 @@ class Portfolio:
 
     @property
     def last_day(self) -> date | None:
-        return self.ledger[-1].day if self.ledger else None
+        return None if self._chain is None else self._chain[0].day
 
     def cash_balance(self) -> Money:
         return self._balance
@@ -338,16 +405,17 @@ class Portfolio:
         Only what is new is checked. Every caller has already refused a movement dated before
         the last or in another currency, so the ledger holds without reading it again.
         """
-        ledger, balance, still_open = self.ledger, self._balance, self._open
+        chain, ledger, balance, still_open = self._chain, self._ledger, self._balance, self._open
         if movement is not None:
-            ledger = (*ledger, movement)
+            chain, ledger = (movement, chain), None
             balance += movement.amount
             still_open = tuple(m for m in (*still_open, movement) if m.settles_on > movement.day)
         snapshot = object.__new__(Portfolio)
         for name, value in (
             ("currency", self.currency),
             ("positions", positions),
-            ("ledger", ledger),
+            ("_chain", chain),
+            ("_ledger", ledger),
             ("_balance", balance),
             ("_open", still_open),
         ):
