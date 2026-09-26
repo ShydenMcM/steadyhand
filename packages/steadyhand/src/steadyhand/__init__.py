@@ -2,7 +2,7 @@
 
 from importlib.metadata import version
 
-from steadyhand.broker import Broker
+from steadyhand.broker import Broker, FillResult, FillSettings, Opening, SimulatedBroker
 from steadyhand.data import DataSource, DataUnavailableError, UnavailableDaysError
 from steadyhand.disclaimer import DISCLAIMER
 from steadyhand.market import MarketRules, UnsupportedDateError
@@ -14,6 +14,7 @@ from steadyhand.money import (
     Money,
     Rounding,
 )
+from steadyhand.outcomes import Cut, Rejected
 from steadyhand.portfolio import (
     CashMovement,
     ChronologyError,
@@ -67,10 +68,13 @@ __all__ = [
     "Costs",
     "Currency",
     "CurrencyMismatchError",
+    "Cut",
     "DataSource",
     "DataUnavailableError",
     "Decision",
     "Fill",
+    "FillResult",
+    "FillSettings",
     "Instrument",
     "InsufficientCashError",
     "InsufficientSharesError",
@@ -84,6 +88,7 @@ __all__ = [
     "Money",
     "MovementKind",
     "NegativeProceedsError",
+    "Opening",
     "Order",
     "OrderAck",
     "OtherAction",
@@ -91,8 +96,10 @@ __all__ = [
     "PortfolioView",
     "Position",
     "PriceHistory",
+    "Rejected",
     "Rounding",
     "Side",
+    "SimulatedBroker",
     "Split",
     "Strategy",
     "Tradable",
