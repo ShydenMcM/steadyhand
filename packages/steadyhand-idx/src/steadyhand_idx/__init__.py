@@ -7,6 +7,7 @@ from steadyhand_idx.cache import BarCache, CacheConflictError, CachedDataSource,
 from steadyhand_idx.calendar import IdxCalendar
 from steadyhand_idx.fees import BrokerPreset, FeeSchedule
 from steadyhand_idx.rules import IdxMarketRules, RuleTables
+from steadyhand_idx.universe import Exclusions, Lq45Membership, MembershipUnknownError
 from steadyhand_idx.yahoo import UnrecoverablePricesError, YahooDataSource
 
 __version__: str = version("steadyhand-idx")
@@ -18,9 +19,12 @@ __all__ = [
     "CacheSchemaError",
     "CachedDataSource",
     "DataFileError",
+    "Exclusions",
     "FeeSchedule",
     "IdxCalendar",
     "IdxMarketRules",
+    "Lq45Membership",
+    "MembershipUnknownError",
     "RuleTables",
     "UnrecoverablePricesError",
     "YahooDataSource",
