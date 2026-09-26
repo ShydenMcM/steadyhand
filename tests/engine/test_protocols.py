@@ -5,7 +5,7 @@ typed as the protocol makes ``mypy --strict`` check every signature; ``isinstanc
 runtime view that plug-in loading will use.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import date, timedelta
 
 import pytest
@@ -15,6 +15,7 @@ from steadyhand.data import DataSource, DataUnavailableError
 from steadyhand.market import MarketRules
 from steadyhand.money import IDR, Currency, Money
 from steadyhand.types import Bar, CorporateAction, Costs, Fill, Instrument, Order, OrderAck, Side
+from steadyhand.universe import Universe
 
 
 class _MinimalRules:
@@ -110,3 +111,20 @@ def test_data_unavailable_keeps_the_callers_message() -> None:
     message = "BBRI.JK bars after 3 attempts"
     with pytest.raises(DataUnavailableError, match=r"^BBRI\.JK bars after 3 attempts$"):
         raise DataUnavailableError(message)
+
+
+class _MinimalUniverse:
+    def members_on(self, day: date) -> frozenset[Instrument]:
+        return frozenset({Instrument("BBRI", "IDX", IDR)})
+
+    def excluded_on(self, day: date) -> Mapping[Instrument, str]:
+        return {}
+
+    def first_day(self) -> date:
+        return date(2021, 1, 4)
+
+
+def test_a_minimal_class_satisfies_universe() -> None:
+    universe: Universe = _MinimalUniverse()
+    assert isinstance(universe, Universe)
+    assert not isinstance(_MinimalSource(), Universe)

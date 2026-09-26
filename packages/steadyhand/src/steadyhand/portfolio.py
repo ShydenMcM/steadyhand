@@ -6,7 +6,9 @@ a whole day at once.
 
 Each ``CashMovement`` carries the date it settles, so T+2 is a date comparison, not a separate
 balance to keep in step. Buys are debited on the trade date, which is conservative: the broker
-takes the money at settlement, but the cash is never available to spend twice.
+takes the money at settlement, but the cash is never available to spend twice. A debit that
+settles later, such as a day's stamp duty netted with its trades, is held back the same way:
+``spendable_cash`` subtracts every debit at once and adds a credit only once it has settled.
 """
 
 from __future__ import annotations
@@ -18,13 +20,20 @@ from enum import Enum
 
 from steadyhand._validate import require_date, require_type
 from steadyhand.money import Currency, CurrencyMismatchError, Money
-from steadyhand.types import Fill, Instrument, Position, Side
+from steadyhand.types import Fill, Instrument, Position, Side, Split
 
 
 class MovementKind(Enum):
     DEPOSIT = "deposit"
     BUY = "buy"
     SELL = "sell"
+    DIVIDEND = "dividend"
+    TAX = "tax"
+    DAILY_COST = "daily cost"
+
+
+_CHARGES = frozenset({MovementKind.TAX, MovementKind.DAILY_COST})
+"""The movements ``Portfolio.charge`` books: money taken that buys nothing."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,10 +55,10 @@ class CashMovement:
 
 
 class InsufficientCashError(ValueError):
-    """A buy needs more settled cash than the portfolio has."""
+    """A buy needs more cash than the portfolio can spend."""
 
     def __init__(self, day: date, needed: Money, available: Money) -> None:
-        super().__init__(f"{day.isoformat()}: needs {needed} but only {available} is settled")
+        super().__init__(f"{day.isoformat()}: needs {needed} but only {available} can be spent")
 
 
 class InsufficientSharesError(ValueError):
@@ -139,6 +148,12 @@ class Portfolio:
         settled = (m.amount for m in self.ledger if m.settles_on <= on)
         return sum(settled, start=Money.zero(self.currency))
 
+    def spendable_cash(self, on: date) -> Money:
+        """What can be spent on *on* without ever overdrawing: settled credits, less every debit."""
+        require_date(on, "on")
+        kept = (m.amount for m in self.ledger if m.amount.amount < 0 or m.settles_on <= on)
+        return sum(kept, start=Money.zero(self.currency))
+
     def unsettled_cash(self, on: date) -> Money:
         return self.cash_balance() - self.settled_cash(on)
 
@@ -168,6 +183,39 @@ class Portfolio:
         movement = CashMovement(on, MovementKind.DEPOSIT, amount, on)
         return Portfolio(self.currency, self.positions, (*self.ledger, movement))
 
+    def credit_dividend(self, gross: Money, on: date) -> Portfolio:
+        """Book a dividend paid on *on*. It settles that day, so the next decision can spend it."""
+        return self._book(MovementKind.DIVIDEND, gross, on)
+
+    def charge(
+        self, kind: MovementKind, amount: Money, on: date, *, settles_on: date | None = None
+    ) -> Portfolio:
+        """Take *amount* for tax or a daily cost on *on*, settling on *settles_on* (default *on*).
+
+        Either way it is held back from ``spendable_cash`` at once.
+        """
+        require_type(kind, MovementKind, "kind")
+        if kind not in _CHARGES:
+            msg = f"charge books tax or a daily cost, not a {kind.value}"
+            raise ValueError(msg)
+        return self._book(kind, amount, on, sign=-1, settles_on=settles_on)
+
+    def apply_split(self, split: Split) -> Portfolio:
+        """Turn every ``old_shares`` held into ``new_shares``, keeping the total cost basis.
+
+        A fraction of a share left by the ratio is dropped (cash in lieu is not modelled), and a
+        holding that rounds to no shares at all is removed with its basis. The caller reports it.
+        """
+        require_type(split, Split, "split")
+        self._require_not_before_last(split.ex_date)
+        held = self.position(split.instrument)
+        if held is None:
+            msg = f"{split.ex_date.isoformat()}: no {split.instrument.symbol} is held to split"
+            raise ValueError(msg)
+        quantity = held.quantity * split.new_shares // split.old_shares
+        updated = Position(held.instrument, quantity, held.cost_basis) if quantity else None
+        return self._replaced(held.instrument, updated, self.ledger)
+
     def apply_fill(self, fill: Fill, settles_on: date) -> Portfolio:
         """Book a fill. A buy is debited on its trade date; a sell is credited on *settles_on*."""
         self._require_not_before_last(fill.day)
@@ -180,6 +228,25 @@ class Portfolio:
             return self._buy(fill)
         return self._sell(fill, settles_on)
 
+    def _book(
+        self,
+        kind: MovementKind,
+        amount: Money,
+        on: date,
+        *,
+        sign: int = 1,
+        settles_on: date | None = None,
+    ) -> Portfolio:
+        self._require_not_before_last(on)
+        require_type(amount, Money, "amount")
+        if amount.currency != self.currency:
+            raise CurrencyMismatchError(self.currency, amount.currency)
+        if amount.amount <= 0:
+            msg = f"a {kind.value} must be positive, got {amount}"
+            raise ValueError(msg)
+        movement = CashMovement(on, kind, amount * sign, on if settles_on is None else settles_on)
+        return Portfolio(self.currency, self.positions, (*self.ledger, movement))
+
     def _require_not_before_last(self, day: date) -> None:
         require_date(day, "day")
         last = self.last_day
@@ -189,7 +256,7 @@ class Portfolio:
     def _buy(self, fill: Fill) -> Portfolio:
         instrument = fill.order.instrument
         cost = fill.gross + fill.costs.total
-        available = self.settled_cash(fill.day)
+        available = self.spendable_cash(fill.day)
         if cost > available:
             raise InsufficientCashError(fill.day, cost, available)
         held = self.position(instrument)
@@ -225,8 +292,12 @@ class Portfolio:
     def _with(
         self, movement: CashMovement, instrument: Instrument, position: Position | None
     ) -> Portfolio:
+        return self._replaced(instrument, position, (*self.ledger, movement))
+
+    def _replaced(
+        self, instrument: Instrument, position: Position | None, ledger: tuple[CashMovement, ...]
+    ) -> Portfolio:
         others = [p for p in self.positions if p.instrument != instrument]
         if position is not None:
             others.append(position)
-        positions = tuple(sorted(others, key=_sort_key))
-        return Portfolio(self.currency, positions, (*self.ledger, movement))
+        return Portfolio(self.currency, tuple(sorted(others, key=_sort_key)), ledger)

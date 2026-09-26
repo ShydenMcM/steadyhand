@@ -101,7 +101,7 @@ class TestBuy:
     def test_one_rupiah_short_is_refused(self) -> None:
         with pytest.raises(
             InsufficientCashError,
-            match="2026-01-05: needs IDR 1,245,450 but only IDR 1,245,449 is settled",
+            match="2026-01-05: needs IDR 1,245,450 but only IDR 1,245,449 can be spent",
         ):
             funded(1_245_449).apply_fill(fill(Side.BUY, 300, 4_150, D0, fee=450), day(2))
 

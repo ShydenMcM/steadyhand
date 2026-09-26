@@ -19,6 +19,7 @@ from steadyhand import (
     Money,
     Side,
     Split,
+    UnavailableDaysError,
 )
 from steadyhand_idx.calendar import IdxCalendar
 from steadyhand_idx.rules import IdxMarketRules
@@ -129,7 +130,7 @@ def test_an_unreported_adjustment_is_refused_with_every_day_named() -> None:
         ),
     ) as caught:
         unadjust(history, BBRI, calendar(), date(2021, 8, 2), date(2021, 9, 30))
-    assert isinstance(caught.value, DataUnavailableError)
+    assert isinstance(caught.value, UnavailableDaysError)
     assert caught.value.days == calendar().trading_days(date(2021, 8, 2), date(2021, 9, 7))
     bars, _ = unadjust(history, BBRI, calendar(), date(2021, 9, 8), date(2021, 9, 30))
     assert bars[0].close == rp(3_730)
