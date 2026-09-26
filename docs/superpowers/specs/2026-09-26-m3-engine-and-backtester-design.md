@@ -1,6 +1,6 @@
 # steadyhand M3: Engine and Backtester
 
-**Status:** design approved in conversation on 2026-09-26. This spec awaits Shyden's review.
+**Status:** approved by Shyden on 2026-09-26, after the design was approved in conversation and the review loop closed on pass 3.
 **Parent spec:** `2026-09-24-steadyhand-core-design.md` (the "core spec"). M3 is its milestone 3 (§13). Everything the core spec already settles still holds. This document adds the decisions M3 needs and says where it narrows or moves scope.
 **Inputs:** the M2 plan's "Carried forward to later plans" section (`docs/superpowers/plans/2026-09-25-m2-idx-rules-and-data.md`, line 7015) and Shyden's answers of 2026-09-26 (§2).
 
