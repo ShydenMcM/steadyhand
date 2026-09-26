@@ -1,7 +1,7 @@
 # Handover: steadyhand
 
-**Updated:** 2026-09-26 13:20 UTC (**The M3b plan is written, reviewed to zero and approved; stories #75–#78 are on the board as Todo. Next: merge the plan PR from `m3/m3b-plan`, then execute S7–S10.**)
-**Local:** `~/Developer/Repos/steadyhand`. On `m3/m3b-plan`, off `develop` at `06b7f73` (S6's squash merge). Read heads with `git rev-parse`; never retype one. `main` has no release yet.
+**Updated:** 2026-09-26 14:34 UTC (**M3b: S7–S9 are merged, deployed and Done (#75–#77). S10 (#78) is in its PR from `m3/s10-performance`, CI pending at the time of writing. When it merges, M3 is complete.**)
+**Local:** `~/Developer/Repos/steadyhand`. On `m3/s10-performance`, off `develop` at `e3c51f3` (S9's squash merge). Read heads with `git rev-parse`; never retype one. `main` has no release yet.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
 ## State
@@ -25,16 +25,23 @@
 - **Plan tools** (git-ignored, reusable for M3b): `.superpowers/sdd/2026-09-26-m3a-engine-day/`. `stubgen.py`, `redrun.py`, `gates.py`, `mutations.py`, `render.py`, `fill.py`, `check_plan.py`. Run them with `uv run --no-project --python 3.12 python`. **`mutations.py` now runs pytest under `HYPOTHESIS_PROFILE=ci`.** Under the default `dev` profile, M18's property-test catcher was missed; under `ci` it caught it in 3 of 3 runs. A plan's mutation table is a claim about CI's profile.
 - **Applying a plan task by script:** `apply_task.py <plan> <tree> <task> red|green` (in the plan tools directory) applies a task's blocks up to or after its red marker. It stops if any edit anchor matches anything other than exactly once. It applied every M3a task.
 
-## M3b plan (approved 2026-09-26)
-- **Plan:** `docs/superpowers/plans/2026-09-26-m3b-backtester.md`, tasks 0 and 7–10, reviewed to zero in three passes (log at its end). Its 15 scope decisions and the Review Focus are the context for every story.
-- **Stories:** S7 #75, S8 #76, S9 #77, S10 #78, all Todo on the board.
-- **Task 0 is this PR:** the plan, this file, and the five year-long Yahoo recordings in `tests/fixtures/yahoo/` (their SHA-256s are in Task 0). With them the suite is 690 passed, 9 deselected, and the live check `-k 2021-02-01` passes 5.
-- **Verified build** (git-ignored `.superpowers/sdd/2026-09-26-m3b-backtester/`): `repo/` is a scratch clone whose branch `m3b/rebased` holds the fixtures commit (`base-sha-replay`) and the four story commits in `stories.txt`. Each passed `gates.py`, which now includes the perf step. `check_plan.py` (run with `FIRST_TASK=7`) replays the plan byte-identical to all four; `replay-final.log`. The mutations are in `mutations.py`; run 3 on these commits is `mutations-run3.log`, 26 of 26 caught.
-- **Executing a story:** `apply_task.py <plan> <tree> <task> red|green` from that directory applies a task's blocks. For Task 9, after the green blocks, run `uv run python scripts/record_golden.py` and check the SHA-256 the plan gives. For Task 10, run the perf step as well: `uv run pytest -W error -m perf`.
+## M3b (plan approved and merged 2026-09-26, PR #79 `a642b17`; #61 Done)
+- **Plan:** `docs/superpowers/plans/2026-09-26-m3b-backtester.md`. Each story was applied from the plan by `apply_task.py`; its red count matched, its tree was byte-identical to the plan's verified commit (checked against a live `git diff` control), its gate was green, and its mutations were all caught on the story's own commit.
+
+  | Story | Issue | PR | Merge | Develop run |
+  |---|---|---|---|---|
+  | S7 backtest | #75 | #80 | b318e76 | 36246848386 |
+  | S8 metrics | #76 | #81 | cf10525 | 36247075105 |
+  | S9 golden + truncation | #77 | #82 | e3c51f3 | 36248773000 |
+  | S10 performance + cash ledger | #78 | this branch's PR | pending | pending |
+
+- **S10 local evidence:** red 738 run / 0 failed (by design), and the perf test still running past 45 s on the old `Portfolio`; gate 738 passed at 100%; perf step 10.46 s; M57–M59 caught.
+- **Build tooling** (git-ignored `.superpowers/sdd/2026-09-26-m3b-backtester/`): the scratch clone `repo/`, `stories.txt`, `wait_ci.sh <sha file> <branch>` (dry-run with `DRY_RUN=1`), and the plan tools. Merge SHAs are kept in `merge*-sha` files there.
 
 ## Resume steps
-1. Wait for CI on the plan PR, then ask Shyden to approve the merge (`AskUserQuestion` naming the PR, its head SHA read from a file in that turn, and the CI state). Merge pinned with `--match-head-commit`, confirm the develop run's `publish-dev`, and move #61 to Done with a comment.
-2. Execute S7 (#75) to S10 (#78) natively, one branch and PR each, in order, as the plan says. After S10's first CI run, record both `test` jobs' performance-step times on #78.
+1. Wait for CI on the S10 PR, then ask Shyden to approve the merge (`AskUserQuestion` naming the PR, its head SHA read from a file in that turn, and the CI state). Merge pinned with `--match-head-commit`, confirm `publish-dev` on develop, close #78 with evidence, and move it to Done.
+2. Record the performance step's time from both `test` jobs of S10's CI run on #78 as the baseline (plan Task 10, Step 7).
+3. M3 is then complete. Next is M4 (core spec §13): the income goal tracker and projection. It starts with a spec or plan review, not code.
 
 ## Research technique
 - **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid scraping. Try the Internet Archive, KSEI, KPEI (idclear) or BPK first. Use idx.co.id only when none has a readable copy, and say so in the research doc.
