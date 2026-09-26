@@ -11,7 +11,11 @@ from steadyhand.types import Fill, Order, OrderAck
 
 @runtime_checkable
 class Broker(Protocol):
-    """Accepts orders and reports what filled. The simulated broker arrives in M3."""
+    """Accepts orders and reports what filled: M5's manual "Confirm Fill" broker.
+
+    The engine's pure core does not call it. Backtests and paper runs fill orders with
+    ``SimulatedBroker``, which is a function of the day's prices rather than a place orders go.
+    """
 
     def submit(self, orders: Sequence[Order], on: date) -> Sequence[OrderAck]:
         """Queue *orders* placed on *on*. Returns one acknowledgement per order, in order."""
