@@ -31,6 +31,15 @@ from steadyhand.engine import (
     run_day,
 )
 from steadyhand.market import MarketRules, UnsupportedDateError
+from steadyhand.metrics import (
+    RATIO_PLACES,
+    YEAR_DAYS,
+    CostBreakdown,
+    DividendTotals,
+    Drawdown,
+    Metrics,
+    measure,
+)
 from steadyhand.money import (
     IDR,
     MAX_MINOR_UNITS,
@@ -85,7 +94,9 @@ __all__ = [
     "IDR",
     "MAX_MINOR_UNITS",
     "PAY_LAG_TRADING_DAYS",
+    "RATIO_PLACES",
     "STRATEGIES",
+    "YEAR_DAYS",
     "BacktestResult",
     "BacktestSettings",
     "Bar",
@@ -98,6 +109,7 @@ __all__ = [
     "CompoundingSizer",
     "CorporateAction",
     "CorporateOutcome",
+    "CostBreakdown",
     "Costs",
     "Currency",
     "CurrencyMismatchError",
@@ -109,6 +121,8 @@ __all__ = [
     "DayOrderError",
     "DayReport",
     "Decision",
+    "DividendTotals",
+    "Drawdown",
     "EngineSettings",
     "EngineState",
     "Entitlement",
@@ -127,6 +141,7 @@ __all__ = [
     "MarketRules",
     "MarketView",
     "Memory",
+    "Metrics",
     "MissingPriceError",
     "Money",
     "MovementKind",
@@ -159,5 +174,6 @@ __all__ = [
     "__version__",
     "apply_actions",
     "backtest",
+    "measure",
     "run_day",
 ]

@@ -18,6 +18,7 @@ from steadyhand.backtest import (
 from steadyhand.data import DataUnavailableError, UnavailableDaysError
 from steadyhand.engine import DataValidationError, EngineSettings
 from steadyhand.market import UnsupportedDateError
+from steadyhand.metrics import measure
 from steadyhand.money import IDR, Currency, Money
 from steadyhand.risk import RiskLimits
 from steadyhand.strategies import BuyAndHold, Decision, Memory, Strategy
@@ -196,6 +197,16 @@ def test_the_strategy_and_the_baseline_each_run_every_trading_day() -> None:
     assert result.baseline.final.last_day == END
     assert {order.instrument for order in result.run.reports[0].queued} == {BBCA}
     assert {order.instrument for order in result.baseline.reports[0].queued} == {BBCA, BBRI}
+
+
+def test_each_run_carries_its_metrics() -> None:
+    result = run(_Source(calm()), chosen=settings(contribution=5_000_000))
+    assert result.baseline is not None
+    for outcome in (result.run, result.baseline):
+        assert outcome.metrics == measure(outcome.reports, outcome.final)
+        assert outcome.metrics.deposited == rp(105_000_000)
+        assert outcome.metrics.final_value == outcome.reports[-1].value
+    assert result.run.metrics != result.baseline.metrics
 
 
 def test_both_runs_share_the_settings() -> None:
