@@ -1,6 +1,6 @@
 # steadyhand M4: Income
 
-**Status:** draft. The design was approved in conversation, section by section, on 2026-09-26; the review loop closed on pass 10 with no findings, and the document awaits Shyden's approval.
+**Status:** approved by Shyden on 2026-09-26, after the design was approved in conversation section by section and the review loop closed on pass 10.
 **Parent spec:** `2026-09-24-steadyhand-core-design.md` (the "core spec"). M4 is its milestone 4 (§13): the dividend ledger, the income goal tracker, the projection and the payment calendar (§7), and the reinvestment exemption claim (§6.2). Everything the core spec settles still holds unless §2 below amends it.
 **Inputs:** core spec §6.2 and §7, `docs/research/t-tax.md` §3, §4 and §7, `docs/research/t-pay.md` §4, and Shyden's answers of 2026-09-26 (§2).
 
