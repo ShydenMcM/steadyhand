@@ -10,6 +10,7 @@ from steadyhand.money import IDR, Money
 from steadyhand.portfolio import (
     InsufficientCashError,
     InsufficientSharesError,
+    MovementKind,
     NegativeProceedsError,
     Portfolio,
 )
@@ -106,3 +107,55 @@ def test_a_round_trip_at_an_unchanged_price_loses_exactly_the_costs(
     assert after.cash_balance() == rp(start - buy_fee - sell_fee)
     assert after.settled_cash(D0 + timedelta(days=3)) == after.cash_balance()
     assert after.position(stock) is None
+
+
+def _settled(portfolio: Portfolio, on: date) -> Money:
+    """The ledger read whole: credits and debits that have settled by *on*."""
+    return sum((m.amount for m in portfolio.ledger if m.settles_on <= on), start=rp(0))
+
+
+def _spendable(portfolio: Portfolio, on: date) -> Money:
+    """The ledger read whole: every debit, and the credits that have settled by *on*."""
+    kept = (m.amount for m in portfolio.ledger if m.amount.amount < 0 or m.settles_on <= on)
+    return sum(kept, start=rp(0))
+
+
+LATER_STEP = st.tuples(
+    st.sampled_from(["deposit", "buy", "sell", "dividend", "duty-later"]),
+    st.integers(min_value=0, max_value=3),
+    st.integers(min_value=0, max_value=len(STOCKS) - 1),
+    st.integers(min_value=1, max_value=5_000),
+    st.integers(min_value=50, max_value=20_000),
+    st.integers(min_value=0, max_value=50_000),
+)
+
+
+@given(st.lists(LATER_STEP, max_size=40))
+def test_the_kept_totals_agree_with_the_whole_ledger_on_every_day(steps: list[Step]) -> None:
+    portfolio = Portfolio.empty(IDR)
+    today = D0
+    for kind, forward, stock_index, shares, price, fee in steps:
+        today += timedelta(days=forward)
+        stock = STOCKS[stock_index]
+        with suppress(InsufficientCashError, InsufficientSharesError, NegativeProceedsError):
+            if kind == "deposit":
+                portfolio = portfolio.deposit(rp(shares * 1_000), today)
+            elif kind == "dividend":
+                portfolio = portfolio.credit_dividend(rp(shares), today)
+            elif kind == "duty-later":
+                later = today + timedelta(days=2)
+                portfolio = portfolio.charge(
+                    MovementKind.DAILY_COST, rp(10_000), today, settles_on=later
+                )
+            else:
+                side = Side.BUY if kind == "buy" else Side.SELL
+                fill = make_fill(side, stock, shares, price, fee, today)
+                portfolio = portfolio.apply_fill(fill, today + timedelta(days=2))
+        assert portfolio.cash_balance() == sum((m.amount for m in portfolio.ledger), start=rp(0))
+        for offset in range(-4, 4):
+            probe = today + timedelta(days=offset)
+            assert portfolio.settled_cash(probe) == _settled(portfolio, probe)
+            assert portfolio.spendable_cash(probe) == _spendable(portfolio, probe)
+        rebuilt = Portfolio(portfolio.currency, portfolio.positions, portfolio.ledger)
+        assert rebuilt == portfolio
+        assert rebuilt.spendable_cash(today) == portfolio.spendable_cash(today)

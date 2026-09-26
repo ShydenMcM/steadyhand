@@ -55,9 +55,10 @@ ignore_missing_imports = true
 minversion = "8.0"
 testpaths = ["tests"]
 pythonpath = ["scripts"]
-addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-ra", "-m", "not live"]
+addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-ra", "-m", "not live and not perf"]
 markers = [
     "live: talks to Yahoo; run by the daily yahoo-shape workflow with -m live, never on a PR",
+    "perf: times a ten-year backtest; CI runs it with -m perf, without coverage",
 ]
 filterwarnings = ["error"]
 xfail_strict = true

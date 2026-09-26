@@ -9,12 +9,16 @@ balance to keep in step. Buys are debited on the trade date, which is conservati
 takes the money at settlement, but the cash is never available to spend twice. A debit that
 settles later, such as a day's stamp duty netted with its trades, is held back the same way:
 ``spendable_cash`` subtracts every debit at once and adds a credit only once it has settled.
+
+Each snapshot also keeps its cash balance and the few movements that settle after its last day,
+so the day's cash is read without summing the ledger, and booking a movement checks only that
+movement. A ten-year backtest books over a hundred thousand of them (M3 spec §9).
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from enum import Enum
 
@@ -108,22 +112,17 @@ class Portfolio:
     currency: Currency
     positions: tuple[Position, ...] = ()
     ledger: tuple[CashMovement, ...] = ()
+    _balance: Money = field(init=False, repr=False, compare=False)
+    """The sum of every movement in the ledger."""
+    _open: tuple[CashMovement, ...] = field(init=False, repr=False, compare=False)
+    """Every movement that settles after the last day, in ledger order."""
 
     def __post_init__(self) -> None:
         require_type(self.currency, Currency, "currency")
-        require_type(self.positions, tuple, "positions")
         require_type(self.ledger, tuple, "ledger")
-        for position in self.positions:
-            require_type(position, Position, "position")
+        self._check_positions()
         for movement in self.ledger:
             require_type(movement, CashMovement, "ledger entry")
-        keys = [_sort_key(p) for p in self.positions]
-        if keys != sorted(set(keys)):
-            msg = "positions must be unique and sorted by market, then symbol"
-            raise ValueError(msg)
-        for position in self.positions:
-            if position.instrument.currency != self.currency:
-                raise CurrencyMismatchError(self.currency, position.instrument.currency)
         previous: date | None = None
         for movement in self.ledger:
             if movement.amount.currency != self.currency:
@@ -131,6 +130,24 @@ class Portfolio:
             if previous is not None and movement.day < previous:
                 raise ChronologyError(movement.day, previous)
             previous = movement.day
+        balance = sum((m.amount for m in self.ledger), start=Money.zero(self.currency))
+        still_open = tuple(
+            m for m in self.ledger if previous is not None and m.settles_on > previous
+        )
+        object.__setattr__(self, "_balance", balance)
+        object.__setattr__(self, "_open", still_open)
+
+    def _check_positions(self) -> None:
+        require_type(self.positions, tuple, "positions")
+        for position in self.positions:
+            require_type(position, Position, "position")
+        keys = [_sort_key(p) for p in self.positions]
+        if keys != sorted(set(keys)):
+            msg = "positions must be unique and sorted by market, then symbol"
+            raise ValueError(msg)
+        for position in self.positions:
+            if position.instrument.currency != self.currency:
+                raise CurrencyMismatchError(self.currency, position.instrument.currency)
 
     @classmethod
     def empty(cls, currency: Currency) -> Portfolio:
@@ -141,18 +158,31 @@ class Portfolio:
         return self.ledger[-1].day if self.ledger else None
 
     def cash_balance(self) -> Money:
-        return sum((m.amount for m in self.ledger), start=Money.zero(self.currency))
+        return self._balance
 
     def settled_cash(self, on: date) -> Money:
         require_date(on, "on")
-        settled = (m.amount for m in self.ledger if m.settles_on <= on)
-        return sum(settled, start=Money.zero(self.currency))
+        return self._balance - self._settling_after(on, credits_only=False)
 
     def spendable_cash(self, on: date) -> Money:
         """What can be spent on *on* without ever overdrawing: settled credits, less every debit."""
         require_date(on, "on")
-        kept = (m.amount for m in self.ledger if m.amount.amount < 0 or m.settles_on <= on)
-        return sum(kept, start=Money.zero(self.currency))
+        return self._balance - self._settling_after(on, credits_only=True)
+
+    def _settling_after(self, on: date, *, credits_only: bool) -> Money:
+        """The movements (or only the credits) that settle after *on*.
+
+        From *on* the last day onwards those are all among ``_open``; an earlier day needs the
+        whole ledger.
+        """
+        last = self.last_day
+        pool = self._open if last is None or on >= last else self.ledger
+        later = (
+            m.amount
+            for m in pool
+            if m.settles_on > on and not (credits_only and m.amount.amount < 0)
+        )
+        return sum(later, start=Money.zero(self.currency))
 
     def unsettled_cash(self, on: date) -> Money:
         return self.cash_balance() - self.settled_cash(on)
@@ -181,7 +211,7 @@ class Portfolio:
             msg = f"a deposit must be positive, got {amount}"
             raise ValueError(msg)
         movement = CashMovement(on, MovementKind.DEPOSIT, amount, on)
-        return Portfolio(self.currency, self.positions, (*self.ledger, movement))
+        return self._next(self.positions, movement)
 
     def credit_dividend(self, gross: Money, on: date) -> Portfolio:
         """Book a dividend paid on *on*. It settles that day, so the next decision can spend it."""
@@ -214,7 +244,7 @@ class Portfolio:
             raise ValueError(msg)
         quantity = held.quantity * split.new_shares // split.old_shares
         updated = Position(held.instrument, quantity, held.cost_basis) if quantity else None
-        return self._replaced(held.instrument, updated, self.ledger)
+        return self._replaced(held.instrument, updated, None)
 
     def apply_fill(self, fill: Fill, settles_on: date) -> Portfolio:
         """Book a fill. A buy is debited on its trade date; a sell is credited on *settles_on*."""
@@ -245,7 +275,7 @@ class Portfolio:
             msg = f"a {kind.value} must be positive, got {amount}"
             raise ValueError(msg)
         movement = CashMovement(on, kind, amount * sign, on if settles_on is None else settles_on)
-        return Portfolio(self.currency, self.positions, (*self.ledger, movement))
+        return self._next(self.positions, movement)
 
     def _require_not_before_last(self, day: date) -> None:
         require_date(day, "day")
@@ -292,12 +322,35 @@ class Portfolio:
     def _with(
         self, movement: CashMovement, instrument: Instrument, position: Position | None
     ) -> Portfolio:
-        return self._replaced(instrument, position, (*self.ledger, movement))
+        return self._replaced(instrument, position, movement)
 
     def _replaced(
-        self, instrument: Instrument, position: Position | None, ledger: tuple[CashMovement, ...]
+        self, instrument: Instrument, position: Position | None, movement: CashMovement | None
     ) -> Portfolio:
         others = [p for p in self.positions if p.instrument != instrument]
         if position is not None:
             others.append(position)
-        return Portfolio(self.currency, tuple(sorted(others, key=_sort_key)), ledger)
+        return self._next(tuple(sorted(others, key=_sort_key)), movement)
+
+    def _next(self, positions: tuple[Position, ...], movement: CashMovement | None) -> Portfolio:
+        """This snapshot with *positions* held and *movement* booked after the rest.
+
+        Only what is new is checked. Every caller has already refused a movement dated before
+        the last or in another currency, so the ledger holds without reading it again.
+        """
+        ledger, balance, still_open = self.ledger, self._balance, self._open
+        if movement is not None:
+            ledger = (*ledger, movement)
+            balance += movement.amount
+            still_open = tuple(m for m in (*still_open, movement) if m.settles_on > movement.day)
+        snapshot = object.__new__(Portfolio)
+        for name, value in (
+            ("currency", self.currency),
+            ("positions", positions),
+            ("ledger", ledger),
+            ("_balance", balance),
+            ("_open", still_open),
+        ):
+            object.__setattr__(snapshot, name, value)
+        snapshot._check_positions()
+        return snapshot

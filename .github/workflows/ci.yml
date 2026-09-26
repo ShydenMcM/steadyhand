@@ -55,6 +55,10 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
       - run: uv run --locked pytest -W error --cov --cov-report=term-missing
+      # The ten-year backtest is timed on its own: under coverage's tracing it would time the
+      # tracer, which roughly triples the run.
+      - name: Performance, a ten-year backtest in under 30 seconds
+        run: uv run --locked pytest -W error -m perf -p no:cacheprovider
 
   audit:
     name: audit
