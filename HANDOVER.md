@@ -25,7 +25,7 @@
 - **Applying a plan task by script:** `apply_task.py <plan> <tree> <task> red|green` (in the plan tools directory) applies a task's blocks up to or after its red marker. It stops if any edit anchor matches anything other than exactly once. It applied every M3a task.
 
 ## Resume steps
-1. **Finish S6.** Find the open PR from `m3/s6-run-day` (`gh pr list --head m3/s6-run-day`). Read its head into a file and check its CI run by that SHA, every job by name. Ask Shyden to merge it, as the plan's **Merging a story** says. Then read the develop run's `publish-dev` by name, close #67 with its evidence and move its card to Done.
+1. **Finish S6.** Find the open PR from `m3/s6-run-day` (`gh pr list --head m3/s6-run-day`). Read its head into a file and check its CI run by that SHA, every job by name. Ask Shyden to merge it, as the plan's **Merging a story** says. Then read the develop run's `publish-dev` by name, then mark story #67 finished: an evidence comment, the issue shut, and its card moved to Done.
 2. **Plan M3b** (stories 7–10 of the M3 spec's §10) the same way M3a was done. Build and verify the code in a scratch worktree off `develop`; render it with the plan tools; replay it with `check_plan.py`; review it to zero; file its stories on the board; and move #61 to Done when the M3b plan is merged. `survivorship_warnings` belongs to story 7 (M3a scope decision 12).
 3. Execute M3b natively, one branch and PR per story, as M3a was.
 
