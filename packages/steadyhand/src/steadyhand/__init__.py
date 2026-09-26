@@ -24,6 +24,14 @@ from steadyhand.portfolio import (
     NegativeProceedsError,
     Portfolio,
 )
+from steadyhand.strategies import (
+    STRATEGIES,
+    BuyAndHold,
+    Decision,
+    InvalidWeightsError,
+    Memory,
+    Strategy,
+)
 from steadyhand.types import (
     Bar,
     CashDividend,
@@ -40,6 +48,7 @@ from steadyhand.types import (
     Split,
 )
 from steadyhand.universe import Universe
+from steadyhand.view import LookAheadError, MarketView, PortfolioView, PriceHistory, Tradable
 
 __version__: str = version("steadyhand")
 
@@ -47,8 +56,10 @@ __all__ = [
     "DISCLAIMER",
     "IDR",
     "MAX_MINOR_UNITS",
+    "STRATEGIES",
     "Bar",
     "Broker",
+    "BuyAndHold",
     "CashDividend",
     "CashMovement",
     "ChronologyError",
@@ -58,12 +69,17 @@ __all__ = [
     "CurrencyMismatchError",
     "DataSource",
     "DataUnavailableError",
+    "Decision",
     "Fill",
     "Instrument",
     "InsufficientCashError",
     "InsufficientSharesError",
     "InvalidBarError",
+    "InvalidWeightsError",
+    "LookAheadError",
     "MarketRules",
+    "MarketView",
+    "Memory",
     "MissingPriceError",
     "Money",
     "MovementKind",
@@ -72,10 +88,14 @@ __all__ = [
     "OrderAck",
     "OtherAction",
     "Portfolio",
+    "PortfolioView",
     "Position",
+    "PriceHistory",
     "Rounding",
     "Side",
     "Split",
+    "Strategy",
+    "Tradable",
     "UnavailableDaysError",
     "Universe",
     "UnsupportedDateError",

@@ -12,18 +12,11 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE = ROOT / "packages/steadyhand/src/steadyhand"
-GUARDED = ("money.py", "portfolio.py", "sizing.py", "risk.py", "income.py", "metrics.py", "broker")
 
 
 def guarded_files() -> list[Path]:
-    files: list[Path] = []
-    for entry in GUARDED:
-        path = ENGINE / entry
-        if path.is_dir():
-            files.extend(sorted(path.rglob("*.py")))
-        elif path.is_file():
-            files.append(path)
-    return files
+    """Every module of the engine, found on disk: money, weights and ledgers run through it all."""
+    return sorted(ENGINE.rglob("*.py"))
 
 
 def _annotations(tree: ast.AST) -> Iterator[ast.expr]:
@@ -77,7 +70,7 @@ def test_detector_ignores_comments_and_plain_strings() -> None:
 def test_guarded_engine_modules_contain_no_float() -> None:
     files = guarded_files()
     names = {path.relative_to(ENGINE).as_posix() for path in files}
-    assert {"money.py", "portfolio.py", "broker/__init__.py", "broker/protocol.py"} <= names
+    assert {"money.py", "portfolio.py", "view.py", "strategies/buy_and_hold.py"} <= names
     findings = {
         path.relative_to(ENGINE).as_posix(): uses
         for path in files
