@@ -38,6 +38,7 @@ from steadyhand import (
     InvalidBarError,
     Money,
     Split,
+    UnavailableDaysError,
 )
 from steadyhand_idx.calendar import IdxCalendar
 
@@ -55,17 +56,18 @@ WHOLE_RUPIAH_TOLERANCE = Decimal("0.0001")
 _SPLIT_DENOMINATOR_LIMIT = 1000
 
 
-class UnrecoverablePricesError(DataUnavailableError):
+class UnrecoverablePricesError(UnavailableDaysError):
     """Yahoo's prices for these days carry an adjustment it does not report, so the traded
     prices cannot be worked out. ``days`` lists every such day in the requested range."""
 
     def __init__(self, ticker: str, days: Sequence[date]) -> None:
-        self.days = tuple(days)
+        found = tuple(days)
         super().__init__(
-            f"{ticker}: Yahoo's prices for {len(self.days)} day(s) from "
-            f"{self.days[0].isoformat()} to {self.days[-1].isoformat()} carry an adjustment it "
+            f"{ticker}: Yahoo's prices for {len(found)} day(s) from "
+            f"{found[0].isoformat()} to {found[-1].isoformat()} carry an adjustment it "
             "does not report as a split (for example a rights issue), so the prices traded on "
-            "those days cannot be recovered"
+            "those days cannot be recovered",
+            found,
         )
 
 

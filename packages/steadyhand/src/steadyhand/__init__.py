@@ -3,7 +3,7 @@
 from importlib.metadata import version
 
 from steadyhand.broker import Broker
-from steadyhand.data import DataSource, DataUnavailableError
+from steadyhand.data import DataSource, DataUnavailableError, UnavailableDaysError
 from steadyhand.disclaimer import DISCLAIMER
 from steadyhand.market import MarketRules, UnsupportedDateError
 from steadyhand.money import (
@@ -39,6 +39,7 @@ from steadyhand.types import (
     Side,
     Split,
 )
+from steadyhand.universe import Universe
 
 __version__: str = version("steadyhand")
 
@@ -75,6 +76,8 @@ __all__ = [
     "Rounding",
     "Side",
     "Split",
+    "UnavailableDaysError",
+    "Universe",
     "UnsupportedDateError",
     "__version__",
 ]

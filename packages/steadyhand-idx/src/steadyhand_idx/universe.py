@@ -227,3 +227,21 @@ def _exclusion(line: list[str], where: str) -> Exclusion:
         msg = f"{where}: give a reason, so the report can say why {symbol} was skipped"
         raise DataFileError(msg)
     return Exclusion(symbol, start, end, reason)
+
+
+class Lq45Universe:
+    """The engine's ``Universe`` for IDX: the LQ45 on each day, and the operator's exclusions."""
+
+    def __init__(self, membership: Lq45Membership, exclusions: Exclusions | None = None) -> None:
+        self._membership = membership
+        self._exclusions = Exclusions() if exclusions is None else exclusions
+
+    def members_on(self, day: date) -> frozenset[Instrument]:
+        return frozenset(Instrument(code, "IDX", IDR) for code in self._membership.members_on(day))
+
+    def excluded_on(self, day: date) -> dict[Instrument, str]:
+        excluded = self._exclusions.excluded_on(day)
+        return {Instrument(symbol, "IDX", IDR): reason for symbol, reason in excluded.items()}
+
+    def first_day(self) -> date:
+        return self._membership.records[0].effective
