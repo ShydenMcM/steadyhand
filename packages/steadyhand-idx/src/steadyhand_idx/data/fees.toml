@@ -1,0 +1,90 @@
+# IDX trading costs and taxes, effective-dated, and the broker fee presets. Spec §5.1 and §9.1.
+#
+# Rates are PERCENTAGES written as strings, so "0.018" is 0.018% and no float is involved.
+# Every dated table answers from each row's `from` until the next row's, and refuses any day
+# before its first row. Only primary-verified rows are shipped (spec §9.1): the sources are in
+# docs/research/t-fees.md and docs/research/t-verify.md.
+#
+# The levy is charged per side on the gross trade value. VAT is charged on the IDX, KPEI and KSEI
+# fees and on a broker's commission, but not on the guarantee fund (t-fees.md §1).
+
+schema = 1
+
+[[levy]]
+from = 2020-03-13
+source = "IDX 0.018%: Kep-00025/BEI/03-2020, II-A XI.1.1. KPEI 0.009%: KPEI AR 2019. KSEI 0.003%: SE-0002/DIR-EKS/KSEI/1211, KSEI AR 2019 and 2020 note 27a. Guarantee fund 0.01%: SEOJK 23/SEOJK.04/2015"
+exchange_percent = "0.018"
+clearing_percent = "0.009"
+settlement_percent = "0.003"
+guarantee_fund_percent = "0.010"
+
+[[levy]]
+from = 2020-06-18
+source = "KEP-019/DIR/KPEI/0620 halved the guarantee fund from 18 Jun to 17 Dec 2020 (KPEI AR 2021, guarantee-fund note)"
+exchange_percent = "0.018"
+clearing_percent = "0.009"
+settlement_percent = "0.003"
+guarantee_fund_percent = "0.005"
+
+[[levy]]
+from = 2020-12-18
+source = "KEP-019/DIR/KPEI/0620 ended on 17 Dec 2020; KSEI Rule VI-A (KEP-0005/DIR/KSEI/0121, 20 Jan 2021) kept 0.003%"
+exchange_percent = "0.018"
+clearing_percent = "0.009"
+settlement_percent = "0.003"
+guarantee_fund_percent = "0.010"
+
+[[vat]]
+from = 2016-01-01
+source = "UU 42/2009 Pasal 7(1)"
+rate_percent = "10"
+
+[[vat]]
+from = 2022-04-01
+source = "UU 7/2021 (HPP) Pasal 7(1)a. From 1 Jan 2025, PMK 131/2024 charges 12% on 11/12 of the base, which is still 11%"
+rate_percent = "11"
+
+[[sale_tax]]
+from = 2016-01-01
+source = "PP 41/1994 Pasal 1(2)a as amended by PP 14/1997: 0.1% of the gross value of every share sale"
+rate_percent = "0.1"
+
+# Stamp duty on the trade confirmation, which brokers issue once per trading day. It is charged
+# as the law imposed it (Shyden, 2026-09-25), not from each broker's collection date: every
+# confirmation from 1 Jan 2021, and from 12 Jan 2022 only one worth more than Rp10,000,000.
+# Before 2021 it is unverified, so this table starts in 2021 and sets the earliest backtest date.
+[[stamp_duty]]
+from = 2021-01-01
+source = "UU 10/2020 Pasal 3(2)e and Pasal 5; its elucidation names the trade confirmation"
+amount_rupiah = 10000
+exempt_up_to_rupiah = 0
+
+[[stamp_duty]]
+from = 2022-01-12
+source = "PP 3/2022 Pasal 5 huruf b and Pasal 7: confirmations worth at most Rp10,000,000 are exempt"
+amount_rupiah = 10000
+exempt_up_to_rupiah = 10000000
+
+[[dividend_tax]]
+from = 2009-01-01
+source = "PP 19/2009 and UU PPh Pasal 17(2c): 10% final for resident individuals (docs/research/t-tax.md)"
+rate_percent = "10"
+
+# Broker presets. `includes` lists what the quoted rate already contains, from "levy",
+# "commission_vat" and "sale_tax", so nothing is charged twice. Anything not included is added.
+# Only a broker whose own page states what its quote includes is shipped (t-fees.md §4): Stockbit
+# and Indo Premier do not say, so a user of theirs sets up `custom`. Check any preset against your
+# broker's fee schedule.
+
+[presets.ajaib]
+source = "ajaib.co.id/biaya: 'Sudah termasuk biaya broker, biaya levy (BEI, KPEI, KSEI) 0,0433%, PPN Biaya Broker 12% ..., dan PPh final untuk transaksi jual 0,1%'"
+checked = 2026-09-25
+buy_percent = "0.1513"
+sell_percent = "0.2513"
+includes = ["levy", "commission_vat", "sale_tax"]
+
+[presets.custom]
+source = "steadyhand's default: a 0.15% commission each way, with VAT, the levy and the sale tax added"
+buy_percent = "0.15"
+sell_percent = "0.15"
+includes = []
