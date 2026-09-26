@@ -1,17 +1,20 @@
 # Handover: steadyhand
 
-**Updated:** 2026-09-26 06:03 UTC (S5 #48 in review as PR #56, branch `m2/s5-yahoo`; gate and all five mutations green locally. S4 merged as `35f2d33`.)
-**Local:** `~/Developer/Repos/steadyhand`, on `m2/s5-yahoo`. Read SHAs with `git rev-parse` and never retype one. `main` has no release yet.
+**Updated:** 2026-09-26 06:43 UTC (S6 #49 implemented on `m2/s6-cache` and opened as a PR; merge needs Shyden's approval. S7 is next after it.)
+**Local:** `~/Developer/Repos/steadyhand`, on `m2/s6-cache` (S6's PR branch). This handover is committed on that branch. Read SHAs with `git rev-parse` and never retype one. `main` has no release yet.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
 ## State
 - **M1, all research and the M2 plan are complete.** The plan is `docs/superpowers/plans/2026-09-25-m2-idx-rules-and-data.md` (PR #51, squash `0958346`).
-- **Stories:** S1 #44, S2 #45, S3 #46 and S4 #47 are Done. S5 #48 is In Progress (PR #56). S6 #49 and S7 #50 are Todo. Each body is the plan task's acceptance criteria.
+- **Stories:** S1 #44 to S5 #48 are Done, and so is bug #57. S6 #49 is In Progress (PR open). S7 #50 is Todo. Each body is the plan task's acceptance criteria.
 - **S1 as run:** red `63 failed`, gate `319 passed`. M18 was caught by **one** test in S1's tree; re-run M18 in S4's tree to see all six catchers.
 - **S2 as run:** the plan puts S2's `.toml` data after its red run, so extract the data first. Red `68 failed`, gate `387 passed`. M1 and M2 were caught exactly on the edge cases; re-run both in S7's tree.
 - **S3 as run (2026-09-26):** `data/fees.toml` was extracted before the red run. Red `31 failed`, all `NotImplementedError`; gate `418 passed` at 100%. The wheel carries all four data files, and `sessions.toml` is absent (the negative control). M4 was caught by 2 tests, M5 by 4 and M6 by 2. **M6's other listed catcher, `test_daily_costs_are_the_stamp_duty`, is S4's** (`tests/idx/test_rules.py`, plan line 3623): re-run M6 in S4's tree, next to M18. **Done in S4:** M6 caught 3 (that test included), M18 caught 6.
 - **S3 departs from the plan text in one place.** Self-review found that `FeeSchedule.dividend_tax` accepted a USD or negative dividend. Commit `4e551d3` adds a shared `_require_rupiah` guard and folds the new assertions into the existing `test_gross_must_be_a_non_negative_rupiah_amount`, so **every later count in the plan still holds** (453, 485, 501, 521). No later task re-extracts `fees.py` (its only marker is plan line 2989), so replaying S4-S7 will not overwrite the fix.
 - **S5 as run (2026-09-26):** red `30 failed, 2 passed` as the plan predicted; fixtures recorded 2026-09-26; gate `485 passed, 4 deselected` at 100%, audit clean, live `4 passed`. Mutations: M9 2, M10 1, M11 1, M16 1, M19 1 of 4 live. **M10's other catcher, `test_unrecoverable_prices_are_never_cached`, is S6's**: re-run M10 in S6's tree.
+- **S6 as run (2026-09-26):** red `4 failed, 12 errors`, all `NotImplementedError`; gate `502 passed, 4 deselected` at 100%. Mutations over the whole suite, 502 every run: M10 2 (`never_cached` included), M12 1, M13 1, M14 2. **S6 departs from the plan in one place:** `test_missing_skips_stored_ranges_and_non_trading_gaps` held no hole made only of weekend days, so a narrow M14 (weekend-only holes fetched, trimming kept) passed it. Commit `fe4bfef` adds one assertion to that test (6-7 Nov 2021) without adding a test, so S7's count still holds. No later task re-extracts `test_cache.py`.
+- **#57 shifts every later gate count by one.** The fix added `test_the_testpypi_check_takes_every_dependency_from_pypi_first` to `tests/meta/test_supply_chain.py`, which the plan doesn't know about, so develop's suite is **486**. Expect S6's gate at **502** (plan says 501) and S7's at **522** (plan 521). Red counts run only the new files and are unchanged.
+- **publish-dev never runs on a PR or in the plan replay.** A story that adds a runtime dependency or changes packaging runs the verify step's install locally against the live indexes before merging (`uv pip install -v`, and read which host served each wheel). S6 (SQLite, stdlib) and S7 add no dependency per the plan; check `uv add` in their steps anyway.
 - **Tools kept on disk** in the git-ignored `.superpowers/sdd/2026-09-25-m2-idx-rules-and-data/`: `extract.py PLAN START END` writes every marked block in a line range (one range per step, because a stub and its implementation share a path); `mutate.py FILE OLD NEW` plants a mutation and fails closed unless the anchor matches exactly once. `progress.md` there is the plan ledger. An `<!-- excerpt: -->` block (S3's ci.yml step) is not extracted: apply it by hand.
 - **Execution method (Shyden, 2026-09-25): native, in a fresh session.** Implement the stories yourself from the plan, in order, one branch and PR per story, with Shyden's merge approval on each. No subagents.
 - **The plan's code is already verified**: replaying it rebuilt all seven story trees byte-identically, with red counts 63, 68, 31, 35+5, 30+2, 4+12, 16+4 and green counts 319, 387, 418, 453, 485, 501, 521 at 100% branch coverage.
@@ -19,9 +22,9 @@
 - **Merging:** each agent merge needs Shyden's go-ahead in the session, through `AskUserQuestion` naming the PR, its head SHA read from a file in that same turn, and the CI state. Pin the merge with `--match-head-commit "$(cat <file>)"`.
 
 ## Resume steps
-1. **Finish S5:** PR #56 CI green by job name; ask Shyden to merge (`AskUserQuestion`, head SHA read from a file that turn, `--match-head-commit`). Then develop run green on all six jobs, close #48 with an AC comment, card `PVTI_lAHOCQ_jzM4BkhEbzg8ygNQ` to Done (read it back), and log the merge in `progress.md`.
-2. **S6 (#49), the plan's Task 6 (line 5419 on).** Card `...ygSY` to In Progress. `git switch -c m2/s6-cache origin/develop`. Re-run M10 there (2 catchers expected).
-3. Then S7 (`...ygXA`). Re-run M1 and M2 in S7's tree.
+1. **S6's PR:** if not merged, wait for its CI (step 3), ask Shyden to merge (see Merging), then read develop's run job by job, close #49 with the AC to test mapping and move card `PVTI_lAHOCQ_jzM4BkhEbzg8ygSY` to Done.
+2. **S7 (#50), the plan's Task 7 (line 6284 on).** Card `...ygXA` to In Progress. `git switch -c m2/s7-universe origin/develop`. Gate **522**. Re-run M1 and M2 in S7's tree, plus M15.
+3. **CI waiters:** find a run with `gh run list --branch B --workflow ci` matched to the SHA read from a file, then poll `gh run view <id> --json status` until `completed`, and read every job by name. A merge also starts "Dependency Graph" runs on the same SHA.
 4. Clear the session at each story boundary once the handover is updated.
 
 ## Research technique
