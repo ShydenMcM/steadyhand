@@ -2,6 +2,15 @@
 
 from importlib.metadata import version
 
+from steadyhand.backtest import (
+    BacktestResult,
+    BacktestSettings,
+    Market,
+    NoTradingDaysError,
+    RunResult,
+    UniverseCoverageError,
+    backtest,
+)
 from steadyhand.broker import Broker, FillResult, FillSettings, Opening, SimulatedBroker
 from steadyhand.corporate import (
     PAY_LAG_TRADING_DAYS,
@@ -77,6 +86,8 @@ __all__ = [
     "MAX_MINOR_UNITS",
     "PAY_LAG_TRADING_DAYS",
     "STRATEGIES",
+    "BacktestResult",
+    "BacktestSettings",
     "Bar",
     "Broker",
     "BuyAndHold",
@@ -112,6 +123,7 @@ __all__ = [
     "InvalidBarError",
     "InvalidWeightsError",
     "LookAheadError",
+    "Market",
     "MarketRules",
     "MarketView",
     "Memory",
@@ -119,6 +131,7 @@ __all__ = [
     "Money",
     "MovementKind",
     "NegativeProceedsError",
+    "NoTradingDaysError",
     "Opening",
     "Order",
     "OrderAck",
@@ -131,6 +144,7 @@ __all__ = [
     "RiskLimits",
     "RiskManager",
     "Rounding",
+    "RunResult",
     "Side",
     "SimulatedBroker",
     "Sizer",
@@ -140,8 +154,10 @@ __all__ = [
     "UnavailableDaysError",
     "UnitValue",
     "Universe",
+    "UniverseCoverageError",
     "UnsupportedDateError",
     "__version__",
     "apply_actions",
+    "backtest",
     "run_day",
 ]

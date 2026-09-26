@@ -28,6 +28,7 @@ def require_type(value: object, expected: type, what: str) -> None:
     """Raise ``TypeError`` unless *value* is an instance of *expected*, naming the field."""
     if not isinstance(value, expected):
         name = expected.__name__
-        article = "an" if name[0].lower() in "aeiou" else "a"
+        # "an" before a vowel sound; every type name here starting with U says "you" (UnitValue).
+        article = "an" if name[0].lower() in "aeio" else "a"
         msg = f"{what} must be {article} {name}, got {type(value).__name__}"
         raise TypeError(msg)

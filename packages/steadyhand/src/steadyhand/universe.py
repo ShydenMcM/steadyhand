@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import date
 from typing import Protocol, runtime_checkable
 
@@ -27,4 +27,12 @@ class Universe(Protocol):
 
     def first_day(self) -> date:
         """The first day whose membership is known."""
+        ...
+
+    def survivorship_warnings(self, start: date, end: date) -> Sequence[str]:
+        """What a backtest from *start* to *end* must print about gaps in the membership record.
+
+        A stock that joined and left inside a gap never appears, so the results look better than
+        a real investor's would have (core spec §9.4).
+        """
         ...

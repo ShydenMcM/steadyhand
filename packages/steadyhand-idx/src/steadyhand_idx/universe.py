@@ -143,15 +143,11 @@ class Lq45Membership:
         return found
 
     def survivorship_warnings(self, start: date, end: date) -> list[str]:
-        """What a backtest from *start* to *end* must print about missing lists (spec §9.4)."""
+        """What a backtest from *start* to *end* must print about missing lists (spec §9.4).
+
+        A start before the first list needs no warning: the backtest refuses it (M3 spec §7.2).
+        """
         warnings: list[str] = []
-        first = self._records[0]
-        if start < first.effective:
-            warnings.append(
-                f"Survivorship bias: the backtest starts on {start.isoformat()}, before the first "
-                f"LQ45 list in {self._file} ({first.effective.isoformat()}, {first.source}). "
-                "Stocks that left the LQ45 before then are missing from the universe."
-            )
         for earlier, later in self.gaps():
             if start < later.effective and earlier.effective <= end:
                 warnings.append(
@@ -245,3 +241,6 @@ class Lq45Universe:
 
     def first_day(self) -> date:
         return self._membership.records[0].effective
+
+    def survivorship_warnings(self, start: date, end: date) -> tuple[str, ...]:
+        return tuple(self._membership.survivorship_warnings(start, end))

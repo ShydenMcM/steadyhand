@@ -123,6 +123,9 @@ class _MinimalUniverse:
     def first_day(self) -> date:
         return date(2021, 1, 4)
 
+    def survivorship_warnings(self, start: date, end: date) -> Sequence[str]:
+        return ()
+
 
 def test_a_minimal_class_satisfies_universe() -> None:
     universe: Universe = _MinimalUniverse()
