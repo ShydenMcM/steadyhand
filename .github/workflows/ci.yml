@@ -125,6 +125,25 @@ jobs:
           assert len(lessons) == int(sys.argv[1]), (len(lessons), sys.argv[1])
           print(len(lessons), "lessons load from the installed wheels")
           PY
+      - name: The engine wheel ships every strategy guide, and the installed command prints one
+        run: |
+          expected="$(find packages/steadyhand/src/steadyhand/strategies/guides -name '*.md' | wc -l)"
+          test "${expected}" -gt 0
+          cd "${RUNNER_TEMP}"
+          "${RUNNER_TEMP}/lessons/bin/python" - "${expected}" <<'PY'
+          import sys
+          from steadyhand import GUIDES, STRATEGIES, guide
+          assert "site-packages" in str(GUIDES), GUIDES
+          shipped = sorted(entry.name for entry in GUIDES.iterdir() if entry.name.endswith(".md"))
+          assert shipped == sorted(f"{name}.md" for name in STRATEGIES), shipped
+          assert len(shipped) == int(sys.argv[1]), (shipped, sys.argv[1])
+          for name in STRATEGIES:
+              assert guide(name).startswith(f"# {name}\n"), name
+          print(len(shipped), "strategy guides ship in the engine wheel")
+          PY
+          STEADYHAND_HOME="${RUNNER_TEMP}/home" "${RUNNER_TEMP}/lessons/bin/steadyhand-idx" \
+            explain buy-and-hold > "${RUNNER_TEMP}/explain.txt"
+          head -1 "${RUNNER_TEMP}/explain.txt" | grep -qx "# buy-and-hold"
 
   publish-dev:
     name: publish-dev

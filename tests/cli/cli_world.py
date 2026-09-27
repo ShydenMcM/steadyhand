@@ -4,6 +4,9 @@ console script builds, with text streams, an environment naming a temporary data
 fixed clock and a data source."""
 
 import io
+import os
+import subprocess
+import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -125,3 +128,17 @@ def market_cli(home: Path, config: str = GOLDEN_CONFIG) -> Cli:
     (home / "steadyhand.toml").write_text(config, encoding="utf-8")
     write_universe(home)
     return Cli(home, recorded_source)
+
+
+SCRIPT = Path(sys.executable).with_name("steadyhand-idx")
+"""The console script the package installs, beside this interpreter."""
+
+
+def installed(home: Path, *argv: str, stdin: str = "") -> Result:
+    """Run the installed ``steadyhand-idx`` in its own process, with *home* as its data
+    directory and no network: only commands that read no market data are run this way."""
+    env = {"PATH": os.environ["PATH"], "HOME": str(home.parent), "STEADYHAND_HOME": str(home)}
+    done = subprocess.run(  # noqa: S603 - the installed console script, with the test's arguments
+        [str(SCRIPT), *argv], input=stdin, capture_output=True, text=True, env=env, check=False
+    )
+    return Result(done.returncode, done.stdout, done.stderr)

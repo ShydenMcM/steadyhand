@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Final, NoReturn, TextIO
 
 from steadyhand import (
     DISCLAIMER,
+    FIGURES,
     STRATEGIES,
     DataSource,
     DataUnavailableError,
@@ -34,6 +35,7 @@ from steadyhand import (
     UnsupportedDateError,
     backtest,
     compare,
+    guide,
 )
 from steadyhand_idx import __version__
 from steadyhand_idx._datafile import DataFileError
@@ -201,6 +203,13 @@ def _parser(stdout: TextIO) -> argparse.ArgumentParser:
     _add_window(several)
     several.add_argument("strategies", nargs="+", metavar="strategy")
     several.set_defaults(run=_compare)
+
+    listing = commands.add_parser("strategies", help="list the strategies")
+    listing.set_defaults(run=_strategies)
+
+    explain = commands.add_parser("explain", help="print a strategy's plain-English guide")
+    explain.add_argument("strategy")
+    explain.set_defaults(run=_explain)
     return parser
 
 
@@ -400,3 +409,25 @@ def _market(config: Config, source: DataSource) -> Market:
         raise DataFileError(str(error)) from None
     universe = Lq45Universe(membership, Exclusions.load(config.exclusions))
     return Market(universe, source, IdxMarketRules(broker_fees=config.broker_fees))
+
+
+def _strategies(ctx: Context) -> str:
+    """Each registered strategy: its name, how much it trades, and what it does (M5 spec §5.5)."""
+    width = max(len("Strategy"), *(len(name) for name in STRATEGIES))
+    page = Page()
+    page.add(f"{'Strategy'.ljust(width)}  Turnover  What it does", FIGURES["Metrics.turnover"])
+    for name, entry in sorted(STRATEGIES.items()):
+        page.add(f"{name.ljust(width)}  {entry.turnover.value.ljust(8)}  {entry.summary}")
+    page.add()
+    page.add(f"Read a strategy's guide with: {APP} explain <strategy>")
+    return render(page, ctx.training())
+
+
+def _explain(ctx: Context) -> str:
+    """The strategy's plain-English guide (M5 spec §5.6)."""
+    name: str = ctx.args.strategy
+    if name not in STRATEGIES:
+        raise UnknownNameError.among(name, STRATEGIES, kind="strategy")
+    page = Page()
+    page.add(guide(name).rstrip("\n"))
+    return render(page, ctx.training())

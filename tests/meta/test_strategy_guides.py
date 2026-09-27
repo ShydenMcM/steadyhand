@@ -1,4 +1,5 @@
-"""Every registered strategy has a complete plain-English guide (core spec §8, §10.1).
+"""Every registered strategy has a complete plain-English guide (core spec §8, §10.1), shipped
+inside the package (M5 spec §5.6).
 
 The guide is read with its HTML comments removed, so a section commented out is missing.
 """
@@ -11,7 +12,7 @@ import pytest
 from steadyhand.strategies import STRATEGIES, Strategy
 
 ROOT = Path(__file__).resolve().parents[2]
-GUIDES = ROOT / "docs/strategies"
+GUIDES = ROOT / "packages/steadyhand/src/steadyhand/strategies/guides"
 SECTIONS = (
     "What it does",
     "Why people use it",
