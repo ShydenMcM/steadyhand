@@ -20,6 +20,7 @@ from steadyhand.engine import (
     run_day,
 )
 from steadyhand.money import IDR, Money
+from steadyhand.notes import DATA_BAR_MISSING, Note
 from steadyhand.portfolio import MissingPriceError, MovementKind
 from steadyhand.risk import Halt, RiskLimits
 from steadyhand.strategies import BuyAndHold, Decision, Memory
@@ -279,9 +280,10 @@ def test_a_held_stock_without_a_bar_is_valued_at_its_last_close_and_not_sold() -
     seller = _Fixed({BBRI: Decimal("0.4")})
     _, report = run_day(state, DayInputs(D3, history, members=MEMBERS), seller, rules(), half())
     assert report.warnings == (
-        (
+        Note(
+            DATA_BAR_MISSING,
             "BBCA has no bar on 2025-06-04, so it is not traded; it is valued at its last "
-            "close, IDR 9,100"
+            "close, IDR 9,100",
         ),
     )
     assert report.holdings_value == rp(500 * 9_100 + 1_200 * 4_050)
@@ -326,7 +328,9 @@ def test_a_member_without_a_bar_is_not_bought_and_is_warned_about() -> None:
     _, report = run_day(
         state, DayInputs(D1, history, members=MEMBERS), BuyAndHold(), rules(), half()
     )
-    assert report.warnings == ("BBRI has no bar on 2025-06-02, so it is not traded",)
+    assert report.warnings == (
+        Note(DATA_BAR_MISSING, "BBRI has no bar on 2025-06-02, so it is not traded"),
+    )
     assert [o.instrument for o in report.queued] == [BBCA]
 
 

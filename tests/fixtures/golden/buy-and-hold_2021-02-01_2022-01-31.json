@@ -1648,7 +1648,10 @@
  },
  "strategy": "buy-and-hold",
  "warnings": [
-  "BBRI: the data source refused 146 day(s) (2021-02-01 to 2021-09-07), so it was not traded on them, and a holding was valued at its last clean close. A dividend whose ex-date falls on a refused day is unknown and was not credited."
+  [
+   "data.bar.refused",
+   "BBRI: the data source refused 146 day(s) (2021-02-01 to 2021-09-07), so it was not traded on them, and a holding was valued at its last clean close. A dividend whose ex-date falls on a refused day is unknown and was not credited."
+  ]
  ],
  "window": [
   "2021-02-01",

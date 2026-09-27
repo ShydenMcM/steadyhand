@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from datetime import date
 from typing import Protocol, runtime_checkable
 
+from steadyhand.notes import Note
 from steadyhand.types import Instrument
 
 
@@ -29,7 +30,7 @@ class Universe(Protocol):
         """The first day whose membership is known."""
         ...
 
-    def survivorship_warnings(self, start: date, end: date) -> Sequence[str]:
+    def survivorship_warnings(self, start: date, end: date) -> Sequence[Note]:
         """What a backtest from *start* to *end* must print about gaps in the membership record.
 
         A stock that joined and left inside a gap never appears, so the results look better than

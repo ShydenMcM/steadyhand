@@ -16,7 +16,7 @@ from datetime import date
 from itertools import pairwise
 from pathlib import Path
 
-from steadyhand import IDR, Instrument
+from steadyhand import IDR, Instrument, Note
 from steadyhand_idx._datafile import (
     DataFileError,
     Row,
@@ -29,6 +29,7 @@ from steadyhand_idx._datafile import (
     require_schema,
     rows,
 )
+from steadyhand_idx.notes import UNIVERSE_SURVIVORSHIP_GAP
 
 LQ45_SIZE = 45
 REVIEW_KINDS = frozenset({"review", "replacement"})
@@ -142,19 +143,22 @@ class Lq45Membership:
                 found.append((earlier, later))
         return found
 
-    def survivorship_warnings(self, start: date, end: date) -> list[str]:
+    def survivorship_warnings(self, start: date, end: date) -> list[Note]:
         """What a backtest from *start* to *end* must print about missing lists (spec §9.4).
 
         A start before the first list needs no warning: the backtest refuses it (M3 spec §7.2).
         """
-        warnings: list[str] = []
+        warnings: list[Note] = []
         for earlier, later in self.gaps():
             if start < later.effective and earlier.effective <= end:
                 warnings.append(
-                    f"Survivorship bias: {self._file} has no LQ45 list between "
-                    f"{earlier.effective.isoformat()} ({earlier.source}) and "
-                    f"{later.effective.isoformat()} ({later.source}), more than one review apart. "
-                    "The backtest uses the earlier list until the later one."
+                    Note(
+                        UNIVERSE_SURVIVORSHIP_GAP,
+                        f"Survivorship bias: {self._file} has no LQ45 list between "
+                        f"{earlier.effective.isoformat()} ({earlier.source}) and "
+                        f"{later.effective.isoformat()} ({later.source}), more than one review "
+                        "apart. The backtest uses the earlier list until the later one.",
+                    )
                 )
         return warnings
 
@@ -242,5 +246,5 @@ class Lq45Universe:
     def first_day(self) -> date:
         return self._membership.records[0].effective
 
-    def survivorship_warnings(self, start: date, end: date) -> tuple[str, ...]:
+    def survivorship_warnings(self, start: date, end: date) -> tuple[Note, ...]:
         return tuple(self._membership.survivorship_warnings(start, end))

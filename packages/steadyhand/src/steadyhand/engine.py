@@ -18,6 +18,7 @@ from steadyhand.broker.simulated import FillResult, FillSettings, Opening, Simul
 from steadyhand.corporate import PAY_LAG_TRADING_DAYS, Entitlement, Holdings, apply_actions
 from steadyhand.market import MarketRules
 from steadyhand.money import Money
+from steadyhand.notes import DATA_BAR_MISSING, Note
 from steadyhand.outcomes import Cut, Rejected
 from steadyhand.portfolio import Portfolio
 from steadyhand.risk import Halt, RiskLimits, RiskManager, UnitValue
@@ -132,7 +133,7 @@ class DayReport:
     value: Money
     unit_price: Decimal
     """The price of one unit at today's close, which a deposit leaves unchanged (M3 spec §6.3)."""
-    warnings: tuple[str, ...]
+    warnings: tuple[Note, ...]
 
 
 def run_day(
@@ -282,7 +283,7 @@ def _tradable(
     held: frozenset[Instrument],
     frozen: Mapping[Instrument, str],
     closes: Mapping[Instrument, Money],
-) -> tuple[Tradable, list[str]]:
+) -> tuple[Tradable, list[Note]]:
     """Today's buyable and sellable stocks (M3 spec §6.4), and a warning for each missing bar."""
     day = inputs.day
     reasons: dict[Instrument, str] = {}
@@ -292,7 +293,7 @@ def _tradable(
         reasons.setdefault(instrument, f"frozen: {reason}")
     for instrument, reason in inputs.excluded.items():
         reasons.setdefault(instrument, f"excluded: {reason}")
-    warnings: list[str] = []
+    warnings: list[Note] = []
     for instrument in sorted(inputs.members | held, key=lambda i: (i.market, i.symbol)):
         if instrument in reasons or inputs.history.on(instrument, day) is not None:
             continue
@@ -300,7 +301,7 @@ def _tradable(
         warning = f"{instrument.symbol} has no bar on {day.isoformat()}, so it is not traded"
         if instrument in held:
             warning += f"; it is valued at its last close, {closes[instrument]}"
-        warnings.append(warning)
+        warnings.append(Note(DATA_BAR_MISSING, warning))
     buyable = frozenset(inputs.members - reasons.keys())
     sellable = frozenset(held - reasons.keys())
     return Tradable(day, buyable, sellable, reasons), warnings
