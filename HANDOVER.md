@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-09-27 09:35 UTC (**T1 is delivered**: S1–S4 are merged, deployed and Done, and #96 is closed. Nothing is in flight. **Next: M4b.**)
+**Updated:** 2026-09-27 10:40 UTC (**The M4b plan is approved** and its PR carries the plan and five new recordings. Stories S5–S8 are #110–#113, Todo. **Next: execute Task 1 (S5, #110).**)
 **Local:** `~/Developer/Repos/steadyhand`. `develop` holds the T1 spec and plan, and `main` has no release yet. `t1/training-spec` and `m4/m4b-plan` are merged or superseded and deleted. Start each story's branch from `origin/develop`. Read heads with `git rev-parse`; never retype one.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
@@ -56,8 +56,14 @@
 
 - **Spec amendments made in the M4a plan** (its scope decisions 4 and 5): a split on a dividend's own ex-date restates it; restatement is exact in integers. M4b's plan should cite them.
 - **Plan tools, newest copy:** `.superpowers/sdd/2026-09-26-m4a-income/` (gates, redrun, stubgen, render, build_plan, check_plan, apply_task, mutations, wait_ci.sh, template.md, shared-merging.md). New since #84: a `delete` marker; `stubgen` keeps a module that only removes functions as it was in the red phase; `redrun.py`/`check_plan.py` resolve their tree path; `wait_ci.sh` uses its own temp file (two waiters shared one and raced); `shared-merging.md` now says merge without asking. Copy the directory for M4b, rewrite `mutations.py`'s list, `build_plan.py`'s `TASK`/`DEFECT`, and `template.md`.
-- **M4b open item for S5:** PMK 18/2021's in-force date is blank in T-TAX; read it from BPK before writing the data row (spec §6.1). S5 also moves `income.py`'s `dividend_tax(..., reinvested_by_deadline=False, ...)` calls off the removed flag.
+- **M4b's PMK 18/2021 read is done:** in force 17 February 2021 (Pasal 119; BPK Download/155338, p158). S5 writes it into T-TAX. Pasal 109's refund route for dividends since 2 November 2020 is recorded, not modelled (M4b scope decision 1).
 - **Hypothesis note:** M87 was caught by the scenario-ordering property on one run and not the next; a property's catch is not guaranteed, so a plan's predicted catchers name hand-worked tests.
+
+## M4b exemption claim (plan approved 2026-09-27, ticket #86)
+- **Plan:** `docs/superpowers/plans/2026-09-27-m4b-exemption-claim.md`, built by extraction and reviewed to zero on pass 5. Its twelve scope decisions fill in or amend the M4 spec: the rule's start, the `dividend_exemption` table in `fees.toml` (from 2009, so `verified_from` stays 1 January 2021), `Payout`, the claim's `uncovered` part, the two bookkeeping functions, the break tie-break, and the switch-on golden run's scripted trader (`ExemptionScript`) over new recordings to 29 April 2022, which the plan PR carries.
+- **Scratch chain** (`.superpowers/sdd/2026-09-27-m4b-exemption/repo`, branch `m4b-chain2`): fixtures `cf283a6`, then S5 `fff6fa7`, S6 `7223349`, S7 `3e728f8`, S8 `813ae4c` (full SHAs in `stories.txt`). Every story passed CI's gate on its own commit (1021, 1037, 1049, 1053 tests at 100%; perf 7.6–8.4 s), its red phase fails for the right reasons (51, 18, 28, 4), 32 mutations (M140–M171) all go red (31 exactly as predicted, M155 with one more catcher), and the plan replays byte-identical from its own text.
+- **Stories:** S5 #110, S6 #111, S7 #112, S8 #113 (Todo). Each merges as the plan's **Merging a story** says; `close_story.sh <issue> <pr> <develop run>` in the tools directory closes one.
+- **Tools** (git-ignored, newest copy): `.superpowers/sdd/2026-09-27-m4b-exemption/`. New: `stubgen` keeps a pre-existing class's fields in the red phase (S5's first red run failed 241 unrelated tests without it); `file_stories.sh`; worktrees `wt-red`, `wt-mut`, `wt-replay`.
 
 ## T1 training foundation (spec approved 2026-09-27, ticket #96)
 - **Spec:** `docs/superpowers/specs/2026-09-27-training-design.md`, approved by Shyden after a section-by-section design and 3 review passes. It records the decisions: any self-hoster in English (with an `en/` folder), three levels plus off, the foundation built before M4b, M3's warnings keyed, `term.*` keys derived by a type walk from the report roots, lessons shipped in both wheels, and an import allowlist as the legal control.
@@ -85,7 +91,8 @@
 - Brainstormed 2026-09-27: see the T1 section above.
 
 ## Resume steps
-1. T1 is done and nothing is in flight. Start M4b (S5–S8): a plan from `develop`, starting with S5's BPK read for PMK 18/2021's in-force date (see the M4 section). Every note M4b adds needs its lesson in the same PR: after T1's S4, `tests/meta/test_lessons.py` fails until it has one.
+1. If the plan PR (`m4/m4b-plan`) is not merged yet, merge it as the plan's **Merging a story** says.
+2. Execute the plan's Task 1 (S5, #110) from `origin/develop`: `apply_task.py <plan> <tree> 1 red`, compare the red run with the plan, then `green`; check the tree equals the scratch S5 commit apart from the plan and handover docs; run the gate and M140–M148; PR, merge, deploy, close. Then Tasks 2–4 the same way, each on the previous story's merge.
 
 ## Research technique
 - **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid scraping. Try the Internet Archive, KSEI, KPEI (idclear) or BPK first. Use idx.co.id only when none has a readable copy, and say so in the research doc.
