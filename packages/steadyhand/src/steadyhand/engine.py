@@ -22,6 +22,7 @@ from steadyhand.corporate import (
     Payout,
     apply_actions,
 )
+from steadyhand.exemption import cover_claims, settle_claims
 from steadyhand.market import MarketRules
 from steadyhand.money import Money
 from steadyhand.notes import DATA_BAR_MISSING, Note
@@ -171,7 +172,9 @@ def run_day(
     corporate = apply_actions(holdings, inputs.actions, day, rules, payout)
     holdings = corporate.holdings
     filled = _fill(holdings, inputs, rules, settings.fills)
-    portfolio = filled.portfolio
+    covered = cover_claims(holdings.claims, filled.fills, rules)
+    claimed = settle_claims(filled.portfolio, covered, day, rules)
+    portfolio = claimed.portfolio
 
     closes = _closes(portfolio, holdings.last_closes, history, day)
     holdings_value = portfolio.holdings_value(closes)
@@ -207,7 +210,7 @@ def run_day(
         memory = decision.memory
 
     new_holdings = Holdings(
-        portfolio, queued, holdings.entitlements, holdings.frozen, closes, holdings.claims
+        portfolio, queued, holdings.entitlements, holdings.frozen, closes, claimed.claims
     )
     report = DayReport(
         day=day,
@@ -217,7 +220,7 @@ def run_day(
         queued=queued,
         entitled=corporate.entitled,
         paid=corporate.paid,
-        tax=corporate.tax,
+        tax=corporate.tax + claimed.tax,
         daily_cost=filled.daily_cost,
         deposit=deposit,
         frozen=(*newly_excluded, *corporate.frozen),
@@ -228,6 +231,7 @@ def run_day(
         value=value,
         unit_price=units.price,
         warnings=(*corporate.warnings, *warnings),
+        notes=claimed.notes,
     )
     return EngineState(new_holdings, units, halt, day, memory), report
 

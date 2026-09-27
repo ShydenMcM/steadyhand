@@ -2,7 +2,7 @@
 id = "tax.exemption"
 title = "The dividend tax exemption"
 summary = "A resident individual's dividend is free of tax if it is reinvested in Indonesia in time and kept invested."
-explains = ["term.claim_to_reinvest", "term.claim_protected"]
+explains = ["term.claim_to_reinvest", "term.claim_protected", "exemption.deadline_missed"]
 module = "costs-and-tax"
 position = 5
 see_also = ["tax.dividend"]
@@ -37,7 +37,12 @@ for the dividend instead, and every figure the claim gives is an estimate:
 - **To reinvest** is the part of the dividend not yet invested. A dividend whose ex-date is
   before 17 February 2021, when the rule came into force, gets no claim and is taxed as usual.
 - **Protected** is a part that a purchase has reinvested, with the last day it must stay
-  invested: 31 December of the second year after the purchase.
+  invested: 31 December of the second year after the purchase. A purchase counts towards the
+  claims that are open on its day, oldest dividend first, up to its value before costs.
+
+If part of a dividend is still to reinvest after its deadline, steadyhand books 10% of that part
+on the first trading day after the deadline, at the rate in force when the dividend was paid. It
+cannot book tax on a past date, so a note records that the tax was owed from the pay date.
 
 This lesson describes the rules; whether they apply to you, and how, is a question for you or a
 tax adviser.
