@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-09-27 08:37 UTC (**The T1 plan is merged** (PR #103, `df541e0`, develop run 36306603813 green with `publish-dev`). **Next: execute T1's stories S1–S4 (#99–#102), then M4b.** Bug #97 is fixed (PR #98).)
+**Updated:** 2026-09-27 09:35 UTC (**T1 is delivered**: S1–S4 are merged, deployed and Done, and #96 is closed. Nothing is in flight. **Next: M4b.**)
 **Local:** `~/Developer/Repos/steadyhand`. `develop` holds the T1 spec and plan, and `main` has no release yet. `t1/training-spec` and `m4/m4b-plan` are merged or superseded and deleted. Start each story's branch from `origin/develop`. Read heads with `git rev-parse`; never retype one.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
@@ -62,7 +62,17 @@
 ## T1 training foundation (spec approved 2026-09-27, ticket #96)
 - **Spec:** `docs/superpowers/specs/2026-09-27-training-design.md`, approved by Shyden after a section-by-section design and 3 review passes. It records the decisions: any self-hoster in English (with an `en/` folder), three levels plus off, the foundation built before M4b, M3's warnings keyed, `term.*` keys derived by a type walk from the report roots, lessons shipped in both wheels, and an import allowlist as the legal control.
 - **Plan:** `docs/superpowers/plans/2026-09-27-t1-training-foundation.md`, built by extraction and reviewed to zero on pass 2. Every story was built and gated first in a scratch chain (`develop` `acca50e` + the spec, then S1 `0779c10`, S2 `9867efe`, S3 `aae3144`, S4 `1053538`). The plan replays byte-identical from its own text, and 36 mutations (M104–M139) all go red, 35 of them exactly as predicted and M138 by hand. Its scope decisions 1–3 amend the T1 spec: `LessonNotFoundError`, `LESSONS` and `catalogue()` in S4, and the figure walk reading properties and skipping private names.
-- **Stories:** S1 #99 `t1/s1-keys`, S2 #100 `t1/s2-catalogue`, S3 #101 `t1/s3-renderer`, S4 #102 `t1/s4-content`. All are filed with their AC and read back as Todo on the board.
+- **Executed 2026-09-27.** Each story was applied with `apply_task.py`, its red count and failure kinds matched the plan, its code was byte-identical to the scratch commit (only the plan and handover docs differ, which `develop` already had), its gate was green at 100%, and its mutations were all caught on the real commit. S2–S4 were built stacked on the previous story and cherry-picked onto `develop` after its squash merge, with the tree checked identical.
+
+  | Story | Issue | PR | Merge | Develop run |
+  |---|---|---|---|---|
+  | S1 keys | #99 | #105 | 68eb583 | 36308697779 |
+  | S2 catalogue | #100 | #106 | 58324e5 | 36309132815 |
+  | S3 renderer | #101 | #107 | cdd7df3 | 36309330894 |
+  | S4 content | #102 | #108 | 2342be8 | 36309671264 |
+
+- **S4 finding:** `tax.dividend` stated the day-15 payment rule without citing t-tax §5, where PMK 81/2024 Pasal 373 is quoted. PR #108's second commit adds the citation. The plan's Step 6 check is document-level and passed; the section-level check (`scratchpad` script, 48 values) is what found it.
+- **Story close-out script:** `.superpowers/sdd/2026-09-27-t1-training/close_story.sh <issue> <pr> <develop run>` comments, closes, moves the card to Done and reads it back through the `PVTI_` node.
 - **Plan tools** (git-ignored): `.superpowers/sdd/2026-09-27-t1-training/`. The scratch clone `repo/` (branch `t1-chain2`), `stories.txt`, `plan-base-sha`, `mutations.py` (M104–M139), `fills/` (red and gate results), `mut-all.log`, and the worktrees `wt-red`, `wt-mut` and `wt-replay`. New since M4a: `build_plan.py` fills any «FIELD» from `fills/FIELD.md`, and `render.py`'s `MAX_HUNKS` is 10.
 
 ## Bug #97 (done 2026-09-27)
@@ -75,9 +85,7 @@
 - Brainstormed 2026-09-27: see the T1 section above.
 
 ## Resume steps
-1. The T1 plan PR is merged (#103); nothing is in flight. Start at S1 (#99).
-2. Execute S1–S4 (#99–#102) from the plan, one branch and PR each, as M4a's were. Apply each task with the plan tools' `apply_task.py` from `docs/superpowers/plans/2026-09-27-t1-training-foundation.md`, check its red count and failure kinds against the plan, check the tree is byte-identical to the scratch commit, run the gate and the task's mutations on the real commit, and merge on green. In S4, also run Task 4 Step 7 (the wheel step as CI runs it) and read each lesson against core spec §3 item 3.
-3. Then M4b (S5–S8): a plan from `develop`, starting with S5's BPK read for PMK 18/2021's in-force date (see the M4 section). Every note M4b adds needs its lesson in the same PR: after T1's S4, `tests/meta/test_lessons.py` fails until it has one.
+1. T1 is done and nothing is in flight. Start M4b (S5–S8): a plan from `develop`, starting with S5's BPK read for PMK 18/2021's in-force date (see the M4 section). Every note M4b adds needs its lesson in the same PR: after T1's S4, `tests/meta/test_lessons.py` fails until it has one.
 
 ## Research technique
 - **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid scraping. Try the Internet Archive, KSEI, KPEI (idclear) or BPK first. Use idx.co.id only when none has a readable copy, and say so in the research doc.
@@ -96,3 +104,4 @@
 - **A TestPyPI publish failure is not always ours.** An OIDC or TLS timeout goes away with `gh run rerun <id> --failed`, and `skip-existing` makes that safe.
 - **Mutation tallies:** print the full `FAILED` ids, not `sort -u` of names, because parametrised cases collapse into one name.
 - **Timestamps:** stamp status lines only from a `date -u` read.
+- **macOS has no `tac`** (use `tail -r`). A `$(tac …)` that fails leaves an empty list, and `git switch -C` then resets the branch with nothing to pick: check the list is non-empty before any reset. Recovered from the reflog on 2026-09-27.
