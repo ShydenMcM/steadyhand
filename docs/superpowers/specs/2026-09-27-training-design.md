@@ -1,6 +1,6 @@
 # steadyhand T1: Training foundation
 
-**Status:** design approved by Shyden in conversation on 2026-09-27, in four parts. The review loop closed on pass 3. The written spec awaits Shyden's review.
+**Status:** design approved by Shyden in conversation on 2026-09-27, in four parts. The review loop closed on pass 3. The written spec was approved by Shyden on 2026-09-27, including the eight details the design parts had not shown (key names, the term walk, `sources`, the import allowlist, the phrase list, the `some` wording, `course.toml`, and the S4 split).
 **Parent spec:** `2026-09-24-steadyhand-core-design.md` (the "core spec"). Training is a sub-project Shyden asked for on 2026-09-26: newbie-friendly training for everything, with an opt-out and a first-launch question on competency. It was deferred until the M4 spec was approved, which happened on 2026-09-26. The legal findings (core spec §3, item 3) and the disclaimer (§9.8) still hold. The stable-key hook it builds on is M4 spec §7.
 
 ## 1. What T1 delivers

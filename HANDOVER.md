@@ -1,7 +1,7 @@
 # Handover: steadyhand
 
-**Updated:** 2026-09-27 03:25 UTC (**M4a is complete: S1-S4 merged into `develop` (#92-#95), deployed, and #87-#90 closed and Done. Next: the M4b plan (S5-S8), and the training brainstorm, which needs Shyden.** Ticket #86 In Progress until the M4b plan merges.)
-**Local:** `~/Developer/Repos/steadyhand`. On `m4/m4b-plan`, branched from `develop` at `bb12b26` (S4's merge); this file is its only change so far and travels in the M4b plan PR. Read heads with `git rev-parse`; never retype one. `main` has no release yet.
+**Updated:** 2026-09-27 07:25 UTC (**The T1 training spec is approved** (`docs/superpowers/specs/2026-09-27-training-design.md`, ticket #96, branch `t1/training-spec`). **Next: the T1 plan (S1-S4), then T1's stories, then M4b.** #86 stays In Progress until the M4b plan merges.)
+**Local:** `~/Developer/Repos/steadyhand`. On `t1/training-spec`, branched from `m4/m4b-plan` (`9d26f16`, whose only change is this file), which branched from `develop` at `bb12b26`. `t1/training-spec` carries the T1 spec and this file, and becomes the T1 plan PR. `m4/m4b-plan` is superseded, so delete it once T1's plan PR merges, and start M4b's plan from `develop` then. Read heads with `git rev-parse`; never retype one. `main` has no release yet.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
 ## State
@@ -59,16 +59,20 @@
 - **M4b open item for S5:** PMK 18/2021's in-force date is blank in T-TAX; read it from BPK before writing the data row (spec §6.1). S5 also moves `income.py`'s `dividend_tax(..., reinvested_by_deadline=False, ...)` calls off the removed flag.
 - **Hypothesis note:** M87 was caught by the scenario-ordering property on one run and not the next; a property's catch is not guaranteed, so a plan's predicted catchers name hand-worked tests.
 
-## Training sub-project (Shyden, 2026-09-26)
+## T1 training foundation (spec approved 2026-09-27, ticket #96)
+- **Spec:** `docs/superpowers/specs/2026-09-27-training-design.md`, approved by Shyden after a section-by-section design and 3 review passes. It records the decisions: any self-hoster in English (with an `en/` folder), three levels plus off, the foundation built before M4b, M3's warnings keyed, `term.*` keys derived by a type walk from the report roots, lessons shipped in both wheels, and an import allowlist as the legal control.
+- **Stories (spec §9):** S1 keys, S2 catalogue, S3 renderer and legal line, S4 content and the built-wheel check. Mutations are numbered from M104. None of S1-S4 is filed yet.
+
+## Training sub-project background (Shyden, 2026-09-26)
 - Shyden asked for newbie-friendly training for everything, with an opt-out, and a first-launch question on competency level and training yes/no. **Decided:** its own sub-project, brainstormed **after the M4 spec is approved**; both contextual explanations and a lesson course; content written once as Markdown in the repo, shown by the CLI (from M5 `init`) and later rendered by the dashboard.
 - **Legal line** (core spec §3.3): competency may change how much is explained, **never** what the tool suggests trading (that would drift towards licensed advice).
 - M4 leaves the hook: every note M4 adds has a stable key (spec §7). Keying M3's existing warnings belongs to the training sub-project.
-- No ticket yet: file one with full AC when its brainstorm starts.
+- Brainstormed 2026-09-27: see the T1 section above.
 
 ## Resume steps
-1. The training sub-project brainstorm is due (Shyden's spec decision 8: after the spec's approval, which happened 2026-09-26). It needs Shyden in the session: raise it with `AskUserQuestion` when he is here.
-2. Write the M4b plan (S5-S8) on `m4/m4b-plan` with superpowers:writing-plans, by extraction as M4a was: code first in a scratch clone on top of `develop`, gates, red runs, mutations with predictions first, render, replay (`check_plan.py`), review to zero, self-approve. Start with S5's BPK read.
-3. File S5-S8, open the M4b plan PR (it carries this file), merge on green without asking, then execute S5-S8 the same way. When the M4b plan merges, #86's last criteria are met.
+1. Write the T1 plan (S1-S4) on `t1/training-spec` with superpowers:writing-plans, by extraction as M4a was. Copy `.superpowers/sdd/2026-09-26-m4a-income/` to `.superpowers/sdd/2026-09-27-t1-training/`, and rewrite `mutations.py`'s list, `build_plan.py`'s `TASK`/`DEFECT` and `template.md`. Build the code first in a scratch clone on top of `develop`, then run the gates and the red runs, predict each mutation before running it (from M104), render the plan, replay it with `check_plan.py`, review to zero and self-approve. S1 is first: it changes public API types (`warnings` becomes `Note`s, including the `Universe` protocol), so read every implementer and test of `survivorship_warnings` before stubbing.
+2. File S1-S4 with full AC on the board (project 1, assert the title), open the T1 plan PR (it carries the spec, the plan and this file), merge on green without asking, then execute S1-S4 the same way.
+3. Then M4b (S5-S8): a plan from `develop`, starting with S5's BPK read for PMK 18/2021's in-force date (see the M4 section). Every note M4b adds needs its lesson in the same PR, once T1's S4 has switched the catalogue guard on.
 
 ## Research technique
 - **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid scraping. Try the Internet Archive, KSEI, KPEI (idclear) or BPK first. Use idx.co.id only when none has a readable copy, and say so in the research doc.
