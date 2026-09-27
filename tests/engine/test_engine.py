@@ -1,6 +1,7 @@
 """run_day: one pure trading day, from yesterday's state to today's (M3 spec §3, §4-§7.4)."""
 
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from functools import cache
@@ -19,9 +20,9 @@ from steadyhand.engine import (
     EngineState,
     run_day,
 )
-from steadyhand.exemption import DividendClaim
+from steadyhand.exemption import DividendClaim, Protection
 from steadyhand.money import IDR, Money
-from steadyhand.notes import DATA_BAR_MISSING, Note
+from steadyhand.notes import DATA_BAR_MISSING, EXEMPTION_DEADLINE_MISSED, Note
 from steadyhand.portfolio import MissingPriceError, MovementKind
 from steadyhand.risk import Halt, RiskLimits
 from steadyhand.strategies import BuyAndHold, Decision, Memory
@@ -250,6 +251,36 @@ def test_with_the_exemption_on_a_dividend_opens_a_claim_the_next_state_keeps() -
     assert after.holdings.claims == (claim,)
     later, _ = run_day(after, DayInputs(D3, steady(), members=MEMBERS), _Untouchable(), rules())
     assert later.holdings.claims == (claim,)
+
+
+def with_claim(state: EngineState, claim: DividendClaim) -> EngineState:
+    return replace(state, holdings=replace(state.holdings, claims=(claim,)))
+
+
+def test_with_the_exemption_on_todays_buys_cover_an_open_claim() -> None:
+    state, _ = day_one()
+    claim = DividendClaim(BBCA, date(2025, 5, 28), D1, rp(12_500), date(2026, 3, 31), rp(12_500))
+    exempt = replace(half(), dividend_reinvestment_exemption=True)
+    inputs = DayInputs(D2, steady(), members=MEMBERS)
+    after, report = run_day(with_claim(state, claim), inputs, BuyAndHold(), rules(), exempt)
+    assert [fill.order.instrument for fill in report.fills] == [BBCA, BBRI]
+    # The first buy, BBCA's 500 shares at about 9,000, covers all 12,500; held through 2027.
+    protected = (Protection(rp(12_500), date(2027, 12, 31)),)
+    assert after.holdings.claims == (replace(claim, uncovered=rp(0), protections=protected),)
+    assert (report.tax, report.notes) == (rp(0), ())
+
+
+def test_a_missed_deadline_adds_its_tax_and_note_to_the_days_report() -> None:
+    state, _ = day_one()
+    claim = DividendClaim(BBCA, date(2025, 5, 27), date(2025, 5, 28), rp(12_500), D1, rp(12_500))
+    exempt = replace(half(), dividend_reinvestment_exemption=True)
+    inputs = DayInputs(D2, steady(), members=MEMBERS)
+    after, report = run_day(with_claim(state, claim), inputs, BuyAndHold(), rules(), exempt)
+    assert report.tax == rp(1_250)  # the day's buys come after the 2 June deadline
+    assert [note.key for note in report.notes] == [EXEMPTION_DEADLINE_MISSED]
+    assert after.holdings.claims == ()
+    taxes = [m for m in after.holdings.portfolio.ledger if m.kind is MovementKind.TAX]
+    assert [(m.amount, m.day) for m in taxes] == [(rp(-1_250), D2)]
 
 
 def test_a_stock_bought_at_todays_open_has_no_entitlement() -> None:

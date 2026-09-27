@@ -32,7 +32,13 @@ from steadyhand.engine import (
     EngineState,
     run_day,
 )
-from steadyhand.exemption import DividendClaim, Protection
+from steadyhand.exemption import (
+    ClaimDay,
+    DividendClaim,
+    Protection,
+    cover_claims,
+    settle_claims,
+)
 from steadyhand.income import (
     BASE_GROWTH_CAP,
     GROWTH_YEARS,
@@ -90,6 +96,7 @@ from steadyhand.notes import (
     CORPORATE_SPLIT_FRACTION_DROPPED,
     DATA_BAR_MISSING,
     DATA_BAR_REFUSED,
+    EXEMPTION_DEADLINE_MISSED,
     INCOME_GROWTH_SHORT_HISTORY,
     INCOME_PROJECTION_COSTS_IGNORED,
     Note,
@@ -187,6 +194,7 @@ __all__ = [
     "DATA_BAR_MISSING",
     "DATA_BAR_REFUSED",
     "DISCLAIMER",
+    "EXEMPTION_DEADLINE_MISSED",
     "FIGURES",
     "GROWTH_YEARS",
     "HISTORY_YEARS",
@@ -254,6 +262,7 @@ __all__ = [
     "CashMovement",
     "Checked",
     "ChronologyError",
+    "ClaimDay",
     "CompoundingSizer",
     "CorporateAction",
     "CorporateOutcome",
@@ -345,6 +354,7 @@ __all__ = [
     "add_trading_days",
     "apply_actions",
     "backtest",
+    "cover_claims",
     "dividend_growth",
     "goal_progress",
     "income_report",
@@ -354,6 +364,7 @@ __all__ = [
     "received_income",
     "run_day",
     "run_rate",
+    "settle_claims",
     "year_window_start",
     "years_before",
 ]

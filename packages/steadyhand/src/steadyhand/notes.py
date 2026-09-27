@@ -25,6 +25,9 @@ DATA_BAR_MISSING = "data.bar.missing"
 DATA_BAR_REFUSED = "data.bar.refused"
 """The data source refused a stock's days in a backtest, so it was not traded on them."""
 
+EXEMPTION_DEADLINE_MISSED = "exemption.deadline_missed"
+"""Part of a dividend claim was not reinvested by its deadline, so its tax is booked now."""
+
 INCOME_GROWTH_SHORT_HISTORY = "income.growth.short_history"
 """A holding whose dividend growth could not be measured, which therefore counts as 0%."""
 
