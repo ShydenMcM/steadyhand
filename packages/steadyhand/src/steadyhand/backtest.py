@@ -142,6 +142,20 @@ class BacktestResult:
 
 
 @dataclass(frozen=True, slots=True)
+class Comparison:
+    """Several strategies run over one window (M5 spec §5.4).
+
+    ``runs`` holds each strategy's run in the order they were named, then the baseline's unless
+    it was named. ``warnings`` are about the data every run shares, as in ``BacktestResult``.
+    """
+
+    start: date
+    end: date
+    runs: tuple[RunResult, ...]
+    warnings: tuple[Note, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class _Window:
     """Everything both runs read: the trading days, the universe on each, and the fetched data."""
 
@@ -157,6 +171,49 @@ def backtest(
     strategy: Strategy, market: Market, start: date, end: date, settings: BacktestSettings
 ) -> BacktestResult:
     """Run *strategy* and the baseline from *start* to *end*, both inclusive (M3 spec §7.1)."""
+    window = _window(market, start, end, settings)
+    run = _complete(_run(strategy, window, market.rules, settings), market, settings)
+    baseline = BuyAndHold()
+    compared = (
+        None
+        if strategy.name == baseline.name
+        else _complete(_run(baseline, window, market.rules, settings), market, settings)
+    )
+    warnings = _data_warnings(market, window, start, end)
+    return BacktestResult(start, end, run, compared, warnings, _impact(run, compared))
+
+
+def compare(
+    strategies: Sequence[Strategy],
+    market: Market,
+    start: date,
+    end: date,
+    settings: BacktestSettings,
+) -> Comparison:
+    """Run each of *strategies*, and the baseline unless it is one of them, over one window
+    fetched once (M5 spec §5.4)."""
+    for strategy in strategies:
+        require_type(strategy, Strategy, "strategy")
+    names = [strategy.name for strategy in strategies]
+    if not names:
+        msg = "name at least one strategy to compare"
+        raise ValueError(msg)
+    twice = sorted({name for name in names if names.count(name) > 1})
+    if twice:
+        msg = f"{twice[0]} is named twice; name each strategy once"
+        raise ValueError(msg)
+    window = _window(market, start, end, settings)
+    baseline = BuyAndHold()
+    everyone = (*strategies, *(() if baseline.name in names else (baseline,)))
+    runs = tuple(
+        _complete(_run(strategy, window, market.rules, settings), market, settings)
+        for strategy in everyone
+    )
+    return Comparison(start, end, runs, _data_warnings(market, window, start, end))
+
+
+def _window(market: Market, start: date, end: date, settings: BacktestSettings) -> _Window:
+    """Check a run's arguments, then fetch what every strategy over them reads."""
     require_type(market, Market, "market")
     require_date(start, "start")
     require_date(end, "end")
@@ -179,17 +236,16 @@ def backtest(
     if not days:
         msg = f"there is no trading day from {start.isoformat()} to {end.isoformat()}"
         raise NoTradingDaysError(msg)
-    window = _fetch(market, days)
-    run = _run(strategy, window, rules, settings)
-    baseline = BuyAndHold()
-    compared = None if strategy.name == baseline.name else _run(baseline, window, rules, settings)
-    if settings.goal is not None:
-        run = _with_income(run, market, settings, settings.goal)
-        compared = (
-            None if compared is None else _with_income(compared, market, settings, settings.goal)
-        )
-    warnings = (*market.universe.survivorship_warnings(start, end), *_refused_warnings(window))
-    return BacktestResult(start, end, run, compared, warnings, _impact(run, compared))
+    return _fetch(market, days)
+
+
+def _complete(run: RunResult, market: Market, settings: BacktestSettings) -> RunResult:
+    """*run*, with its income report when the settings set a goal."""
+    return run if settings.goal is None else _with_income(run, market, settings, settings.goal)
+
+
+def _data_warnings(market: Market, window: _Window, start: date, end: date) -> tuple[Note, ...]:
+    return (*market.universe.survivorship_warnings(start, end), *_refused_warnings(window))
 
 
 def _calendar_days(start: date, end: date) -> Iterator[date]:

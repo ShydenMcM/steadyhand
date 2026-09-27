@@ -42,7 +42,7 @@ class UnknownNameError(LookupError):
         self.closest = closest
 
     @classmethod
-    def among(cls, kind: str, wanted: str, names: Iterable[str]) -> UnknownNameError:
+    def among(cls, wanted: str, names: Iterable[str], *, kind: str) -> UnknownNameError:
         """The error for *wanted*, with the names closest to it (``difflib``)."""
         return cls(wanted, tuple(get_close_matches(wanted, sorted(names), n=3)), kind=kind)
 

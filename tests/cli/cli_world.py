@@ -7,12 +7,17 @@ import io
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from itertools import product
 from pathlib import Path
 from typing import NamedTuple
 
+from record_golden import RECORDED, START, STOCKS, recorded
+
 from steadyhand import DataSource
+from steadyhand_idx import BarCache, CachedDataSource, YahooDataSource
 from steadyhand_idx.cli import SourceFactory, World, main
+from steadyhand_idx.yahoo import YahooHistory
 
 NOW = datetime(2026, 9, 27, 18, 0, tzinfo=UTC)
 """18:00 UTC is 01:00 on 28 September in Jakarta, so 'today' is the Jakarta date."""
@@ -58,3 +63,65 @@ class Cli:
         )
         assert result.code == 0, result.err
         return result
+
+
+PLACEHOLDERS = tuple("Z" + "".join(letters) for letters in product("ABCDEFGHIJ", repeat=3))[:40]
+"""Made-up codes that fill the LQ45 file to 45. No real LQ45 list is ever written into this
+repository (core spec §9.4); these are excluded, so no strategy ever holds one."""
+
+GOLDEN_CONFIG = """[account]
+starting_cash_idr = 100_000_000
+
+[goal]
+monthly_income_target_idr = 1_000_000
+
+[risk]
+max_weight = "0.25"
+
+[consent]
+disclaimer_accepted = 2026-09-27
+"""
+"""The golden run's settings (``record_golden.settings``), so a CLI backtest over its window must
+reproduce its figures exactly."""
+
+
+def recorded_or_empty(ticker: str, start: date, end: date) -> YahooHistory:
+    """Yahoo's recorded answer for the five golden stocks, and no rows for a placeholder."""
+    if ticker.removesuffix(".JK") in STOCKS:
+        return recorded(ticker, start, end)
+    return YahooHistory(ticker, (), ())
+
+
+def _no_wait(seconds: float) -> None:
+    del seconds
+
+
+@contextmanager
+def recorded_source(folder: Path) -> Iterator[DataSource]:
+    """The recorded answers through the real ``YahooDataSource`` and the bar cache in *folder*,
+    on the day they were recorded, as the golden test reads them."""
+    yahoo = YahooDataSource(download=recorded_or_empty, sleep=_no_wait)
+    with BarCache(folder / "cache.sqlite") as cache:
+        yield CachedDataSource(yahoo, cache, today=lambda: RECORDED)
+
+
+def write_universe(home: Path) -> None:
+    """The operator's files: an LQ45 list of the five golden stocks and 40 placeholders from the
+    golden run's first day, and exclusions for every placeholder."""
+    members = ", ".join(f'"{code}"' for code in (*STOCKS, *PLACEHOLDERS))
+    (home / "lq45_members.toml").write_text(
+        f"schema = 1\n\n[[record]]\neffective = {START}\nannounced = {START}\n"
+        'source = "steadyhand CLI test: the golden stocks and made-up codes, not an LQ45 list"\n'
+        f'kind = "review"\nmembers = [{members}]\n',
+        encoding="utf-8",
+    )
+    rows = "".join(f"{code},{START},,a made-up code with no data\n" for code in PLACEHOLDERS)
+    (home / "exclusions.csv").write_text(f"symbol,from,to,reason\n{rows}", encoding="utf-8")
+
+
+def market_cli(home: Path, config: str = GOLDEN_CONFIG) -> Cli:
+    """``steadyhand-idx`` over the recorded data, with *config* and the operator's files."""
+    home.mkdir(parents=True)
+    (home / "steadyhand.toml").write_text(config, encoding="utf-8")
+    write_universe(home)
+    return Cli(home, recorded_source)

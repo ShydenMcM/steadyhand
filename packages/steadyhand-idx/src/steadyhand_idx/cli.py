@@ -20,7 +20,21 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, NoReturn, TextIO
 
-from steadyhand import DISCLAIMER, DataSource
+from steadyhand import (
+    DISCLAIMER,
+    STRATEGIES,
+    DataSource,
+    DataUnavailableError,
+    DataValidationError,
+    InvalidBarError,
+    Market,
+    NoTradingDaysError,
+    Strategy,
+    UniverseCoverageError,
+    UnsupportedDateError,
+    backtest,
+    compare,
+)
 from steadyhand_idx import __version__
 from steadyhand_idx._datafile import DataFileError
 from steadyhand_idx.cache import JAKARTA, BarCache, CachedDataSource
@@ -43,6 +57,14 @@ from steadyhand_idx.paths import (
     make_private_dir,
     replace_private,
 )
+from steadyhand_idx.reports import (
+    backtest_files,
+    backtest_page,
+    comparison_files,
+    comparison_page,
+)
+from steadyhand_idx.rules import IdxMarketRules
+from steadyhand_idx.universe import Exclusions, Lq45Membership, Lq45Universe
 from steadyhand_idx.yahoo import YahooDataSource
 
 if TYPE_CHECKING:
@@ -53,6 +75,8 @@ type SourceFactory = Callable[[Path], AbstractContextManager[DataSource]]
 
 ACCEPT: Final = "I understand"
 DEBUG_HINT: Final = "run again with --debug for details"
+REPORTS: Final = "reports"
+"""The folder in the data directory that the report files go into."""
 
 
 class UsageError(Exception):
@@ -68,6 +92,12 @@ EXIT_CODES: Final[tuple[tuple[type[Exception], int], ...]] = (
     (ConfigMissingError, 2),
     (DataFileError, 2),
     (UnknownNameError, 2),
+    (UnsupportedDateError, 2),
+    (UniverseCoverageError, 2),
+    (NoTradingDaysError, 2),
+    (DataUnavailableError, 3),
+    (DataValidationError, 3),
+    (InvalidBarError, 3),
 )
 """Each error a command raises on purpose, and its exit code (core spec §9.6). The first row
 that matches wins. Anything else is unexpected, and exits 1."""
@@ -161,7 +191,30 @@ def _parser(stdout: TextIO) -> argparse.ArgumentParser:
     learn = commands.add_parser("learn", help="list the lessons, or read one")
     learn.add_argument("lesson", nargs="?")
     learn.set_defaults(run=_learn)
+
+    run_one = commands.add_parser("backtest", help="back-test a strategy beside buy-and-hold")
+    _add_window(run_one)
+    run_one.add_argument("--strategy", help="the strategy to run, by default the configured one")
+    run_one.set_defaults(run=_backtest)
+
+    several = commands.add_parser("compare", help="back-test several strategies over one window")
+    _add_window(several)
+    several.add_argument("strategies", nargs="+", metavar="strategy")
+    several.set_defaults(run=_compare)
     return parser
+
+
+def _add_window(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--from", dest="start", type=_day, required=True, help="the first day")
+    parser.add_argument("--to", dest="end", type=_day, required=True, help="the last day")
+
+
+def _day(text: str) -> date:
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        msg = f"write a date as 2021-02-01, not {text!r}"
+        raise argparse.ArgumentTypeError(msg) from None
 
 
 def main(argv: Sequence[str], world: World) -> int:
@@ -294,3 +347,56 @@ def _learn(ctx: Context) -> str:
     """The course, or one lesson (T1 spec §6 item 3)."""
     page = course_page() if ctx.args.lesson is None else lesson_page(ctx.args.lesson)
     return render(page, ctx.training())
+
+
+def _backtest(ctx: Context) -> str:
+    """Back-test a strategy beside ``buy-and-hold`` and write its report files (M5 spec §5.3)."""
+    config = ctx.config()
+    strategy = _strategy(ctx.args.strategy or config.strategy)
+    start, end = _window(ctx)
+    with ctx.world.source(config.data_dir) as source:
+        result = backtest(strategy, _market(config, source), start, end, config.settings)
+    written = backtest_files(result, config.data_dir / REPORTS)
+    return render(backtest_page(result, written), config.training)
+
+
+def _compare(ctx: Context) -> str:
+    """Back-test several strategies over one window, fetched once (M5 spec §5.4)."""
+    config = ctx.config()
+    names: list[str] = ctx.args.strategies
+    twice = sorted({name for name in names if names.count(name) > 1})
+    if twice:
+        msg = f"{twice[0]} is named twice; name each strategy once"
+        raise UsageError(msg)
+    strategies = [_strategy(name) for name in names]
+    start, end = _window(ctx)
+    with ctx.world.source(config.data_dir) as source:
+        comparison = compare(strategies, _market(config, source), start, end, config.settings)
+    written = comparison_files(comparison, config.data_dir / REPORTS)
+    return render(comparison_page(comparison, written), config.training)
+
+
+def _strategy(name: str) -> Strategy:
+    if name not in STRATEGIES:
+        raise UnknownNameError.among(name, STRATEGIES, kind="strategy")
+    return STRATEGIES[name]()
+
+
+def _window(ctx: Context) -> tuple[date, date]:
+    start: date = ctx.args.start
+    end: date = ctx.args.end
+    if end < start:
+        msg = f"--to {end} is before --from {start}"
+        raise UsageError(msg)
+    return start, end
+
+
+def _market(config: Config, source: DataSource) -> Market:
+    """The LQ45 in the operator's file less their exclusions, the source, and the IDX rules for
+    their broker's fees (core spec §9.4)."""
+    try:
+        membership = Lq45Membership.load(config.lq45_members)
+    except FileNotFoundError as error:
+        raise DataFileError(str(error)) from None
+    universe = Lq45Universe(membership, Exclusions.load(config.exclusions))
+    return Market(universe, source, IdxMarketRules(broker_fees=config.broker_fees))

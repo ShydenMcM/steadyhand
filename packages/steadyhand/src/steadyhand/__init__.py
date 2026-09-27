@@ -5,12 +5,14 @@ from importlib.metadata import version
 from steadyhand.backtest import (
     BacktestResult,
     BacktestSettings,
+    Comparison,
     IncomeImpact,
     Market,
     NoTradingDaysError,
     RunResult,
     UniverseCoverageError,
     backtest,
+    compare,
 )
 from steadyhand.broker import Broker, FillResult, FillSettings, Opening, SimulatedBroker
 from steadyhand.corporate import (
@@ -267,6 +269,7 @@ __all__ = [
     "Checked",
     "ChronologyError",
     "ClaimDay",
+    "Comparison",
     "CompoundingSizer",
     "CorporateAction",
     "CorporateOutcome",
@@ -358,6 +361,7 @@ __all__ = [
     "add_trading_days",
     "apply_actions",
     "backtest",
+    "compare",
     "cover_claims",
     "dividend_growth",
     "goal_progress",
