@@ -12,5 +12,14 @@ from steadyhand.training.catalogue import (
     LessonNotFoundError,
     Module,
 )
+from steadyhand.training.render import Level, explain
 
-__all__ = ["Catalogue", "Lesson", "LessonError", "LessonNotFoundError", "Module"]
+__all__ = [
+    "Catalogue",
+    "Lesson",
+    "LessonError",
+    "LessonNotFoundError",
+    "Level",
+    "Module",
+    "explain",
+]
