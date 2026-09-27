@@ -13,7 +13,14 @@ from hypothesis import strategies as st
 
 from steadyhand.corporate import Entitlement, Holdings
 from steadyhand.engine import DayReport, EngineState
-from steadyhand.metrics import RATIO_PLACES, CostBreakdown, DividendTotals, Drawdown, measure
+from steadyhand.metrics import (
+    RATIO_PLACES,
+    CostBreakdown,
+    DividendTotals,
+    Drawdown,
+    measure,
+    year_window_start,
+)
 from steadyhand.money import IDR, Money
 from steadyhand.portfolio import Portfolio
 from steadyhand.risk import UnitValue
@@ -190,6 +197,12 @@ def test_dividends_and_the_income_of_the_last_365_days() -> None:
     assert metrics.dividends == DividendTotals(rp(7_000), rp(700))
     assert metrics.dividends.net == rp(6_300)
     assert metrics.trailing_income == rp(5_400)
+
+
+def test_the_year_window_is_365_days_with_both_ends_included() -> None:
+    assert year_window_start(date(2022, 1, 10)) == date(2021, 1, 11)
+    # Across 29 February 2024, 365 days ending on 31 December start on 2 January.
+    assert year_window_start(date(2024, 12, 31)) == date(2024, 1, 2)
 
 
 def test_a_run_with_no_days_has_no_metrics() -> None:

@@ -30,6 +30,7 @@ from steadyhand.engine import (
     EngineState,
     run_day,
 )
+from steadyhand.income import IncomeFigures, MonthlyIncome, ReceivedIncome, received_income
 from steadyhand.market import MarketRules, UnsupportedDateError
 from steadyhand.metrics import (
     RATIO_PLACES,
@@ -39,6 +40,7 @@ from steadyhand.metrics import (
     Drawdown,
     Metrics,
     measure,
+    year_window_start,
 )
 from steadyhand.money import (
     IDR,
@@ -131,6 +133,7 @@ __all__ = [
     "FillSettings",
     "Halt",
     "Holdings",
+    "IncomeFigures",
     "Instrument",
     "InsufficientCashError",
     "InsufficientSharesError",
@@ -144,6 +147,7 @@ __all__ = [
     "Metrics",
     "MissingPriceError",
     "Money",
+    "MonthlyIncome",
     "MovementKind",
     "NegativeProceedsError",
     "NoTradingDaysError",
@@ -155,6 +159,7 @@ __all__ = [
     "PortfolioView",
     "Position",
     "PriceHistory",
+    "ReceivedIncome",
     "Rejected",
     "RiskLimits",
     "RiskManager",
@@ -175,5 +180,7 @@ __all__ = [
     "apply_actions",
     "backtest",
     "measure",
+    "received_income",
     "run_day",
+    "year_window_start",
 ]
