@@ -14,7 +14,9 @@ import pytest
 
 from steadyhand.corporate import Entitlement, Holdings
 from steadyhand.engine import DayReport, EngineState
+from steadyhand.exemption import DividendClaim, Protection
 from steadyhand.income import (
+    CLAIMS_LABEL,
     GROWTH_YEARS,
     HISTORY_YEARS,
     GoalProgress,
@@ -119,6 +121,30 @@ def test_the_report_gathers_every_part_as_of_the_last_day() -> None:
     # the same 45,000 of take-home, 3,750 a month; 3,750 / 10,000 = 0.375 of the goal.
     assert got.goal == GoalProgress(
         rp(10_000), rp(3_750), Decimal("0.375"), rp(3_750), Decimal("0.375")
+    )
+
+
+def test_the_report_shows_the_open_claims_as_an_estimate() -> None:
+    settings = IncomeSettings(IncomeGoal(rp(10_000)), rp(1_000))
+    assert income_report(run(), final(), history(), rules(), settings).claims == ()
+    protected = (Protection(rp(30_000), date(2027, 12, 31)),)
+    claim = DividendClaim(
+        BBCA,
+        date(2025, 4, 21),
+        date(2025, 5, 14),
+        rp(50_000),
+        date(2026, 3, 31),
+        rp(20_000),
+        protected,
+    )
+    state = final()
+    claimed = EngineState(Holdings(state.holdings.portfolio, claims=(claim,)))
+    got = income_report(run(), claimed, history(), rules(), settings)
+    assert got.claims == (claim,)
+    assert (
+        got.claims_label
+        == CLAIMS_LABEL
+        == ("Estimate: assumes the yearly realisation reports are filed")
     )
 
 
