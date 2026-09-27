@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-09-27 15:57 UTC (**The M5a plan is approved** (reviewed to zero on pass 3) and its PR is open; epic #120. **Next: merge the plan, then execute S1–S4 (#122–#125) from it.**)
+**Updated:** 2026-09-27 16:35 UTC (**M5a is delivered**: S1–S4 merged, deployed and Done; epic #120 stays open for M5b. **Next: the M5b plan (S5–S8), built by extraction and reviewed to zero.**)
 **Local:** `~/Developer/Repos/steadyhand`. `develop` holds the T1 spec and plan, and `main` has no release yet. `t1/training-spec` and `m4/m4b-plan` are merged or superseded and deleted. Start each story's branch from `origin/develop`. Read heads with `git rev-parse`; never retype one.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
@@ -81,7 +81,17 @@
 - **Things the plans must not miss:** `[training]` is parsed by `output.py`, never `config.py` (T1 §5 item 3); `Portfolio.restore` is a new engine constructor (S5); the fetch step of `backtest` becomes public and paper calls it over the whole range from the opening day (the golden invariant paper == backtest depends on it); guides move into the engine wheel (S4); performance budgets are measured in the scratch build, then pinned.
 - **Epic card:** `PVTI_lAHOCQ_jzM4BkhEbzg9CRmw`, In Progress.
 - **M5a plan:** `docs/superpowers/plans/2026-09-27-m5a-cli.md`, built by extraction and reviewed to zero on pass 3. Scratch chain (`.superpowers/sdd/2026-09-27-m5a-cli/repo`, branch `m5a-chain4`) on `develop` `c2b8062`: S1 `1a58cf2`, S2 `426739f`, S3 `670cab2`, S4 `e10a47f` (full SHAs in `stories.txt`). Gates 1122, 1207, 1257, 1272 at 100%; red 69, 80, 44, 41 failed; 47 mutations M172–M218 all red (45 exactly as predicted, M193 and M207 with one more catcher), M219 by hand; the plan replays byte-identical from its own text. Its fourteen scope decisions amend the M5 spec: `main(argv, world)`, a context-manager source, `buy-and-hold` default, the config ranges, an engine `compare`, the CSV's two dividend columns, `Registered(make, summary, turnover)` callable, the wheel check as a CI step, and more.
-- **Stories filed** (Todo on the board, read back): S1 #122, S2 #123, S3 #124, S4 #125.
+- **Executed 2026-09-27.** Each story was applied with `apply_task.py`; its red count matched, its code tree was byte-identical to the scratch commit (only the plan and handover docs differ), its gate was green at 100%, and its mutations were all caught on the real commit exactly as the plan predicts (M219 by hand on S4). S2–S4 were built stacked and moved onto `develop` with `rebase --onto` after each squash merge; `develop` requires a branch up to date, so S1 was rebased after the plan merged.
+
+  | Story | Issue | PR | Merge | Develop run |
+  |---|---|---|---|---|
+  | Plan | #120 | #126 | 6cc6115 | 36331687408 |
+  | S1 config | #122 | #127 | ff73a95 | 36332354155 |
+  | S2 shell, init, training, learn | #123 | #128 | b1450b1 | 36332826309 |
+  | S3 backtest, compare | #124 | #129 | 058dad8 | 36333114942 |
+  | S4 guides, strategies, explain | #125 | #130 | 9a78c9e | 36333553346 |
+
+- **Execution finding:** S4's red phase reads `39 failed, 2 errors` in pytest where the plan said "41 failed" (two tests stop in a fixture that builds a stubbed name). PR #130 corrected the plan's text; `redrun.py` now prints pytest's own split.
 - **Found while building (carried forward):** a backtest ending on the recordings' last day but starting late (25–31 January 2022) stops with exit 3: its income report reads five years back into BBRI's unrecoverable prices. M4 §8's rule, kept; whether an income report should leave out such a stock is a question for its own ticket.
 - **M5a tools** (git-ignored, newest copy): `.superpowers/sdd/2026-09-27-m5a-cli/`. New: `render.py` and `redrun.py` list files with `--no-renames` (a moved file was rendered with no delete); `wheel_check.sh <tree>` runs CI's guide step locally from `ci.yml` itself; `prose_check.py <plan>` checks every cited test exists and each task's mutation range; `rerun.sh`; worktrees `wt-red`, `wt-mut`, `wt-replay`, `wt-wheel`.
 
@@ -111,9 +121,8 @@
 - Brainstormed 2026-09-27: see the T1 section above.
 
 ## Resume steps
-1. If the M5a plan PR (branch `m5/m5a-plan`, `Refs #120`) is not merged: (S1–S4 are already filed as #122–#125) read the PR head with `gh pr view --json headRefOid` into a file, confirm every CI job `success` by name on that SHA, merge with `--squash --match-head-commit`, and check `publish-dev` on the develop run.
-2. Execute S1–S4 from the plan, as M4b's were: `apply_task.py <plan> <tree> <task> red|green` in the tools directory, the red count and kinds as the plan says, the tree byte-identical to the story's scratch commit (only docs differ), the gate green, the story's mutations caught on the real commit (`mutations.py` with the real SHAs in a stories file), M219 by hand for S4; then `merge_story.sh` and `close_story.sh`.
-3. After S4: move #120's M5a criteria to done, and brainstorm nothing new: M5b's plan (S5–S8) follows from the same spec.
+1. Write the **M5b plan** (S5–S8: `Portfolio.restore` and the snapshot codec, `state.py`, `paper run`, and the paper commands) with `superpowers:writing-plans`, the way M5a's was: copy the newest tools (`.superpowers/sdd/2026-09-27-m5a-cli/`), build every story in a scratch chain from `origin/develop`, gate each, write the mutations and predictions first, render the plan from the verified commits, replay it byte-identical, and review it to zero. M5 spec §6, §7 and §9 hold its contract; M5a's plan "Carried forward" lists what it builds on.
+2. File S5–S8 with acceptance criteria and execute them. After S8, #120 moves to Done.
 
 ## Research technique
 - **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid scraping. Try the Internet Archive, KSEI, KPEI (idclear) or BPK first. Use idx.co.id only when none has a readable copy, and say so in the research doc.
