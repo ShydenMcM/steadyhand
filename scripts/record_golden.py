@@ -3,11 +3,13 @@
     uv run python scripts/record_golden.py
 
 runs ``buy-and-hold`` over the recorded Yahoo fixtures for ASII, BBCA, BBRI, TLKM and UNVR from
-1 February 2021 to 31 January 2022, and writes everything the golden test pins to
+1 February 2021 to 31 January 2022, with an income goal, and writes everything the golden test pins,
+its income report included, to
 ``tests/fixtures/golden/buy-and-hold_2021-02-01_2022-01-31.json``. The window holds BBCA's
 1-for-5 split, seven cash dividends, and 146 days of BBRI prices that Yahoo cannot unadjust (its
-rights issue). Run it only after a change that moves the numbers on purpose, and review the diff:
-the file is never edited by hand.
+rights issue). The recordings reach back to 31 January 2017, five years before the run ends, for
+the income report's dividend growth (M4 spec §9). Run it only after a change that moves the
+numbers on purpose, and review the diff: the file is never edited by hand.
 """
 
 from __future__ import annotations
@@ -25,6 +27,9 @@ from steadyhand import (
     BacktestResult,
     BacktestSettings,
     EngineSettings,
+    IncomeFigures,
+    IncomeGoal,
+    IncomeReport,
     Market,
     Money,
     RiskLimits,
@@ -39,23 +44,28 @@ TESTS = Path(__file__).resolve().parents[1] / "tests"
 FIXTURES = TESTS / "fixtures" / "yahoo"
 GOLDEN = TESTS / "fixtures" / "golden" / "buy-and-hold_2021-02-01_2022-01-31.json"
 START, END = date(2021, 2, 1), date(2022, 1, 31)
+HISTORY_START = date(2017, 1, 31)
+"""Where the recordings start: five years before the run ends (M4 spec §9)."""
 STOCKS = ("ASII", "BBCA", "BBRI", "TLKM", "UNVR")
-RECORDED = date(2026, 9, 26)
+RECORDED = date(2026, 9, 27)
 """The day the fixtures were recorded; the cache treats it as today."""
 
 
-def settings() -> BacktestSettings:
-    """Rp100,000,000, and 25% a stock so that five stocks can be fully invested (M3 spec §9)."""
+def settings(*, income: bool = True) -> BacktestSettings:
+    """Rp100,000,000, 25% a stock so that five stocks can be fully invested (M3 spec §9), and a
+    goal of Rp1,000,000 a month, so that the run carries an income report (M4 spec §9)."""
     limits = RiskLimits(max_weight=Decimal("0.25"))
-    return BacktestSettings(Money(100_000_000, IDR), EngineSettings(limits=limits))
+    goal = IncomeGoal(Money(1_000_000, IDR)) if income else None
+    return BacktestSettings(Money(100_000_000, IDR), EngineSettings(limits=limits), goal)
 
 
 def recorded(ticker: str, start: date, end: date) -> YahooHistory:
     """Yahoo's recorded answer. A range outside the recording is refused, never invented."""
-    if start < START or end > END:
-        msg = f"{ticker}: the fixture covers {START} to {END}, not {start} to {end}"
+    if start < HISTORY_START or end > END:
+        msg = f"{ticker}: the fixture covers {HISTORY_START} to {END}, not {start} to {end}"
         raise ValueError(msg)
-    return history_from_json(FIXTURES / f"{ticker}_{START.isoformat()}_{END.isoformat()}.json")
+    name = f"{ticker}_{HISTORY_START.isoformat()}_{END.isoformat()}.json"
+    return history_from_json(FIXTURES / name)
 
 
 def universe() -> Lq45Universe:
@@ -71,14 +81,20 @@ def universe() -> Lq45Universe:
     return Lq45Universe(Lq45Membership([record]))
 
 
-def run(folder: Path, strategy: str = "buy-and-hold", end: date = END) -> BacktestResult:
-    """Back-test *strategy* from ``START`` to *end* through the real source, cache and rules."""
+def run(
+    folder: Path, strategy: str = "buy-and-hold", end: date = END, *, income: bool = True
+) -> BacktestResult:
+    """Back-test *strategy* from ``START`` to *end* through the real source, cache and rules.
+
+    Without *income* there is no goal, so no history is fetched before ``START``: an earlier
+    *end* would need recordings from before ``HISTORY_START``.
+    """
     folder.mkdir(parents=True, exist_ok=True)
     yahoo = YahooDataSource(download=recorded, sleep=_no_wait)
     with BarCache(folder / "bars.sqlite") as store:
         source = CachedDataSource(yahoo, store, today=lambda: RECORDED)
         market = Market(universe(), source, IdxMarketRules())
-        return backtest(STRATEGIES[strategy](), market, START, end, settings())
+        return backtest(STRATEGIES[strategy](), market, START, end, settings(income=income))
 
 
 def _no_wait(seconds: float) -> None:
@@ -141,7 +157,81 @@ def summary(result: BacktestResult) -> dict[str, object]:
             },
             "trailing_income": metrics.trailing_income.amount,
         },
+        "income": _income(outcome.income),
     }
+
+
+def _income(report: IncomeReport | None) -> object:
+    """Every figure of an income report, as JSON values."""
+    if report is None:
+        return None
+    received, rate, growth = report.received, report.run_rate, report.growth
+    goal = report.goal
+    return {
+        "as_of": report.as_of.isoformat(),
+        "received": {
+            "by_month": [[m.month.isoformat(), *_figures(m.figures)] for m in received.by_month],
+            "trailing": _figures(received.trailing),
+            "monthly_average": _figures(received.monthly_average),
+            "yields": [str(received.current_yield), str(received.yield_on_cost)],
+        },
+        "run_rate": {
+            "holdings": [
+                [
+                    h.instrument.symbol,
+                    h.shares,
+                    h.annual_gross.amount,
+                    h.monthly_take_home.amount,
+                    [
+                        [e.ex_date.isoformat(), e.pay_date.isoformat(), e.gross.amount]
+                        for e in h.dividends
+                    ],
+                ]
+                for h in rate.holdings
+            ],
+            "annual_gross": rate.annual_gross.amount,
+            "monthly_take_home": rate.monthly_take_home.amount,
+        },
+        "calendar": {
+            "months": [month.amount for month in report.calendar.months],
+            "empty_months": report.calendar.empty_months,
+            "evenness": str(report.calendar.evenness),
+        },
+        "growth": {
+            "holdings": [
+                [g.instrument.symbol, str(g.recent), str(g.earlier), str(g.growth)]
+                for g in growth.holdings
+            ],
+            "portfolio": str(growth.portfolio),
+            "notes": [[note.key, note.text] for note in growth.notes],
+        },
+        "projection": [
+            [
+                s.scenario.value,
+                s.starting_gross.amount,
+                str(s.growth),
+                s.outcome.value,
+                None if s.years is None else str(s.years),
+            ]
+            for s in report.projection.scenarios
+        ],
+        "goal": [
+            goal.target.amount,
+            goal.received.amount,
+            str(goal.received_share),
+            goal.run_rate.amount,
+            str(goal.run_rate_share),
+        ],
+    }
+
+
+def _figures(figures: IncomeFigures) -> list[int]:
+    return [
+        figures.gross.amount,
+        figures.tax.amount,
+        figures.net.amount,
+        figures.take_home.amount,
+    ]
 
 
 def record(folder: Path, golden: Path = GOLDEN) -> Path:

@@ -2,8 +2,9 @@
 
 ``scripts/record_golden.py`` runs ``buy-and-hold`` over a year of real, recorded Yahoo data
 through the real ``YahooDataSource``, ``CachedDataSource``, ``IdxMarketRules`` and engine. Its
-result must equal the stored file exactly, in integer rupiah. After a change that moves the
-numbers on purpose, re-record with ``uv run python scripts/record_golden.py`` and review the diff.
+result, its income report included, must equal the stored file exactly, in integer rupiah.
+After a change that moves the numbers on purpose, re-record with
+``uv run python scripts/record_golden.py`` and review the diff.
 
 The truncation check: every registered strategy, run to day D and to D plus 20 trading days,
 makes the same decisions up to D, so no decision can have read a later price.
@@ -15,9 +16,9 @@ from functools import cache
 from pathlib import Path
 
 import pytest
-from record_golden import GOLDEN, main, record, run, summary
+from record_golden import END, GOLDEN, HISTORY_START, STOCKS, main, record, recorded, run, summary
 
-from steadyhand import STRATEGIES
+from steadyhand import HISTORY_YEARS, IDR, STRATEGIES, Money, years_before
 from steadyhand_idx import IdxMarketRules
 
 
@@ -63,8 +64,38 @@ def test_the_window_holds_the_events_it_was_chosen_for(tmp_path: Path) -> None:
 
 
 def test_a_fetch_outside_the_recording_is_refused(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match=r"^ASII\.JK: the fixture covers 2021-02-01 to 2022-01-31"):
+    with pytest.raises(ValueError, match=r"^ASII\.JK: the fixture covers 2017-01-31 to 2022-01-31"):
         run(tmp_path, end=date(2022, 2, 7))
+    with pytest.raises(
+        ValueError, match=r"^ASII\.JK: the fixture covers 2017-01-31 to 2022-01-31, not 2017-01-30"
+    ):
+        recorded("ASII.JK", date(2017, 1, 30), END)
+
+
+def test_the_recordings_reach_five_years_before_the_run_ends() -> None:
+    # Growth reads a year window four years back, so five years of history must be there.
+    assert years_before(END, HISTORY_YEARS) == HISTORY_START
+    for stock in STOCKS:
+        rows = recorded(f"{stock}.JK", HISTORY_START, END).rows
+        assert (rows[0].day, rows[-1].day) == (HISTORY_START, END), stock
+
+
+def test_the_income_report_agrees_with_what_the_engine_paid(tmp_path: Path) -> None:
+    result = run(tmp_path)
+    income = result.run.income
+    assert income is not None
+    paid = {
+        (e.instrument.symbol, e.ex_date): e for report in result.run.reports for e in report.paid
+    }
+    expected = [dividend for held in income.run_rate.holdings for dividend in held.dividends]
+    # Every dividend of the trailing year was paid in the run, on the pay date the calendar uses.
+    assert len(expected) == len(paid) == 7
+    assert all(e.pay_date == paid[(e.instrument.symbol, e.ex_date)].pay_date for e in expected)
+    # BBCA's 2021-04-08 dividend: Rp432 a share on the 700 shares held before the 1-for-5 split,
+    # and Rp86.4 a share, restated, on the 3,500 held after it. Rp302,400 either way.
+    bbca = paid[("BBCA", date(2021, 4, 8))]
+    assert bbca.gross == Money(302_400, IDR)
+    assert bbca in expected
 
 
 @pytest.mark.parametrize("strategy", sorted(STRATEGIES))
@@ -74,8 +105,10 @@ def test_a_run_to_day_d_decides_as_a_longer_run_did_up_to_d(
 ) -> None:
     # The cuts fall on the day before BBCA's dividend ex-date, the day before its split, and the
     # day before UNVR's ex-date; each longer run goes on for twenty more trading days.
-    short = run(tmp_path / "short", strategy, cut)
-    longer = run(tmp_path / "long", strategy, _trading_days_after(cut, 20))
+    # Decisions only: an income report reads no bar after its day, and a run cut this early
+    # would need history from before the recordings start.
+    short = run(tmp_path / "short", strategy, cut, income=False)
+    longer = run(tmp_path / "long", strategy, _trading_days_after(cut, 20), income=False)
     count = len(short.run.reports)
     assert short.run.reports[-1].day == cut
     assert len(longer.run.reports) == count + 20
