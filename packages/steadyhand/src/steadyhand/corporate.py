@@ -14,6 +14,7 @@ from datetime import date
 from steadyhand._validate import require_date, require_int, require_type
 from steadyhand.market import MarketRules, add_trading_days
 from steadyhand.money import CurrencyMismatchError, Money, Rounding
+from steadyhand.notes import CORPORATE_SPLIT_FRACTION_DROPPED, Note
 from steadyhand.outcomes import Rejected
 from steadyhand.portfolio import MovementKind, Portfolio
 from steadyhand.types import CashDividend, CorporateAction, Instrument, Order, OtherAction, Split
@@ -80,7 +81,7 @@ class CorporateOutcome:
     paid: tuple[Entitlement, ...]
     tax: Money
     frozen: tuple[tuple[Instrument, str], ...]
-    warnings: tuple[str, ...]
+    warnings: tuple[Note, ...]
 
 
 def apply_actions(
@@ -127,7 +128,7 @@ class _Actions:
         self._paid: list[Entitlement] = []
         self._tax = Money.zero(holdings.portfolio.currency)
         self._newly_frozen: list[tuple[Instrument, str]] = []
-        self._warnings: list[str] = []
+        self._warnings: list[Note] = []
 
     def split(self, split: Split) -> None:
         stock = split.instrument
@@ -138,9 +139,12 @@ class _Actions:
                 after = self._portfolio.position(stock)
                 kept = 0 if after is None else after.quantity
                 self._warnings.append(
-                    f"{stock.symbol}: the {split.new_shares}-for-{split.old_shares} split on "
-                    f"{self._day.isoformat()} turned {held.quantity} shares into {kept}; the "
-                    "fraction of a share left over is dropped (cash in lieu is not modelled)"
+                    Note(
+                        CORPORATE_SPLIT_FRACTION_DROPPED,
+                        f"{stock.symbol}: the {split.new_shares}-for-{split.old_shares} split on "
+                        f"{self._day.isoformat()} turned {held.quantity} shares into {kept}; the "
+                        "fraction of a share left over is dropped (cash in lieu is not modelled)",
+                    )
                 )
         close = self._closes.get(stock)
         if close is not None:

@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 from record_golden import END, GOLDEN, HISTORY_START, STOCKS, main, record, recorded, run, summary
 
-from steadyhand import HISTORY_YEARS, IDR, STRATEGIES, Money, years_before
+from steadyhand import DATA_BAR_REFUSED, HISTORY_YEARS, IDR, STRATEGIES, Money, years_before
 from steadyhand_idx import IdxMarketRules
 
 
@@ -58,7 +58,8 @@ def test_the_window_holds_the_events_it_was_chosen_for(tmp_path: Path) -> None:
     paid = {e.instrument.symbol for report in result.run.reports for e in report.paid}
     assert paid == {"ASII", "BBCA", "TLKM", "UNVR"}
     assert "BBRI" not in held
-    assert result.warnings[0].startswith(
+    assert result.warnings[0].key == DATA_BAR_REFUSED
+    assert result.warnings[0].text.startswith(
         "BBRI: the data source refused 146 day(s) (2021-02-01 to 2021-09-07),"
     )
 

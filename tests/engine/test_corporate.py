@@ -8,6 +8,7 @@ import pytest
 
 from steadyhand.corporate import PAY_LAG_TRADING_DAYS, Entitlement, Holdings, apply_actions
 from steadyhand.money import IDR, Currency, CurrencyMismatchError, Money
+from steadyhand.notes import CORPORATE_SPLIT_FRACTION_DROPPED, Note
 from steadyhand.portfolio import MovementKind, Portfolio
 from steadyhand.types import (
     CashDividend,
@@ -89,9 +90,10 @@ def test_a_reverse_split_warns_about_the_dropped_fraction() -> None:
     outcome = apply_actions(Holdings(holding(BBCA=1_203)), [Split(BBCA, EX, 5, 1)], EX, rules())
     assert shares(outcome.holdings.portfolio, BBCA) == 240
     assert outcome.warnings == (
-        (
+        Note(
+            CORPORATE_SPLIT_FRACTION_DROPPED,
             "BBCA: the 1-for-5 split on 2025-06-02 turned 1203 shares into 240; the fraction of "
-            "a share left over is dropped (cash in lieu is not modelled)"
+            "a share left over is dropped (cash in lieu is not modelled)",
         ),
     )
 
@@ -99,7 +101,8 @@ def test_a_reverse_split_warns_about_the_dropped_fraction() -> None:
 def test_a_split_that_leaves_no_whole_share_warns_with_zero() -> None:
     outcome = apply_actions(Holdings(holding(BBCA=4)), [Split(BBCA, EX, 5, 1)], EX, rules())
     assert outcome.holdings.portfolio.positions == ()
-    assert "turned 4 shares into 0" in outcome.warnings[0]
+    assert outcome.warnings[0].key == CORPORATE_SPLIT_FRACTION_DROPPED
+    assert "turned 4 shares into 0" in outcome.warnings[0].text
 
 
 def test_a_dividend_entitles_what_was_held_at_the_previous_close() -> None:

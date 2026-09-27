@@ -30,6 +30,7 @@ from steadyhand import (
     MarketView,
     Memory,
     Money,
+    Note,
     PortfolioView,
     Rounding,
     Side,
@@ -158,7 +159,7 @@ class _All:
     def first_day(self) -> date:
         return START
 
-    def survivorship_warnings(self, start: date, end: date) -> Sequence[str]:
+    def survivorship_warnings(self, start: date, end: date) -> Sequence[Note]:
         return ()
 
 

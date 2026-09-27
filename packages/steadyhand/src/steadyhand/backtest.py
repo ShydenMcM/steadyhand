@@ -28,6 +28,7 @@ from steadyhand.income import (
 from steadyhand.market import MarketRules
 from steadyhand.metrics import Metrics, measure
 from steadyhand.money import CurrencyMismatchError, Money
+from steadyhand.notes import DATA_BAR_REFUSED, Note
 from steadyhand.risk import Halt
 from steadyhand.strategies.buy_and_hold import BuyAndHold
 from steadyhand.strategies.protocol import Strategy
@@ -106,7 +107,7 @@ class RunResult:
         return self.final.halt
 
     @property
-    def warnings(self) -> tuple[str, ...]:
+    def warnings(self) -> tuple[Note, ...]:
         """Every day's warnings, in day order."""
         return tuple(warning for report in self.reports for warning in report.warnings)
 
@@ -136,7 +137,7 @@ class BacktestResult:
     end: date
     run: RunResult
     baseline: RunResult | None
-    warnings: tuple[str, ...]
+    warnings: tuple[Note, ...]
     income_impact: IncomeImpact | None = None
 
 
@@ -308,9 +309,9 @@ def _resumed(window: _Window, day: date) -> frozenset[Instrument]:
     return frozenset(resumed)
 
 
-def _refused_warnings(window: _Window) -> list[str]:
+def _refused_warnings(window: _Window) -> list[Note]:
     """One warning per stock, naming each span of consecutive refused trading days."""
-    warnings: list[str] = []
+    warnings: list[Note] = []
     for stock in sorted(window.refused, key=lambda i: (i.market, i.symbol)):
         refused = window.refused[stock]
         spans: list[list[date]] = []
@@ -329,8 +330,11 @@ def _refused_warnings(window: _Window) -> list[str]:
             for span in spans
         )
         warnings.append(
-            f"{stock.symbol}: the data source refused {len(refused)} day(s) ({named}), so it was "
-            "not traded on them, and a holding was valued at its last clean close. A dividend "
-            "whose ex-date falls on a refused day is unknown and was not credited."
+            Note(
+                DATA_BAR_REFUSED,
+                f"{stock.symbol}: the data source refused {len(refused)} day(s) ({named}), so it "
+                "was not traded on them, and a holding was valued at its last clean close. A "
+                "dividend whose ex-date falls on a refused day is unknown and was not credited.",
+            )
         )
     return warnings

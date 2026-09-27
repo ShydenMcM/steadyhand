@@ -6,6 +6,7 @@ from itertools import product
 import pytest
 
 from steadyhand import IDR, Instrument, Universe
+from steadyhand_idx.notes import UNIVERSE_SURVIVORSHIP_GAP
 from steadyhand_idx.universe import (
     Exclusion,
     Exclusions,
@@ -75,4 +76,5 @@ def test_survivorship_warnings_are_the_memberships() -> None:
     warnings = Lq45Universe(gapped).survivorship_warnings(FIRST, date(2022, 6, 30))
     assert warnings == tuple(gapped.survivorship_warnings(FIRST, date(2022, 6, 30)))
     assert len(warnings) == 1
-    assert "between 2021-02-01 (Peng-1) and 2022-02-01 (Peng-3)" in warnings[0]
+    assert warnings[0].key == UNIVERSE_SURVIVORSHIP_GAP
+    assert "between 2021-02-01 (Peng-1) and 2022-02-01 (Peng-3)" in warnings[0].text

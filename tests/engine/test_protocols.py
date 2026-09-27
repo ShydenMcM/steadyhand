@@ -14,6 +14,7 @@ from steadyhand.broker import Broker
 from steadyhand.data import DataSource, DataUnavailableError
 from steadyhand.market import MarketRules
 from steadyhand.money import IDR, Currency, Money
+from steadyhand.notes import Note
 from steadyhand.types import Bar, CorporateAction, Costs, Fill, Instrument, Order, OrderAck, Side
 from steadyhand.universe import Universe
 
@@ -123,7 +124,7 @@ class _MinimalUniverse:
     def first_day(self) -> date:
         return date(2021, 1, 4)
 
-    def survivorship_warnings(self, start: date, end: date) -> Sequence[str]:
+    def survivorship_warnings(self, start: date, end: date) -> Sequence[Note]:
         return ()
 
 

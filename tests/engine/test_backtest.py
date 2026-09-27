@@ -24,11 +24,12 @@ from steadyhand.income import IncomeGoal
 from steadyhand.market import UnsupportedDateError
 from steadyhand.metrics import measure
 from steadyhand.money import IDR, Currency, CurrencyMismatchError, Money
+from steadyhand.notes import DATA_BAR_MISSING, DATA_BAR_REFUSED, Note
 from steadyhand.risk import RiskLimits
 from steadyhand.strategies import BuyAndHold, Decision, Memory, Strategy
 from steadyhand.types import Bar, CashDividend, CorporateAction, Instrument
 from steadyhand.view import MarketView, PortfolioView
-from steadyhand_idx import IdxMarketRules
+from steadyhand_idx import UNIVERSE_SURVIVORSHIP_GAP, IdxMarketRules
 
 BBCA = Instrument("BBCA", "IDX", IDR)
 BBRI = Instrument("BBRI", "IDX", IDR)
@@ -47,6 +48,7 @@ DAYS = (
     date(2025, 7, 11),
 )
 START, END = DAYS[0], DAYS[-1]
+GAP = Note(UNIVERSE_SURVIVORSHIP_GAP, "a gap")
 
 
 @cache
@@ -123,7 +125,7 @@ class _Universe:
         self,
         lists: Sequence[tuple[date, frozenset[Instrument]]],
         excluded: Mapping[Instrument, str] | None = None,
-        warnings: Sequence[str] = (),
+        warnings: Sequence[Note] = (),
     ) -> None:
         self._lists = lists
         self._excluded = {} if excluded is None else excluded
@@ -143,7 +145,7 @@ class _Universe:
     def first_day(self) -> date:
         return self._lists[0][0]
 
-    def survivorship_warnings(self, start: date, end: date) -> Sequence[str]:
+    def survivorship_warnings(self, start: date, end: date) -> Sequence[Note]:
         self.asked.append((start, end))
         return self._warnings
 
@@ -340,7 +342,7 @@ def test_refused_days_are_fetched_around_and_the_stock_sits_them_out() -> None:
         bar(BBRI, day, 5_200) for day in clean if day >= date(2025, 7, 8)
     ]
     source = _Source(flat(BBCA, 9_000) + bbri, refused={BBRI: refused})
-    universe = _Universe([(START, frozenset({BBCA, BBRI}))], warnings=["a gap"])
+    universe = _Universe([(START, frozenset({BBCA, BBRI}))], warnings=[GAP])
     result = run(source, universe, strategy=BuyAndHold())
     assert source.requests == [
         ("bars", "BBCA", START, END),
@@ -355,11 +357,12 @@ def test_refused_days_are_fetched_around_and_the_stock_sits_them_out() -> None:
     ]
     assert universe.asked == [(START, END)]
     assert result.warnings == (
-        "a gap",
-        (
+        GAP,
+        Note(
+            DATA_BAR_REFUSED,
             "BBRI: the data source refused 4 day(s) (2025-07-03 to 2025-07-07, 2025-07-10), so it "
             "was not traded on them, and a holding was valued at its last clean close. A dividend "
-            "whose ex-date falls on a refused day is unknown and was not credited."
+            "whose ex-date falls on a refused day is unknown and was not credited.",
         ),
     )
     reports = {report.day: report for report in result.run.reports}
@@ -407,7 +410,8 @@ def test_refusals_on_the_first_and_last_days_leave_one_range_between() -> None:
         ("bars", "BBRI", DAYS[1], DAYS[-2]),
         ("actions", "BBRI", DAYS[1], DAYS[-2]),
     ]
-    assert result.warnings[0].startswith(
+    assert result.warnings[0].key == DATA_BAR_REFUSED
+    assert result.warnings[0].text.startswith(
         "BBRI: the data source refused 2 day(s) (2025-06-30, 2025-07-11),"
     )
     # Refused on day one, BBRI is not buyable then, so buy-and-hold never adds it to its set.
@@ -462,9 +466,10 @@ def test_a_run_gathers_every_days_warnings_in_order() -> None:
     source = _Source(flat(BBCA, 9_000) + [b for b in flat(BBRI, 4_000) if b.day != gap])
     result = run(source, strategy=BuyAndHold())
     assert result.run.warnings == (
-        (
+        Note(
+            DATA_BAR_MISSING,
             "BBRI has no bar on 2025-07-08, so it is not traded; it is valued at its last close, "
-            "IDR 4,000"
+            "IDR 4,000",
         ),
     )
     assert result.warnings == ()

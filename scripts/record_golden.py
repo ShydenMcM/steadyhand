@@ -133,7 +133,7 @@ def summary(result: BacktestResult) -> dict[str, object]:
         "halt": None
         if outcome.halt is None
         else [outcome.halt.day.isoformat(), outcome.halt.cause],
-        "warnings": [*result.warnings, *outcome.warnings],
+        "warnings": [[note.key, note.text] for note in (*result.warnings, *outcome.warnings)],
         "metrics": {
             "final_value": metrics.final_value.amount,
             "deposited": metrics.deposited.amount,
