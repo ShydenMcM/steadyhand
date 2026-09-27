@@ -22,7 +22,12 @@ from steadyhand.engine import (
 )
 from steadyhand.exemption import DividendClaim, Protection
 from steadyhand.money import IDR, Money
-from steadyhand.notes import DATA_BAR_MISSING, EXEMPTION_DEADLINE_MISSED, Note
+from steadyhand.notes import (
+    DATA_BAR_MISSING,
+    EXEMPTION_CLAIM_BROKEN,
+    EXEMPTION_DEADLINE_MISSED,
+    Note,
+)
 from steadyhand.portfolio import MissingPriceError, MovementKind
 from steadyhand.risk import Halt, RiskLimits
 from steadyhand.strategies import BuyAndHold, Decision, Memory
@@ -281,6 +286,25 @@ def test_a_missed_deadline_adds_its_tax_and_note_to_the_days_report() -> None:
     assert after.holdings.claims == ()
     taxes = [m for m in after.holdings.portfolio.ledger if m.kind is MovementKind.TAX]
     assert [(m.amount, m.day) for m in taxes] == [(rp(-1_250), D2)]
+
+
+def test_a_shortfall_is_kept_across_days_and_breaks_when_its_trade_would_settle() -> None:
+    state, _ = day_one()  # cash only: nothing is invested
+    protected = (Protection(rp(12_500), date(2027, 12, 31)),)
+    claim = DividendClaim(
+        BBCA, date(2025, 5, 27), date(2025, 5, 28), rp(12_500), date(2026, 3, 31), rp(0), protected
+    )
+    holdings = Holdings(state.holdings.portfolio, claims=(claim,))
+    current = EngineState(holdings, state.units, Halt(D1, "test"), D1)
+    kept: list[tuple[date | None, Money]] = []
+    for day in (D2, D3, D4):  # D2's trade would settle on D4
+        current, report = run_day(
+            current, DayInputs(day, steady(), members=MEMBERS), _Untouchable(), rules()
+        )
+        kept.append((current.holdings.shortfall_since, report.tax))
+    assert kept == [(D2, rp(0)), (D2, rp(0)), (None, rp(1_250))]
+    assert [note.key for note in report.notes] == [EXEMPTION_CLAIM_BROKEN]
+    assert current.holdings.claims == ()
 
 
 def test_a_stock_bought_at_todays_open_has_no_entitlement() -> None:

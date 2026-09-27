@@ -25,6 +25,9 @@ DATA_BAR_MISSING = "data.bar.missing"
 DATA_BAR_REFUSED = "data.bar.refused"
 """The data source refused a stock's days in a backtest, so it was not traded on them."""
 
+EXEMPTION_CLAIM_BROKEN = "exemption.claim_broken"
+"""Protected dividend money left the portfolio past the settlement grace, so its tax is booked."""
+
 EXEMPTION_DEADLINE_MISSED = "exemption.deadline_missed"
 """Part of a dividend claim was not reinvested by its deadline, so its tax is booked now."""
 
