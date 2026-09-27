@@ -49,8 +49,14 @@ class _MinimalRules:
     def settlement_date(self, trade_date: date) -> date:
         return trade_date + timedelta(days=2)
 
-    def dividend_tax(self, gross: Money, *, reinvested_by_deadline: bool, on: date) -> Money:
+    def dividend_tax(self, gross: Money, *, on: date) -> Money:
         return Money.zero(gross.currency)
+
+    def reinvestment_deadline(self, ex_date: date) -> date | None:
+        return None
+
+    def protection_end(self, purchase_day: date) -> date:
+        return purchase_day
 
     def is_trading_day(self, day: date) -> bool:
         return day.weekday() < 5
@@ -92,6 +98,12 @@ def test_a_class_missing_methods_is_not_market_rules() -> None:
 
 @pytest.mark.parametrize("member", ["verified_from", "require_supported", "daily_costs"])
 def test_each_member_added_in_m2_is_required(member: str) -> None:
+    members = {name: value for name, value in vars(_MinimalRules).items() if name != member}
+    assert not isinstance(type("Partial", (), members)(), MarketRules)
+
+
+@pytest.mark.parametrize("member", ["reinvestment_deadline", "protection_end"])
+def test_each_member_added_in_m4_is_required(member: str) -> None:
     members = {name: value for name, value in vars(_MinimalRules).items() if name != member}
     assert not isinstance(type("Partial", (), members)(), MarketRules)
 

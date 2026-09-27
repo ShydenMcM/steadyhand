@@ -71,11 +71,22 @@ class MarketRules(Protocol):
         """The trading day on which a trade made on *trade_date* settles."""
         ...
 
-    def dividend_tax(self, gross: Money, *, reinvested_by_deadline: bool, on: date) -> Money:
-        """The tax due on a *gross* dividend paid on *on*.
+    def dividend_tax(self, gross: Money, *, on: date) -> Money:
+        """The full tax due on a *gross* dividend paid on *on*, before any exemption.
 
         IDX issuers withhold nothing from resident individuals; see docs/research/t-tax.md.
         """
+        ...
+
+    def reinvestment_deadline(self, ex_date: date) -> date | None:
+        """The last day a dividend with *ex_date* may be reinvested to be exempt from its tax.
+
+        ``None`` where the market has no such exemption for that ex-date (M4 spec §6.1).
+        """
+        ...
+
+    def protection_end(self, purchase_day: date) -> date:
+        """The last day an investment made on *purchase_day* must stay held to keep its claim."""
         ...
 
     def is_trading_day(self, day: date) -> bool:

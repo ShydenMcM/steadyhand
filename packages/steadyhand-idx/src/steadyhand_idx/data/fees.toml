@@ -70,6 +70,21 @@ from = 2009-01-01
 source = "PP 19/2009 and UU PPh Pasal 17(2c): 10% final for resident individuals (docs/research/t-tax.md)"
 rate_percent = "10"
 
+# The reinvestment exemption (docs/research/t-tax.md §3). A row with neither count means no
+# exemption applies to a dividend whose ex-date falls on or after its `from`. A row with both
+# gives the deadline, the end of month `reinvest_by_month` of the year after the ex-date's year,
+# and the holding period, `hold_tax_years` tax years counting the purchase year.
+
+[[dividend_exemption]]
+from = 2009-01-01
+source = "No reinvestment exemption for resident individuals before PMK 18/2021 (docs/research/t-tax.md §6)"
+
+[[dividend_exemption]]
+from = 2021-02-17
+source = "PMK 18/PMK.03/2021 Pasal 36(1)(a) and 36(2), in force 17 Feb 2021 under its Pasal 119 (docs/research/t-tax.md §2, §3)"
+reinvest_by_month = 3
+hold_tax_years = 3
+
 # Broker presets. `includes` lists what the quoted rate already contains, from "levy",
 # "commission_vat" and "sale_tax", so nothing is charged twice. Anything not included is added.
 # Only a broker whose own page states what its quote includes is shipped (t-fees.md §4): Stockbit

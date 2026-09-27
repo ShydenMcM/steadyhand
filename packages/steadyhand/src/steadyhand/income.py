@@ -568,7 +568,7 @@ class _Projector:
         return _per_month(income - self._tax(income)) >= self.target
 
     def _tax(self, gross: Money) -> Money:
-        return self.rules.dividend_tax(gross, reinvested_by_deadline=False, on=self.as_of)
+        return self.rules.dividend_tax(gross, on=self.as_of)
 
 
 def _tenths(months: int) -> Decimal:
@@ -642,7 +642,7 @@ def _day_figures(report: DayReport, rules: MarketRules, currency: Currency) -> I
 
 def _take_home(gross: Money, rules: MarketRules, on: date) -> Money:
     """What the full dividend tax on *on* leaves of *gross* (decision 2)."""
-    return gross - rules.dividend_tax(gross, reinvested_by_deadline=False, on=on)
+    return gross - rules.dividend_tax(gross, on=on)
 
 
 def _per_month(amount: Money) -> Money:

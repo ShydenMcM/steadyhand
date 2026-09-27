@@ -18,6 +18,7 @@ from steadyhand.corporate import (
     CorporateOutcome,
     Entitlement,
     Holdings,
+    Payout,
     apply_actions,
 )
 from steadyhand.data import DataSource, DataUnavailableError, UnavailableDaysError
@@ -31,6 +32,7 @@ from steadyhand.engine import (
     EngineState,
     run_day,
 )
+from steadyhand.exemption import DividendClaim, Protection
 from steadyhand.income import (
     BASE_GROWTH_CAP,
     GROWTH_YEARS,
@@ -118,6 +120,8 @@ from steadyhand.terms import (
     TERM_ANNUAL_RETURN,
     TERM_BROKER_FEE,
     TERM_CASH_MOVEMENT,
+    TERM_CLAIM_PROTECTED,
+    TERM_CLAIM_TO_REINVEST,
     TERM_CONTRIBUTION,
     TERM_COST_BASIS,
     TERM_CURRENT_YIELD,
@@ -200,6 +204,8 @@ __all__ = [
     "TERM_ANNUAL_RETURN",
     "TERM_BROKER_FEE",
     "TERM_CASH_MOVEMENT",
+    "TERM_CLAIM_PROTECTED",
+    "TERM_CLAIM_TO_REINVEST",
     "TERM_CONTRIBUTION",
     "TERM_COST_BASIS",
     "TERM_CURRENT_YIELD",
@@ -263,6 +269,7 @@ __all__ = [
     "DayOrderError",
     "DayReport",
     "Decision",
+    "DividendClaim",
     "DividendGrowth",
     "DividendTotals",
     "Drawdown",
@@ -306,12 +313,14 @@ __all__ = [
     "OrderAck",
     "OtherAction",
     "PaymentCalendar",
+    "Payout",
     "Portfolio",
     "PortfolioView",
     "Position",
     "PriceHistory",
     "Projection",
     "ProjectionOutcome",
+    "Protection",
     "ReceivedIncome",
     "Rejected",
     "RiskLimits",

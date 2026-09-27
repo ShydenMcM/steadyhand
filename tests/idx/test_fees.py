@@ -13,7 +13,7 @@ from hypothesis import strategies as st
 
 from steadyhand import IDR, Currency, Money, Side, UnsupportedDateError
 from steadyhand_idx._datafile import DataFileError, load_shipped
-from steadyhand_idx.fees import BrokerPreset, FeeSchedule, parse_fees
+from steadyhand_idx.fees import BrokerPreset, Exemption, FeeSchedule, parse_fees
 
 
 @cache
@@ -63,6 +63,7 @@ def test_the_tables_start_where_their_rows_are_verified() -> None:
         date(2016, 1, 1),  # sale tax
         date(2021, 1, 1),  # stamp duty
         date(2009, 1, 1),  # dividend tax
+        date(2009, 1, 1),  # dividend exemption: none until PMK 18/2021
     ]
 
 
@@ -124,9 +125,9 @@ def test_gross_must_be_a_non_negative_rupiah_amount() -> None:
     with pytest.raises(ValueError, match=r"got USD 1\.00"):
         fees().trade_costs(custom(), Side.BUY, Money(100, Currency("USD", 2)), TODAY)
     with pytest.raises(ValueError, match=r"^gross must be a non-negative IDR amount, got IDR -1$"):
-        fees().dividend_tax(rp(-1), reinvested_by_deadline=False, on=TODAY)
+        fees().dividend_tax(rp(-1), on=TODAY)
     with pytest.raises(ValueError, match=r"got USD 1\.00"):
-        fees().dividend_tax(Money(100, Currency("USD", 2)), reinvested_by_deadline=True, on=TODAY)
+        fees().dividend_tax(Money(100, Currency("USD", 2)), on=TODAY)
 
 
 def test_costs_before_the_levy_is_verified_are_refused() -> None:
@@ -159,10 +160,67 @@ def test_stamp_duty_before_2021_is_refused() -> None:
         fees().daily_costs(rp(-1), TODAY)
 
 
-def test_dividend_tax_is_ten_percent_rounded_up_unless_reinvested() -> None:
-    assert fees().dividend_tax(rp(1_000_000), reinvested_by_deadline=False, on=TODAY) == rp(100_000)
-    assert fees().dividend_tax(rp(999), reinvested_by_deadline=False, on=TODAY) == rp(100)
-    assert fees().dividend_tax(rp(999), reinvested_by_deadline=True, on=TODAY) == rp(0)
+def test_dividend_tax_is_the_full_ten_percent_rounded_up() -> None:
+    assert fees().dividend_tax(rp(1_000_000), on=TODAY) == rp(100_000)
+    assert fees().dividend_tax(rp(999), on=TODAY) == rp(100)  # 99.9 rounds up to 100
+    assert fees().dividend_tax(rp(0), on=TODAY) == rp(0)
+
+
+def test_the_exemption_starts_when_pmk_18_2021_came_into_force() -> None:
+    # PMK 18/PMK.03/2021 Pasal 119: in force when promulgated, on 17 February 2021.
+    assert fees().dividend_exemption.starts == (date(2009, 1, 1), date(2021, 2, 17))
+    assert fees().dividend_exemption.values == (None, Exemption(3, 3))
+
+
+@pytest.mark.parametrize(
+    ("ex_date", "deadline"),
+    [
+        (date(2021, 2, 16), None),  # the day before PMK 18/2021
+        (date(2021, 2, 17), date(2022, 3, 31)),
+        (date(2026, 5, 20), date(2027, 3, 31)),  # t-tax.md §4's worked example
+        (date(2026, 12, 31), date(2027, 3, 31)),
+        (date(2027, 1, 4), date(2028, 3, 31)),
+    ],
+)
+def test_the_reinvestment_deadline_is_the_end_of_march_after_the_ex_date_year(
+    ex_date: date, deadline: date | None
+) -> None:
+    assert fees().reinvestment_deadline(ex_date) == deadline
+
+
+def test_the_deadline_is_the_last_day_of_its_month() -> None:
+    document = _document()
+    exemption = document["dividend_exemption"]
+    assert isinstance(exemption, list)
+    exemption[1]["reinvest_by_month"] = 2
+    february = parse_fees(document)
+    assert february.reinvestment_deadline(date(2023, 6, 1)) == date(2024, 2, 29)  # a leap year
+    assert february.reinvestment_deadline(date(2024, 6, 1)) == date(2025, 2, 28)
+
+
+@pytest.mark.parametrize(
+    ("purchase", "until"),
+    [
+        (date(2021, 2, 17), date(2023, 12, 31)),
+        (date(2027, 3, 10), date(2029, 12, 31)),  # M4 spec §2's correction: 2027, 2028 and 2029
+        (date(2026, 12, 31), date(2028, 12, 31)),
+    ],
+)
+def test_protection_lasts_three_tax_years_counting_the_purchase_year(
+    purchase: date, until: date
+) -> None:
+    assert fees().protection_end(purchase) == until
+
+
+def test_no_protection_ends_for_a_purchase_the_exemption_does_not_cover() -> None:
+    with pytest.raises(
+        ValueError, match=r"^no reinvestment exemption applies to a purchase on 2021-02-16$"
+    ):
+        fees().protection_end(date(2021, 2, 16))
+    with pytest.raises(
+        UnsupportedDateError, match=r"^fees\.toml \[dividend_exemption\] has no verified row"
+    ):
+        fees().reinvestment_deadline(date(2008, 12, 31))
 
 
 def test_only_presets_that_state_what_they_include_are_shipped() -> None:
@@ -244,4 +302,38 @@ def test_bad_documents_are_refused() -> None:
     document = _document()
     document["levies"] = []
     with pytest.raises(DataFileError, match=r"\[top level\]: unknown key 'levies'"):
+        parse_fees(document)
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (
+            {"hold_tax_years": None},
+            r"row 2: an exemption row gives both counts or neither, and lacks 'hold_tax_years'$",
+        ),
+        (
+            {"reinvest_by_month": None},
+            r"row 2: an exemption row gives both counts or neither, and lacks 'reinvest_by_month'$",
+        ),
+        (
+            {"reinvest_by_month": 13},
+            r"row 2: reinvest_by_month must be a month from 1 to 12, got 13$",
+        ),
+        ({"reinvest_by_month": 0}, r"row 2: reinvest_by_month must be an integer of at least 1"),
+        ({"hold_tax_years": 0}, r"row 2: hold_tax_years must be an integer of at least 1"),
+        ({"months": 3}, r"row 2: unknown key 'months'$"),
+    ],
+)
+def test_bad_exemption_rows_are_refused(change: dict[str, object], message: str) -> None:
+    document = _document()
+    exemption = document["dividend_exemption"]
+    assert isinstance(exemption, list)
+    row = exemption[1]
+    for key, value in change.items():
+        if value is None:
+            del row[key]
+        else:
+            row[key] = value
+    with pytest.raises(DataFileError, match=r"^fees\.toml \[\[dividend_exemption\]\] " + message):
         parse_fees(document)

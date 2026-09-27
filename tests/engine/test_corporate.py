@@ -6,7 +6,14 @@ from functools import cache
 
 import pytest
 
-from steadyhand.corporate import PAY_LAG_TRADING_DAYS, Entitlement, Holdings, apply_actions
+from steadyhand.corporate import (
+    PAY_LAG_TRADING_DAYS,
+    Entitlement,
+    Holdings,
+    Payout,
+    apply_actions,
+)
+from steadyhand.exemption import DividendClaim
 from steadyhand.money import IDR, Currency, CurrencyMismatchError, Money
 from steadyhand.notes import CORPORATE_SPLIT_FRACTION_DROPPED, Note
 from steadyhand.portfolio import MovementKind, Portfolio
@@ -37,8 +44,19 @@ def rules() -> IdxMarketRules:
 class _TaxFree(IdxMarketRules):
     """IDX, but in a market that taxes no dividend."""
 
-    def dividend_tax(self, gross: Money, *, reinvested_by_deadline: bool, on: date) -> Money:
+    def dividend_tax(self, gross: Money, *, on: date) -> Money:
         return Money.zero(gross.currency)
+
+
+class _Deadline(IdxMarketRules):
+    """IDX, but every dividend's reinvestment deadline is one fixed day."""
+
+    def __init__(self, deadline: date) -> None:
+        super().__init__()
+        self._deadline = deadline
+
+    def reinvestment_deadline(self, ex_date: date) -> date | None:
+        return self._deadline
 
 
 def rp(amount: int) -> Money:
@@ -143,6 +161,49 @@ def test_an_entitlement_is_paid_and_taxed_on_its_pay_date_even_after_a_sale() ->
     assert outcome.tax == rp(1_250)
     kinds = [(m.kind, m.amount, m.settles_on) for m in outcome.holdings.portfolio.ledger]
     assert kinds == [(MovementKind.DIVIDEND, rp(12_500), PAY), (MovementKind.TAX, rp(-1_250), PAY)]
+    assert outcome.holdings.claims == ()
+
+
+def test_with_the_exemption_a_paid_dividend_opens_a_claim_instead_of_booking_tax() -> None:
+    due = Entitlement(BBCA, EX, PAY, rp(12_500))
+    payout = Payout(exemption=True)
+    outcome = apply_actions(Holdings(holding(), entitlements=(due,)), [], PAY, rules(), payout)
+    assert outcome.paid == (due,)
+    assert outcome.tax == rp(0)
+    # Ex-date 2 June 2025: reinvest by 31 March 2026, and nothing is reinvested yet.
+    claim = DividendClaim(BBCA, EX, PAY, rp(12_500), date(2026, 3, 31), rp(12_500))
+    assert outcome.holdings.claims == (claim,)
+    ledger = outcome.holdings.portfolio.ledger
+    assert [(m.kind, m.amount) for m in ledger] == [(MovementKind.DIVIDEND, rp(12_500))]
+
+
+def test_a_dividend_from_before_the_rule_is_taxed_at_pay_with_the_switch_on() -> None:
+    pay = date(2021, 3, 9)
+    early = Entitlement(BBCA, date(2021, 2, 16), pay, rp(12_500))  # the day before PMK 18/2021
+    before = Holdings(holding(), entitlements=(early,))
+    outcome = apply_actions(before, [], pay, rules(), Payout(exemption=True))
+    assert outcome.tax == rp(1_250)
+    assert outcome.holdings.claims == ()
+
+
+@pytest.mark.parametrize(
+    ("deadline", "claims", "tax"),
+    [(PAY, 1, 0), (date(2025, 6, 23), 0, 1_250)],  # a deadline before the pay day cannot be met
+)
+def test_a_claim_opens_only_while_its_deadline_can_still_be_met(
+    deadline: date, claims: int, tax: int
+) -> None:
+    due = Entitlement(BBCA, EX, PAY, rp(12_500))
+    before = Holdings(holding(), entitlements=(due,))
+    outcome = apply_actions(before, [], PAY, _Deadline(deadline), Payout(exemption=True))
+    assert len(outcome.holdings.claims) == claims
+    assert outcome.tax == rp(tax)
+
+
+def test_open_claims_are_carried_through_a_day_unchanged() -> None:
+    claim = DividendClaim(BBCA, EX, PAY, rp(12_500), date(2026, 3, 31), rp(12_500))
+    outcome = apply_actions(Holdings(holding(), claims=(claim,)), [], PAY, rules())
+    assert outcome.holdings.claims == (claim,)
 
 
 def test_an_untaxed_dividend_books_no_tax() -> None:
@@ -172,7 +233,9 @@ def test_actions_must_be_dated_today_and_the_lag_positive() -> None:
     ):
         apply_actions(Holdings(holding()), [Split(BBCA, date(2025, 6, 3), 1, 2)], EX, rules())
     with pytest.raises(ValueError, match=r"^pay_lag_trading_days must be at least 1, got 0$"):
-        apply_actions(Holdings(holding()), [], EX, rules(), 0)
+        Payout(0)
+    with pytest.raises(TypeError, match=r"^exemption must be a bool, got int$"):
+        Payout(exemption=1)  # type: ignore[arg-type]
 
 
 def test_an_entitlement_must_be_a_positive_amount_paid_after_its_ex_date() -> None:
@@ -191,3 +254,5 @@ def test_holdings_check_their_parts() -> None:
         Holdings(holding(), ("BBCA",))  # type: ignore[arg-type]
     with pytest.raises(TypeError, match=r"^entitlement must be an Entitlement, got str$"):
         Holdings(holding(), entitlements=("BBCA",))  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match=r"^claim must be a DividendClaim, got str$"):
+        Holdings(holding(), claims=("BBCA",))  # type: ignore[arg-type]

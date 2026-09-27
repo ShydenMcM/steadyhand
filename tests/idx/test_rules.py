@@ -84,7 +84,9 @@ def test_a_year_past_the_holiday_data_is_refused() -> None:
         lambda: rules().costs(Side.BUY, rp(1000), date(2020, 12, 31)),
         lambda: rules().daily_costs(rp(1000), date(2020, 12, 31)),
         lambda: rules().settlement_date(date(2020, 12, 30)),
-        lambda: rules().dividend_tax(rp(1000), reinvested_by_deadline=False, on=date(2020, 12, 31)),
+        lambda: rules().dividend_tax(rp(1000), on=date(2020, 12, 31)),
+        lambda: rules().reinvestment_deadline(date(2020, 12, 31)),
+        lambda: rules().protection_end(date(2020, 12, 31)),
         lambda: rules().is_trading_day(date(2020, 12, 31)),
     ],
 )
@@ -103,7 +105,13 @@ def test_other_markets_and_currencies_are_refused() -> None:
     with pytest.raises(ValueError, match=r"^price must be in IDR, got USD 2\.01$"):
         rules().round_to_tick(BBCA, Money(201, usd), Side.BUY, TODAY)
     with pytest.raises(ValueError, match=r"^gross must be in IDR"):
-        rules().dividend_tax(Money(1, usd), reinvested_by_deadline=False, on=TODAY)
+        rules().dividend_tax(Money(1, usd), on=TODAY)
+
+
+def test_the_exemption_dates_come_from_the_fee_tables() -> None:
+    assert rules().reinvestment_deadline(date(2021, 2, 16)) is None
+    assert rules().reinvestment_deadline(TODAY) == date(2027, 3, 31)
+    assert rules().protection_end(TODAY) == date(2028, 12, 31)
 
 
 def test_lots_and_ticks() -> None:
@@ -192,6 +200,6 @@ def test_nothing_settles_from_a_non_trading_day() -> None:
 
 
 def test_dividend_tax_and_trading_days() -> None:
-    assert rules().dividend_tax(rp(1_000), reinvested_by_deadline=False, on=TODAY) == rp(100)
+    assert rules().dividend_tax(rp(1_000), on=TODAY) == rp(100)
     assert rules().is_trading_day(date(2021, 1, 4))
     assert not rules().is_trading_day(date(2026, 12, 31))
