@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date
 
 from steadyhand._validate import require_date, require_int, require_type
-from steadyhand.market import MarketRules
+from steadyhand.market import MarketRules, add_trading_days
 from steadyhand.money import CurrencyMismatchError, Money, Rounding
 from steadyhand.outcomes import Rejected
 from steadyhand.portfolio import MovementKind, Portfolio
@@ -102,7 +102,7 @@ def apply_actions(
             run.split(action)
     for action in actions:
         if isinstance(action, CashDividend):
-            run.entitle(action, _add_trading_days(rules, day, pay_lag_trading_days))
+            run.entitle(action, add_trading_days(rules, day, pay_lag_trading_days))
     run.pay(rules)
     for action in actions:
         if isinstance(action, OtherAction):
@@ -194,12 +194,3 @@ class _Actions:
             tuple(self._newly_frozen),
             tuple(self._warnings),
         )
-
-
-def _add_trading_days(rules: MarketRules, day: date, count: int) -> date:
-    current = day
-    for _ in range(count):
-        current += timedelta(days=1)
-        while not rules.is_trading_day(current):
-            current += timedelta(days=1)
-    return current

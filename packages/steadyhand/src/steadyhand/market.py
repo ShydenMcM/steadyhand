@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Protocol, runtime_checkable
 
+from steadyhand._validate import require_int
 from steadyhand.money import Currency, Money
 from steadyhand.types import Costs, Instrument, Side
 
@@ -80,3 +81,18 @@ class MarketRules(Protocol):
     def is_trading_day(self, day: date) -> bool:
         """Whether the market is open on *day*. Raises for a year with no holiday data."""
         ...
+
+
+def add_trading_days(rules: MarketRules, day: date, count: int) -> date:
+    """The day *count* trading days after *day*, which need not be a trading day itself.
+
+    The engine's dividend pay date and the income calendar's pay month both come from here, so
+    the two cannot disagree (M4 spec §3.1).
+    """
+    require_int(count, "count", minimum=0)
+    current = day
+    for _ in range(count):
+        current += timedelta(days=1)
+        while not rules.is_trading_day(current):
+            current += timedelta(days=1)
+    return current

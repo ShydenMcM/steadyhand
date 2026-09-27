@@ -30,8 +30,19 @@ from steadyhand.engine import (
     EngineState,
     run_day,
 )
-from steadyhand.income import IncomeFigures, MonthlyIncome, ReceivedIncome, received_income
-from steadyhand.market import MarketRules, UnsupportedDateError
+from steadyhand.income import (
+    HoldingCalendar,
+    HoldingRunRate,
+    IncomeFigures,
+    MonthlyIncome,
+    PaymentCalendar,
+    ReceivedIncome,
+    RunRate,
+    payment_calendar,
+    received_income,
+    run_rate,
+)
+from steadyhand.market import MarketRules, UnsupportedDateError, add_trading_days
 from steadyhand.metrics import (
     RATIO_PLACES,
     YEAR_DAYS,
@@ -132,6 +143,8 @@ __all__ = [
     "FillResult",
     "FillSettings",
     "Halt",
+    "HoldingCalendar",
+    "HoldingRunRate",
     "Holdings",
     "IncomeFigures",
     "Instrument",
@@ -155,6 +168,7 @@ __all__ = [
     "Order",
     "OrderAck",
     "OtherAction",
+    "PaymentCalendar",
     "Portfolio",
     "PortfolioView",
     "Position",
@@ -164,6 +178,7 @@ __all__ = [
     "RiskLimits",
     "RiskManager",
     "Rounding",
+    "RunRate",
     "RunResult",
     "Side",
     "SimulatedBroker",
@@ -177,10 +192,13 @@ __all__ = [
     "UniverseCoverageError",
     "UnsupportedDateError",
     "__version__",
+    "add_trading_days",
     "apply_actions",
     "backtest",
     "measure",
+    "payment_calendar",
     "received_income",
     "run_day",
+    "run_rate",
     "year_window_start",
 ]
