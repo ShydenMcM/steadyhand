@@ -87,8 +87,13 @@ def test_all_lists_only_defined_names() -> None:
 
 def test_training_is_left_out_of_the_engine_and_exports_its_own_names() -> None:
     assert not any(module.startswith(TRAINING) for module in public_modules())
-    found = definitions(TRAINING)
-    assert {"Catalogue", "Lesson", "LessonError"} <= set(found)
+    # The training package defines its lesson root in its own __init__, as well as re-exporting.
+    own = SRC / "steadyhand/training/__init__.py"
+    found = {
+        **definitions(TRAINING),
+        **dict.fromkeys(public_definitions(own.read_text(encoding="utf-8")), TRAINING),
+    }
+    assert {"Catalogue", "Lesson", "LessonError", "LESSONS"} <= set(found)
     assert sorted(set(found) ^ set(steadyhand.training.__all__)) == []
     wrong = sorted(
         name

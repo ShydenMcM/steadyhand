@@ -7,7 +7,19 @@ decides what to trade (T1 spec §5).
 from importlib.resources import files
 from importlib.resources.abc import Traversable
 
+from steadyhand.training import LESSONS as ENGINE_LESSONS
+from steadyhand.training import Catalogue
+
 COURSE: Traversable = files(__name__) / "course.toml"
 """The course's module list, shipped inside the wheel."""
 
-__all__ = ["COURSE"]
+LESSONS: Traversable = files(__name__) / "lessons" / "en"
+"""The IDX lessons, shipped inside the wheel."""
+
+
+def catalogue() -> Catalogue:
+    """Both packages' lessons and the course, loaded and checked (T1 spec §7)."""
+    return Catalogue.load([ENGINE_LESSONS, LESSONS], COURSE)
+
+
+__all__ = ["COURSE", "LESSONS", "catalogue"]
