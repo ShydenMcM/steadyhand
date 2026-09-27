@@ -12,7 +12,7 @@ from decimal import Decimal
 from functools import cache
 
 import pytest
-from hypothesis import given, settings
+from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
 from steadyhand.income import (
@@ -325,6 +325,9 @@ def test_a_zero_run_rate_cannot_be_projected(value: int, target: int, contributi
 
 @settings(max_examples=100)
 @given(grosses, values, targets, rates, added, added)
+# Found by hypothesis (#97): rounding the income down every month made Rp6 a month take 1.7 years
+# where Rp5 took 1.6.
+@example(gross=12, value=14, target=6, growth=Decimal(0), smaller=5, extra=1)
 def test_a_larger_contribution_never_takes_longer(
     gross: int, value: int, target: int, growth: Decimal, smaller: int, extra: int
 ) -> None:
