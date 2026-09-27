@@ -69,7 +69,8 @@ class Holdings:
 
     ``pending`` holds the orders queued for the next open, ``frozen`` each frozen stock with
     its reason, and ``last_closes`` the last close of each held stock, which values it on a
-    day with no bar. ``claims`` are the open reinvestment-exemption claims (M4 spec §6.2).
+    day with no bar. ``claims`` are the open reinvestment-exemption claims (M4 spec §6.2), and
+    ``shortfall_since`` the day their protected amount first exceeded what is invested (§6.4).
     """
 
     portfolio: Portfolio
@@ -78,6 +79,7 @@ class Holdings:
     frozen: Mapping[Instrument, str] = field(default_factory=dict)
     last_closes: Mapping[Instrument, Money] = field(default_factory=dict)
     claims: tuple[DividendClaim, ...] = ()
+    shortfall_since: date | None = None
 
     def __post_init__(self) -> None:
         require_type(self.portfolio, Portfolio, "portfolio")
@@ -87,6 +89,8 @@ class Holdings:
             require_type(entitlement, Entitlement, "entitlement")
         for claim in self.claims:
             require_type(claim, DividendClaim, "claim")
+        if self.shortfall_since is not None:
+            require_date(self.shortfall_since, "shortfall_since")
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +144,7 @@ class _Actions:
         self._pending = list(holdings.pending)
         self._entitlements = list(holdings.entitlements)
         self._claims = list(holdings.claims)
+        self._shortfall_since = holdings.shortfall_since
         self._frozen = dict(holdings.frozen)
         self._closes = dict(holdings.last_closes)
         self._cancelled: list[Rejected] = []
@@ -216,6 +221,7 @@ class _Actions:
             self._frozen,
             self._closes,
             tuple(self._claims),
+            self._shortfall_since,
         )
         return CorporateOutcome(
             holdings,

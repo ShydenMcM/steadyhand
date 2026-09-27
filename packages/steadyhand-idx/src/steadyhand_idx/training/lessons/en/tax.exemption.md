@@ -2,7 +2,7 @@
 id = "tax.exemption"
 title = "The dividend tax exemption"
 summary = "A resident individual's dividend is free of tax if it is reinvested in Indonesia in time and kept invested."
-explains = ["term.claim_to_reinvest", "term.claim_protected", "exemption.deadline_missed"]
+explains = ["term.claim_to_reinvest", "term.claim_protected", "exemption.deadline_missed", "exemption.claim_broken"]
 module = "costs-and-tax"
 position = 5
 see_also = ["tax.dividend"]
@@ -43,6 +43,14 @@ for the dividend instead, and every figure the claim gives is an estimate:
 If part of a dividend is still to reinvest after its deadline, steadyhand books 10% of that part
 on the first trading day after the deadline, at the rate in force when the dividend was paid. It
 cannot book tax on a past date, so a note records that the tax was owed from the pay date.
+
+Each day at the close, steadyhand compares the amount protected with what the portfolio still
+has invested, at cost. Selling one stock and buying another within the settlement cycle keeps
+the claim: the rules allow it, and how long the gap may last is not settled, so this grace is
+steadyhand's assumption. If the portfolio still holds less than the protected amount when the
+settlement cycle ends, the difference is broken, starting with the protection that runs latest.
+10% of what broke is booked that day, at the rate in force when each dividend was paid, with a
+note that the tax was owed from the pay date.
 
 This lesson describes the rules; whether they apply to you, and how, is a question for you or a
 tax adviser.

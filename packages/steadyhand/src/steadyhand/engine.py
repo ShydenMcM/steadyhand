@@ -173,7 +173,7 @@ def run_day(
     holdings = corporate.holdings
     filled = _fill(holdings, inputs, rules, settings.fills)
     covered = cover_claims(holdings.claims, filled.fills, rules)
-    claimed = settle_claims(filled.portfolio, covered, day, rules)
+    claimed = settle_claims(filled.portfolio, covered, holdings.shortfall_since, day, rules)
     portfolio = claimed.portfolio
 
     closes = _closes(portfolio, holdings.last_closes, history, day)
@@ -210,7 +210,13 @@ def run_day(
         memory = decision.memory
 
     new_holdings = Holdings(
-        portfolio, queued, holdings.entitlements, holdings.frozen, closes, claimed.claims
+        portfolio,
+        queued,
+        holdings.entitlements,
+        holdings.frozen,
+        closes,
+        claimed.claims,
+        claimed.shortfall_since,
     )
     report = DayReport(
         day=day,

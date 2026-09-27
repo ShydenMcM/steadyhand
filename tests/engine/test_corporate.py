@@ -256,3 +256,5 @@ def test_holdings_check_their_parts() -> None:
         Holdings(holding(), entitlements=("BBCA",))  # type: ignore[arg-type]
     with pytest.raises(TypeError, match=r"^claim must be a DividendClaim, got str$"):
         Holdings(holding(), claims=("BBCA",))  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match=r"^shortfall_since must be a date"):
+        Holdings(holding(), shortfall_since="2025-06-02")  # type: ignore[arg-type]
