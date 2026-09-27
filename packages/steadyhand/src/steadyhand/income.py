@@ -541,16 +541,25 @@ class _Projector:
     as_of: date
 
     def years(self, income: Money, value: Money, growth: Decimal) -> Decimal | None:
-        """Years until the target is met, rounded up to a tenth, or ``None`` after 600 months."""
+        """Years until the target is met, rounded up to a tenth, or ``None`` after 600 months.
+
+        Reinvesting at the holdings' own yield leaves the yield, income over value, unchanged:
+        ``(I + n·I/V) / (V + n) = I/V``. So the yield is kept exactly, as a ratio of integers that
+        only growth changes, and the income is rounded down only where a month uses it. Rounding
+        it down every month instead lost an amount that depended on the month's figures, and a
+        larger contribution could then take longer (#97).
+        """
         if self._met(income):
             return _tenths(0)
+        numerator, denominator = income.amount, value.amount
+        grow_by, grow_over = (1 + growth).as_integer_ratio()
+        worth = value.amount
         for month in range(1, PROJECTION_MONTHS + 1):
             monthly = _per_month(income)
-            new = monthly - self._tax(monthly) + self.contribution
-            income += Money(new.amount * income.amount // value.amount, income.currency)
-            value += new
+            worth += (monthly - self._tax(monthly) + self.contribution).amount
             if month % _MONTHS == 0:
-                income = income.times(1 + growth, Rounding.DOWN)
+                numerator, denominator = numerator * grow_by, denominator * grow_over
+            income = Money(worth * numerator // denominator, income.currency)
             if self._met(income):
                 return _tenths(month)
         return None
