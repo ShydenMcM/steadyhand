@@ -5,6 +5,9 @@ trade (T1 spec §5): the level a user picks changes how much is explained, never
 suggests. It uses the standard library only.
 """
 
+from importlib.resources import files
+from importlib.resources.abc import Traversable
+
 from steadyhand.training.catalogue import (
     Catalogue,
     Lesson,
@@ -14,7 +17,11 @@ from steadyhand.training.catalogue import (
 )
 from steadyhand.training.render import Level, explain
 
+LESSONS: Traversable = files(__name__) / "lessons" / "en"
+"""The engine's lessons: the market-neutral ones, shipped inside the wheel (T1 spec §4.2)."""
+
 __all__ = [
+    "LESSONS",
     "Catalogue",
     "Lesson",
     "LessonError",

@@ -109,6 +109,22 @@ jobs:
           uv venv "${RUNNER_TEMP}/engine-only"
           uv pip install --python "${RUNNER_TEMP}/engine-only" dist/steadyhand-*.whl
           "${RUNNER_TEMP}/engine-only/bin/python" -c "import steadyhand; print(steadyhand.__version__)"
+      - name: Both wheels ship every lesson, and the catalogue loads from them
+        run: |
+          expected="$(find packages/*/src/*/training/lessons -name '*.md' | wc -l)"
+          test "${expected}" -gt 0
+          uv venv "${RUNNER_TEMP}/lessons"
+          uv pip install --python "${RUNNER_TEMP}/lessons" dist/*.whl
+          cd "${RUNNER_TEMP}"
+          "${RUNNER_TEMP}/lessons/bin/python" - "${expected}" <<'PY'
+          import sys
+          from steadyhand_idx.training import catalogue
+          lessons = catalogue().lessons()
+          outside = [lesson.origin for lesson in lessons if "site-packages" not in lesson.origin]
+          assert outside == [], outside
+          assert len(lessons) == int(sys.argv[1]), (len(lessons), sys.argv[1])
+          print(len(lessons), "lessons load from the installed wheels")
+          PY
 
   publish-dev:
     name: publish-dev

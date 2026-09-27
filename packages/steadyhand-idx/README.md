@@ -4,4 +4,7 @@ The Indonesia Stock Exchange (IDX) distribution of steadyhand: IDX trading rules
 
 > steadyhand is example software that you run yourself, on your own account, and you make your own decisions with it. It is not financial advice. You can lose money.
 
+It ships a course for first-time investors, with lessons on how IDX works, its costs and its
+taxes. The `steadyhand-idx learn` command that shows them arrives with the CLI.
+
 Early development. See the [project repository](https://github.com/ShydenMcM/steadyhand).
