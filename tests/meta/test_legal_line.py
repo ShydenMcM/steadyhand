@@ -2,8 +2,10 @@
 the tool suggests trading.
 
 1. Only the output layer may import training. No module of either package outside the two
-   training packages imports either of them (the CLI's output layer joins the exceptions in M5).
-   This covers any new module, a strategy or a broker say, without anyone listing it.
+   training packages and the CLI's output layer, ``steadyhand_idx.output``, imports either of them
+   (M5 spec §5.7). This covers any new module, a strategy or a broker say, without anyone listing
+   it. The output layer is also where ``[training]`` is parsed (T1 spec §5 item 3), so the
+   configuration and the command modules stay outside the exception.
 2. Training imports nothing that decides: only the standard library and a short allowlist.
 4. The advice-phrase backstop over every lesson's title, summary and body.
 
@@ -23,6 +25,8 @@ from lesson_rules import ADVICE_PHRASES, advice_findings, advice_phrases
 from steadyhand.training import Catalogue
 
 TRAINING = ("steadyhand.training", "steadyhand_idx.training")
+OUTPUT_LAYER = "steadyhand_idx.output"
+MAY_IMPORT_TRAINING = (*TRAINING, OUTPUT_LAYER)
 ENGINE_TRAINING_MAY_IMPORT = ("steadyhand.notes", "steadyhand.terms", "steadyhand._validate")
 IDX_TRAINING_MAY_IMPORT = (
     *ENGINE_TRAINING_MAY_IMPORT,
@@ -176,19 +180,34 @@ def test_the_idx_training_allowlist(line: str, *, ok: bool) -> None:
     assert allowed(statement, IDX_TRAINING_MAY_IMPORT, "steadyhand_idx.training") is ok
 
 
-def test_only_training_imports_training() -> None:
+def test_only_training_and_the_output_layer_import_training() -> None:
     modules = sources()
-    inside = [name for name, _, _ in modules if _within(name, TRAINING)]
+    inside = [name for name, _, _ in modules if _within(name, MAY_IMPORT_TRAINING)]
     assert len(modules) >= 40
-    assert {"steadyhand.training", "steadyhand_idx.training"} <= set(inside)
+    assert {"steadyhand.training", "steadyhand_idx.training", OUTPUT_LAYER} <= set(inside)
     found = [
         f"{name}: {base}"
         for name, is_package, source in modules
-        if not _within(name, TRAINING)
+        if not _within(name, MAY_IMPORT_TRAINING)
         for base, names in statements(source, name, is_package=is_package)
         if imports_training((base, names))
     ]
     assert found == []
+
+
+def test_the_output_layer_is_the_exception_it_is_listed_as() -> None:
+    (source,) = [text for name, _, text in sources() if name == OUTPUT_LAYER]
+    found = statements(source, OUTPUT_LAYER, is_package=False)
+    assert [base for base, names in found if imports_training((base, names))] == [
+        "steadyhand.training",
+        "steadyhand_idx.training",
+    ]
+
+
+@pytest.mark.parametrize("module", ["steadyhand_idx.config", "steadyhand_idx.cli"])
+def test_the_configuration_and_the_commands_stay_outside_the_exception(module: str) -> None:
+    assert module in [name for name, _, _ in sources()]
+    assert not _within(module, MAY_IMPORT_TRAINING)
 
 
 def test_training_imports_nothing_that_decides() -> None:
