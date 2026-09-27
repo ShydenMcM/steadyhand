@@ -1,7 +1,7 @@
 # Handover: steadyhand
 
-**Updated:** 2026-09-26 19:02 UTC (**M4a plan written, reviewed to zero and self-approved. Next: push `m4/spec`, file S1-S4, open the plan PR, merge on Shyden's go-ahead, then execute S1.** Branch `m4/spec`; read its head with `git rev-parse HEAD`, never retype one. Ticket #86 In Progress.)
-**Local:** `~/Developer/Repos/steadyhand`. On `m4/spec`: the spec commits, `fe1051c` (five-year recordings), `d5d7e21` (the plan), and this file, all on top of `develop` (`8fe2a69`). `main` has no release yet.
+**Updated:** 2026-09-27 03:25 UTC (**M4a is complete: S1-S4 merged into `develop` (#92-#95), deployed, and #87-#90 closed and Done. Next: the M4b plan (S5-S8), and the training brainstorm, which needs Shyden.** Ticket #86 In Progress until the M4b plan merges.)
+**Local:** `~/Developer/Repos/steadyhand`. On `m4/m4b-plan`, branched from `develop` at `bb12b26` (S4's merge); this file is its only change so far and travels in the M4b plan PR. Read heads with `git rev-parse`; never retype one. `main` has no release yet.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
 ## State
@@ -21,7 +21,7 @@
   #62–#67 are closed, with evidence comments, and read Done on the board. #61 has a comment recording that M3a is done.
 - **S6 local evidence:** red phase 690 run / 23 failed (all `NotImplementedError`), gate 690 passed at 100% branch coverage (2,604 statements, 688 branches), and M29–M33 each red with the total unchanged, every catcher set as predicted.
 - **Ticket #61** (M3 plans), In Progress. Its M3a criteria are met; its M3b criteria are met by the plan PR, after which #61 moves to Done.
-- **Merging:** each agent merge needs Shyden's go-ahead in the session, through `AskUserQuestion` naming the PR, its head SHA read from a file in that same turn, and the CI state. Pin the merge with `--match-head-commit "$(cat <file>)"`.
+- **Merging (Shyden, 2026-09-27):** merge every green PR into `develop` without asking: *"you don't need to wait for my permission to merge to develop, just merge automatically from now on"*. Never `main`. Keep the discipline: CI completed on the head SHA read from a file, every job `success` by name, `gh pr merge --squash --match-head-commit "$(cat <file>)"`, then `publish-dev` on the develop run. If the classifier denies a merge, do not retry another way; tell Shyden in one line.
 - **Plan tools** (git-ignored, reusable for M3b): `.superpowers/sdd/2026-09-26-m3a-engine-day/`. `stubgen.py`, `redrun.py`, `gates.py`, `mutations.py`, `render.py`, `fill.py`, `check_plan.py`. Run them with `uv run --no-project --python 3.12 python`. **`mutations.py` now runs pytest under `HYPOTHESIS_PROFILE=ci`.** Under the default `dev` profile, M18's property-test catcher was missed; under `ci` it caught it in 3 of 3 runs. A plan's mutation table is a claim about CI's profile.
 - **Applying a plan task by script:** `apply_task.py <plan> <tree> <task> red|green` (in the plan tools directory) applies a task's blocks up to or after its red marker. It stops if any edit anchor matches anything other than exactly once. It applied every M3a task.
 
@@ -44,12 +44,20 @@
 - **Plan tooling, newest copy:** `.superpowers/sdd/2026-09-26-s11-ledger/` (git-ignored). `render.py` has `@@rewrite N` (a story that changes no public name: red is the new tests on the old code); `mutations.py` resolves its worktree path; `gates.py` returns the scratch repo to its branch. Start the next plan's tools from this copy.
 
 ## M4 income (spec 2026-09-26, ticket #86)
-- **Spec:** `docs/superpowers/specs/2026-09-26-m4-income-design.md`, approved by Shyden 2026-09-26. Decisions in its §2 (split M4a/M4b; goal on take-home; projection from the run-rate; pure functions; settlement grace). The exemption protection end is purchase year **+ 2** (spec §2 correction).
-- **M4a plan:** `docs/superpowers/plans/2026-09-26-m4a-income-reporting.md`. Tasks 0-4 = the plan PR and stories S1-S4. Reviewed to zero on pass 3 and self-approved (review log at its end). Verified by extraction: story commits in the scratch clone `.superpowers/sdd/2026-09-26-m4a-income/repo` (branch `m4a-stories`; SHAs in `stories.txt`, base in `base-sha` = the recordings commit), gates green (757/778/812/830 at 100%), `check_plan.py` replay "problems: 0" with every tree byte-identical, 37 mutations (M67-M103) all caught.
-- **Scope decisions worth knowing before executing** (plan §"Scope decisions"): `income_report` takes 5 args via `IncomeSettings`; a split on the dividend's own ex-date restates it and restatement is exact in integers (both amend spec §3.3); `notes.py` lands in S3, not S1; the golden run moves to five-year recordings and gains a goal (every S9 figure unchanged, checked); the perf test's synthetic dividend moved to the first weekday from 15 June.
-- **Executing a story:** `apply_task.py <plan> <tree> <task> red|green` in the plan tools dir applies a task's blocks. Task 4's golden file is generated by `uv run python scripts/record_golden.py` (its SHA-256 is in the plan); `apply_task.py` does not run it, so run it by hand after the green blocks, then Step 6's check.
-- **Plan tools, newest copy:** `.superpowers/sdd/2026-09-26-m4a-income/`. New since #84: a `delete` marker (render, apply_task, check_plan); `stubgen` keeps a module that only removes functions as it was in the red phase; `redrun.py` and `check_plan.py` resolve their tree path (a relative one lost pytest's report). Start M4b's tools from this copy.
-- **Open item for S5 (M4b):** PMK 18/2021's in-force date is blank in T-TAX; read it from BPK before writing the data row.
+- **Spec:** `docs/superpowers/specs/2026-09-26-m4-income-design.md`, approved by Shyden 2026-09-26. The exemption protection end is purchase year **+ 2** (spec §2 correction).
+- **M4a done (2026-09-27).** Plan `docs/superpowers/plans/2026-09-26-m4a-income-reporting.md` (PR #91, `7cd8cd4`), reviewed to zero on pass 3. Every story was applied from the plan with `apply_task.py`, its red phase matched the plan's count and failure kinds, its code was byte-identical to the verified scratch commit, its gate was green at 100%, its mutations were all caught on the real commit, and `publish-dev` was green after merging:
+
+  | Story | Issue | PR | Merge | Develop run |
+  |---|---|---|---|---|
+  | S1 received income | #87 | #92 | fd41033 | 36284337515 |
+  | S2 run-rate, calendar | #88 | #93 | 9cb193a | 36284582613 |
+  | S3 notes, growth, projection | #89 | #94 | 598ace7 | 36289819694 |
+  | S4 report, goal, backtest | #90 | #95 | bb12b26 | 36291259882 |
+
+- **Spec amendments made in the M4a plan** (its scope decisions 4 and 5): a split on a dividend's own ex-date restates it; restatement is exact in integers. M4b's plan should cite them.
+- **Plan tools, newest copy:** `.superpowers/sdd/2026-09-26-m4a-income/` (gates, redrun, stubgen, render, build_plan, check_plan, apply_task, mutations, wait_ci.sh, template.md, shared-merging.md). New since #84: a `delete` marker; `stubgen` keeps a module that only removes functions as it was in the red phase; `redrun.py`/`check_plan.py` resolve their tree path; `wait_ci.sh` uses its own temp file (two waiters shared one and raced); `shared-merging.md` now says merge without asking. Copy the directory for M4b, rewrite `mutations.py`'s list, `build_plan.py`'s `TASK`/`DEFECT`, and `template.md`.
+- **M4b open item for S5:** PMK 18/2021's in-force date is blank in T-TAX; read it from BPK before writing the data row (spec §6.1). S5 also moves `income.py`'s `dividend_tax(..., reinvested_by_deadline=False, ...)` calls off the removed flag.
+- **Hypothesis note:** M87 was caught by the scenario-ordering property on one run and not the next; a property's catch is not guaranteed, so a plan's predicted catchers name hand-worked tests.
 
 ## Training sub-project (Shyden, 2026-09-26)
 - Shyden asked for newbie-friendly training for everything, with an opt-out, and a first-launch question on competency level and training yes/no. **Decided:** its own sub-project, brainstormed **after the M4 spec is approved**; both contextual explanations and a lesson course; content written once as Markdown in the repo, shown by the CLI (from M5 `init`) and later rendered by the dashboard.
@@ -58,12 +66,9 @@
 - No ticket yet: file one with full AC when its brainstorm starts.
 
 ## Resume steps
-1. `git push -u origin m4/spec` (runs as the App). Confirm with `git ls-remote origin m4/spec`.
-2. Plan Task 0 Step 3: file S1-S4 as issues (title from the plan's Stories table, body = that task's acceptance criteria), add each to board project 1, Status Todo, read each card back via its `PVTI_` node asserting `project.title` = `steadyhand`. Tick #86's "Stories S1-S4 are filed" and "M4a plan ... reviewed to zero" criteria.
-3. Open the PR `m4/spec` -> `develop` (`Refs #86`, never a closing keyword). Wait for CI on the head SHA (write it to a file), read every job by name, then ask Shyden to approve the merge with `AskUserQuestion` (PR, head SHA read from the file that turn, CI state). Merge with `--match-head-commit`. Check `publish-dev` on the develop run.
-4. Execute S1 (plan Task 1) on `m4/s1-received-income` from `origin/develop`, then S2-S4 in order, each merged the same way.
-5. The training sub-project brainstorm is due now: Shyden decided it follows the spec's approval (spec decision 8), which has happened. It needs Shyden in the session, so raise it when he is.
-6. After M4a merges: write the M4b plan (S5-S8) the same way.
+1. The training sub-project brainstorm is due (Shyden's spec decision 8: after the spec's approval, which happened 2026-09-26). It needs Shyden in the session: raise it with `AskUserQuestion` when he is here.
+2. Write the M4b plan (S5-S8) on `m4/m4b-plan` with superpowers:writing-plans, by extraction as M4a was: code first in a scratch clone on top of `develop`, gates, red runs, mutations with predictions first, render, replay (`check_plan.py`), review to zero, self-approve. Start with S5's BPK read.
+3. File S5-S8, open the M4b plan PR (it carries this file), merge on green without asking, then execute S5-S8 the same way. When the M4b plan merges, #86's last criteria are met.
 
 ## Research technique
 - **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid scraping. Try the Internet Archive, KSEI, KPEI (idclear) or BPK first. Use idx.co.id only when none has a readable copy, and say so in the research doc.
