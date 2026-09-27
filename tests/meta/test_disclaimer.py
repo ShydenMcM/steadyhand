@@ -1,24 +1,14 @@
 """The disclaimer is written once and shown everywhere it must be (spec §9.8)."""
 
-import re
 from pathlib import Path
+
+from markdown_text import normalised
 
 from steadyhand.disclaimer import DISCLAIMER
 
 ROOT = Path(__file__).resolve().parents[2]
 # Plans, specs and research notes are for the people building steadyhand, not its users.
 INTERNAL = frozenset({"superpowers", "research"})
-_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
-
-
-def normalised(markdown: str) -> str:
-    """Join a Markdown file into one line of single spaces, quote markers and comments removed.
-
-    A disclaimer inside an HTML comment is never shown to a reader, so it does not count.
-    """
-    shown = _COMMENT.sub(" ", markdown)
-    lines = (line.strip().removeprefix(">").strip() for line in shown.splitlines())
-    return " ".join(" ".join(lines).split())
 
 
 def user_docs(docs: Path) -> list[Path]:

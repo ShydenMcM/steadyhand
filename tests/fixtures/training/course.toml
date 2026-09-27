@@ -1,0 +1,16 @@
+# A fixture course for the catalogue guards' own tests (T1 spec §8).
+
+[[module]]
+number = 1
+slug = "start-here"
+title = "Start here"
+
+[[module]]
+number = 2
+slug = "how-idx-works"
+title = "How IDX works"
+
+[[module]]
+number = 3
+slug = "later"
+title = "Coming later"
