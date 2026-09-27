@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-09-27 10:40 UTC (**The M4b plan is approved** and its PR carries the plan and five new recordings. Stories S5–S8 are #110–#113, Todo. **Next: execute Task 1 (S5, #110).**)
+**Updated:** 2026-09-27 11:05 UTC (**M4 is delivered**: M4b's S5–S8 are merged, deployed and Done, and the epic #86 is closed. Nothing is in flight. **Next: M5, paper trading and the CLI, which starts with a design brainstorm with Shyden.**)
 **Local:** `~/Developer/Repos/steadyhand`. `develop` holds the T1 spec and plan, and `main` has no release yet. `t1/training-spec` and `m4/m4b-plan` are merged or superseded and deleted. Start each story's branch from `origin/develop`. Read heads with `git rev-parse`; never retype one.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
@@ -62,7 +62,17 @@
 ## M4b exemption claim (plan approved 2026-09-27, ticket #86)
 - **Plan:** `docs/superpowers/plans/2026-09-27-m4b-exemption-claim.md`, built by extraction and reviewed to zero on pass 5. Its twelve scope decisions fill in or amend the M4 spec: the rule's start, the `dividend_exemption` table in `fees.toml` (from 2009, so `verified_from` stays 1 January 2021), `Payout`, the claim's `uncovered` part, the two bookkeeping functions, the break tie-break, and the switch-on golden run's scripted trader (`ExemptionScript`) over new recordings to 29 April 2022, which the plan PR carries.
 - **Scratch chain** (`.superpowers/sdd/2026-09-27-m4b-exemption/repo`, branch `m4b-chain2`): fixtures `cf283a6`, then S5 `fff6fa7`, S6 `7223349`, S7 `3e728f8`, S8 `813ae4c` (full SHAs in `stories.txt`). Every story passed CI's gate on its own commit (1021, 1037, 1049, 1053 tests at 100%; perf 7.6–8.4 s), its red phase fails for the right reasons (51, 18, 28, 4), 32 mutations (M140–M171) all go red (31 exactly as predicted, M155 with one more catcher), and the plan replays byte-identical from its own text.
-- **Stories:** S5 #110, S6 #111, S7 #112, S8 #113 (Todo). Each merges as the plan's **Merging a story** says; `close_story.sh <issue> <pr> <develop run>` in the tools directory closes one.
+- **Executed 2026-09-27.** Each story was applied with `apply_task.py`, its red count and failure kinds matched the plan, its tree was byte-identical to the scratch commit (only the plan and handover docs differ), its gate was green at 100%, and its mutations were all caught on the real commit (M155 with one more catcher, as in the plan). S6–S8 were built stacked and moved onto `develop` by SHA after each squash merge, with each tree checked unchanged.
+
+  | Story | Issue | PR | Merge | Develop run |
+  |---|---|---|---|---|
+  | Plan and recordings | #86 | #114 | d55ea8b | 36313303284 |
+  | S5 rules, switch, claim | #110 | #115 | 7363018 | 36313474258 |
+  | S6 matching, deadline tax | #111 | #116 | 6fa386b | 36313957374 |
+  | S7 protection, grace, breaks | #112 | #117 | 66500d8 | 36314142172 |
+  | S8 report, switch-on golden | #113 | #118 | 3f79c3e | 36314316667 |
+
+- **Story scripts** (tools directory): `file_stories.sh`, `merge_story.sh <pr> <first M> <last M> <total> <log> <mutated commit>` (posts the mutation results, checks the mutated tree equals the PR head, merges pinned to it) and `close_story.sh <issue> <pr> <develop run>`.
 - **Tools** (git-ignored, newest copy): `.superpowers/sdd/2026-09-27-m4b-exemption/`. New: `stubgen` keeps a pre-existing class's fields in the red phase (S5's first red run failed 241 unrelated tests without it); `file_stories.sh`; worktrees `wt-red`, `wt-mut`, `wt-replay`.
 
 ## T1 training foundation (spec approved 2026-09-27, ticket #96)
@@ -91,8 +101,7 @@
 - Brainstormed 2026-09-27: see the T1 section above.
 
 ## Resume steps
-1. If the plan PR (`m4/m4b-plan`) is not merged yet, merge it as the plan's **Merging a story** says.
-2. Execute the plan's Task 1 (S5, #110) from `origin/develop`: `apply_task.py <plan> <tree> 1 red`, compare the red run with the plan, then `green`; check the tree equals the scratch S5 commit apart from the plan and handover docs; run the gate and M140–M148; PR, merge, deploy, close. Then Tasks 2–4 the same way, each on the previous story's merge.
+1. M4 is done and nothing is in flight. Start **M5, paper trading and the CLI** (core spec §13 item 5: the state DB, idempotency and atomicity, halts and resume, every CLI command, CLI journeys). It needs a spec first: brainstorm it with Shyden section by section, as M4 and T1 were. M5 must save `Holdings.claims` and `shortfall_since`, render `IncomeReport.claims` under its label, and offer the exemption switch (M4b plan, "Carried forward"); T1's `init` questions and `learn` commands also land in M5 (T1 plan, "Carried forward").
 
 ## Research technique
 - **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid scraping. Try the Internet Archive, KSEI, KPEI (idclear) or BPK first. Use idx.co.id only when none has a readable copy, and say so in the research doc.
