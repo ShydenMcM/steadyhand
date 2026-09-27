@@ -1,4 +1,5 @@
-"""backtest: the pre-flight checks, the fetch, refused days, halts and the baseline (M3 spec §7)."""
+"""backtest: the pre-flight checks, the fetch, refused days, halts, the baseline (M3 spec §7), and
+the income reports and income impact when a goal is set (M4 spec §8)."""
 
 from collections.abc import Mapping, Sequence
 from datetime import date
@@ -10,16 +11,19 @@ import pytest
 from steadyhand.backtest import (
     BacktestResult,
     BacktestSettings,
+    IncomeImpact,
     Market,
     NoTradingDaysError,
     UniverseCoverageError,
     backtest,
 )
+from steadyhand.corporate import Entitlement
 from steadyhand.data import DataUnavailableError, UnavailableDaysError
 from steadyhand.engine import DataValidationError, EngineSettings
+from steadyhand.income import IncomeGoal
 from steadyhand.market import UnsupportedDateError
 from steadyhand.metrics import measure
-from steadyhand.money import IDR, Currency, Money
+from steadyhand.money import IDR, Currency, CurrencyMismatchError, Money
 from steadyhand.risk import RiskLimits
 from steadyhand.strategies import BuyAndHold, Decision, Memory, Strategy
 from steadyhand.types import Bar, CashDividend, CorporateAction, Instrument
@@ -464,3 +468,98 @@ def test_a_run_gathers_every_days_warnings_in_order() -> None:
         ),
     )
     assert result.warnings == ()
+
+
+# Dividends from before the run, which only an income report's history fetch reaches.
+EARLIER: list[CorporateAction] = [
+    CashDividend(BBCA, date(2025, 4, 21), Decimal(100)),
+    CashDividend(BBRI, date(2025, 3, 20), Decimal(50)),
+]
+# Five years before the last day, Friday 11 July 2025.
+HISTORY_FROM = date(2020, 7, 11)
+
+
+def with_goal(contribution: int | None = None, lag: int = 14) -> BacktestSettings:
+    limits = RiskLimits(max_weight=Decimal("0.5"))
+    top_up = None if contribution is None else rp(contribution)
+    engine = EngineSettings(limits=limits, monthly_contribution=top_up, pay_lag_trading_days=lag)
+    return BacktestSettings(rp(100_000_000), engine, IncomeGoal(rp(1_000_000)))
+
+
+def monthly_take_home(gross: int) -> int:
+    """A year's gross less 10% tax, rounded up, over 12 months, rounded down."""
+    return (gross - -(-gross // 10)) // 12
+
+
+def test_without_a_goal_there_is_no_income_report_and_no_history_fetch() -> None:
+    source = _Source(calm(), EARLIER)
+    result = run(source)
+    assert result.baseline is not None
+    assert (result.run.income, result.baseline.income, result.income_impact) == (None, None, None)
+    assert [request for request in source.requests if request[2] < START] == []
+
+
+def test_with_a_goal_each_run_reports_its_income_from_five_years_of_history() -> None:
+    source = _Source(calm(), EARLIER)
+    result = run(source, chosen=with_goal(lag=3))
+    assert result.baseline is not None
+    # The strategy ends holding BBCA; the baseline BBCA and BBRI. Each is asked for once a run.
+    assert [request for request in source.requests if request[2] < START] == [
+        ("actions", "BBCA", HISTORY_FROM, END),
+        ("actions", "BBCA", HISTORY_FROM, END),
+        ("actions", "BBRI", HISTORY_FROM, END),
+    ]
+    ours, theirs = result.run.income, result.baseline.income
+    assert ours is not None
+    assert theirs is not None
+    assert ours.as_of == theirs.as_of == END
+    held = {p.instrument: p.quantity for p in result.baseline.final.holdings.portfolio.positions}
+    shares = result.run.final.holdings.portfolio.positions[0].quantity
+    # Three trading days after Monday 21 April 2025 is Thursday 24 April, with the run's lag.
+    assert ours.run_rate.holdings[0].dividends == (
+        Entitlement(BBCA, date(2025, 4, 21), date(2025, 4, 24), rp(100 * shares)),
+    )
+    baseline_gross = 100 * held[BBCA] + 50 * held[BBRI]
+    assert theirs.run_rate.annual_gross == rp(baseline_gross)
+    # Neither run was paid a dividend, so only the run-rates differ.
+    assert result.income_impact == IncomeImpact(
+        rp(0), rp(monthly_take_home(100 * shares) - monthly_take_home(baseline_gross))
+    )
+
+
+def test_the_income_report_projects_with_the_engines_contribution() -> None:
+    result = run(_Source(calm(), EARLIER), chosen=with_goal(contribution=5_000_000))
+    assert result.run.income is not None
+    assert result.run.income.projection.contribution == rp(5_000_000)
+
+
+def test_a_buy_and_hold_backtest_with_a_goal_has_no_income_impact() -> None:
+    result = run(_Source(calm(), EARLIER), strategy=BuyAndHold(), chosen=with_goal())
+    assert result.baseline is None
+    assert result.run.income is not None
+    assert result.income_impact is None
+
+
+class _NoHistory(_Source):
+    """A source with the run's own days and nothing before them."""
+
+    def corporate_actions(
+        self, instrument: Instrument, start: date, end: date
+    ) -> Sequence[CorporateAction]:
+        if start < START:
+            msg = f"{instrument.symbol}: no history before {START.isoformat()}"
+            raise DataUnavailableError(msg)
+        return super().corporate_actions(instrument, start, end)
+
+
+def test_history_the_source_cannot_give_stops_the_backtest() -> None:
+    with pytest.raises(DataUnavailableError, match=r"^BBCA: no history before 2025-06-30$"):
+        run(_NoHistory(calm()), chosen=with_goal())
+
+
+def test_a_goal_is_an_income_goal_in_the_capitals_currency() -> None:
+    with pytest.raises(TypeError, match=r"^goal must be an IncomeGoal, got Money$"):
+        BacktestSettings(rp(1), EngineSettings(), rp(1))  # type: ignore[arg-type]
+    dollars = IncomeGoal(Money(100, Currency("USD", 2)))
+    with pytest.raises(CurrencyMismatchError, match=r"^cannot combine IDR with USD$"):
+        BacktestSettings(rp(1), EngineSettings(), dollars)

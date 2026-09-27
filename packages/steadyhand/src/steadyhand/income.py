@@ -34,6 +34,10 @@ PROJECTION_MONTHS = 600
 GROWTH_YEARS = 4
 """Dividend growth compares the trailing year with the year ending this many years earlier."""
 
+HISTORY_YEARS = 5
+"""An income report needs each holding's corporate actions from this many years before its day,
+which holds every window it reads (M4 spec §3.2)."""
+
 PESSIMISTIC_START = Decimal("0.8")
 """The pessimistic scenario starts from this share of the run-rate (core spec §7)."""
 
@@ -311,6 +315,72 @@ class Projection:
         return PROJECTION_LABEL
 
 
+@dataclass(frozen=True, slots=True)
+class GoalProgress:
+    """How far the income is from the goal (M4 spec §5.4).
+
+    ``received`` is the monthly average take-home over the trailing year and ``run_rate`` the
+    run-rate's monthly take-home; each share is that figure over the target, not capped at 1.
+    """
+
+    target: Money
+    received: Money
+    received_share: Decimal
+    run_rate: Money
+    run_rate_share: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class IncomeReport:
+    """A run's dividend income, as of its last day: everything M5's ``report --income`` shows."""
+
+    as_of: date
+    received: ReceivedIncome
+    run_rate: RunRate
+    calendar: PaymentCalendar
+    growth: DividendGrowth
+    projection: Projection
+    goal: GoalProgress
+
+
+def income_report(
+    reports: Sequence[DayReport],
+    final: EngineState,
+    history: Mapping[Instrument, Sequence[CorporateAction]],
+    rules: MarketRules,
+    settings: IncomeSettings,
+) -> IncomeReport:
+    """The income report of a run whose day reports, in order, are *reports* (M4 spec §3.2).
+
+    *history* holds, for every stock in the final portfolio, its corporate actions with an
+    ex-date from ``HISTORY_YEARS`` years before the last day to the last day. The caller fetches
+    it; nothing here reads a file or the network.
+    """
+    received = received_income(reports, final, rules)
+    portfolio = final.holdings.portfolio
+    target = settings.goal.monthly_target
+    if target.currency != portfolio.currency:
+        raise CurrencyMismatchError(portfolio.currency, target.currency)
+    rate = run_rate(portfolio, history, rules, received.as_of, settings.pay_lag_trading_days)
+    growth = dividend_growth(rate, history)
+    return IncomeReport(
+        received.as_of,
+        received,
+        rate,
+        payment_calendar(rate, rules),
+        growth,
+        project(rate, growth, reports[-1].holdings_value, settings, rules),
+        goal_progress(settings.goal, received, rate),
+    )
+
+
+def goal_progress(goal: IncomeGoal, received: ReceivedIncome, rate: RunRate) -> GoalProgress:
+    """The goal tracker: received and run-rate monthly take-home against the target (§5.4)."""
+    target = goal.monthly_target
+    got, expected = received.monthly_average.take_home, rate.monthly_take_home
+    return GoalProgress(target, got, _share(got, target), expected, _share(expected, target))
+
+
 def years_before(day: date, years: int) -> date:
     """The same month and day *years* years before *day*; 29 February becomes 28 February."""
     year = day.year - years
@@ -575,6 +645,12 @@ def _ratio(numerator: Money, denominator: Money) -> Decimal | None:
     if denominator.amount == 0:
         return None
     return _rounded(_CONTEXT.divide(numerator.amount, denominator.amount))
+
+
+def _share(part: Money, target: Money) -> Decimal:
+    if part.currency != target.currency:
+        raise CurrencyMismatchError(target.currency, part.currency)
+    return _rounded(_CONTEXT.divide(part.amount, target.amount))
 
 
 def _rounded(value: Decimal) -> Decimal:

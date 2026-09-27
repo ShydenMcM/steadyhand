@@ -3,22 +3,31 @@
 ``backtest`` checks the range before day one, fetches every bar and corporate action the run can
 need, then repeats ``run_day`` over the trading days: once for the strategy and once, with the
 same settings, for the baseline. Nothing is guessed: a start the rules or the universe do not
-cover stops the run with an error that names the first date that would work.
+cover stops the run with an error that names the first date that would work. With an income goal
+set, each run also gets an income report on its last day, from dividend history fetched then.
 """
 
 from __future__ import annotations
 
 from bisect import bisect_left
 from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 
 from steadyhand._validate import require_date, require_type
 from steadyhand.data import DataSource, UnavailableDaysError
 from steadyhand.engine import DayInputs, DayReport, EngineSettings, EngineState, run_day
+from steadyhand.income import (
+    HISTORY_YEARS,
+    IncomeGoal,
+    IncomeReport,
+    IncomeSettings,
+    income_report,
+    years_before,
+)
 from steadyhand.market import MarketRules
 from steadyhand.metrics import Metrics, measure
-from steadyhand.money import Money
+from steadyhand.money import CurrencyMismatchError, Money
 from steadyhand.risk import Halt
 from steadyhand.strategies.buy_and_hold import BuyAndHold
 from steadyhand.strategies.protocol import Strategy
@@ -57,10 +66,14 @@ class Market:
 
 @dataclass(frozen=True, slots=True)
 class BacktestSettings:
-    """The capital a run starts with, and how the engine runs each day. Both runs share them."""
+    """The capital a run starts with, how the engine runs each day, and an optional income goal.
+
+    Both runs share them. With a ``goal``, each run's result carries an income report.
+    """
 
     capital: Money
     engine: EngineSettings = field(default_factory=EngineSettings)
+    goal: IncomeGoal | None = None
 
     def __post_init__(self) -> None:
         require_type(self.capital, Money, "capital")
@@ -68,17 +81,24 @@ class BacktestSettings:
         if self.capital.amount <= 0:
             msg = f"the starting capital must be positive, got {self.capital}"
             raise ValueError(msg)
+        if self.goal is not None:
+            require_type(self.goal, IncomeGoal, "goal")
+            if self.goal.monthly_target.currency != self.capital.currency:
+                raise CurrencyMismatchError(
+                    self.capital.currency, self.goal.monthly_target.currency
+                )
 
 
 @dataclass(frozen=True, slots=True)
 class RunResult:
-    """One strategy's run: every day's report, in order, the state after the last day, and what
-    the run achieved (M3 spec §8)."""
+    """One strategy's run: every day's report, in order, the state after the last day, what the
+    run achieved (M3 spec §8), and its income report when the settings set a goal (M4 spec §8)."""
 
     strategy: str
     reports: tuple[DayReport, ...]
     final: EngineState
     metrics: Metrics
+    income: IncomeReport | None = None
 
     @property
     def halt(self) -> Halt | None:
@@ -92,11 +112,24 @@ class RunResult:
 
 
 @dataclass(frozen=True, slots=True)
+class IncomeImpact:
+    """The strategy's monthly take-home income minus the baseline's (core spec §7).
+
+    ``received`` compares the monthly averages over the trailing year and ``run_rate`` the
+    run-rates. Each is negative when the strategy earns less than ``buy-and-hold``.
+    """
+
+    received: Money
+    run_rate: Money
+
+
+@dataclass(frozen=True, slots=True)
 class BacktestResult:
     """The strategy's run and, unless the strategy is the baseline, the baseline's.
 
     ``warnings`` are about the data both runs share: gaps in the universe's membership record,
-    and each stock whose data source refused some of its days.
+    and each stock whose data source refused some of its days. ``income_impact`` is set when
+    there is a goal and a baseline.
     """
 
     start: date
@@ -104,6 +137,7 @@ class BacktestResult:
     run: RunResult
     baseline: RunResult | None
     warnings: tuple[str, ...]
+    income_impact: IncomeImpact | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,8 +182,13 @@ def backtest(
     run = _run(strategy, window, rules, settings)
     baseline = BuyAndHold()
     compared = None if strategy.name == baseline.name else _run(baseline, window, rules, settings)
+    if settings.goal is not None:
+        run = _with_income(run, market, settings, settings.goal)
+        compared = (
+            None if compared is None else _with_income(compared, market, settings, settings.goal)
+        )
     warnings = (*market.universe.survivorship_warnings(start, end), *_refused_warnings(window))
-    return BacktestResult(start, end, run, compared, warnings)
+    return BacktestResult(start, end, run, compared, warnings, _impact(run, compared))
 
 
 def _calendar_days(start: date, end: date) -> Iterator[date]:
@@ -227,6 +266,35 @@ def _run(
         state, report = run_day(state, inputs, strategy, rules, settings.engine)
         reports.append(report)
     return RunResult(strategy.name, tuple(reports), state, measure(reports, state))
+
+
+def _with_income(
+    run: RunResult, market: Market, settings: BacktestSettings, goal: IncomeGoal
+) -> RunResult:
+    """*run* with its income report, from each final holding's history as the source gives it.
+
+    A source that cannot give it raises, and the backtest stops: an income report is never
+    built on missing history (M4 spec §8).
+    """
+    as_of = run.reports[-1].day
+    since = years_before(as_of, HISTORY_YEARS)
+    history = {
+        position.instrument: tuple(
+            market.source.corporate_actions(position.instrument, since, as_of)
+        )
+        for position in run.final.holdings.portfolio.positions
+    }
+    engine = settings.engine
+    plan = IncomeSettings(goal, engine.monthly_contribution, engine.pay_lag_trading_days)
+    income = income_report(run.reports, run.final, history, market.rules, plan)
+    return replace(run, income=income)
+
+
+def _impact(run: RunResult, baseline: RunResult | None) -> IncomeImpact | None:
+    if baseline is None or run.income is None or baseline.income is None:
+        return None
+    ours, theirs = run.income.goal, baseline.income.goal
+    return IncomeImpact(ours.received - theirs.received, ours.run_rate - theirs.run_rate)
 
 
 def _resumed(window: _Window, day: date) -> frozenset[Instrument]:

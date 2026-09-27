@@ -24,6 +24,7 @@ from steadyhand import (
     Currency,
     Decision,
     EngineSettings,
+    IncomeGoal,
     Instrument,
     Market,
     MarketView,
@@ -104,7 +105,8 @@ class _Lcg:
 
 
 class _Synthetic:
-    """Ten years of daily bars and one June dividend a year for each stock, from ``SEED``."""
+    """Ten years of daily bars and a dividend each year on the first weekday from 15 June, for
+    each stock, from ``SEED``. Every year pays, so the last year gives a run-rate to project."""
 
     def __init__(self) -> None:
         rng = _Lcg(SEED)
@@ -117,6 +119,7 @@ class _Synthetic:
             close = rng.randint(1_000, 20_000)
             bars: list[Bar] = []
             actions: list[CorporateAction] = []
+            paid: set[int] = set()
             for day in trading:
                 opening = close * (1_000 + rng.randint(-10, 10)) // 1_000
                 close = max(50, opening * (1_000 + rng.randint(-20, 21)) // 1_000)
@@ -125,7 +128,8 @@ class _Synthetic:
                 bars.append(
                     Bar(stock, day, Money(opening, IDR), high_, low_, Money(close, IDR), 10**8)
                 )
-                if day.month == 6 and day.day == 15:
+                if (day.month, day.day) >= (6, 15) and day.year not in paid:
+                    paid.add(day.year)
                     actions.append(CashDividend(stock, day, Decimal(close // 50)))
             self._bars[stock] = bars
             self._actions[stock] = actions
@@ -179,7 +183,9 @@ class _EqualWeight:
 def test_ten_years_of_45_stocks_run_inside_the_budget() -> None:
     source = _Synthetic()
     settings = BacktestSettings(
-        Money(1_000_000_000, IDR), EngineSettings(monthly_contribution=Money(10_000_000, IDR))
+        Money(1_000_000_000, IDR),
+        EngineSettings(monthly_contribution=Money(10_000_000, IDR)),
+        IncomeGoal(Money(50_000_000, IDR)),
     )
     market = Market(_All(source.stocks), source, _PlainRules())
     began = time.perf_counter()
@@ -193,4 +199,10 @@ def test_ten_years_of_45_stocks_run_inside_the_budget() -> None:
     assert all(run.halt is None for run in runs)
     assert all(sum(len(r.fills) for r in run.reports) > 45 for run in runs)
     assert all(run.metrics.dividends.gross.amount > 0 for run in runs)
+    # Each run's income report, from five years of history, is inside the same budget, and its
+    # projection had a run-rate to simulate.
+    assert all(
+        run.income is not None and run.income.run_rate.annual_gross.amount > 0 for run in runs
+    )
+    assert result.income_impact is not None
     assert seconds < BUDGET_SECONDS, f"took {seconds:.1f} s, over the {BUDGET_SECONDS} s budget"
