@@ -1,0 +1,43 @@
+# The steadyhand course: its modules in order (T1 spec §4.3). A lesson joins a module by giving
+# its slug as `module` and its place as `position`. A module with no lessons yet is listed as
+# "coming later".
+
+[[module]]
+number = 1
+slug = "start-here"
+title = "Start here"
+
+[[module]]
+number = 2
+slug = "shares-and-dividends"
+title = "Shares and dividends"
+
+[[module]]
+number = 3
+slug = "how-idx-works"
+title = "How IDX works"
+
+[[module]]
+number = 4
+slug = "costs-and-tax"
+title = "Costs and tax"
+
+[[module]]
+number = 5
+slug = "risk"
+title = "Risk, and why backtests mislead"
+
+[[module]]
+number = 6
+slug = "using-steadyhand"
+title = "Using steadyhand"
+
+[[module]]
+number = 7
+slug = "income-goal"
+title = "The income goal"
+
+[[module]]
+number = 8
+slug = "strategies"
+title = "Strategies"
