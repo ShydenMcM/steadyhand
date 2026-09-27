@@ -108,7 +108,7 @@ def measure(reports: Sequence[DayReport], final: EngineState) -> Metrics:
         sum((e.gross for report in reports for e in report.paid), nothing),
         sum((report.tax for report in reports), nothing),
     )
-    since = last - timedelta(days=YEAR_DAYS - 1)
+    since = year_window_start(last)
     trailing = [report for report in reports if report.day >= since]
     trailing_income = sum((e.gross for report in trailing for e in report.paid), nothing) - sum(
         (report.tax for report in trailing), nothing
@@ -124,6 +124,11 @@ def measure(reports: Sequence[DayReport], final: EngineState) -> Metrics:
         dividends=dividends,
         trailing_income=trailing_income,
     )
+
+
+def year_window_start(end: date) -> date:
+    """The first day of the year window ending on *end*: ``YEAR_DAYS`` days, both ends included."""
+    return end - timedelta(days=YEAR_DAYS - 1)
 
 
 def _rounded(value: Decimal) -> Decimal:
