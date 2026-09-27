@@ -1,7 +1,7 @@
 # Handover: steadyhand
 
-**Updated:** 2026-09-27 08:31 UTC (**The T1 plan is written, reviewed to zero and approved** (`docs/superpowers/plans/2026-09-27-t1-training-foundation.md`, ticket #96). Its stories are filed as #99–#102. **Next: merge the T1 plan PR, then execute S1–S4, then M4b.** Bug #97 was found and fixed on the way (PR #98).)
-**Local:** `~/Developer/Repos/steadyhand`. On `t1/training-spec`, branched from `m4/m4b-plan` (`9d26f16`, whose only change is this file), which branched from `develop` at `bb12b26`. `t1/training-spec` carries the T1 spec and this file, and becomes the T1 plan PR. `m4/m4b-plan` is superseded, so delete it once T1's plan PR merges, and start M4b's plan from `develop` then. Read heads with `git rev-parse`; never retype one. `main` has no release yet.
+**Updated:** 2026-09-27 08:37 UTC (**The T1 plan is merged** (PR #103, `df541e0`, develop run 36306603813 green with `publish-dev`). **Next: execute T1's stories S1–S4 (#99–#102), then M4b.** Bug #97 is fixed (PR #98).)
+**Local:** `~/Developer/Repos/steadyhand`. `develop` holds the T1 spec and plan, and `main` has no release yet. `t1/training-spec` and `m4/m4b-plan` are merged or superseded and deleted. Start each story's branch from `origin/develop`. Read heads with `git rev-parse`; never retype one.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
 ## State
@@ -75,7 +75,7 @@
 - Brainstormed 2026-09-27: see the T1 section above.
 
 ## Resume steps
-1. If the T1 plan PR (`t1/training-spec`, `Refs #96`) is not merged yet, merge it on green as **Merging** says, then delete the superseded `m4/m4b-plan` branch.
+1. The T1 plan PR is merged (#103); nothing is in flight. Start at S1 (#99).
 2. Execute S1–S4 (#99–#102) from the plan, one branch and PR each, as M4a's were. Apply each task with the plan tools' `apply_task.py` from `docs/superpowers/plans/2026-09-27-t1-training-foundation.md`, check its red count and failure kinds against the plan, check the tree is byte-identical to the scratch commit, run the gate and the task's mutations on the real commit, and merge on green. In S4, also run Task 4 Step 7 (the wheel step as CI runs it) and read each lesson against core spec §3 item 3.
 3. Then M4b (S5–S8): a plan from `develop`, starting with S5's BPK read for PMK 18/2021's in-force date (see the M4 section). Every note M4b adds needs its lesson in the same PR: after T1's S4, `tests/meta/test_lessons.py` fails until it has one.
 
