@@ -6,7 +6,7 @@ explains = ["term.dividend_tax", "term.dividend_net", "term.take_home"]
 module = "costs-and-tax"
 position = 4
 see_also = ["tax.exemption", "dividends.basics", "income.goal"]
-sources = ["docs/research/t-tax.md §1", "docs/research/t-tax.md §2", "docs/superpowers/specs/2026-09-26-m4-income-design.md §2"]
+sources = ["docs/research/t-tax.md §1", "docs/research/t-tax.md §2", "docs/superpowers/specs/2026-09-26-m4-income-design.md §2", "docs/research/t-tax.md §5"]
 +++
 
 For a resident individual, a dividend from an Indonesian company is taxed at **10%**, and the tax
