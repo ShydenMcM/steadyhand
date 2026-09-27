@@ -59,4 +59,11 @@ def test_every_readme_carries_the_disclaimer() -> None:
 def test_every_user_facing_doc_carries_the_disclaimer() -> None:
     docs = user_docs(ROOT / "docs")
     assert ROOT / "docs/lq45-members.md" in docs
+    assert ROOT / "docs/strategies/README.md" in docs
     assert missing_disclaimer(docs) == []
+
+
+def test_every_strategy_guide_carries_the_disclaimer() -> None:
+    guides = sorted((ROOT / "packages/steadyhand/src/steadyhand/strategies/guides").glob("*.md"))
+    assert "buy-and-hold.md" in [path.name for path in guides]
+    assert missing_disclaimer(guides) == []

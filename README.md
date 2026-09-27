@@ -6,8 +6,9 @@ Self-hosted, open-source toolkit for building a **dividend income portfolio**, s
 
 ## Status
 
-**Early development.** The engine library, the IDX rules, the backtester, income reporting and the
-lesson catalogue are built; the command line (`steadyhand-idx`) comes next. The approved design
+**Early development.** The engine library, the IDX rules, the backtester, income reporting, the
+lesson catalogue and the command line (`steadyhand-idx`: `init`, `backtest`, `compare`,
+`strategies`, `explain`, `learn` and `training`) are built; paper trading comes next. The approved design
 for the first sub-project is in
 [`docs/superpowers/specs/2026-09-24-steadyhand-core-design.md`](docs/superpowers/specs/2026-09-24-steadyhand-core-design.md).
 
@@ -15,7 +16,7 @@ for the first sub-project is in
 
 - `steadyhand`: a market-neutral Python engine library covering strategies, a simulated broker, risk controls, a backtester and income tracking.
 - `steadyhand-idx`: the IDX distribution, with IDX trading rules, Yahoo Finance `.JK` data, paper trading, a CLI, and an income goal tracker that shows when dividends could cover a monthly target.
-- A course for first-time investors, and plain-English explanations under each command's output at the level you choose, or none. The lessons already ship inside both packages; the `steadyhand-idx learn` command that shows them arrives with the CLI.
+- A course for first-time investors, and plain-English explanations under each command's output at the level you choose, or none. `steadyhand-idx learn` shows the lessons, which ship inside both packages.
 
 ## What it will never be
 

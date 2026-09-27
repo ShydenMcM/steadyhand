@@ -119,12 +119,16 @@ from steadyhand.portfolio import (
 from steadyhand.risk import Checked, Halt, RiskLimits, RiskManager, UnitValue
 from steadyhand.sizing import CompoundingSizer, Sizer
 from steadyhand.strategies import (
+    GUIDES,
     STRATEGIES,
     BuyAndHold,
     Decision,
     InvalidWeightsError,
     Memory,
+    Registered,
     Strategy,
+    Turnover,
+    guide,
 )
 from steadyhand.terms import (
     FIGURES,
@@ -203,6 +207,7 @@ __all__ = [
     "EXEMPTION_DEADLINE_MISSED",
     "FIGURES",
     "GROWTH_YEARS",
+    "GUIDES",
     "HISTORY_YEARS",
     "IDR",
     "INCOME_GROWTH_SHORT_HISTORY",
@@ -338,6 +343,7 @@ __all__ = [
     "ProjectionOutcome",
     "Protection",
     "ReceivedIncome",
+    "Registered",
     "Rejected",
     "RiskLimits",
     "RiskManager",
@@ -352,6 +358,7 @@ __all__ = [
     "Split",
     "Strategy",
     "Tradable",
+    "Turnover",
     "UnavailableDaysError",
     "UnitValue",
     "Universe",
@@ -365,6 +372,7 @@ __all__ = [
     "cover_claims",
     "dividend_growth",
     "goal_progress",
+    "guide",
     "income_report",
     "measure",
     "payment_calendar",

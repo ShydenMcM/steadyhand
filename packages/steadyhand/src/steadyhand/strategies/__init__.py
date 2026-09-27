@@ -2,6 +2,17 @@
 
 from steadyhand.strategies.buy_and_hold import BuyAndHold
 from steadyhand.strategies.protocol import Decision, InvalidWeightsError, Memory, Strategy
-from steadyhand.strategies.registry import STRATEGIES
+from steadyhand.strategies.registry import GUIDES, STRATEGIES, Registered, Turnover, guide
 
-__all__ = ["STRATEGIES", "BuyAndHold", "Decision", "InvalidWeightsError", "Memory", "Strategy"]
+__all__ = [
+    "GUIDES",
+    "STRATEGIES",
+    "BuyAndHold",
+    "Decision",
+    "InvalidWeightsError",
+    "Memory",
+    "Registered",
+    "Strategy",
+    "Turnover",
+    "guide",
+]
