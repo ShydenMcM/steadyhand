@@ -147,13 +147,13 @@ def test_the_course_lists_each_module_and_says_when_one_is_empty() -> None:
 
 
 def test_an_unknown_name_carries_up_to_three_close_names() -> None:
-    error = UnknownNameError.among("strategy", "buy-and-hodl", ["buy-and-hold", "x", "y"])
+    error = UnknownNameError.among("buy-and-hodl", ["buy-and-hold", "x", "y"], kind="strategy")
     assert str(error) == "no strategy named 'buy-and-hodl'; the closest: buy-and-hold"
     assert (error.kind, error.wanted, error.closest) == (
         "strategy",
         "buy-and-hodl",
         ("buy-and-hold",),
     )
-    assert str(UnknownNameError.among("lesson", "zzz", ["a.b"])) == "no lesson named 'zzz'"
-    many = UnknownNameError.among("lesson", "abcd", ["abce", "abcf", "abcg", "abch"])
+    assert str(UnknownNameError.among("zzz", ["a.b"], kind="lesson")) == "no lesson named 'zzz'"
+    many = UnknownNameError.among("abcd", ["abce", "abcf", "abcg", "abch"], kind="lesson")
     assert len(many.closest) == 3

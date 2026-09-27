@@ -3,11 +3,23 @@
 import io
 import sys
 from collections.abc import Callable
+from datetime import date
 from pathlib import Path
 
 import pytest
 from cli_world import Cli
 
+from steadyhand import (
+    IDR,
+    DataUnavailableError,
+    DataValidationError,
+    Instrument,
+    InvalidBarError,
+    NoTradingDaysError,
+    UnavailableDaysError,
+    UniverseCoverageError,
+    UnsupportedDateError,
+)
 from steadyhand_idx import CachedDataSource, __version__
 from steadyhand_idx._datafile import DataFileError
 from steadyhand_idx.cli import (
@@ -21,6 +33,8 @@ from steadyhand_idx.cli import (
 from steadyhand_idx.config import ConfigMissingError
 from steadyhand_idx.output import UnknownNameError
 
+BBCA = Instrument("BBCA", "IDX", IDR)
+
 
 def test_the_exit_code_table_is_pinned_row_by_row() -> None:
     assert (
@@ -28,6 +42,12 @@ def test_the_exit_code_table_is_pinned_row_by_row() -> None:
         (ConfigMissingError, 2),
         (DataFileError, 2),
         (UnknownNameError, 2),
+        (UnsupportedDateError, 2),
+        (UniverseCoverageError, 2),
+        (NoTradingDaysError, 2),
+        (DataUnavailableError, 3),
+        (DataValidationError, 3),
+        (InvalidBarError, 3),
     ) == EXIT_CODES
 
 
@@ -40,6 +60,13 @@ def test_the_exit_code_table_is_pinned_row_by_row() -> None:
         (lambda: ConfigMissingError(Path("steadyhand.toml")), 2),
         (lambda: DataFileError("x"), 2),
         (lambda: UnknownNameError("x", (), kind="lesson"), 2),
+        (lambda: UnsupportedDateError("x"), 2),
+        (lambda: UniverseCoverageError(date(2021, 1, 4), date(2021, 2, 1)), 2),
+        (lambda: NoTradingDaysError("x"), 2),
+        (lambda: DataUnavailableError("x"), 3),
+        (lambda: UnavailableDaysError("x", [date(2021, 2, 1)]), 3),
+        (lambda: DataValidationError(BBCA, date(2021, 2, 1), "x"), 3),
+        (lambda: InvalidBarError("x"), 3),
         (lambda: ConfigRewriteError("x"), 1),
         (lambda: RuntimeError("x"), 1),
         (lambda: KeyError("x"), 1),

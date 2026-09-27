@@ -2,6 +2,7 @@
 the income reports and income impact when a goal is set (M4 spec §8)."""
 
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from functools import cache
@@ -16,6 +17,7 @@ from steadyhand.backtest import (
     NoTradingDaysError,
     UniverseCoverageError,
     backtest,
+    compare,
 )
 from steadyhand.corporate import Entitlement
 from steadyhand.data import DataUnavailableError, UnavailableDaysError
@@ -568,3 +570,50 @@ def test_a_goal_is_an_income_goal_in_the_capitals_currency() -> None:
     dollars = IncomeGoal(Money(100, Currency("USD", 2)))
     with pytest.raises(CurrencyMismatchError, match=r"^cannot combine IDR with USD$"):
         BacktestSettings(rp(1), EngineSettings(), dollars)
+
+
+def test_compare_runs_each_strategy_in_the_order_named_then_the_baseline() -> None:
+    fixed = _Fixed({BBCA: Decimal("0.5")})
+    result = compare([fixed], market(_Source(calm())), START, END, settings())
+    alone = run(_Source(calm()), strategy=fixed)
+    assert [each.strategy for each in result.runs] == ["fixed", "buy-and-hold"]
+    assert result.runs == (alone.run, alone.baseline)
+    assert (result.start, result.end, result.warnings) == (START, END, alone.warnings)
+
+
+def test_a_named_baseline_runs_once_where_it_was_named() -> None:
+    fixed = _Fixed({BBCA: Decimal("0.5")})
+    result = compare([BuyAndHold(), fixed], market(_Source(calm())), START, END, settings())
+    assert [each.strategy for each in result.runs] == ["buy-and-hold", "fixed"]
+
+
+def test_compare_fetches_the_window_once_for_every_strategy() -> None:
+    source = _Source(calm())
+    compare([_Fixed({BBCA: Decimal("0.5")})], market(source), START, END, settings())
+    assert [request for request in source.requests if request[0] == "bars"] == [
+        ("bars", "BBCA", START, END),
+        ("bars", "BBRI", START, END),
+    ]
+
+
+def test_compare_gives_every_run_its_income_report_when_there_is_a_goal() -> None:
+    chosen = replace(settings(), goal=IncomeGoal(rp(1_000_000)))
+    fixed = _Fixed({BBCA: Decimal("0.5")})
+    result = compare([fixed], market(_Source(calm())), START, END, chosen)
+    assert all(each.income is not None for each in result.runs)
+    assert compare([fixed], market(_Source(calm())), START, END, settings()).runs[0].income is None
+
+
+def test_compare_needs_each_strategy_named_once() -> None:
+    fixed = _Fixed({BBCA: Decimal("0.5")})
+    with pytest.raises(ValueError, match=r"^name at least one strategy to compare$"):
+        compare([], market(_Source(calm())), START, END, settings())
+    with pytest.raises(ValueError, match=r"^fixed is named twice; name each strategy once$"):
+        compare([fixed, BuyAndHold(), fixed], market(_Source(calm())), START, END, settings())
+    with pytest.raises(TypeError, match="strategy"):
+        compare(["fixed"], market(_Source(calm())), START, END, settings())  # type: ignore[list-item]
+
+
+def test_compare_checks_its_window_as_backtest_does() -> None:
+    with pytest.raises(ValueError, match=r"^the backtest ends on 2025-06-30, before it starts on"):
+        compare([BuyAndHold()], market(_Source(calm())), END, START, settings())
