@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-09-27 11:05 UTC (**M4 is delivered**: M4b's S5–S8 are merged, deployed and Done, and the epic #86 is closed. Nothing is in flight. **Next: M5, paper trading and the CLI, which starts with a design brainstorm with Shyden.**)
+**Updated:** 2026-09-27 14:35 UTC (**The M5 spec is approved** and its PR is open; epic #120. **Next: the M5a plan (S1–S4), built by extraction and reviewed to zero.**)
 **Local:** `~/Developer/Repos/steadyhand`. `develop` holds the T1 spec and plan, and `main` has no release yet. `t1/training-spec` and `m4/m4b-plan` are merged or superseded and deleted. Start each story's branch from `origin/develop`. Read heads with `git rev-parse`; never retype one.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
@@ -75,6 +75,12 @@
 - **Story scripts** (tools directory): `file_stories.sh`, `merge_story.sh <pr> <first M> <last M> <total> <log> <mutated commit>` (posts the mutation results, checks the mutated tree equals the PR head, merges pinned to it) and `close_story.sh <issue> <pr> <develop run>`.
 - **Tools** (git-ignored, newest copy): `.superpowers/sdd/2026-09-27-m4b-exemption/`. New: `stubgen` keeps a pre-existing class's fields in the red phase (S5's first red run failed 241 unrelated tests without it); `file_stories.sh`; worktrees `wt-red`, `wt-mut`, `wt-replay`.
 
+## M5 paper trading and the CLI (spec approved 2026-09-27, epic #120)
+- **Spec:** `docs/superpowers/specs/2026-09-27-m5-paper-and-cli-design.md`, reviewed to zero on pass 8 and approved by Shyden, including 19 details listed to him item by item. Branch `m5/spec`; the spec PR carries this handover.
+- **Decisions:** one spec, two plans (M5a S1–S4 config and stateless CLI; M5b S5–S8 paper trading); missed days are caught up in order (cap 30, `--catch-up` lifts it); a strategy change needs `paper switch`; state is one snapshot row plus append-only `day_reports`, `audit`, `runs`.
+- **Things the plans must not miss:** `[training]` is parsed by `output.py`, never `config.py` (T1 §5 item 3); `Portfolio.restore` is a new engine constructor (S5); the fetch step of `backtest` becomes public and paper calls it over the whole range from the opening day (the golden invariant paper == backtest depends on it); guides move into the engine wheel (S4); performance budgets are measured in the scratch build, then pinned.
+- **Epic card:** `PVTI_lAHOCQ_jzM4BkhEbzg9CRmw`, In Progress.
+
 ## T1 training foundation (spec approved 2026-09-27, ticket #96)
 - **Spec:** `docs/superpowers/specs/2026-09-27-training-design.md`, approved by Shyden after a section-by-section design and 3 review passes. It records the decisions: any self-hoster in English (with an `en/` folder), three levels plus off, the foundation built before M4b, M3's warnings keyed, `term.*` keys derived by a type walk from the report roots, lessons shipped in both wheels, and an import allowlist as the legal control.
 - **Plan:** `docs/superpowers/plans/2026-09-27-t1-training-foundation.md`, built by extraction and reviewed to zero on pass 2. Every story was built and gated first in a scratch chain (`develop` `acca50e` + the spec, then S1 `0779c10`, S2 `9867efe`, S3 `aae3144`, S4 `1053538`). The plan replays byte-identical from its own text, and 36 mutations (M104–M139) all go red, 35 of them exactly as predicted and M138 by hand. Its scope decisions 1–3 amend the T1 spec: `LessonNotFoundError`, `LESSONS` and `catalogue()` in S4, and the figure walk reading properties and skipping private names.
@@ -101,7 +107,9 @@
 - Brainstormed 2026-09-27: see the T1 section above.
 
 ## Resume steps
-1. M4 is done and nothing is in flight. Start **M5, paper trading and the CLI** (core spec §13 item 5: the state DB, idempotency and atomicity, halts and resume, every CLI command, CLI journeys). It needs a spec first: brainstorm it with Shyden section by section, as M4 and T1 were. M5 must save `Holdings.claims` and `shortfall_since`, render `IncomeReport.claims` under its label, and offer the exemption switch (M4b plan, "Carried forward"); T1's `init` questions and `learn` commands also land in M5 (T1 plan, "Carried forward").
+1. If the M5 spec PR (branch `m5/spec`, `Refs #120`) is not merged yet: read its head with `gh pr view --json headRefOid` into a file, confirm every CI job `success` by name on that SHA, merge with `--squash --match-head-commit`, then check `publish-dev` on the develop run.
+2. Write the **M5a plan** (S1–S4) with `superpowers:writing-plans`, the way M4b's was: copy the newest tools (`.superpowers/sdd/2026-09-27-m4b-exemption/`), build every story in a scratch chain from `origin/develop`, gate each (100% branch, lint, mypy), write the mutations and their predictions first, render the plan from the verified commits, replay it byte-identical, and review it to zero. Then file S1–S4 with acceptance criteria and execute them.
+3. M5b's plan follows M5a's delivery.
 
 ## Research technique
 - **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid scraping. Try the Internet Archive, KSEI, KPEI (idclear) or BPK first. Use idx.co.id only when none has a readable copy, and say so in the research doc.

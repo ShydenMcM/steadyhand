@@ -1,6 +1,6 @@
 # steadyhand M5: Paper trading and the CLI
 
-**Status:** design approved by Shyden in conversation on 2026-09-27, in five sections, after four decisions (§2). The review loop closed on pass 8. The written spec awaits Shyden's review.
+**Status:** design approved by Shyden in conversation on 2026-09-27, in five sections, after four decisions (§2). The review loop closed on pass 8. The written spec was approved by Shyden on 2026-09-27, including the nineteen details the design sections had not shown (listed to him item by item: the `[training]` parser, required keys, commands that need no config, the `training` rewrite, `compare`'s baseline, the CSV columns, `stderr`, the `runs` row, exit codes on a halted account, `paper switch`'s name, typed confirmations, `report --income`'s data, `Portfolio.restore`, stock-keyed maps, the starting-cash note, keys per story, the trigger test, the guides README and the wheel test).
 **Parent spec:** `2026-09-24-steadyhand-core-design.md` (the "core spec"): §5 (the daily run), §9.3 (cache and state), §9.5 (configuration), §9.6 (CLI), §9.7 (audit log), §9.8 (disclaimers), §13 item 5 and §14. M5 also builds what two earlier plans carried forward: the M4b plan (`2026-09-27-m4b-exemption-claim.md`, "Carried forward") and the T1 plan (`2026-09-27-t1-training-foundation.md`, "Carried forward"), whose user-facing contract is T1 spec §6.
 
 ## 1. What M5 delivers
