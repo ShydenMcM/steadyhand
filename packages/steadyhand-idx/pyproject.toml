@@ -25,6 +25,9 @@ dependencies = [
     "yfinance==1.7.0",
 ]
 
+[project.scripts]
+steadyhand-idx = "steadyhand_idx.cli:run"
+
 [project.urls]
 Homepage = "https://github.com/ShydenMcM/steadyhand"
 Issues = "https://github.com/ShydenMcM/steadyhand/issues"

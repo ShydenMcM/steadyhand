@@ -54,7 +54,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
-pythonpath = ["scripts", "tests/meta"]
+pythonpath = ["scripts", "tests/meta", "tests/cli"]
 addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-ra", "-m", "not live and not perf"]
 markers = [
     "live: talks to Yahoo; run by the daily yahoo-shape workflow with -m live, never on a PR",
