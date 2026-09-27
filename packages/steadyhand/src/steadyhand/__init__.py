@@ -41,6 +41,7 @@ from steadyhand.exemption import (
 )
 from steadyhand.income import (
     BASE_GROWTH_CAP,
+    CLAIMS_LABEL,
     GROWTH_YEARS,
     HISTORY_YEARS,
     OPTIMISTIC_GROWTH_CAP,
@@ -191,6 +192,7 @@ __version__: str = version("steadyhand")
 
 __all__ = [
     "BASE_GROWTH_CAP",
+    "CLAIMS_LABEL",
     "CORPORATE_SPLIT_FRACTION_DROPPED",
     "DATA_BAR_MISSING",
     "DATA_BAR_REFUSED",

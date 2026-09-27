@@ -18,6 +18,7 @@ from enum import Enum
 from steadyhand._validate import require_int, require_type
 from steadyhand.corporate import PAY_LAG_TRADING_DAYS, Entitlement
 from steadyhand.engine import DayReport, EngineState
+from steadyhand.exemption import DividendClaim
 from steadyhand.market import MarketRules, add_trading_days
 from steadyhand.metrics import RATIO_PLACES, year_window_start
 from steadyhand.money import Currency, CurrencyMismatchError, Money, Rounding
@@ -27,6 +28,9 @@ from steadyhand.types import CashDividend, CorporateAction, Instrument, Split
 
 PROJECTION_LABEL = "Projection, not a promise"
 """Carried by every projection: it reports years, never a date (core spec §7)."""
+
+CLAIMS_LABEL = "Estimate: assumes the yearly realisation reports are filed"
+"""Carried by the exemption claims: steadyhand cannot see the investor's reports (M4 §6.4)."""
 
 PROJECTION_MONTHS = 600
 """A projection stops after 50 years: a target not met by then is ``NOT_WITHIN``."""
@@ -341,6 +345,13 @@ class IncomeReport:
     growth: DividendGrowth
     projection: Projection
     goal: GoalProgress
+    claims: tuple[DividendClaim, ...]
+    """The open reinvestment-exemption claims (M4 spec §6.5): what is left to reinvest and by
+    when, and what is protected and until when. Empty with the exemption switch off."""
+
+    @property
+    def claims_label(self) -> str:
+        return CLAIMS_LABEL
 
 
 def income_report(
@@ -371,6 +382,7 @@ def income_report(
         growth,
         project(rate, growth, reports[-1].holdings_value, settings, rules),
         goal_progress(settings.goal, received, rate),
+        final.holdings.claims,
     )
 
 

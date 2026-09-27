@@ -16,9 +16,32 @@ from functools import cache
 from pathlib import Path
 
 import pytest
-from record_golden import END, GOLDEN, HISTORY_START, STOCKS, main, record, recorded, run, summary
+from record_golden import (
+    END,
+    EXEMPT_GOLDEN,
+    GOLDEN,
+    HISTORY_START,
+    STOCKS,
+    main,
+    record,
+    record_exempt,
+    recorded,
+    run,
+    run_exempt,
+    summary,
+)
 
-from steadyhand import DATA_BAR_REFUSED, HISTORY_YEARS, IDR, STRATEGIES, Money, years_before
+from steadyhand import (
+    CLAIMS_LABEL,
+    DATA_BAR_REFUSED,
+    EXEMPTION_CLAIM_BROKEN,
+    EXEMPTION_DEADLINE_MISSED,
+    HISTORY_YEARS,
+    IDR,
+    STRATEGIES,
+    Money,
+    years_before,
+)
 from steadyhand_idx import IdxMarketRules
 
 
@@ -35,6 +58,55 @@ def test_buy_and_hold_reproduces_the_stored_results_exactly(tmp_path: Path) -> N
 def test_the_recorder_writes_the_stored_file_byte_for_byte(tmp_path: Path) -> None:
     written = record(tmp_path / "cache", tmp_path / "golden.json")
     assert written.read_bytes() == GOLDEN.read_bytes()
+
+
+def test_the_switch_on_run_reproduces_its_stored_results_exactly(tmp_path: Path) -> None:
+    stored = json.loads(EXEMPT_GOLDEN.read_text(encoding="utf-8"))
+    assert summary(run_exempt(tmp_path)) == stored
+
+
+def test_the_recorder_writes_the_switch_on_file_byte_for_byte(tmp_path: Path) -> None:
+    written = record_exempt(tmp_path / "cache", tmp_path / "exempt.json")
+    assert written.read_bytes() == EXEMPT_GOLDEN.read_bytes()
+
+
+def test_the_switch_on_run_holds_a_claim_of_each_kind_as_worked_by_hand() -> None:
+    stored = json.loads(EXEMPT_GOLDEN.read_text(encoding="utf-8"))
+    # Each [quantity, price, fee, levy, sale tax]: the cost basis is 200 x 34,875 + 11,509 + 2,999
+    # = 6,989,508 and 300 x 30,400 + 15,049 + 3,921 = 9,138,970, together 16,128,478.
+    assert [f[3:8] for f in stored["fills"] if f[1] == "BBCA" and f[2] == "buy"] == [
+        [200, 34_875, 11_509, 2_999, 0],
+        [300, 30_400, 15_049, 3_921, 0],
+    ]
+    until = "2023-12-31"  # a 2021 purchase is protected through its third tax year
+    assert stored["claims"] == [
+        # Reinvested by the deadline: ASII's buy on 2 July 2021 (1,900 x 5,050 = 9,595,000)
+        # covers the four claims paid before it, oldest first: 86,400 (200 BBCA shares x Rp432,
+        # before the split), 139,200 (1,600 ASII x 87) and 140,000 (1,400 UNVR x 100) stay whole.
+        ["BBCA", "2021-04-08", "2021-04-28", 86_400, "2022-03-31", 0, [[86_400, until]]],
+        ["ASII", "2021-05-03", "2021-05-27", 139_200, "2022-03-31", 0, [[139_200, until]]],
+        ["UNVR", "2021-06-08", "2021-06-28", 140_000, "2022-03-31", 0, [[140_000, until]]],
+        # Broken after reinvestment: selling 2,400 of the 2,500 BBCA shares on 2 November
+        # releases 16,128,478 x 2,400 / 2,500 = 15,483,338.88, rounded up to 15,483,339, so
+        # 645,139 stays invested against 869,630 protected. The 224,491 short at the close of
+        # 4 November, the sale's settlement date, breaks from the newest claim, TLKM's
+        # (3,000 x 168.01 = 504,030): 504,030 - 224,491 = 279,539 stays protected.
+        ["TLKM", "2021-06-09", "2021-06-29", 504_030, "2022-03-31", 0, [[279_539, until]]],
+        # Still open at the end: 100 BBCA x 120, with a year to be reinvested.
+        ["BBCA", "2022-03-28", "2022-04-18", 12_000, "2023-03-31", 12_000, []],
+    ]
+    # 10% of 224,491 is 22,449.1, rounded up. Taxed at the deadline: ASII's 3,500 x 45 = 157,500
+    # and BBCA's 100 x 25 = 2,500 were never reinvested, so 15,750 + 250 on 1 April 2022.
+    assert stored["taxes"] == [["2021-11-04", 22_450], ["2022-04-01", 16_000]]
+    assert [note[:2] for note in stored["notes"]] == [
+        ["2021-11-04", EXEMPTION_CLAIM_BROKEN],
+        ["2022-04-01", EXEMPTION_DEADLINE_MISSED],
+        ["2022-04-01", EXEMPTION_DEADLINE_MISSED],
+    ]
+    assert stored["income"]["claims"] == [CLAIMS_LABEL, stored["claims"]]
+    # Tax shows in the month it was booked, not the month its dividend was paid (M4 spec §6.5).
+    taxed = {month[0]: month[2] for month in stored["income"]["received"]["by_month"] if month[2]}
+    assert taxed == {"2021-11-01": 22_450, "2022-04-01": 16_000}
 
 
 def test_the_recorder_takes_no_arguments(capsys: pytest.CaptureFixture[str]) -> None:
