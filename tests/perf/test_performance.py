@@ -86,8 +86,14 @@ class _PlainRules:
             left -= self.is_trading_day(day)
         return day
 
-    def dividend_tax(self, gross: Money, *, reinvested_by_deadline: bool, on: date) -> Money:
+    def dividend_tax(self, gross: Money, *, on: date) -> Money:
         return gross.times(Decimal("0.1"), Rounding.UP)
+
+    def reinvestment_deadline(self, ex_date: date) -> date | None:
+        return None
+
+    def protection_end(self, purchase_day: date) -> date:
+        return purchase_day
 
     def is_trading_day(self, day: date) -> bool:
         return day.weekday() < 5

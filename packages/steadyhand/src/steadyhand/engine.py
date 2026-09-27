@@ -15,7 +15,13 @@ from decimal import Decimal
 
 from steadyhand._validate import require_date, require_int, require_type
 from steadyhand.broker.simulated import FillResult, FillSettings, Opening, SimulatedBroker
-from steadyhand.corporate import PAY_LAG_TRADING_DAYS, Entitlement, Holdings, apply_actions
+from steadyhand.corporate import (
+    PAY_LAG_TRADING_DAYS,
+    Entitlement,
+    Holdings,
+    Payout,
+    apply_actions,
+)
 from steadyhand.market import MarketRules
 from steadyhand.money import Money
 from steadyhand.notes import DATA_BAR_MISSING, Note
@@ -48,6 +54,8 @@ class EngineSettings:
     monthly_contribution: Money | None = None
     """Cash deposited on the first trading day of each month, before the decision."""
     pay_lag_trading_days: int = PAY_LAG_TRADING_DAYS
+    dividend_reinvestment_exemption: bool = False
+    """Claim the reinvestment exemption instead of booking dividend tax at pay (M4 spec §6)."""
 
     def __post_init__(self) -> None:
         require_type(self.fills, FillSettings, "fills")
@@ -58,6 +66,7 @@ class EngineSettings:
                 msg = f"a monthly contribution must be positive, got {self.monthly_contribution}"
                 raise ValueError(msg)
         require_int(self.pay_lag_trading_days, "pay_lag_trading_days", minimum=1)
+        require_type(self.dividend_reinvestment_exemption, bool, "dividend_reinvestment_exemption")
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +143,8 @@ class DayReport:
     unit_price: Decimal
     """The price of one unit at today's close, which a deposit leaves unchanged (M3 spec §6.3)."""
     warnings: tuple[Note, ...]
+    notes: tuple[Note, ...] = ()
+    """The day's exemption-claim events (M4 spec §6.3, §6.4). Empty with the switch off."""
 
 
 def run_day(
@@ -156,7 +167,8 @@ def run_day(
     _validate(inputs, rules)
 
     holdings, newly_excluded = _freeze_excluded(state.holdings, inputs.excluded)
-    corporate = apply_actions(holdings, inputs.actions, day, rules, settings.pay_lag_trading_days)
+    payout = Payout(settings.pay_lag_trading_days, settings.dividend_reinvestment_exemption)
+    corporate = apply_actions(holdings, inputs.actions, day, rules, payout)
     holdings = corporate.holdings
     filled = _fill(holdings, inputs, rules, settings.fills)
     portfolio = filled.portfolio
@@ -194,7 +206,9 @@ def run_day(
         cuts += checked.cuts
         memory = decision.memory
 
-    new_holdings = Holdings(portfolio, queued, holdings.entitlements, holdings.frozen, closes)
+    new_holdings = Holdings(
+        portfolio, queued, holdings.entitlements, holdings.frozen, closes, holdings.claims
+    )
     report = DayReport(
         day=day,
         fills=filled.fills,

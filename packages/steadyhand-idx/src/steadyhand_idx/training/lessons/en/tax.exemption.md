@@ -2,11 +2,11 @@
 id = "tax.exemption"
 title = "The dividend tax exemption"
 summary = "A resident individual's dividend is free of tax if it is reinvested in Indonesia in time and kept invested."
-explains = []
+explains = ["term.claim_to_reinvest", "term.claim_protected"]
 module = "costs-and-tax"
 position = 5
 see_also = ["tax.dividend"]
-sources = ["docs/research/t-tax.md §3", "docs/research/t-tax.md §4", "docs/research/t-tax.md §5"]
+sources = ["docs/research/t-tax.md §3", "docs/research/t-tax.md §4", "docs/research/t-tax.md §5", "docs/superpowers/specs/2026-09-26-m4-income-design.md §6"]
 +++
 
 The 10% dividend tax is not due on a dividend that you invest in Indonesia. The rules, for a
@@ -29,5 +29,15 @@ If you miss a condition, the tax is owed as of the day you received the dividend
 can apply.
 
 steadyhand cannot see your paperwork, or any investment you hold outside it. That is why it books
-the full 10% by default: its income figures can only be too low, never too high. This lesson
-describes the rules; whether they apply to you, and how, is a question for you or a tax adviser.
+the full 10% by default: its income figures can only be too low, never too high.
+
+With the exemption switch on, steadyhand books no tax when a dividend is paid. It opens a claim
+for the dividend instead, and every figure the claim gives is an estimate:
+
+- **To reinvest** is the part of the dividend not yet invested. A dividend whose ex-date is
+  before 17 February 2021, when the rule came into force, gets no claim and is taxed as usual.
+- **Protected** is a part that a purchase has reinvested, with the last day it must stay
+  invested: 31 December of the second year after the purchase.
+
+This lesson describes the rules; whether they apply to you, and how, is a question for you or a
+tax adviser.

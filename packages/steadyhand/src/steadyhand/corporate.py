@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from steadyhand._validate import require_date, require_int, require_type
+from steadyhand.exemption import DividendClaim
 from steadyhand.market import MarketRules, add_trading_days
 from steadyhand.money import CurrencyMismatchError, Money, Rounding
 from steadyhand.notes import CORPORATE_SPLIT_FRACTION_DROPPED, Note
@@ -49,12 +50,26 @@ class Entitlement:
 
 
 @dataclass(frozen=True, slots=True)
+class Payout:
+    """How dividends are paid: trading days from ex-date to pay date, and whether the tax on
+    one that can be exempt waits on a ``DividendClaim`` (M4 spec §6.2) instead of being booked.
+    """
+
+    pay_lag_trading_days: int = PAY_LAG_TRADING_DAYS
+    exemption: bool = False
+
+    def __post_init__(self) -> None:
+        require_int(self.pay_lag_trading_days, "pay_lag_trading_days", minimum=1)
+        require_type(self.exemption, bool, "exemption")
+
+
+@dataclass(frozen=True, slots=True)
 class Holdings:
     """The portfolio and what the engine keeps about its stocks from one day to the next.
 
     ``pending`` holds the orders queued for the next open, ``frozen`` each frozen stock with
     its reason, and ``last_closes`` the last close of each held stock, which values it on a
-    day with no bar.
+    day with no bar. ``claims`` are the open reinvestment-exemption claims (M4 spec §6.2).
     """
 
     portfolio: Portfolio
@@ -62,6 +77,7 @@ class Holdings:
     entitlements: tuple[Entitlement, ...] = ()
     frozen: Mapping[Instrument, str] = field(default_factory=dict)
     last_closes: Mapping[Instrument, Money] = field(default_factory=dict)
+    claims: tuple[DividendClaim, ...] = ()
 
     def __post_init__(self) -> None:
         require_type(self.portfolio, Portfolio, "portfolio")
@@ -69,6 +85,8 @@ class Holdings:
             require_type(order, Order, "pending order")
         for entitlement in self.entitlements:
             require_type(entitlement, Entitlement, "entitlement")
+        for claim in self.claims:
+            require_type(claim, DividendClaim, "claim")
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,10 +107,10 @@ def apply_actions(
     actions: Sequence[CorporateAction],
     day: date,
     rules: MarketRules,
-    pay_lag_trading_days: int = PAY_LAG_TRADING_DAYS,
+    payout: Payout | None = None,
 ) -> CorporateOutcome:
     """Apply *actions*, every one of them with its ex-date on *day*, to *holdings*."""
-    require_int(pay_lag_trading_days, "pay_lag_trading_days", minimum=1)
+    payout = Payout() if payout is None else payout
     for action in actions:
         if action.ex_date != day:
             msg = f"{action.instrument.symbol}: an action dated {action.ex_date} applied on {day}"
@@ -103,8 +121,8 @@ def apply_actions(
             run.split(action)
     for action in actions:
         if isinstance(action, CashDividend):
-            run.entitle(action, add_trading_days(rules, day, pay_lag_trading_days))
-    run.pay(rules)
+            run.entitle(action, add_trading_days(rules, day, payout.pay_lag_trading_days))
+    run.pay(rules, exemption=payout.exemption)
     for action in actions:
         if isinstance(action, OtherAction):
             run.freeze(action)
@@ -121,6 +139,7 @@ class _Actions:
         self._day = day
         self._pending = list(holdings.pending)
         self._entitlements = list(holdings.entitlements)
+        self._claims = list(holdings.claims)
         self._frozen = dict(holdings.frozen)
         self._closes = dict(holdings.last_closes)
         self._cancelled: list[Rejected] = []
@@ -165,15 +184,23 @@ class _Actions:
             self._entitlements.append(entitlement)
             self._entitled.append(entitlement)
 
-    def pay(self, rules: MarketRules) -> None:
+    def pay(self, rules: MarketRules, *, exemption: bool) -> None:
         for entitlement in [e for e in self._entitlements if e.pay_date <= self._day]:
             self._entitlements.remove(entitlement)
             self._portfolio = self._portfolio.credit_dividend(entitlement.gross, self._day)
-            tax = rules.dividend_tax(entitlement.gross, reinvested_by_deadline=False, on=self._day)
+            self._paid.append(entitlement)
+            deadline = rules.reinvestment_deadline(entitlement.ex_date) if exemption else None
+            if deadline is not None and deadline >= self._day:
+                gross = entitlement.gross
+                claim = DividendClaim(
+                    entitlement.instrument, entitlement.ex_date, self._day, gross, deadline, gross
+                )
+                self._claims.append(claim)
+                continue
+            tax = rules.dividend_tax(entitlement.gross, on=self._day)
             if tax.amount > 0:
                 self._portfolio = self._portfolio.charge(MovementKind.TAX, tax, self._day)
                 self._tax += tax
-            self._paid.append(entitlement)
 
     def freeze(self, action: OtherAction) -> None:
         stock = action.instrument
@@ -188,6 +215,7 @@ class _Actions:
             tuple(self._entitlements),
             self._frozen,
             self._closes,
+            tuple(self._claims),
         )
         return CorporateOutcome(
             holdings,

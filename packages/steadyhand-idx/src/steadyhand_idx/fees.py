@@ -8,6 +8,7 @@ always add up to the rounded total and none of them is negative.
 
 from __future__ import annotations
 
+import calendar
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date
@@ -35,6 +36,7 @@ from steadyhand_idx._datafile import (
 FEES_FILE = "fees.toml"
 INCLUDABLE = frozenset({"levy", "commission_vat", "sale_tax"})
 _HUNDRED = Decimal(100)
+_MONTHS = 12
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +83,19 @@ class Percentages:
 
 
 @dataclass(frozen=True, slots=True)
+class Exemption:
+    """The reinvestment exemption's two counts (docs/research/t-tax.md §3).
+
+    A dividend is exempt when it is reinvested by the end of month ``reinvest_by_month`` of the
+    year after it is received, and the investment is held for ``hold_tax_years`` tax years,
+    counting the year it is made.
+    """
+
+    reinvest_by_month: int
+    hold_tax_years: int
+
+
+@dataclass(frozen=True, slots=True)
 class FeeSchedule:
     """The dated cost tables and the broker presets from one ``fees.toml``."""
 
@@ -89,6 +104,7 @@ class FeeSchedule:
     sale_tax: Dated[Decimal]
     stamp_duty: Dated[StampDuty]
     dividend_tax_rate: Dated[Decimal]
+    dividend_exemption: Dated[Exemption | None]
     presets: Mapping[str, BrokerPreset]
 
     def __post_init__(self) -> None:
@@ -103,7 +119,14 @@ class FeeSchedule:
     @property
     def tables(self) -> tuple[Dated[object], ...]:
         """Every dated table, for working out the first day all of them are verified."""
-        return (self.levy, self.vat, self.sale_tax, self.stamp_duty, self.dividend_tax_rate)
+        return (
+            self.levy,
+            self.vat,
+            self.sale_tax,
+            self.stamp_duty,
+            self.dividend_tax_rate,
+            self.dividend_exemption,
+        )
 
     def preset(self, name: str) -> BrokerPreset:
         found = self.presets.get(name)
@@ -145,16 +168,35 @@ class FeeSchedule:
             return Money.zero(IDR)
         return Money(duty.amount, IDR)
 
-    def dividend_tax(self, gross: Money, *, reinvested_by_deadline: bool, on: date) -> Money:
-        """10% of a gross dividend, or nothing when it is reinvested by the deadline.
+    def dividend_tax(self, gross: Money, *, on: date) -> Money:
+        """The full tax on a gross dividend paid on *on*, rounded up to the rupiah.
 
-        M4 replaces the flag with a read of the dividend's exemption claim (spec §6.2).
+        The reinvestment exemption is the engine's claim bookkeeping, not a discount here.
         """
         _require_rupiah(gross, "gross")
         rate = self.dividend_tax_rate.on(on)
-        if reinvested_by_deadline:
-            return Money.zero(gross.currency)
         return gross.times(rate / _HUNDRED, Rounding.UP)
+
+    def reinvestment_deadline(self, ex_date: date) -> date | None:
+        """The last day to reinvest a dividend with *ex_date*, or ``None`` if it cannot be exempt.
+
+        The deadline counts from the ex-date's year, which is never later than the year the
+        dividend is really paid (docs/research/t-pay.md §4), so it errs early.
+        """
+        exemption = self.dividend_exemption.on(ex_date)
+        if exemption is None:
+            return None
+        year = ex_date.year + 1
+        month = exemption.reinvest_by_month
+        return date(year, month, calendar.monthrange(year, month)[1])
+
+    def protection_end(self, purchase_day: date) -> date:
+        """The last day an investment made on *purchase_day* must stay held to keep its claim."""
+        exemption = self.dividend_exemption.on(purchase_day)
+        if exemption is None:
+            msg = f"no reinvestment exemption applies to a purchase on {purchase_day.isoformat()}"
+            raise ValueError(msg)
+        return date(purchase_day.year + exemption.hold_tax_years - 1, 12, 31)
 
     def _check_quote_covers_what_it_includes(self, preset: BrokerPreset) -> None:
         """An all-in quote smaller than the levy and tax it claims to contain is a data error."""
@@ -206,6 +248,22 @@ def _rate(row: Row, where: Where) -> Decimal:
     return get_decimal(row, "rate_percent", where)
 
 
+def _exemption(row: Row, where: Where) -> Exemption | None:
+    counts = {"reinvest_by_month", "hold_tax_years"}
+    present = counts & set(row)
+    if not present:
+        return None
+    if present != counts:
+        missing = sorted(counts - present)[0]
+        msg = f"{where}: an exemption row gives both counts or neither, and lacks {missing!r}"
+        raise DataFileError(msg)
+    month = get_int(row, "reinvest_by_month", where, minimum=1)
+    if month > _MONTHS:
+        msg = f"{where}: reinvest_by_month must be a month from 1 to 12, got {month}"
+        raise DataFileError(msg)
+    return Exemption(month, get_int(row, "hold_tax_years", where, minimum=1))
+
+
 def _stamp_duty(row: Row, where: Where) -> StampDuty:
     return StampDuty(
         amount=get_int(row, "amount_rupiah", where, minimum=1),
@@ -239,7 +297,15 @@ def _preset(name: str, row: object, file: str) -> BrokerPreset:
 
 def parse_fees(document: Row, file: str = FEES_FILE) -> FeeSchedule:
     require_schema(document, file, 1)
-    tables = {"levy", "vat", "sale_tax", "stamp_duty", "dividend_tax", "presets"}
+    tables = {
+        "levy",
+        "vat",
+        "sale_tax",
+        "stamp_duty",
+        "dividend_tax",
+        "dividend_exemption",
+        "presets",
+    }
     only_keys(document, {"schema", *tables}, Where(file, "top level"))
     presets = document.get("presets")
     if not isinstance(presets, dict) or not presets:
@@ -254,6 +320,13 @@ def parse_fees(document: Row, file: str = FEES_FILE) -> FeeSchedule:
             document, "stamp_duty", {"amount_rupiah", "exempt_up_to_rupiah"}, _stamp_duty, file
         ),
         dividend_tax_rate=_dated(document, "dividend_tax", {"rate_percent"}, _rate, file),
+        dividend_exemption=_dated(
+            document,
+            "dividend_exemption",
+            {"reinvest_by_month", "hold_tax_years"},
+            _exemption,
+            file,
+        ),
         presets=MappingProxyType({name: _preset(name, row, file) for name, row in presets.items()}),
     )
 

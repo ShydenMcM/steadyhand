@@ -19,6 +19,7 @@ from steadyhand.engine import (
     EngineState,
     run_day,
 )
+from steadyhand.exemption import DividendClaim
 from steadyhand.money import IDR, Money
 from steadyhand.notes import DATA_BAR_MISSING, Note
 from steadyhand.portfolio import MissingPriceError, MovementKind
@@ -231,6 +232,24 @@ def test_dividends_still_arrive_while_halted() -> None:
     assert report.paid == (due,)
     assert (report.tax, report.fills, report.queued) == (rp(1_250), (), ())
     assert after.holdings.portfolio.cash_balance() == rp(10_000_000 + 12_500 - 1_250)
+    assert (report.notes, after.holdings.claims) == ((), ())
+
+
+def test_with_the_exemption_on_a_dividend_opens_a_claim_the_next_state_keeps() -> None:
+    state, _ = day_one()
+    due = Entitlement(BBCA, D1, D2, rp(12_500))
+    halted = EngineState(
+        Holdings(state.holdings.portfolio, (), (due,)), state.units, Halt(D1, "test"), D1
+    )
+    exempt = EngineSettings(dividend_reinvestment_exemption=True)
+    inputs = DayInputs(D2, steady(), members=MEMBERS)
+    after, report = run_day(halted, inputs, _Untouchable(), rules(), exempt)
+    assert (report.paid, report.tax, report.notes) == ((due,), rp(0), ())
+    assert after.holdings.portfolio.cash_balance() == rp(10_000_000 + 12_500)  # no tax booked
+    claim = DividendClaim(BBCA, D1, D2, rp(12_500), date(2026, 3, 31), rp(12_500))
+    assert after.holdings.claims == (claim,)
+    later, _ = run_day(after, DayInputs(D3, steady(), members=MEMBERS), _Untouchable(), rules())
+    assert later.holdings.claims == (claim,)
 
 
 def test_a_stock_bought_at_todays_open_has_no_entitlement() -> None:
@@ -396,6 +415,10 @@ def test_settings_and_state_check_their_parts() -> None:
         EngineSettings(pay_lag_trading_days=0)
     with pytest.raises(TypeError, match=r"^limits must be a RiskLimits, got NoneType$"):
         EngineSettings(limits=None)  # type: ignore[arg-type]
+    with pytest.raises(
+        TypeError, match=r"^dividend_reinvestment_exemption must be a bool, got str$"
+    ):
+        EngineSettings(dividend_reinvestment_exemption="yes")  # type: ignore[arg-type]
     with pytest.raises(TypeError, match=r"^holdings must be a Holdings, got NoneType$"):
         EngineState(None)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match=r"^halt must be a Halt, got str$"):

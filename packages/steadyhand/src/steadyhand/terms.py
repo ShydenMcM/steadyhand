@@ -24,6 +24,12 @@ TERM_BROKER_FEE = "term.broker_fee"
 TERM_CASH_MOVEMENT = "term.cash_movement"
 """One change to cash: positive when money comes in, negative when it goes out."""
 
+TERM_CLAIM_PROTECTED = "term.claim_protected"
+"""Part of a dividend claim reinvested by a purchase, which must stay invested until a date."""
+
+TERM_CLAIM_TO_REINVEST = "term.claim_to_reinvest"
+"""The part of a dividend claim not yet reinvested, which is taxed if its deadline passes."""
+
 TERM_CONTRIBUTION = "term.contribution"
 """The money added each month in a projection."""
 
@@ -158,6 +164,8 @@ FIGURES: Mapping[str, str] = MappingProxyType(
         "DayReport.unit_price": TERM_UNIT_PRICE,
         "DayReport.unsettled": TERM_UNSETTLED_CASH,
         "DayReport.value": TERM_PORTFOLIO_VALUE,
+        "DividendClaim.gross": TERM_DIVIDEND_GROSS,
+        "DividendClaim.uncovered": TERM_CLAIM_TO_REINVEST,
         "DividendGrowth.portfolio": TERM_DIVIDEND_GROWTH,
         "DividendTotals.gross": TERM_DIVIDEND_GROSS,
         "DividendTotals.net": TERM_DIVIDEND_NET,
@@ -195,6 +203,7 @@ FIGURES: Mapping[str, str] = MappingProxyType(
         "Position.cost_basis": TERM_COST_BASIS,
         "Projection.contribution": TERM_CONTRIBUTION,
         "Projection.target": TERM_INCOME_TARGET,
+        "Protection.amount": TERM_CLAIM_PROTECTED,
         "ReceivedIncome.current_yield": TERM_CURRENT_YIELD,
         "ReceivedIncome.yield_on_cost": TERM_YIELD_ON_COST,
         "RunRate.annual_gross": TERM_RUN_RATE,

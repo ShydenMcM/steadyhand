@@ -134,12 +134,18 @@ class IdxMarketRules:
         lag = self._tables.settlement.on(trade_date)
         return self._tables.calendar.add_trading_days(trade_date, lag)
 
-    def dividend_tax(self, gross: Money, *, reinvested_by_deadline: bool, on: date) -> Money:
+    def dividend_tax(self, gross: Money, *, on: date) -> Money:
         self.require_supported(on)
         self._check_money(gross, "gross")
-        return self._tables.fees.dividend_tax(
-            gross, reinvested_by_deadline=reinvested_by_deadline, on=on
-        )
+        return self._tables.fees.dividend_tax(gross, on=on)
+
+    def reinvestment_deadline(self, ex_date: date) -> date | None:
+        self.require_supported(ex_date)
+        return self._tables.fees.reinvestment_deadline(ex_date)
+
+    def protection_end(self, purchase_day: date) -> date:
+        self.require_supported(purchase_day)
+        return self._tables.fees.protection_end(purchase_day)
 
     def is_trading_day(self, day: date) -> bool:
         self.require_supported(day)

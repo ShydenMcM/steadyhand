@@ -63,7 +63,7 @@ def rules() -> IdxMarketRules:
 class _TaxFree(IdxMarketRules):
     """IDX, but in a market that taxes no dividend, so a projection's arithmetic stays exact."""
 
-    def dividend_tax(self, gross: Money, *, reinvested_by_deadline: bool, on: date) -> Money:
+    def dividend_tax(self, gross: Money, *, on: date) -> Money:
         return Money.zero(gross.currency)
 
 
