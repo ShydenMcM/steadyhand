@@ -7,6 +7,7 @@ failure names what is wrong. Until the real lessons land they run against the fi
 catalogue; then against both packages' lesson folders.
 """
 
+import re
 from collections.abc import Set
 from pathlib import Path, PurePosixPath
 
@@ -57,3 +58,43 @@ def start_here_problems(catalogue: Catalogue, disclaimer: str) -> list[str]:
     if disclaimer not in normalised(first.body):
         return [f"{first.id} does not carry the disclaimer"]
     return []
+
+
+ADVICE_PHRASES = (
+    "you should buy",
+    "you should sell",
+    "we recommend",
+    "recommended stock",
+    "best stock",
+    "guaranteed",
+    "can't lose",
+    "cannot lose",
+)
+"""Advice phrasing, matched in any case (T1 spec §5 item 4). A backstop: the import rule is the
+control."""
+
+TICKER_ADVICE = re.compile(r"\b[A-Z]{4}\b(?:\W+\w+){0,2}?\W+(?i:buy|sell)\b")
+"""A word of exactly four capital letters, followed within three words by buy or sell in any
+case: a real IDX ticker used as advice. Lessons use made-up names such as "Stock A"."""
+
+
+def advice_phrases(text: str) -> list[str]:
+    """Every advice phrase in *text*: across line breaks and quote markers, with a curly
+    apostrophe read as a straight one. HTML comments are scanned too, since the command line
+    prints a lesson's body as it is written."""
+    lines = (line.strip().removeprefix(">") for line in text.replace("\u2019", "'").splitlines())
+    shown = " ".join(" ".join(lines).split())
+    lowered = shown.casefold()
+    found = [phrase for phrase in ADVICE_PHRASES if phrase in lowered]
+    found += [match.group(0) for match in TICKER_ADVICE.finditer(shown)]
+    return found
+
+
+def advice_findings(catalogue: Catalogue) -> list[str]:
+    """Every advice phrase in a lesson's title, summary or body, as ``file: phrase``."""
+    return [
+        f"{lesson.origin}: {phrase}"
+        for lesson in catalogue.lessons()
+        for text in (lesson.title, lesson.summary, lesson.body)
+        for phrase in advice_phrases(text)
+    ]

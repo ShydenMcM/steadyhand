@@ -1,0 +1,251 @@
+"""The legal line is structural (T1 spec §5): the level changes how much is explained, never what
+the tool suggests trading.
+
+1. Only the output layer may import training. No module of either package outside the two
+   training packages imports either of them (the CLI's output layer joins the exceptions in M5).
+   This covers any new module, a strategy or a broker say, without anyone listing it.
+2. Training imports nothing that decides: only the standard library and a short allowlist.
+4. The advice-phrase backstop over every lesson's title, summary and body.
+
+Imports are read from the AST, relative ones resolved, so a comment or a docstring that names a
+module is never a finding.
+"""
+
+import ast
+import shutil
+import sys
+from pathlib import Path
+
+import pytest
+from key_walk import ENGINE, IDX
+from lesson_rules import ADVICE_PHRASES, advice_findings, advice_phrases
+
+from steadyhand.training import Catalogue
+
+TRAINING = ("steadyhand.training", "steadyhand_idx.training")
+ENGINE_TRAINING_MAY_IMPORT = ("steadyhand.notes", "steadyhand.terms", "steadyhand._validate")
+IDX_TRAINING_MAY_IMPORT = (
+    *ENGINE_TRAINING_MAY_IMPORT,
+    "steadyhand.training",
+    "steadyhand_idx.notes",
+)
+FIXTURE = Path(__file__).resolve().parents[1] / "fixtures/training"
+
+type Statement = tuple[str, tuple[str, ...]]
+"""One import statement: the module it names, and for ``from`` imports the names it takes."""
+
+
+def module_name(path: Path) -> str:
+    """The dotted name of a source file of either package."""
+    for package in (ENGINE, IDX):
+        if package in path.parents:
+            parts = path.relative_to(package.parent).with_suffix("").parts
+            return ".".join(parts[:-1] if parts[-1] == "__init__" else parts)
+    msg = f"{path} is not in either package"
+    raise ValueError(msg)
+
+
+def statements(source: str, module: str, *, is_package: bool) -> list[Statement]:
+    """Every import statement in *source*, each module resolved to its absolute name."""
+    package = module if is_package else module.rpartition(".")[0]
+    found: list[Statement] = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            found += [(alias.name, ()) for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if node.level:
+                parent = package.rsplit(".", node.level - 1)[0] if node.level > 1 else package
+                base = f"{parent}.{base}" if base else parent
+            found.append((base, tuple(alias.name for alias in node.names)))
+    return found
+
+
+def _within(name: str, modules: tuple[str, ...]) -> bool:
+    return any(name == module or name.startswith(f"{module}.") for module in modules)
+
+
+def imports_training(statement: Statement) -> bool:
+    base, names = statement
+    return _within(base, TRAINING) or any(_within(f"{base}.{name}", TRAINING) for name in names)
+
+
+def allowed(statement: Statement, allowlist: tuple[str, ...], own: str) -> bool:
+    def ok(name: str) -> bool:
+        return name.split(".", maxsplit=1)[0] in sys.stdlib_module_names or _within(
+            name, (*allowlist, own)
+        )
+
+    base, names = statement
+    return ok(base) or (bool(names) and all(ok(f"{base}.{name}") for name in names))
+
+
+def sources() -> list[tuple[str, bool, str]]:
+    """Every module of both packages: (dotted name, is a package, source)."""
+    paths = sorted([*ENGINE.rglob("*.py"), *IDX.rglob("*.py")])
+    return [(module_name(p), p.name == "__init__.py", p.read_text(encoding="utf-8")) for p in paths]
+
+
+def test_the_module_names_are_resolved_from_paths() -> None:
+    assert module_name(ENGINE / "__init__.py") == "steadyhand"
+    assert module_name(ENGINE / "broker/simulated.py") == "steadyhand.broker.simulated"
+    assert module_name(IDX / "training/__init__.py") == "steadyhand_idx.training"
+    with pytest.raises(ValueError, match="is not in either package"):
+        module_name(Path("/elsewhere/x.py"))
+
+
+def test_the_training_import_detector() -> None:
+    source = (
+        "import steadyhand.training\n"
+        "from steadyhand import training\n"
+        "from steadyhand.training.render import explain\n"
+        "from steadyhand_idx.training import COURSE\n"
+        "import steadyhand.trainingx\n"
+        "from steadyhand import Money\n"
+        '"""import steadyhand.training"""\n'
+    )
+    found = statements(source, "steadyhand.engine", is_package=False)
+    assert [imports_training(statement) for statement in found] == [
+        True,
+        True,
+        True,
+        True,
+        False,
+        False,
+    ]
+
+
+def test_relative_imports_are_resolved() -> None:
+    assert statements("from .training import explain\n", "steadyhand", is_package=True) == [
+        ("steadyhand.training", ("explain",))
+    ]
+    assert statements("from . import training\n", "steadyhand", is_package=True) == [
+        ("steadyhand", ("training",))
+    ]
+    assert statements(
+        "from ..training import x\n", "steadyhand.broker.simulated", is_package=False
+    ) == [("steadyhand.training", ("x",))]
+    assert statements(
+        "from . import catalogue\n", "steadyhand.training.render", is_package=False
+    ) == [("steadyhand.training", ("catalogue",))]
+    assert all(
+        imports_training(s)
+        for s in statements(
+            "from . import training\nfrom .training import e\n", "steadyhand", is_package=True
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    ("line", "ok"),
+    [
+        ("import re", True),
+        ("from __future__ import annotations", True),
+        ("from collections.abc import Iterable", True),
+        ("from steadyhand.notes import Note", True),
+        ("from steadyhand import notes", True),
+        ("from steadyhand._validate import require_type", True),
+        ("from steadyhand.training.catalogue import Catalogue", True),
+        ("from . import catalogue", True),
+        ("from steadyhand.risk import RiskLimits", False),
+        ("from steadyhand import Money", False),
+        ("from steadyhand import notes, risk", False),
+        ("import steadyhand", False),
+        ("import yaml", False),
+        ("from steadyhand_idx.notes import UNIVERSE_SURVIVORSHIP_GAP", False),
+    ],
+)
+def test_the_engine_training_allowlist(line: str, *, ok: bool) -> None:
+    (statement,) = statements(line, "steadyhand.training.render", is_package=False)
+    assert allowed(statement, ENGINE_TRAINING_MAY_IMPORT, "steadyhand.training") is ok
+
+
+@pytest.mark.parametrize(
+    ("line", "ok"),
+    [
+        ("from steadyhand.training import Catalogue", True),
+        ("from steadyhand_idx.notes import UNIVERSE_SURVIVORSHIP_GAP", True),
+        ("from importlib.resources import files", True),
+        ("from steadyhand_idx.universe import Lq45Universe", False),
+        ("from steadyhand_idx import Lq45Universe", False),
+        ("from steadyhand.backtest import backtest", False),
+    ],
+)
+def test_the_idx_training_allowlist(line: str, *, ok: bool) -> None:
+    (statement,) = statements(line, "steadyhand_idx.training", is_package=True)
+    assert allowed(statement, IDX_TRAINING_MAY_IMPORT, "steadyhand_idx.training") is ok
+
+
+def test_only_training_imports_training() -> None:
+    modules = sources()
+    inside = [name for name, _, _ in modules if _within(name, TRAINING)]
+    assert len(modules) >= 40
+    assert {"steadyhand.training", "steadyhand_idx.training"} <= set(inside)
+    found = [
+        f"{name}: {base}"
+        for name, is_package, source in modules
+        if not _within(name, TRAINING)
+        for base, names in statements(source, name, is_package=is_package)
+        if imports_training((base, names))
+    ]
+    assert found == []
+
+
+def test_training_imports_nothing_that_decides() -> None:
+    checked = 0
+    found: list[str] = []
+    for name, is_package, source in sources():
+        for own, allowlist in zip(
+            TRAINING, (ENGINE_TRAINING_MAY_IMPORT, IDX_TRAINING_MAY_IMPORT), strict=True
+        ):
+            if not _within(name, (own,)):
+                continue
+            for statement in statements(source, name, is_package=is_package):
+                checked += 1
+                if not allowed(statement, allowlist, own):
+                    found.append(f"{name}: {statement[0]}")
+    assert checked >= 8, "no training module's imports were read"
+    assert found == []
+
+
+@pytest.mark.parametrize("phrase", ADVICE_PHRASES)
+def test_each_advice_phrase_is_found_in_any_case(phrase: str) -> None:
+    assert advice_phrases(f"Here {phrase.upper()} it is.") == [phrase]
+
+
+@pytest.mark.parametrize(
+    ("text", "found"),
+    [
+        ("BBCA is a buy.", ["BBCA is a buy"]),
+        ("Then TLKM, you sell.", ["TLKM, you sell"]),
+        ("ASII looks cheap, BUY", ["ASII looks cheap, BUY"]),
+        ("UNVR one two three sell", []),
+        ("Stock A is one you might buy.", []),
+        ("The IDX lets you buy in lots.", []),
+        ("BBCAX is a buy.", []),
+        ("bbca is a buy.", []),
+        ("BBCA is a buyer.", []),
+    ],
+)
+def test_a_ticker_followed_by_buy_or_sell_is_found(text: str, found: list[str]) -> None:
+    assert advice_phrases(text) == found
+
+
+def test_a_phrase_is_found_across_lines_quotes_and_curly_apostrophes() -> None:
+    assert advice_phrases("You should\n> buy it.") == ["you should buy"]
+    assert advice_phrases("You can" + chr(0x2019) + "t lose.") == ["can't lose"]
+    assert advice_phrases("<!-- we recommend it -->") == ["we recommend"]
+
+
+def test_the_fixture_lessons_carry_no_advice() -> None:
+    catalogue = Catalogue.load([FIXTURE / "engine/en", FIXTURE / "idx/en"], FIXTURE / "course.toml")
+    assert len(catalogue.lessons()) == 3
+    assert advice_findings(catalogue) == []
+
+
+def test_an_advice_finding_names_the_file_and_the_phrase(tmp_path: Path) -> None:
+    copy = Path(shutil.copytree(FIXTURE, tmp_path / "training"))
+    lesson = copy / "idx/en/fixture.lots.md"
+    lesson.write_text(lesson.read_text(encoding="utf-8") + "\nYou should buy lots.\n", "utf-8")
+    catalogue = Catalogue.load([copy / "engine/en", copy / "idx/en"], copy / "course.toml")
+    assert advice_findings(catalogue) == [f"{lesson}: you should buy"]
