@@ -8,14 +8,15 @@ never a finding.
 """
 
 import re
+from pathlib import Path
 
+import pytest
 from key_walk import (
     ENGINE,
     IDX,
     KEY_MODULES,
     NOTE_MODULES,
-    SAVED_NOTE_READER,
-    SAVED_NOTES,
+    SAVED_NOTE_READERS,
     TERM_MODULE,
     TERM_PREFIX,
     constants_in,
@@ -78,10 +79,13 @@ def test_the_note_detector_leaves_out_only_the_reader_it_is_given() -> None:
     assert note_keys(source, reader="_read") == ["line 4: key is not a constant"]
 
 
-def test_the_snapshot_reader_is_the_one_note_built_from_saved_data() -> None:
-    source = SAVED_NOTES.read_text(encoding="utf-8")
-    assert len([key for key in note_keys(source) if "not a constant" in key]) == 1
-    assert note_keys(source, reader=SAVED_NOTE_READER) == []
+@pytest.mark.parametrize("path", sorted(SAVED_NOTE_READERS), ids=lambda path: path.name)
+def test_each_saved_note_reader_is_its_modules_one_note_built_from_saved_data(path: Path) -> None:
+    names = {name for name, _ in constants_in(NOTE_MODULES)}
+    source = path.read_text(encoding="utf-8")
+    assert len([key for key in note_keys(source) if key not in names]) == 1
+    read = note_keys(source, reader=SAVED_NOTE_READERS[path])
+    assert [key for key in read if key not in names] == []
 
 
 def test_the_literal_detector() -> None:
@@ -128,7 +132,7 @@ def test_every_note_is_built_from_a_note_key_and_every_note_key_is_used() -> Non
     used = [
         key
         for path, source in sources.items()
-        for key in note_keys(source, reader=SAVED_NOTE_READER if path == SAVED_NOTES else None)
+        for key in note_keys(source, reader=SAVED_NOTE_READERS.get(path))
     ]
     assert len(used) >= len(names) >= 6, "no Note(...) call was found in the packages"
     assert any(note_keys(source) for path, source in sources.items() if IDX in path.parents)
