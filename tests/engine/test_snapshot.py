@@ -11,6 +11,7 @@ from hypothesis import strategies as st
 
 from steadyhand import (
     IDR,
+    RISK_HALT_DAILY_LOSS,
     SNAPSHOT_CURRENCIES,
     SNAPSHOT_UPGRADES,
     SNAPSHOT_VERSION,
@@ -71,8 +72,8 @@ POSITIVE = st.integers(1, 10**15).map(rp)
 NOT_NEGATIVE = st.integers(0, 10**15).map(rp)
 RATES = st.decimals(min_value=0, max_value=10**9, allow_nan=False, allow_infinity=False)
 ORDERS = st.builds(Order, INSTRUMENTS, st.sampled_from(Side), st.integers(1, 10**6), DAYS)
-HALTS = st.builds(Halt, DAYS, TEXT)
 NOTES = st.builds(Note, st.from_regex(r"[a-z]+(\.[a-z_]+)+", fullmatch=True), TEXT)
+HALTS = st.builds(Halt, DAYS, NOTES)
 
 
 @st.composite
@@ -214,12 +215,13 @@ def small_state() -> EngineState:
         shortfall_since=D0,
     )
     units = UnitValue(Decimal("10000000"), Decimal("0.9998500"), Decimal("1.000"))
-    halt = Halt(D0, "daily loss limit")
+    halt = Halt(D0, Note(RISK_HALT_DAILY_LOSS, "daily loss limit"))
     return EngineState(holdings, units, halt, D0, {"set": "IDX:BBRI"})
 
 
 SMALL_STATE_JSON = (
-    '{"halt":{"cause":"daily loss limit","day":"2026-01-05"},'
+    '{"halt":{"cause":{"key":"risk.halt.daily_loss","text":"daily loss limit"},'
+    '"day":"2026-01-05"},'
     '"holdings":{"claims":[],"entitlements":[],'
     '"frozen":[[{"currency":"IDR","market":"IDX","symbol":"BBRI"},"excluded: under review"],'
     '[{"currency":"IDR","market":"IDX","symbol":"TLKM"},"excluded: suspended"]],'

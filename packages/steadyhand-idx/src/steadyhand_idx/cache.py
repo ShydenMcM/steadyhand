@@ -7,8 +7,8 @@ so good cached data survives a bad fetch (spec §5 step 1).
 
 ``CachedDataSource`` puts the cache in front of another ``DataSource`` and fetches only the
 ranges it is missing (spec §9.2). A day counts as fetched only once it is over in Jakarta, so
-today's bar is always fetched afresh and never stored here: M5's daily run stores it after it
-passes validation.
+today's bar is always fetched afresh and never stored here; it is stored by the first read
+after the day is over.
 """
 
 from __future__ import annotations

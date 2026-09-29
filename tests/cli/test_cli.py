@@ -11,11 +11,16 @@ from cli_world import Cli, mode, umask
 
 from steadyhand import (
     IDR,
+    RISK_HALT_DAILY_LOSS,
     DataUnavailableError,
     DataValidationError,
+    Halt,
     Instrument,
     InvalidBarError,
+    Note,
     NoTradingDaysError,
+    SnapshotError,
+    SnapshotVersionError,
     UnavailableDaysError,
     UniverseCoverageError,
     UnsupportedDateError,
@@ -32,6 +37,13 @@ from steadyhand_idx.cli import (
 )
 from steadyhand_idx.config import ConfigMissingError
 from steadyhand_idx.output import UnknownNameError
+from steadyhand_idx.paper import (
+    AccountHaltedError,
+    CatchUpError,
+    StaleDataError,
+    StrategyChangedError,
+)
+from steadyhand_idx.state import StateSchemaError
 
 BBCA = Instrument("BBCA", "IDX", IDR)
 
@@ -45,9 +57,15 @@ def test_the_exit_code_table_is_pinned_row_by_row() -> None:
         (UnsupportedDateError, 2),
         (UniverseCoverageError, 2),
         (NoTradingDaysError, 2),
+        (SnapshotVersionError, 2),
+        (StateSchemaError, 2),
+        (CatchUpError, 2),
+        (StrategyChangedError, 2),
         (DataUnavailableError, 3),
         (DataValidationError, 3),
         (InvalidBarError, 3),
+        (StaleDataError, 3),
+        (AccountHaltedError, 3),
     ) == EXIT_CODES
 
 
@@ -63,10 +81,22 @@ def test_the_exit_code_table_is_pinned_row_by_row() -> None:
         (lambda: UnsupportedDateError("x"), 2),
         (lambda: UniverseCoverageError(date(2021, 1, 4), date(2021, 2, 1)), 2),
         (lambda: NoTradingDaysError("x"), 2),
+        (lambda: SnapshotVersionError(2, 1), 2),
+        (lambda: StateSchemaError("x"), 2),
+        (lambda: CatchUpError(31, date(2021, 2, 1)), 2),
+        (lambda: StrategyChangedError("buy-and-hold", "retired"), 2),
         (lambda: DataUnavailableError("x"), 3),
         (lambda: UnavailableDaysError("x", [date(2021, 2, 1)]), 3),
         (lambda: DataValidationError(BBCA, date(2021, 2, 1), "x"), 3),
         (lambda: InvalidBarError("x"), 3),
+        (lambda: StaleDataError(date(2021, 2, 1)), 3),
+        (
+            lambda: AccountHaltedError(
+                Halt(date(2021, 2, 1), Note(RISK_HALT_DAILY_LOSS, "x")), "buy-and-hold"
+            ),
+            3,
+        ),
+        (lambda: SnapshotError("x"), 1),
         (lambda: ConfigRewriteError("x"), 1),
         (lambda: RuntimeError("x"), 1),
         (lambda: KeyError("x"), 1),

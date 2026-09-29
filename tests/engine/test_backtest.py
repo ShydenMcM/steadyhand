@@ -26,7 +26,7 @@ from steadyhand.income import IncomeGoal
 from steadyhand.market import UnsupportedDateError
 from steadyhand.metrics import measure
 from steadyhand.money import IDR, Currency, CurrencyMismatchError, Money
-from steadyhand.notes import DATA_BAR_MISSING, DATA_BAR_REFUSED, Note
+from steadyhand.notes import DATA_BAR_MISSING, DATA_BAR_REFUSED, RISK_HALT_DAILY_LOSS, Note
 from steadyhand.risk import RiskLimits
 from steadyhand.strategies import BuyAndHold, Decision, Memory, Strategy
 from steadyhand.types import Bar, CashDividend, CorporateAction, Instrument
@@ -440,8 +440,8 @@ def test_a_halt_lasts_to_the_end_of_the_run_and_is_recorded() -> None:
     result = run(_Source(fall), strategy=BuyAndHold())
     assert result.run.halt is not None
     assert result.run.halt.day == date(2025, 7, 7)
-    assert result.run.halt.cause == (
-        "daily loss limit: the unit value fell 7.46%, the limit is 5.00%"
+    assert result.run.halt.cause == Note(
+        RISK_HALT_DAILY_LOSS, "daily loss limit: the unit value fell 7.46%, the limit is 5.00%"
     )
     reports = {report.day: report for report in result.run.reports}
     assert reports[date(2025, 7, 7)].halt == result.run.halt

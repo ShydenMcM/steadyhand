@@ -16,8 +16,9 @@ from types import NoneType
 from key_walk import TERM_MODULE, key_constants
 
 from steadyhand import FIGURES, BacktestResult, DayReport, IncomeReport, Money
+from steadyhand_idx.paper import PaperRun
 
-REPORTS: tuple[type, ...] = (DayReport, BacktestResult, IncomeReport)
+REPORTS: tuple[type, ...] = (DayReport, BacktestResult, IncomeReport, PaperRun)
 FIGURE_TYPES = (Money, Decimal)
 
 

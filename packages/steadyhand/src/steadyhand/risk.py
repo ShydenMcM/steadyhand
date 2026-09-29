@@ -15,6 +15,7 @@ from steadyhand._ratio import ratio_down
 from steadyhand._validate import require_date, require_int, require_type
 from steadyhand.market import MarketRules
 from steadyhand.money import Money, Rounding
+from steadyhand.notes import RISK_HALT_DAILY_LOSS, RISK_HALT_DRAWDOWN, Note
 from steadyhand.outcomes import Cut, Rejected
 from steadyhand.types import Instrument, Order, Side
 from steadyhand.view import PortfolioView, Tradable
@@ -58,17 +59,17 @@ class RiskLimits:
 
 @dataclass(frozen=True, slots=True)
 class Halt:
-    """Ordering stopped on ``day``, for ``cause``. In a backtest it lasts to the end of the run."""
+    """Ordering stopped on ``day``, for ``cause``, a note under the key of the limit reached.
+
+    In a backtest it lasts to the end of the run; a paper account keeps it until it is resumed.
+    """
 
     day: date
-    cause: str
+    cause: Note
 
     def __post_init__(self) -> None:
         require_date(self.day, "halt day")
-        require_type(self.cause, str, "cause")
-        if not self.cause.strip():
-            msg = "a halt needs a cause"
-            raise ValueError(msg)
+        require_type(self.cause, Note, "cause")
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,7 +188,7 @@ class RiskManager:
                 cause = (
                     f"daily loss limit: the unit value fell {_percent(fall)}, the limit is {limit}"
                 )
-                return Halt(day, cause)
+                return Halt(day, Note(RISK_HALT_DAILY_LOSS, cause))
         drawdown = 1 - ratio_down(after.price, after.high_water)
         if after.units > 0 and drawdown >= self._limits.max_drawdown:
             limit = _percent(self._limits.max_drawdown)
@@ -195,7 +196,7 @@ class RiskManager:
                 f"drawdown kill switch: the unit value is {_percent(drawdown)} below its "
                 f"high-water mark, the limit is {limit}"
             )
-            return Halt(day, cause)
+            return Halt(day, Note(RISK_HALT_DRAWDOWN, cause))
         return None
 
     def _affordable(

@@ -13,6 +13,7 @@ from steadyhand.backtest import (
     UniverseCoverageError,
     backtest,
     compare,
+    day_inputs,
 )
 from steadyhand.broker import Broker, FillResult, FillSettings, Opening, SimulatedBroker
 from steadyhand.corporate import (
@@ -103,6 +104,8 @@ from steadyhand.notes import (
     EXEMPTION_DEADLINE_MISSED,
     INCOME_GROWTH_SHORT_HISTORY,
     INCOME_PROJECTION_COSTS_IGNORED,
+    RISK_HALT_DAILY_LOSS,
+    RISK_HALT_DRAWDOWN,
     Note,
 )
 from steadyhand.outcomes import Cut, Rejected
@@ -234,6 +237,8 @@ __all__ = [
     "PROJECTION_LABEL",
     "PROJECTION_MONTHS",
     "RATIO_PLACES",
+    "RISK_HALT_DAILY_LOSS",
+    "RISK_HALT_DRAWDOWN",
     "SNAPSHOT_CURRENCIES",
     "SNAPSHOT_UPGRADES",
     "SNAPSHOT_VERSION",
@@ -391,6 +396,7 @@ __all__ = [
     "backtest",
     "compare",
     "cover_claims",
+    "day_inputs",
     "decode_report",
     "decode_state",
     "dividend_growth",

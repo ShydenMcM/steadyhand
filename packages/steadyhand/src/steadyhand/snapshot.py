@@ -266,7 +266,7 @@ def _pairs[V](mapping: Mapping[Instrument, V], encode: Callable[[V], object]) ->
 
 
 def _halt(halt: Halt | None) -> dict[str, object] | None:
-    return None if halt is None else {"day": halt.day.isoformat(), "cause": halt.cause}
+    return None if halt is None else {"day": halt.day.isoformat(), "cause": _note(halt.cause)}
 
 
 def _note(note: Note) -> dict[str, object]:
@@ -428,7 +428,7 @@ def _read_halt(value: object) -> Halt | None:
     if value is None:
         return None
     day, cause = _fields(value, "day", "cause")
-    return Halt(_date(day), _str(cause))
+    return Halt(_date(day), _read_note(cause))
 
 
 def _read_note(value: object) -> Note:

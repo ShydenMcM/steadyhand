@@ -2,7 +2,7 @@
 id = "risk.limits"
 title = "The safety limits steadyhand applies"
 summary = "The limits that cut or stop a strategy's orders, whatever the strategy wants to do."
-explains = []
+explains = ["risk.halt.daily_loss", "risk.halt.drawdown"]
 module = "risk"
 position = 3
 see_also = ["risk.drawdown"]

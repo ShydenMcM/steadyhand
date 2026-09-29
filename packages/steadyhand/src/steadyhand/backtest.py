@@ -172,12 +172,13 @@ def backtest(
 ) -> BacktestResult:
     """Run *strategy* and the baseline from *start* to *end*, both inclusive (M3 spec §7.1)."""
     window = _window(market, start, end, settings)
-    run = _complete(_run(strategy, window, market.rules, settings), market, settings)
+    inputs = _inputs(window)
+    run = _complete(_run(strategy, inputs, market.rules, settings), market, settings)
     baseline = BuyAndHold()
     compared = (
         None
         if strategy.name == baseline.name
-        else _complete(_run(baseline, window, market.rules, settings), market, settings)
+        else _complete(_run(baseline, inputs, market.rules, settings), market, settings)
     )
     warnings = _data_warnings(market, window, start, end)
     return BacktestResult(start, end, run, compared, warnings, _impact(run, compared))
@@ -203,13 +204,31 @@ def compare(
         msg = f"{twice[0]} is named twice; name each strategy once"
         raise ValueError(msg)
     window = _window(market, start, end, settings)
+    inputs = _inputs(window)
     baseline = BuyAndHold()
     everyone = (*strategies, *(() if baseline.name in names else (baseline,)))
     runs = tuple(
-        _complete(_run(strategy, window, market.rules, settings), market, settings)
+        _complete(_run(strategy, inputs, market.rules, settings), market, settings)
         for strategy in everyone
     )
     return Comparison(start, end, runs, _data_warnings(market, window, start, end))
+
+
+def day_inputs(market: Market, start: date, end: date) -> tuple[DayInputs, ...]:
+    """Every trading day's inputs from *start* to *end*, both inclusive, oldest first.
+
+    This is a backtest's fetch step, public so that paper trading builds each day exactly as a
+    backtest over the same range does (M5 spec §6.2). ``refused`` and ``resumed`` depend on the
+    days before the one run, so a caller that runs only the later days still fetches from the
+    first.
+    """
+    require_type(market, Market, "market")
+    require_date(start, "start")
+    require_date(end, "end")
+    if end < start:
+        msg = f"the range ends on {end.isoformat()}, before it starts on {start.isoformat()}"
+        raise ValueError(msg)
+    return _inputs(_fetch(market, _days(market, start, end)))
 
 
 def _window(market: Market, start: date, end: date, settings: BacktestSettings) -> _Window:
@@ -228,6 +247,12 @@ def _window(market: Market, start: date, end: date, settings: BacktestSettings) 
             f"but the market trades in {rules.currency.code}"
         )
         raise ValueError(msg)
+    return _fetch(market, _days(market, start, end))
+
+
+def _days(market: Market, start: date, end: date) -> tuple[date, ...]:
+    """The trading days from *start* to *end*, once the rules and the universe cover them."""
+    rules = market.rules
     rules.require_supported(start)
     first = market.universe.first_day()
     if start < first:
@@ -236,7 +261,7 @@ def _window(market: Market, start: date, end: date, settings: BacktestSettings) 
     if not days:
         msg = f"there is no trading day from {start.isoformat()} to {end.isoformat()}"
         raise NoTradingDaysError(msg)
-    return _fetch(market, days)
+    return days
 
 
 def _complete(run: RunResult, market: Market, settings: BacktestSettings) -> RunResult:
@@ -304,23 +329,35 @@ def _clean_ranges(days: Sequence[date], refused: frozenset[date]) -> Iterator[tu
         yield run[0], run[-1]
 
 
-def _run(
-    strategy: Strategy, window: _Window, rules: MarketRules, settings: BacktestSettings
-) -> RunResult:
-    state = EngineState.opening(settings.capital, window.days[0])
-    reports: list[DayReport] = []
+def _inputs(window: _Window) -> tuple[DayInputs, ...]:
+    """Each day of *window* as the engine takes it (M3 spec §7.1)."""
+    inputs: list[DayInputs] = []
     for day in window.days:
         refused = frozenset(stock for stock, found in window.refused.items() if day in found)
-        inputs = DayInputs(
-            day,
-            window.history,
-            window.actions.get(day, ()),
-            window.members[day],
-            window.excluded[day],
-            refused,
-            _resumed(window, day) - refused,
+        inputs.append(
+            DayInputs(
+                day,
+                window.history,
+                window.actions.get(day, ()),
+                window.members[day],
+                window.excluded[day],
+                refused,
+                _resumed(window, day) - refused,
+            )
         )
-        state, report = run_day(state, inputs, strategy, rules, settings.engine)
+    return tuple(inputs)
+
+
+def _run(
+    strategy: Strategy,
+    inputs: Sequence[DayInputs],
+    rules: MarketRules,
+    settings: BacktestSettings,
+) -> RunResult:
+    state = EngineState.opening(settings.capital, inputs[0].day)
+    reports: list[DayReport] = []
+    for day in inputs:
+        state, report = run_day(state, day, strategy, rules, settings.engine)
         reports.append(report)
     return RunResult(strategy.name, tuple(reports), state, measure(reports, state))
 

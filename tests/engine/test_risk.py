@@ -9,6 +9,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from steadyhand.money import IDR, Money
+from steadyhand.notes import RISK_HALT_DAILY_LOSS, RISK_HALT_DRAWDOWN, Note
 from steadyhand.risk import Halt, RiskLimits, RiskManager, UnitValue
 from steadyhand.types import Instrument, Order, Side
 from steadyhand.view import PortfolioView, Tradable
@@ -180,18 +181,19 @@ def fund(price: str, high_water: str = "1") -> UnitValue:
 
 def test_a_daily_loss_at_the_limit_halts() -> None:
     halt = RiskManager(rules()).halt(fund("1"), fund("0.95"), DAY)
-    assert halt == Halt(DAY, "daily loss limit: the unit value fell 5.00%, the limit is 5.00%")
+    cause = "daily loss limit: the unit value fell 5.00%, the limit is 5.00%"
+    assert halt == Halt(DAY, Note(RISK_HALT_DAILY_LOSS, cause))
     assert RiskManager(rules()).halt(fund("1"), fund("0.9501"), DAY) is None
 
 
 def test_a_drawdown_at_the_kill_switch_halts() -> None:
     manager = RiskManager(rules())
     halt = manager.halt(fund("0.76", "1"), fund("0.75", "1"), DAY)
-    assert halt == Halt(
-        DAY,
+    cause = (
         "drawdown kill switch: the unit value is 25.00% below its high-water mark, "
-        "the limit is 25.00%",
+        "the limit is 25.00%"
     )
+    assert halt == Halt(DAY, Note(RISK_HALT_DRAWDOWN, cause))
     assert manager.halt(fund("0.76", "1"), fund("0.7501", "1"), DAY) is None
 
 
@@ -202,7 +204,7 @@ def test_no_halt_before_there_are_units() -> None:
 
 
 def test_a_halt_needs_a_day_and_a_cause() -> None:
-    with pytest.raises(ValueError, match=r"^a halt needs a cause$"):
-        Halt(DAY, " ")
+    with pytest.raises(TypeError, match=r"^cause must be a Note, got str$"):
+        Halt(DAY, "daily loss limit")  # type: ignore[arg-type]
     with pytest.raises(TypeError, match=r"^halt day must be a date, got str$"):
-        Halt("2025-06-02", "x")  # type: ignore[arg-type]
+        Halt("2025-06-02", Note(RISK_HALT_DAILY_LOSS, "x"))  # type: ignore[arg-type]
