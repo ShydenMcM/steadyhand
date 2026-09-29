@@ -57,6 +57,7 @@ from steadyhand_idx.paths import (
     create_private,
     data_dir,
     make_private_dir,
+    private_file,
     replace_private,
 )
 from steadyhand_idx.reports import (
@@ -267,7 +268,7 @@ def _now() -> datetime:
 @contextmanager
 def open_source(folder: Path) -> Iterator[DataSource]:
     """Yahoo through the bar cache in the data directory, closed when the command ends."""
-    with BarCache(folder / "cache.sqlite") as cache:
+    with BarCache(private_file(folder / "cache.sqlite")) as cache:
         yield CachedDataSource(YahooDataSource(), cache)
 
 

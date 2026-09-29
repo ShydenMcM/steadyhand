@@ -7,7 +7,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from cli_world import Cli
+from cli_world import Cli, mode, umask
 
 from steadyhand import (
     IDR,
@@ -166,3 +166,19 @@ def test_the_real_source_is_yahoo_through_the_cache_in_the_data_directory(
     with open_source(tmp_path) as source:
         assert isinstance(source, CachedDataSource)
     assert (tmp_path / "cache.sqlite").is_file()
+
+
+@pytest.mark.parametrize("value", [0o000, 0o022, 0o277])
+def test_the_bar_cache_is_0600_whatever_the_umask(tmp_path: Path, value: int) -> None:
+    with umask(value), open_source(tmp_path):
+        pass
+    assert mode(tmp_path / "cache.sqlite") == 0o600
+
+
+def test_an_existing_bar_cache_is_made_0600_when_a_command_opens_it(tmp_path: Path) -> None:
+    with open_source(tmp_path):
+        pass
+    (tmp_path / "cache.sqlite").chmod(0o644)
+    with open_source(tmp_path):
+        pass
+    assert mode(tmp_path / "cache.sqlite") == 0o600
