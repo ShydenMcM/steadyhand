@@ -14,6 +14,7 @@ from steadyhand.backtest import (
     backtest,
     compare,
     day_inputs,
+    income_of,
 )
 from steadyhand.broker import Broker, FillResult, FillSettings, Opening, SimulatedBroker
 from steadyhand.corporate import (
@@ -141,7 +142,7 @@ from steadyhand.portfolio import (
     NegativeProceedsError,
     Portfolio,
 )
-from steadyhand.risk import Checked, Halt, RiskLimits, RiskManager, UnitValue
+from steadyhand.risk import Checked, Halt, RiskLimits, RiskManager, UnitValue, percent
 from steadyhand.sizing import CompoundingSizer, Sizer
 from steadyhand.snapshot import (
     SNAPSHOT_CURRENCIES,
@@ -449,9 +450,11 @@ __all__ = [
     "from_json",
     "goal_progress",
     "guide",
+    "income_of",
     "income_report",
     "measure",
     "payment_calendar",
+    "percent",
     "project",
     "received_income",
     "run_day",

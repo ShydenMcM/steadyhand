@@ -37,11 +37,13 @@ from steadyhand import (
     backtest,
     compare,
     guide,
+    income_of,
 )
 from steadyhand_idx import __version__
 from steadyhand_idx._datafile import DataFileError
 from steadyhand_idx.cache import JAKARTA, BarCache, CachedDataSource
 from steadyhand_idx.config import Config, ConfigMissingError, load, starter
+from steadyhand_idx.notes import PAPER_RESUMED, PAPER_STRATEGY_SWITCHED
 from steadyhand_idx.output import (
     LEVELS,
     Page,
@@ -54,13 +56,30 @@ from steadyhand_idx.output import (
 )
 from steadyhand_idx.paper import (
     CATCH_UP_CAP,
+    AccountChangedError,
     AccountHaltedError,
     CatchUpError,
+    HaltCausePresentError,
+    NoAccountError,
+    NoReportError,
     StaleDataError,
     StrategyChangedError,
+    SwitchRefusedError,
+    WrongStrategyError,
+    check_resume,
+    check_switch,
+    resume,
     run_paper,
+    saved_account,
+    saved_report,
+    switch,
 )
-from steadyhand_idx.paper_pages import paper_run_page
+from steadyhand_idx.paper_pages import (
+    day_report_page,
+    income_page,
+    paper_run_page,
+    status_page,
+)
 from steadyhand_idx.paths import (
     APP,
     CONFIG_FILE,
@@ -113,11 +132,17 @@ EXIT_CODES: Final[tuple[tuple[type[Exception], int], ...]] = (
     (StateSchemaError, 2),
     (CatchUpError, 2),
     (StrategyChangedError, 2),
+    (NoAccountError, 2),
+    (NoReportError, 2),
+    (WrongStrategyError, 2),
+    (SwitchRefusedError, 2),
     (DataUnavailableError, 3),
     (DataValidationError, 3),
     (InvalidBarError, 3),
     (StaleDataError, 3),
     (AccountHaltedError, 3),
+    (HaltCausePresentError, 3),
+    (AccountChangedError, 3),
 )
 """Each error a command raises on purpose, and its exit code (core spec §9.6). The first row
 that matches wins. Anything else is unexpected, and exits 1."""
@@ -236,6 +261,21 @@ def _parser(stdout: TextIO) -> argparse.ArgumentParser:
         "--catch-up", action="store_true", help=f"run more than {CATCH_UP_CAP} missed days"
     )
     paper_run.set_defaults(run=_paper_run)
+    status = paper_commands.add_parser("status", help="show the paper account as it stands")
+    status.set_defaults(run=_paper_status)
+    moving = paper_commands.add_parser("switch", help="move the account to the configured strategy")
+    moving.add_argument("strategy", metavar="name")
+    moving.set_defaults(run=_paper_switch)
+
+    report = commands.add_parser("report", help="show a saved day of the paper account")
+    which = report.add_mutually_exclusive_group()
+    which.add_argument("--day", type=_day, help="the day to show, by default the latest")
+    which.add_argument("--income", action="store_true", help="show the income report instead")
+    report.set_defaults(run=_report)
+
+    resuming = commands.add_parser("resume", help="resume ordering after a halt")
+    resuming.add_argument("strategy")
+    resuming.set_defaults(run=_resume)
     return parser
 
 
@@ -427,6 +467,85 @@ def _paper_run(ctx: Context) -> str:
         ctx.say(text)
         raise AccountHaltedError(done.halt, config.strategy)
     return text
+
+
+def _paper_status(ctx: Context) -> str:
+    """The paper account after its last day run (M5 spec §7.1). A halted account exits 0."""
+    config = ctx.config()
+    with StateStore(config.data_dir / STATE_FILE) as store:
+        account = saved_account(store)
+        report = saved_report(store, account.last_day)
+    return render(status_page(account, report), config.training)
+
+
+def _report(ctx: Context) -> str:
+    """A saved day, the latest by default, or with ``--income`` the income report, which reads
+    each holding's corporate actions through the data source (M5 spec §7.2)."""
+    config = ctx.config()
+    with StateStore(config.data_dir / STATE_FILE) as store:
+        account = saved_account(store)
+        if not ctx.args.income:
+            day: date = ctx.args.day or account.last_day
+            return render(day_report_page(saved_report(store, day), account), config.training)
+        reports = store.reports()
+    with ctx.world.source(config.data_dir) as source:
+        market = _market(config, source)
+        income = income_of(reports, account.state, market, config.settings, config.goal)
+    return render(income_page(income), config.training)
+
+
+def _resume(ctx: Context) -> str:
+    """Clear a halt once the operator types ``resume`` (M5 spec §7.3, core spec §6.1)."""
+    config = ctx.config()
+    page = Page()
+    with StateStore(config.data_dir / STATE_FILE) as store:
+        account = saved_account(store)
+        halt = check_resume(account, ctx.args.strategy, config.settings.engine.limits)
+        if halt is None:
+            page.add("The paper account is not halted; there is nothing to resume.")
+            return render(page, config.training)
+        ctx.say(f"The paper account halted on {halt.day.isoformat()}: {halt.cause.text}.\n")
+        _confirm(ctx, "resume", "Type resume to resume ordering: ")
+        resume(store, account, halt, ctx.today(), _user(ctx))
+    page.add(
+        "Resumed. From the next day run, the strategy's orders are placed again.", PAPER_RESUMED
+    )
+    return render(page, config.training)
+
+
+def _paper_switch(ctx: Context) -> str:
+    """Move the account to the strategy the configuration names, once the operator types its
+    name (M5 spec §7.3)."""
+    config = ctx.config()
+    name: str = ctx.args.strategy
+    with StateStore(config.data_dir / STATE_FILE) as store:
+        account = saved_account(store)
+        check_switch(account, name, config.strategy)
+        old = account.strategy
+        ctx.say(
+            f"The paper account runs {old}; steadyhand.toml names {name}.\n"
+            f"Switching keeps the holdings and the cash and clears what {old} remembered; "
+            f"{name} trades from the next day run.\n"
+        )
+        _confirm(ctx, name, f"Type {name} to switch: ")
+        switch(store, account, name, ctx.today(), _user(ctx))
+    page = Page()
+    page.add(f"Switched the paper account to {name}.", PAPER_STRATEGY_SWITCHED)
+    return render(page, config.training)
+
+
+def _confirm(ctx: Context, expected: str, question: str) -> None:
+    """Ask *question*; anything but *expected*, or no answer, changes nothing (M5 spec §7.3)."""
+    answer = ctx.ask(question)
+    if answer != expected:
+        msg = f"you typed {answer!r}, not {expected!r}; nothing was changed"
+        raise UsageError(msg)
+
+
+def _user(ctx: Context) -> str:
+    """Who is running the command, for the audit log (core spec §6.1)."""
+    env = ctx.world.env
+    return env.get("USER") or env.get("LOGNAME") or "unknown"
 
 
 def _strategy(name: str) -> Strategy:

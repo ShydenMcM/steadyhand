@@ -23,6 +23,9 @@ PAPER_ORDER_QUEUED = "paper.order.queued"
 PAPER_ORDER_SKIPPED = "paper.order.skipped"
 """An order the strategy wanted was not placed at all, and why."""
 
+PAPER_RESUMED = "paper.resumed"
+"""The operator resumed ordering after a halt, and who did it (core spec §6.1)."""
+
 PAPER_RUN_STOPPED = "paper.run.stopped"
 """A ``paper run`` stopped on a day whose data could not be trusted; that day was not saved."""
 
@@ -31,3 +34,6 @@ PAPER_SETTING_CHANGED = "paper.setting.changed"
 
 PAPER_SETTING_STARTING_CASH_IGNORED = "paper.setting.starting_cash_ignored"
 """The starting cash changed after the account opened, so the change has no effect."""
+
+PAPER_STRATEGY_SWITCHED = "paper.strategy.switched"
+"""The operator switched the account to the configured strategy, keeping its holdings."""

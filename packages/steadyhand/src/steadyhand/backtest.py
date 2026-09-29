@@ -266,7 +266,9 @@ def _days(market: Market, start: date, end: date) -> tuple[date, ...]:
 
 def _complete(run: RunResult, market: Market, settings: BacktestSettings) -> RunResult:
     """*run*, with its income report when the settings set a goal."""
-    return run if settings.goal is None else _with_income(run, market, settings, settings.goal)
+    if settings.goal is None:
+        return run
+    return replace(run, income=income_of(run.reports, run.final, market, settings, settings.goal))
 
 
 def _data_warnings(market: Market, window: _Window, start: date, end: date) -> tuple[Note, ...]:
@@ -362,26 +364,31 @@ def _run(
     return RunResult(strategy.name, tuple(reports), state, measure(reports, state))
 
 
-def _with_income(
-    run: RunResult, market: Market, settings: BacktestSettings, goal: IncomeGoal
-) -> RunResult:
-    """*run* with its income report, from each final holding's history as the source gives it.
+def income_of(
+    reports: Sequence[DayReport],
+    final: EngineState,
+    market: Market,
+    settings: BacktestSettings,
+    goal: IncomeGoal,
+) -> IncomeReport:
+    """The income report of a run whose day reports, in order, are *reports* and whose state
+    after the last is *final*, from each final holding's history as *market*'s source gives it.
+    A backtest and a paper account's ``report --income`` both build theirs here.
 
-    A source that cannot give it raises, and the backtest stops: an income report is never
-    built on missing history (M4 spec §8).
+    A source that cannot give the history raises, and the caller stops: an income report is
+    never built on missing history (M4 spec §8).
     """
-    as_of = run.reports[-1].day
+    as_of = reports[-1].day
     since = years_before(as_of, HISTORY_YEARS)
     history = {
         position.instrument: tuple(
             market.source.corporate_actions(position.instrument, since, as_of)
         )
-        for position in run.final.holdings.portfolio.positions
+        for position in final.holdings.portfolio.positions
     }
     engine = settings.engine
     plan = IncomeSettings(goal, engine.monthly_contribution, engine.pay_lag_trading_days)
-    income = income_report(run.reports, run.final, history, market.rules, plan)
-    return replace(run, income=income)
+    return income_report(reports, final, history, market.rules, plan)
 
 
 def _impact(run: RunResult, baseline: RunResult | None) -> IncomeImpact | None:

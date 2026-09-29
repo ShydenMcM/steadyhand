@@ -211,6 +211,7 @@ FIGURES: Mapping[str, str] = MappingProxyType(
         "ScenarioProjection.growth": TERM_DIVIDEND_GROWTH,
         "ScenarioProjection.starting_gross": TERM_STARTING_INCOME,
         "ScenarioProjection.years": TERM_YEARS_TO_GOAL,
+        "UnitValue.drawdown": TERM_DRAWDOWN,
         "UnitValue.high_water": TERM_HIGH_WATER,
         "UnitValue.price": TERM_UNIT_PRICE,
         "UnitValue.units": TERM_UNITS,

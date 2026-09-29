@@ -162,10 +162,12 @@ class ConfigMissingError(LookupError):
 @dataclass(frozen=True, slots=True)
 class Config:
     """``steadyhand.toml``, checked. ``settings`` carries the engine settings, the starting cash
-    and the income goal; ``training`` is the ``[training]`` table, unread."""
+    and the income goal, which the file always has and ``goal`` holds as well;
+    ``training`` is the ``[training]`` table, unread."""
 
     path: Path
     settings: BacktestSettings
+    goal: IncomeGoal
     broker_fees: str
     strategy: str
     lq45_members: Path
@@ -209,19 +211,18 @@ def load(path: Path) -> Config:
             tables["tax"], "dividend_reinvestment_exemption", where["tax"]
         ),
     )
+    goal = IncomeGoal(
+        Money(get_int(tables["goal"], "monthly_income_target_idr", where["goal"], minimum=1), IDR)
+    )
     settings = BacktestSettings(
         capital=Money(get_int(account, "starting_cash_idr", where["account"], minimum=1), IDR),
         engine=engine,
-        goal=IncomeGoal(
-            Money(
-                get_int(tables["goal"], "monthly_income_target_idr", where["goal"], minimum=1),
-                IDR,
-            )
-        ),
+        goal=goal,
     )
     return Config(
         path=path,
         settings=settings,
+        goal=goal,
         broker_fees=_choice(
             account, "broker_fees", where["account"], FeeSchedule.shipped().presets
         ),

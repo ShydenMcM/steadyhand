@@ -7,18 +7,23 @@ come from ``day_inputs`` over the whole range from the opening day, so an accoun
 day with its configuration unchanged ends exactly where a backtest over the same days does
 (§6.2). A day that cannot be run safely stops the run with the days before it kept (§6.5).
 
-The CLI calls ``run_paper``; the B+C scheduler will too.
+``resume`` clears a halt and ``switch`` moves the account to another strategy, each saved over
+the account as it was read, so a day another run saves meanwhile is never overwritten.
+
+The CLI calls these; the B+C scheduler will call ``run_paper`` too.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, time, timedelta
+from decimal import Decimal
 from typing import Final
 
 from steadyhand import (
     STRATEGIES,
+    Cut,
     DataUnavailableError,
     DataValidationError,
     DayInputs,
@@ -29,7 +34,10 @@ from steadyhand import (
     Market,
     MarketRules,
     Note,
+    Rejected,
+    RiskLimits,
     day_inputs,
+    percent,
     run_day,
 )
 from steadyhand_idx.cache import JAKARTA
@@ -39,9 +47,11 @@ from steadyhand_idx.notes import (
     PAPER_ORDER_CUT,
     PAPER_ORDER_QUEUED,
     PAPER_ORDER_SKIPPED,
+    PAPER_RESUMED,
     PAPER_RUN_STOPPED,
     PAPER_SETTING_CHANGED,
     PAPER_SETTING_STARTING_CASH_IGNORED,
+    PAPER_STRATEGY_SWITCHED,
 )
 from steadyhand_idx.paths import APP
 from steadyhand_idx.state import Account, AuditLine, Outcome, Run, StateStore
@@ -99,6 +109,71 @@ class AccountHaltedError(RuntimeError):
         )
 
 
+class NoAccountError(ValueError):
+    """No day has been run, so there is no account to show or change. M5 exits 2."""
+
+    def __init__(self) -> None:
+        super().__init__(f"there is no paper account yet; run {APP} paper run first")
+
+
+class NoReportError(ValueError):
+    """``report --day`` named a day with no saved report. M5 exits 2."""
+
+    def __init__(self, day: date, first: date, last: date) -> None:
+        super().__init__(
+            f"there is no report for {day.isoformat()}; the saved days run from "
+            f"{first.isoformat()} to {last.isoformat()}"
+        )
+
+
+class WrongStrategyError(ValueError):
+    """``resume`` named another strategy than the account runs. M5 exits 2."""
+
+    def __init__(self, named: str, saved: str) -> None:
+        super().__init__(
+            f"the paper account runs {saved}, not {named}; to resume it, run: {APP} resume {saved}"
+        )
+
+
+class HaltCausePresentError(RuntimeError):
+    """``resume`` while the unit value is still at or past the drawdown limit (core spec §6.1):
+    ordering would only halt again. M5 exits 3."""
+
+    def __init__(self, drawdown: Decimal, limit: Decimal) -> None:
+        super().__init__(
+            f"the unit value is still {percent(drawdown)} below its high-water mark, at or past "
+            f"the {percent(limit)} drawdown limit; the halt stays until it recovers or you raise "
+            "risk.max_drawdown"
+        )
+
+
+class SwitchRefusedError(ValueError):
+    """``paper switch`` named a strategy the configuration does not, or the one already
+    running. M5 exits 2."""
+
+    @classmethod
+    def not_configured(cls, name: str, configured: str) -> SwitchRefusedError:
+        return cls(
+            f"steadyhand.toml names the strategy {configured}, not {name}; edit [strategy] name "
+            f"first, then run: {APP} paper switch {name}"
+        )
+
+    @classmethod
+    def already(cls, name: str) -> SwitchRefusedError:
+        return cls(f"the paper account already runs {name}; there is nothing to switch")
+
+
+class AccountChangedError(RuntimeError):
+    """Another ``paper run`` saved a day between reading the account and saving the change, so
+    nothing was saved. M5 exits 3."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "another paper run saved a day while you were answering; nothing was changed, run "
+            "the command again"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class PaperRun:
     """What one ``paper run`` did: its target day, the reports of the days it ran, and the
@@ -141,12 +216,11 @@ def settings_of(config: Config) -> dict[str, str]:
     """The settings a day runs with, by configuration key, as the audit log shows them."""
     engine = config.settings.engine
     contribution = engine.monthly_contribution
-    goal = config.settings.goal
     return {
         STARTING_CASH: str(config.settings.capital.amount),
         "account.monthly_contribution_idr": str(0 if contribution is None else contribution.amount),
         "account.broker_fees": config.broker_fees,
-        "goal.monthly_income_target_idr": str(0 if goal is None else goal.monthly_target.amount),
+        "goal.monthly_income_target_idr": str(config.goal.monthly_target.amount),
         "risk.max_weight": str(engine.limits.max_weight),
         "risk.daily_loss_limit": str(engine.limits.daily_loss),
         "risk.max_drawdown": str(engine.limits.max_drawdown),
@@ -242,6 +316,76 @@ def _run_one(
     return report if saved else None
 
 
+def saved_account(store: StateStore) -> Account:
+    """The account, which a command that shows or changes it needs."""
+    account = store.account()
+    if account is None:
+        raise NoAccountError
+    return account
+
+
+def saved_report(store: StateStore, day: date) -> DayReport:
+    """The report saved for *day*, which must be one of the days run."""
+    report = store.report(day)
+    if report is None:
+        days = store.days()
+        raise NoReportError(day, days[0], days[-1])
+    return report
+
+
+def check_resume(account: Account, named: str, limits: RiskLimits) -> Halt | None:
+    """The halt ``resume`` would clear, or ``None`` when nothing is halted. *named* must be the
+    account's strategy, and the drawdown must be back within *limits* (core spec §6.1)."""
+    if named != account.strategy:
+        raise WrongStrategyError(named, account.strategy)
+    halt = account.state.halt
+    if halt is None:
+        return None
+    units = account.state.units
+    if units.drawdown >= limits.max_drawdown:
+        raise HaltCausePresentError(units.drawdown, limits.max_drawdown)
+    return halt
+
+
+def resume(store: StateStore, account: Account, halt: Halt, day: date, user: str) -> None:
+    """Clear *account*'s halt and write who resumed it, dated *day*, unless another run saved a
+    day since *account* was read."""
+    line = Note(
+        PAPER_RESUMED,
+        f"resumed ordering after the halt of {halt.day.isoformat()} ({halt.cause.text}), by {user}",
+    )
+    resumed = replace(account, state=replace(account.state, halt=None))
+    _save_change(store, account, resumed, AuditLine(day, line))
+
+
+def check_switch(account: Account, name: str, configured: str) -> None:
+    """Refuse a switch to anything but the configured strategy, to the one already running, or
+    while the account is halted (M5 spec §7.3)."""
+    if name != configured:
+        raise SwitchRefusedError.not_configured(name, configured)
+    if name == account.strategy:
+        raise SwitchRefusedError.already(name)
+    if account.state.halt is not None:
+        raise AccountHaltedError(account.state.halt, account.strategy)
+
+
+def switch(store: StateStore, account: Account, name: str, day: date, user: str) -> None:
+    """Move *account* to the strategy *name*, keeping its holdings and cash and clearing what
+    the old strategy remembered, and write who switched it, dated *day*."""
+    line = Note(
+        PAPER_STRATEGY_SWITCHED,
+        f"switched the strategy from {account.strategy} to {name}, keeping the holdings and the "
+        f"cash, by {user}",
+    )
+    switched = Account(account.opened_on, name, replace(account.state, memory={}), account.settings)
+    _save_change(store, account, switched, AuditLine(day, line))
+
+
+def _save_change(store: StateStore, before: Account, after: Account, line: AuditLine) -> None:
+    if not store.save(after, after=before.last_day, audit=(line,)):
+        raise AccountChangedError
+
+
 def _require_fresh(inputs: DayInputs, state: EngineState) -> None:
     """Refuse a day on which no stock the universe or the account holds has a bar: the source
     has not published it yet (M5 spec §11, "Yahoo lags the close")."""
@@ -270,6 +414,24 @@ def _changes(before: Mapping[str, str], after: Mapping[str, str], day: date) -> 
     return lines
 
 
+def cut_line(cut: Cut) -> str:
+    """How a cut order is written, in the audit log and in ``report``."""
+    order = cut.order
+    return (
+        f"cut: {order.side.value} {order.instrument.symbol} from {order.quantity} to "
+        f"{cut.quantity} shares: {cut.reason.text}"
+    )
+
+
+def skipped_line(rejected: Rejected) -> str:
+    """How a skipped order is written, in the audit log and in ``report``."""
+    order = rejected.order
+    return (
+        f"skipped: {order.side.value} {order.quantity} {order.instrument.symbol}: "
+        f"{rejected.reason.text}"
+    )
+
+
 def _decisions(report: DayReport) -> list[AuditLine]:
     """The day's decisions (core spec §9.7): orders queued, cut and skipped with their reasons,
     and a halt with its cause."""
@@ -285,26 +447,9 @@ def _decisions(report: DayReport) -> list[AuditLine]:
         )
         for order in report.queued
     ]
+    lines += [AuditLine(day, Note(PAPER_ORDER_CUT, cut_line(cut))) for cut in report.cuts]
     lines += [
-        AuditLine(
-            day,
-            Note(
-                PAPER_ORDER_CUT,
-                f"cut: {cut.order.side.value} {cut.order.instrument.symbol} from "
-                f"{cut.order.quantity} to {cut.quantity} shares: {cut.reason.text}",
-            ),
-        )
-        for cut in report.cuts
-    ]
-    lines += [
-        AuditLine(
-            day,
-            Note(
-                PAPER_ORDER_SKIPPED,
-                f"skipped: {rejected.order.side.value} {rejected.order.quantity} "
-                f"{rejected.order.instrument.symbol}: {rejected.reason.text}",
-            ),
-        )
+        AuditLine(day, Note(PAPER_ORDER_SKIPPED, skipped_line(rejected)))
         for rejected in report.rejected
     ]
     if report.halt is not None:

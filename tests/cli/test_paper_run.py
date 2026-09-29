@@ -9,24 +9,32 @@ import sqlite3
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, replace
-from datetime import UTC, date, datetime, timedelta, timezone
-from functools import cache
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
-from cli_world import GOLDEN_CONFIG, Cli, Result, market_cli, paper_process, recorded_source
+from cli_world import (
+    GOLDEN_CONFIG,
+    at,
+    golden_backtest,
+    opened,
+    paper,
+    paper_process,
+    recorded_source,
+    rules,
+    run_on,
+    tables,
+    trading_days,
+)
 from record_golden import END, START
 
 from steadyhand import (
     RISK_HALT_DAILY_LOSS,
-    BacktestResult,
     Bar,
-    BuyAndHold,
     CorporateAction,
     DataSource,
     Instrument,
     Market,
-    backtest,
     day_inputs,
 )
 from steadyhand_idx.cli import SourceFactory
@@ -40,67 +48,8 @@ from steadyhand_idx.notes import (
     PAPER_SETTING_STARTING_CASH_IGNORED,
 )
 from steadyhand_idx.paper import CATCH_UP_CAP, CLOSE, days_to_run, settings_of, target_day
-from steadyhand_idx.rules import IdxMarketRules
-from steadyhand_idx.state import STATE_FILE, Account, Outcome, StateStore
+from steadyhand_idx.state import STATE_FILE, Account, Outcome
 from steadyhand_idx.universe import Exclusions, Lq45Membership, Lq45Universe
-
-WIB = timezone(timedelta(hours=7))
-
-
-@cache
-def rules() -> IdxMarketRules:
-    return IdxMarketRules()
-
-
-@cache
-def trading_days() -> tuple[date, ...]:
-    """The golden window's trading days, from the IDX calendar."""
-    return days_to_run(START - timedelta(days=1), END, rules())
-
-
-def at(day: date, hour: int = 17, minute: int = 0, second: int = 0) -> datetime:
-    return datetime(day.year, day.month, day.day, hour, minute, second, tzinfo=WIB)
-
-
-def paper(tmp_path: Path, config: str = GOLDEN_CONFIG) -> Cli:
-    return market_cli(tmp_path / "home", config)
-
-
-def run_on(cli: Cli, day: date, *extra: str) -> Result:
-    return replace(cli, now=at(day))("paper", "run", *extra)
-
-
-@contextmanager
-def opened(cli: Cli) -> Iterator[StateStore]:
-    with StateStore(cli.home / STATE_FILE) as store:
-        yield store
-
-
-def tables(cli: Cli) -> dict[str, list[tuple[object, ...]]]:
-    """Every row of the account, the day reports and the audit log, as SQLite holds them."""
-    database = sqlite3.connect(cli.home / STATE_FILE)
-    try:
-        return {
-            table: database.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall()  # noqa: S608
-            for table in ("account", "day_reports", "audit")
-        }
-    finally:
-        database.close()
-
-
-def golden_backtest(cli: Cli, end: date) -> BacktestResult:
-    """``buy-and-hold`` from the golden window's first day to *end*, as ``backtest`` runs it over
-    the same configuration, universe files and recorded data. Without the income goal: its
-    report reads five years before *end* (M4 spec §8), which the recordings do not cover for an
-    early *end*, and it changes neither the states nor the day reports."""
-    config = load(cli.config)
-    universe = Lq45Universe(
-        Lq45Membership.load(config.lq45_members), Exclusions.load(config.exclusions)
-    )
-    with recorded_source(cli.home) as source:
-        market = Market(universe, source, IdxMarketRules(broker_fees=config.broker_fees))
-        return backtest(BuyAndHold(), market, START, end, replace(config.settings, goal=None))
-
 
 # Which day is the target (M5 spec §6.1).
 
@@ -510,8 +459,6 @@ def test_the_settings_a_day_ran_with_are_recorded_by_configuration_key(tmp_path:
         "dividends.pay_lag_trading_days": "14",
         "tax.dividend_reinvestment_exemption": "false",
     }
-    no_goal = replace(config, settings=replace(config.settings, goal=None))
-    assert settings_of(no_goal)["goal.monthly_income_target_idr"] == "0"
 
 
 # Atomicity and concurrency (M5 spec §6.4, §9.2).
