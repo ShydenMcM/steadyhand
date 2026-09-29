@@ -2,6 +2,7 @@
 
 import sqlite3
 from collections.abc import Iterator
+from contextlib import closing
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -84,8 +85,13 @@ def saved_through_d2(store: StateStore) -> None:
     assert store.save(account(D2), after=D1, report=report(D2), audit=(line(D2, "two"),))
 
 
-def raw(path: Path) -> sqlite3.Connection:
-    return sqlite3.connect(path, isolation_level=None)
+def raw(path: Path) -> closing[sqlite3.Connection]:
+    """A second connection to the file, closed when its ``with`` block ends.
+
+    Python 3.13 warns about a connection left for the garbage collector, and ``-W error``
+    fails whichever test is running when it is collected.
+    """
+    return closing(sqlite3.connect(path, isolation_level=None))
 
 
 # The schema.
@@ -96,7 +102,8 @@ def test_a_new_database_reaches_the_current_schema_with_its_tables_and_triggers(
 ) -> None:
     with StateStore(tmp_path / STATE_FILE) as store:
         assert store.schema_version == len(MIGRATIONS) == 1
-    rows = raw(tmp_path / STATE_FILE).execute("SELECT type, name FROM sqlite_master").fetchall()
+    with raw(tmp_path / STATE_FILE) as database:
+        rows = database.execute("SELECT type, name FROM sqlite_master").fetchall()
     assert {name for kind, name in rows if kind == "table"} == {
         "account",
         "day_reports",
@@ -124,7 +131,8 @@ def test_a_database_from_a_newer_steadyhand_idx_is_refused_and_left_as_it_was(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / STATE_FILE
-    raw(path).execute("PRAGMA user_version = 2")
+    with raw(path) as database:
+        database.execute("PRAGMA user_version = 2")
     with pytest.raises(
         StateSchemaError,
         match=(
@@ -133,9 +141,9 @@ def test_a_database_from_a_newer_steadyhand_idx_is_refused_and_left_as_it_was(
         ),
     ):
         StateStore(path)
-    database = raw(path)
-    assert database.execute("PRAGMA user_version").fetchone() == (2,)
-    assert database.execute("SELECT name FROM sqlite_master").fetchall() == []
+    with raw(path) as database:
+        assert database.execute("PRAGMA user_version").fetchone() == (2,)
+        assert database.execute("SELECT name FROM sqlite_master").fetchall() == []
 
 
 @pytest.mark.parametrize("value", [0o000, 0o022, 0o277])
@@ -152,8 +160,11 @@ def test_a_second_run_waits_up_to_the_busy_timeout(store: StateStore) -> None:
 
 def test_the_account_table_holds_one_row(store: StateStore, tmp_path: Path) -> None:
     saved_through_d2(store)
-    with pytest.raises(sqlite3.IntegrityError, match="CHECK constraint failed"):
-        raw(tmp_path / STATE_FILE).execute(
+    with (
+        raw(tmp_path / STATE_FILE) as database,
+        pytest.raises(sqlite3.IntegrityError, match="CHECK constraint failed"),
+    ):
+        database.execute(
             "INSERT INTO account VALUES (2, '2026-01-05', 'x', '{}', '2026-01-05', '{}')"
         )
 
@@ -207,19 +218,19 @@ def test_a_day_whose_report_cannot_be_written_leaves_everything_as_it_was(
     store: StateStore, tmp_path: Path
 ) -> None:
     saved_through_d2(store)
-    database = raw(tmp_path / STATE_FILE)
-    database.execute(
-        "CREATE TRIGGER refuse BEFORE INSERT ON day_reports "
-        "BEGIN SELECT RAISE(ABORT, 'refused by the test'); END"
-    )
-    with pytest.raises(sqlite3.IntegrityError, match="refused by the test"):
-        store.save(account(D3), after=D2, report=report(D3), audit=(line(D3, "three"),))
-    assert store.account() == account(D2)
-    assert store.days() == (D1, D2)
-    assert store.audit() == (line(D1, "one"), line(D2, "two"))
-    database.execute("DROP TRIGGER refuse")
-    assert store.save(account(D3), after=D2, report=report(D3), audit=(line(D3, "three"),))
-    assert store.days() == (D1, D2, D3)
+    with raw(tmp_path / STATE_FILE) as database:
+        database.execute(
+            "CREATE TRIGGER refuse BEFORE INSERT ON day_reports "
+            "BEGIN SELECT RAISE(ABORT, 'refused by the test'); END"
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="refused by the test"):
+            store.save(account(D3), after=D2, report=report(D3), audit=(line(D3, "three"),))
+        assert store.account() == account(D2)
+        assert store.days() == (D1, D2)
+        assert store.audit() == (line(D1, "one"), line(D2, "two"))
+        database.execute("DROP TRIGGER refuse")
+        assert store.save(account(D3), after=D2, report=report(D3), audit=(line(D3, "three"),))
+        assert store.days() == (D1, D2, D3)
 
 
 @pytest.mark.parametrize(
@@ -237,8 +248,11 @@ def test_the_logs_are_append_only(store: StateStore, tmp_path: Path, statement: 
     saved_through_d2(store)
     store.finish(Run(datetime(2026, 1, 6, 10, tzinfo=UTC), D2, (D1, D2), Outcome.RAN))
     table = statement.split()[1 if statement.startswith("UPDATE") else 2]
-    with pytest.raises(sqlite3.IntegrityError, match=f"^{table} is append-only$"):
-        raw(tmp_path / STATE_FILE).execute(statement)
+    with (
+        raw(tmp_path / STATE_FILE) as database,
+        pytest.raises(sqlite3.IntegrityError, match=f"^{table} is append-only$"),
+    ):
+        database.execute(statement)
     assert (len(store.days()), len(store.audit()), len(store.runs())) == (2, 2, 1)
 
 
@@ -327,6 +341,7 @@ def test_saved_rows_that_cannot_be_read_are_refused(
     store: StateStore, tmp_path: Path, statement: str, read: str, message: str
 ) -> None:
     saved_through_d2(store)
-    raw(tmp_path / STATE_FILE).execute(statement)
+    with raw(tmp_path / STATE_FILE) as database:
+        database.execute(statement)
     with pytest.raises(ValueError, match=message):
         getattr(store, read)()
