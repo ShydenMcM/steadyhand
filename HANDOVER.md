@@ -127,8 +127,8 @@
 - Brainstormed 2026-09-27: see the T1 section above.
 
 ## Resume steps
-0. **Task 0 of the M5b plan.** On `m5/m5b-plan` (this handover and the plan): open the PR (`Refs #120`), merge it when green as the plan's **Merging a story** says, and check `publish-dev`. Then Task 0 Step 1: file S5–S9 as issues whose bodies are each task's acceptance criteria, add each to board 1, Status Todo, and read each card back through its `PVTI_` node.
-1. **Execute Tasks 1–5** with `apply_task.py <plan> <tree> <task> red|green` (tools directory), as M5a was: each story's red count must match, its tree byte-identical to the scratch commit, its gate green, its mutations caught on the real commit, then merge and `publish-dev`. After Task 5, move #120 to Done.
+0. **Read `.superpowers/sdd/2026-09-29-m5b-paper/PROGRESS.md` first** ("Still to do", step 0): it holds the plan PR's state and head SHA file. Task 0 is done apart from merging: the plan PR is #134 (`m5/m5b-plan`), and the stories are **already filed**, S5 #135, S6 #136, S7 #137, S8 #138, S9 #139, each on board 1 as Todo. Never file them again. Merge #134 when green, as the plan's **Merging a story** says, and check `publish-dev`.
+1. **Execute Tasks 1–5** (#135–#139) with `apply_task.py <plan> <tree> <task> red|green` (tools directory), as M5a was: each story's red count must match, its tree byte-identical to the scratch commit, its gate green, its mutations caught on the real commit, then merge (`merge_story.sh`), `publish-dev`, and close (`close_story.sh`). After Task 5, move #120 to Done.
 
 ## Research technique
 - **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid scraping. Try the Internet Archive, KSEI, KPEI (idclear) or BPK first. Use idx.co.id only when none has a readable copy, and say so in the research doc.
