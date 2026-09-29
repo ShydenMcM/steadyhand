@@ -118,6 +118,21 @@ from steadyhand.portfolio import (
 )
 from steadyhand.risk import Checked, Halt, RiskLimits, RiskManager, UnitValue
 from steadyhand.sizing import CompoundingSizer, Sizer
+from steadyhand.snapshot import (
+    SNAPSHOT_CURRENCIES,
+    SNAPSHOT_UPGRADES,
+    SNAPSHOT_VERSION,
+    SnapshotError,
+    SnapshotUpgrade,
+    SnapshotVersionError,
+    decode_report,
+    decode_state,
+    encode_report,
+    encode_state,
+    from_json,
+    to_json,
+    upgrade_snapshot,
+)
 from steadyhand.strategies import (
     GUIDES,
     STRATEGIES,
@@ -219,6 +234,9 @@ __all__ = [
     "PROJECTION_LABEL",
     "PROJECTION_MONTHS",
     "RATIO_PLACES",
+    "SNAPSHOT_CURRENCIES",
+    "SNAPSHOT_UPGRADES",
+    "SNAPSHOT_VERSION",
     "STRATEGIES",
     "TERM_ANNUAL_RETURN",
     "TERM_BROKER_FEE",
@@ -355,6 +373,9 @@ __all__ = [
     "Side",
     "SimulatedBroker",
     "Sizer",
+    "SnapshotError",
+    "SnapshotUpgrade",
+    "SnapshotVersionError",
     "Split",
     "Strategy",
     "Tradable",
@@ -370,7 +391,12 @@ __all__ = [
     "backtest",
     "compare",
     "cover_claims",
+    "decode_report",
+    "decode_state",
     "dividend_growth",
+    "encode_report",
+    "encode_state",
+    "from_json",
     "goal_progress",
     "guide",
     "income_report",
@@ -381,6 +407,8 @@ __all__ = [
     "run_day",
     "run_rate",
     "settle_claims",
+    "to_json",
+    "upgrade_snapshot",
     "year_window_start",
     "years_before",
 ]
