@@ -1,28 +1,23 @@
 """The data directory and the private files in it (M5 spec §4.1)."""
 
-import os
-import stat
-from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager
 from pathlib import Path
 
 import pytest
+from cli_world import mode, umask
 
-from steadyhand_idx.paths import create_private, data_dir, make_private_dir, replace_private
+from steadyhand_idx.paths import (
+    create_private,
+    data_dir,
+    make_private_dir,
+    private_file,
+    replace_private,
+)
 
 
-def mode(path: Path) -> int:
-    return stat.S_IMODE(path.stat().st_mode)
-
-
-@contextmanager
-def strict_umask() -> Iterator[None]:
+def strict_umask() -> AbstractContextManager[None]:
     """A umask that strips the owner's write bit, so a mode that is only inherited shows."""
-    old = os.umask(0o277)
-    try:
-        yield
-    finally:
-        os.umask(old)
+    return umask(0o277)
 
 
 def test_the_option_comes_first() -> None:
@@ -123,3 +118,21 @@ def test_a_failed_replace_keeps_the_old_file_and_leaves_nothing_behind(tmp_path:
         replace_private(target, f"new {unencodable}\n")
     assert target.read_text(encoding="utf-8") == "old\n"
     assert sorted(path.name for path in tmp_path.iterdir()) == ["report.md"]
+
+
+@pytest.mark.parametrize("value", [0o000, 0o022, 0o277])
+def test_a_private_file_is_created_empty_and_0600_whatever_the_umask(
+    tmp_path: Path, value: int
+) -> None:
+    path = tmp_path / "state.sqlite"
+    with umask(value):
+        assert private_file(path) == path
+    assert (mode(path), path.read_bytes()) == (0o600, b"")
+
+
+def test_an_existing_file_is_made_0600_and_keeps_its_contents(tmp_path: Path) -> None:
+    path = tmp_path / "cache.sqlite"
+    path.write_bytes(b"kept")
+    path.chmod(0o644)
+    private_file(path)
+    assert (mode(path), path.read_bytes()) == (0o600, b"kept")

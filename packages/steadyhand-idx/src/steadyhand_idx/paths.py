@@ -57,6 +57,19 @@ def create_private(path: Path, text: str) -> None:
         file.write(text)
 
 
+def private_file(path: Path) -> Path:
+    """*path*, created empty and ``0600`` if it is missing, and made ``0600`` if it is not.
+
+    For a file another library then opens and writes, such as an SQLite database, which would
+    otherwise be created with the umask's mode.
+    """
+    try:
+        create_private(path, "")
+    except FileExistsError:
+        path.chmod(FILE_MODE)
+    return path
+
+
 def replace_private(path: Path, text: str) -> None:
     """Write *text* to *path*, ``0600``, in one step: a reader sees the old file or the new one,
     never half of either."""

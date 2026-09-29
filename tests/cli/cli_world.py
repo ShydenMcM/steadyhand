@@ -5,6 +5,7 @@ fixed clock and a data source."""
 
 import io
 import os
+import stat
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -24,6 +25,21 @@ from steadyhand_idx.yahoo import YahooHistory
 
 NOW = datetime(2026, 9, 27, 18, 0, tzinfo=UTC)
 """18:00 UTC is 01:00 on 28 September in Jakarta, so 'today' is the Jakarta date."""
+
+
+def mode(path: Path) -> int:
+    """The permission bits of *path*."""
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+@contextmanager
+def umask(value: int) -> Iterator[None]:
+    """The process's umask set to *value* while the block runs."""
+    old = os.umask(value)
+    try:
+        yield
+    finally:
+        os.umask(old)
 
 
 @contextmanager
