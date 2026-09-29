@@ -14,6 +14,11 @@ NOTE_MODULES = (ENGINE / "notes.py", IDX / "notes.py")
 TERM_MODULE = ENGINE / "terms.py"
 KEY_MODULES = (*NOTE_MODULES, TERM_MODULE)
 TERM_PREFIX = "term."
+SAVED_NOTES = ENGINE / "snapshot.py"
+SAVED_NOTE_READER = "_read_note"
+"""The one function allowed to build a ``Note`` from a key that is not a constant: the snapshot
+reader, which rebuilds a saved note exactly as it was written (M5 spec §6.3). The note was built
+from a constant when it was made; read back, its key is data, and it cannot drift."""
 
 
 def key_constants(source: str) -> list[tuple[str, str]]:
@@ -33,11 +38,21 @@ def key_constants(source: str) -> list[tuple[str, str]]:
     return found
 
 
-def note_keys(source: str) -> list[str]:
-    """How each ``Note(...)`` call in *source* names its key: a constant's name, or a finding."""
+def note_keys(source: str, *, reader: str | None = None) -> list[str]:
+    """How each ``Note(...)`` call in *source* names its key: a constant's name, or a finding.
+
+    Calls inside the function named *reader* are left out: pass it only for the snapshot module.
+    """
+    tree = ast.parse(source)
+    skipped = {
+        id(inner)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == reader
+        for inner in ast.walk(node)
+    }
     found: list[str] = []
-    for node in ast.walk(ast.parse(source)):
-        if not isinstance(node, ast.Call) or _called(node.func) != "Note":
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or _called(node.func) != "Note" or id(node) in skipped:
             continue
         keywords = [keyword.value for keyword in node.keywords if keyword.arg == "key"]
         key = node.args[0] if node.args else next(iter(keywords), None)

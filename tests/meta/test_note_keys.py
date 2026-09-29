@@ -14,6 +14,8 @@ from key_walk import (
     IDX,
     KEY_MODULES,
     NOTE_MODULES,
+    SAVED_NOTE_READER,
+    SAVED_NOTES,
     TERM_MODULE,
     TERM_PREFIX,
     constants_in,
@@ -62,6 +64,26 @@ def test_the_note_detector() -> None:
     ]
 
 
+def test_the_note_detector_leaves_out_only_the_reader_it_is_given() -> None:
+    source = (
+        "def _read(saved):\n"
+        "    return Note(str(saved), 't')\n"
+        "def other(saved):\n"
+        "    return Note(str(saved), 't')\n"
+    )
+    assert note_keys(source) == [
+        "line 2: key is not a constant",
+        "line 4: key is not a constant",
+    ]
+    assert note_keys(source, reader="_read") == ["line 4: key is not a constant"]
+
+
+def test_the_snapshot_reader_is_the_one_note_built_from_saved_data() -> None:
+    source = SAVED_NOTES.read_text(encoding="utf-8")
+    assert len([key for key in note_keys(source) if "not a constant" in key]) == 1
+    assert note_keys(source, reader=SAVED_NOTE_READER) == []
+
+
 def test_the_literal_detector() -> None:
     source = '"""Mentions income.x in passing."""\nK = "income.x"\nNote("income.y", "t")\n'
     assert {"income.x", "income.y"} <= set(string_literals(source))
@@ -103,7 +125,11 @@ def test_no_key_is_defined_twice() -> None:
 def test_every_note_is_built_from_a_note_key_and_every_note_key_is_used() -> None:
     names = {name for name, _ in constants_in(NOTE_MODULES)}
     sources = package_sources()
-    used = [key for source in sources.values() for key in note_keys(source)]
+    used = [
+        key
+        for path, source in sources.items()
+        for key in note_keys(source, reader=SAVED_NOTE_READER if path == SAVED_NOTES else None)
+    ]
     assert len(used) >= len(names) >= 6, "no Note(...) call was found in the packages"
     assert any(note_keys(source) for path, source in sources.items() if IDX in path.parents)
     assert sorted(set(used) - names) == []
