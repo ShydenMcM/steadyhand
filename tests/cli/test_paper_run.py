@@ -7,7 +7,7 @@ state database in a temporary data directory, at a fixed time in Jakarta.
 import multiprocessing
 import sqlite3
 from collections.abc import Callable, Iterator, Sequence
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta, timezone
 from functools import cache
@@ -521,17 +521,16 @@ def test_a_day_that_fails_to_save_leaves_the_account_at_the_day_before(tmp_path:
     cli = paper(tmp_path)
     run_on(cli, START)
     before = tables(cli)
-    database = sqlite3.connect(cli.home / STATE_FILE, isolation_level=None)
-    database.execute(
-        "CREATE TRIGGER refuse BEFORE INSERT ON day_reports "
-        "BEGIN SELECT RAISE(ABORT, 'refused by the test'); END"
-    )
-    failed = run_on(cli, trading_days()[1])
-    assert failed.code == 1
-    assert failed.err.startswith("steadyhand-idx: refused by the test\n")
-    assert tables(cli) == before
-    database.execute("DROP TRIGGER refuse")
-    database.close()
+    with closing(sqlite3.connect(cli.home / STATE_FILE, isolation_level=None)) as database:
+        database.execute(
+            "CREATE TRIGGER refuse BEFORE INSERT ON day_reports "
+            "BEGIN SELECT RAISE(ABORT, 'refused by the test'); END"
+        )
+        failed = run_on(cli, trading_days()[1])
+        assert failed.code == 1
+        assert failed.err.startswith("steadyhand-idx: refused by the test\n")
+        assert tables(cli) == before
+        database.execute("DROP TRIGGER refuse")
     assert run_on(cli, trading_days()[1]).code == 0
     with opened(cli) as store:
         assert store.days() == trading_days()[:2]
