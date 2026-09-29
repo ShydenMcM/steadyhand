@@ -23,10 +23,16 @@ from steadyhand.engine import (
 from steadyhand.exemption import DividendClaim, Protection
 from steadyhand.money import IDR, Money
 from steadyhand.notes import (
+    CORPORATE_SPLIT_ORDER_CANCELLED,
     DATA_BAR_MISSING,
     EXEMPTION_CLAIM_BROKEN,
     EXEMPTION_DEADLINE_MISSED,
     RISK_HALT_DAILY_LOSS,
+    TRADE_EXCLUDED,
+    TRADE_FROZEN,
+    TRADE_NO_BAR,
+    TRADE_NOT_IN_UNIVERSE,
+    TRADE_REFUSED,
     Note,
 )
 from steadyhand.portfolio import MissingPriceError, MovementKind
@@ -349,7 +355,8 @@ def test_a_split_cancels_pending_orders_and_rescales_the_last_close() -> None:
     )
     inputs = DayInputs(D3, history, actions=(Split(BBCA, D3, 1, 5),), members=MEMBERS)
     after, report = run_day(state, inputs, BuyAndHold(), rules(), half())
-    assert (report.rejected[0].order, report.rejected[0].reason) == (pending, "split on ex-date")
+    cancelled = Note(CORPORATE_SPLIT_ORDER_CANCELLED, "split on ex-date")
+    assert (report.rejected[0].order, report.rejected[0].reason) == (pending, cancelled)
     assert after.holdings.last_closes[BBCA] == rp(1_820)
     assert report.holdings_value == rp(2_500 * 1_820 + 1_200 * 4_050)
 
@@ -370,7 +377,7 @@ def test_a_held_stock_without_a_bar_is_valued_at_its_last_close_and_not_sold() -
     )
     assert report.holdings_value == rp(500 * 9_100 + 1_200 * 4_050)
     assert [(r.order.side, r.reason) for r in report.rejected] == [
-        (Side.SELL, "no bar on 2025-06-04")
+        (Side.SELL, Note(TRADE_NO_BAR, "no bar on 2025-06-04"))
     ]
 
 
@@ -381,7 +388,7 @@ def test_a_held_stock_that_becomes_excluded_is_frozen_and_not_sold() -> None:
     assert report.frozen == ((BBCA, "excluded: Special Monitoring Board"),)
     assert after.holdings.frozen == {BBCA: "excluded: Special Monitoring Board"}
     assert [(r.order.instrument, r.reason) for r in report.rejected] == [
-        (BBCA, "frozen: excluded: Special Monitoring Board")
+        (BBCA, Note(TRADE_FROZEN, "frozen: excluded: Special Monitoring Board"))
     ]
     assert [o.instrument for o in report.queued] == [BBRI]
 
@@ -401,7 +408,7 @@ def test_an_exclusion_freezes_only_a_held_stock_and_only_once() -> None:
     inputs = DayInputs(D1, steady(), members=MEMBERS, excluded={BBRI: "board"})
     after, report = run_day(fresh, inputs, _Fixed({BBRI: Decimal("0.1")}), rules(), half())
     assert (report.frozen, after.holdings.frozen) == ((), {})
-    assert [r.reason for r in report.rejected] == ["excluded: board"]
+    assert [r.reason for r in report.rejected] == [Note(TRADE_EXCLUDED, "excluded: board")]
 
 
 def test_a_member_without_a_bar_is_not_bought_and_is_warned_about() -> None:
@@ -431,7 +438,7 @@ def test_a_refused_stock_is_neither_bought_nor_sold() -> None:
     inputs = DayInputs(D3, steady(), members=MEMBERS, refused=frozenset({BBRI}))
     _, report = run_day(state, inputs, _Fixed({}), rules(), half())
     assert [(r.order.instrument, r.reason) for r in report.rejected] == [
-        (BBRI, "the data source refused 2025-06-04")
+        (BBRI, Note(TRADE_REFUSED, "the data source refused 2025-06-04"))
     ]
 
 
@@ -440,7 +447,7 @@ def test_a_weight_on_a_stock_outside_the_universe_is_dropped_with_its_reason() -
     inputs = DayInputs(D1, steady(), members=frozenset({BBRI}))
     _, report = run_day(state, inputs, _Fixed({BBCA: Decimal("0.3")}), rules(), half())
     assert [(r.order.instrument, r.reason) for r in report.rejected] == [
-        (BBCA, "not in the universe on 2025-06-02")
+        (BBCA, Note(TRADE_NOT_IN_UNIVERSE, "not in the universe on 2025-06-02"))
     ]
 
 

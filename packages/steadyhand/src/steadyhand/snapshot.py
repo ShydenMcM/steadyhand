@@ -106,9 +106,11 @@ def encode_report(report: DayReport) -> dict[str, object]:
         "version": SNAPSHOT_VERSION,
         "day": report.day.isoformat(),
         "fills": [_fill(fill) for fill in report.fills],
-        "rejected": [{"order": _order(r.order), "reason": r.reason} for r in report.rejected],
+        "rejected": [
+            {"order": _order(r.order), "reason": _note(r.reason)} for r in report.rejected
+        ],
         "cuts": [
-            {"order": _order(c.order), "quantity": c.quantity, "reason": c.reason}
+            {"order": _order(c.order), "quantity": c.quantity, "reason": _note(c.reason)}
             for c in report.cuts
         ],
         "queued": [_order(order) for order in report.queued],
@@ -524,12 +526,12 @@ def _read_report(document: dict[str, object]) -> DayReport:
 
 def _read_rejected(value: object) -> Rejected:
     order, reason = _fields(value, "order", "reason")
-    return Rejected(_read_order(order), _str(reason))
+    return Rejected(_read_order(order), _read_note(reason))
 
 
 def _read_cut(value: object) -> Cut:
     order, quantity, reason = _fields(value, "order", "quantity", "reason")
-    return Cut(_read_order(order), _int(quantity), _str(reason))
+    return Cut(_read_order(order), _int(quantity), _read_note(reason))
 
 
 def _read_frozen(value: object) -> tuple[Instrument, str]:

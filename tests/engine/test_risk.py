@@ -9,7 +9,18 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from steadyhand.money import IDR, Money
-from steadyhand.notes import RISK_HALT_DAILY_LOSS, RISK_HALT_DRAWDOWN, Note
+from steadyhand.notes import (
+    LIMIT_CASH_CUT,
+    LIMIT_CASH_SHORT,
+    LIMIT_MIN_LOTS,
+    LIMIT_WEIGHT_CUT,
+    LIMIT_WEIGHT_FULL,
+    RISK_HALT_DAILY_LOSS,
+    RISK_HALT_DRAWDOWN,
+    TRADE_FROZEN,
+    TRADE_NOT_IN_UNIVERSE,
+    Note,
+)
 from steadyhand.risk import Halt, RiskLimits, RiskManager, UnitValue
 from steadyhand.types import Instrument, Order, Side
 from steadyhand.view import PortfolioView, Tradable
@@ -20,7 +31,8 @@ BBCA = Instrument("BBCA", "IDX", IDR)
 BBRI = Instrument("BBRI", "IDX", IDR)
 TLKM = Instrument("TLKM", "IDX", IDR)
 PRICES = {BBCA: Money(9_000, IDR), BBRI: Money(4_000, IDR)}
-OPEN = Tradable(DAY, frozenset({BBCA, BBRI}), frozenset({BBCA, BBRI}), {TLKM: "frozen: merger"})
+MERGER = Note(TRADE_FROZEN, "frozen: merger")
+OPEN = Tradable(DAY, frozenset({BBCA, BBRI}), frozenset({BBCA, BBRI}), {TLKM: MERGER})
 
 
 @cache
@@ -42,7 +54,7 @@ def check(
     spendable: int | None = None,
     held: dict[Instrument, int] | None = None,
     limits: RiskLimits | None = None,
-) -> tuple[list[Order], list[tuple[Order, str]], list[tuple[int, str]]]:
+) -> tuple[list[Order], list[tuple[Order, Note]], list[tuple[int, Note]]]:
     """Check *orders* for a portfolio worth *value*, spending all of it not *held* by default."""
     holdings = {stock: rp(amount) for stock, amount in (held or {}).items()}
     cash = value - sum((held or {}).values()) if spendable is None else spendable
@@ -86,9 +98,9 @@ def test_a_stock_outside_the_tradable_set_is_dropped_with_its_reason() -> None:
     passed, rejected, _ = check(buy(100, TLKM), sell, stranger)
     assert passed == []
     assert rejected == [
-        (buy(100, TLKM), "frozen: merger"),
-        (sell, "frozen: merger"),
-        (stranger, "not in the universe on 2025-06-02"),
+        (buy(100, TLKM), MERGER),
+        (sell, MERGER),
+        (stranger, Note(TRADE_NOT_IN_UNIVERSE, "not in the universe on 2025-06-02")),
     ]
 
 
@@ -96,26 +108,27 @@ def test_sales_pass_and_their_proceeds_fund_nothing() -> None:
     sell = Order(BBCA, Side.SELL, 1_000, DAY)
     passed, rejected, _ = check(sell, buy(100), spendable=0)
     assert passed == [sell]
-    assert rejected == [(buy(100), "not enough cash: IDR 0 can be spent")]
+    assert rejected == [(buy(100), Note(LIMIT_CASH_SHORT, "not enough cash: IDR 0 can be spent"))]
 
 
 def test_a_buy_is_cut_to_the_limit_per_stock_exactly_at_its_edge() -> None:
     passed, _, cuts = check(buy(300), value=18_000_000)
     assert passed == [buy(200)]
-    assert cuts == [(200, "cut to the 10.00% limit per stock")]
+    assert cuts == [(200, Note(LIMIT_WEIGHT_CUT, "cut to the 10.00% limit per stock"))]
     passed, _, cuts = check(buy(300), value=17_999_990)
     assert passed == [buy(100)]
 
 
 def test_a_buy_for_a_stock_already_at_the_limit_is_dropped() -> None:
     _, rejected, _ = check(buy(100), value=10_000_000, held={BBCA: 900_001})
-    assert rejected == [(buy(100), "already at the 10.00% limit per stock")]
+    full = Note(LIMIT_WEIGHT_FULL, "already at the 10.00% limit per stock")
+    assert rejected == [(buy(100), full)]
 
 
 def test_a_buy_below_the_minimum_lots_is_dropped() -> None:
     limits = RiskLimits(min_lots=2)
     passed, rejected, _ = check(buy(100), buy(200, BBRI), limits=limits)
-    assert rejected == [(buy(100), "below the minimum buy of 2 lot(s)")]
+    assert rejected == [(buy(100), Note(LIMIT_MIN_LOTS, "below the minimum buy of 2 lot(s)"))]
     assert passed == [buy(200, BBRI)]
 
 
@@ -123,10 +136,12 @@ def test_buys_together_spend_no_more_than_the_cash_costs_included() -> None:
     limits = RiskLimits(max_weight=Decimal(1))
     passed, rejected, _ = check(buy(100), buy(100, BBRI), spendable=1_000_000, limits=limits)
     assert passed == [buy(100)]
-    assert rejected == [(buy(100, BBRI), "not enough cash: IDR 98,111 can be spent")]
+    assert rejected == [
+        (buy(100, BBRI), Note(LIMIT_CASH_SHORT, "not enough cash: IDR 98,111 can be spent"))
+    ]
     passed, _, cuts = check(buy(300), spendable=1_803_777, limits=limits)
     assert passed == [buy(200)]
-    assert cuts == [(200, "cut to the IDR 1,803,777 that can be spent")]
+    assert cuts == [(200, Note(LIMIT_CASH_CUT, "cut to the IDR 1,803,777 that can be spent"))]
     passed, _, _ = check(buy(300), spendable=1_803_776, limits=limits)
     assert passed == [buy(100)]
 

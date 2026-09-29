@@ -15,7 +15,11 @@ from steadyhand._validate import require_date, require_int, require_type
 from steadyhand.exemption import DividendClaim
 from steadyhand.market import MarketRules, add_trading_days
 from steadyhand.money import CurrencyMismatchError, Money, Rounding
-from steadyhand.notes import CORPORATE_SPLIT_FRACTION_DROPPED, Note
+from steadyhand.notes import (
+    CORPORATE_SPLIT_FRACTION_DROPPED,
+    CORPORATE_SPLIT_ORDER_CANCELLED,
+    Note,
+)
 from steadyhand.outcomes import Rejected
 from steadyhand.portfolio import MovementKind, Portfolio
 from steadyhand.types import CashDividend, CorporateAction, Instrument, Order, OtherAction, Split
@@ -176,7 +180,9 @@ class _Actions:
             self._closes[stock] = Money(scaled, close.currency)
         for order in [order for order in self._pending if order.instrument == stock]:
             self._pending.remove(order)
-            self._cancelled.append(Rejected(order, "split on ex-date"))
+            self._cancelled.append(
+                Rejected(order, Note(CORPORATE_SPLIT_ORDER_CANCELLED, "split on ex-date"))
+            )
 
     def entitle(self, dividend: CashDividend, pay_date: date) -> None:
         held = self._before.position(dividend.instrument)

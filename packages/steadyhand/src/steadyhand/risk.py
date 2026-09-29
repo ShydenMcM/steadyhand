@@ -15,7 +15,16 @@ from steadyhand._ratio import ratio_down
 from steadyhand._validate import require_date, require_int, require_type
 from steadyhand.market import MarketRules
 from steadyhand.money import Money, Rounding
-from steadyhand.notes import RISK_HALT_DAILY_LOSS, RISK_HALT_DRAWDOWN, Note
+from steadyhand.notes import (
+    LIMIT_CASH_CUT,
+    LIMIT_CASH_SHORT,
+    LIMIT_MIN_LOTS,
+    LIMIT_WEIGHT_CUT,
+    LIMIT_WEIGHT_FULL,
+    RISK_HALT_DAILY_LOSS,
+    RISK_HALT_DRAWDOWN,
+    Note,
+)
 from steadyhand.outcomes import Cut, Rejected
 from steadyhand.types import Instrument, Order, Side
 from steadyhand.view import PortfolioView, Tradable
@@ -161,20 +170,26 @@ class RiskManager:
             if quantity < order.quantity:
                 limit = _percent(self._limits.max_weight)
                 if quantity == 0:
-                    rejected.append(Rejected(order, f"already at the {limit} limit per stock"))
+                    full = Note(LIMIT_WEIGHT_FULL, f"already at the {limit} limit per stock")
+                    rejected.append(Rejected(order, full))
                     continue
-                cuts.append(Cut(order, quantity, f"cut to the {limit} limit per stock"))
+                cut = Note(LIMIT_WEIGHT_CUT, f"cut to the {limit} limit per stock")
+                cuts.append(Cut(order, quantity, cut))
             smallest = self._limits.min_lots * lot
             if quantity < smallest:
-                reason = f"below the minimum buy of {self._limits.min_lots} lot(s)"
+                reason = Note(
+                    LIMIT_MIN_LOTS, f"below the minimum buy of {self._limits.min_lots} lot(s)"
+                )
                 rejected.append(Rejected(order, reason))
                 continue
             affordable = self._affordable(order.instrument, quantity, price, budget, day)
             if affordable == 0:
-                rejected.append(Rejected(order, f"not enough cash: {budget} can be spent"))
+                short = Note(LIMIT_CASH_SHORT, f"not enough cash: {budget} can be spent")
+                rejected.append(Rejected(order, short))
                 continue
             if affordable < quantity:
-                cuts.append(Cut(order, affordable, f"cut to the {budget} that can be spent"))
+                cut = Note(LIMIT_CASH_CUT, f"cut to the {budget} that can be spent")
+                cuts.append(Cut(order, affordable, cut))
             budget -= self._cost(affordable, price, day)
             passed.append(Order(order.instrument, order.side, affordable, order.placed_on))
         return Checked(tuple(passed), tuple(rejected), tuple(cuts))

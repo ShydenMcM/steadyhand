@@ -26,7 +26,13 @@ from steadyhand.income import IncomeGoal
 from steadyhand.market import UnsupportedDateError
 from steadyhand.metrics import measure
 from steadyhand.money import IDR, Currency, CurrencyMismatchError, Money
-from steadyhand.notes import DATA_BAR_MISSING, DATA_BAR_REFUSED, RISK_HALT_DAILY_LOSS, Note
+from steadyhand.notes import (
+    DATA_BAR_MISSING,
+    DATA_BAR_REFUSED,
+    RISK_HALT_DAILY_LOSS,
+    TRADE_NOT_IN_UNIVERSE,
+    Note,
+)
 from steadyhand.risk import RiskLimits
 from steadyhand.strategies import BuyAndHold, Decision, Memory, Strategy
 from steadyhand.types import Bar, CashDividend, CorporateAction, Instrument
@@ -331,7 +337,7 @@ def test_every_stock_the_universe_holds_on_any_day_is_fetched_for_the_whole_wind
     assert queued[5:] == [{TLKM}, set(), set(), set(), set()]
     assert all(not found for found in queued[:5])
     assert [rejected.reason for rejected in result.run.reports[0].rejected] == [
-        "not in the universe on 2025-06-30"
+        Note(TRADE_NOT_IN_UNIVERSE, "not in the universe on 2025-06-30")
     ]
 
 

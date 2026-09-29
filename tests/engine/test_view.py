@@ -8,9 +8,18 @@ import pytest
 
 from steadyhand._ratio import ratio_down
 from steadyhand.money import IDR, Currency, CurrencyMismatchError, Money
+from steadyhand.notes import (
+    TRADE_FROZEN,
+    TRADE_NO_BAR,
+    TRADE_NOT_HELD,
+    TRADE_NOT_IN_UNIVERSE,
+    Note,
+)
 from steadyhand.types import Bar, Instrument, Side
 from steadyhand.view import LookAheadError, MarketView, PortfolioView, PriceHistory, Tradable
 
+RIGHTS = Note(TRADE_FROZEN, "frozen: rights issue")
+NO_BAR = Note(TRADE_NO_BAR, "no bar on 2025-06-02")
 D0 = date(2025, 6, 2)
 BBCA = Instrument("BBCA", "IDX", IDR)
 BBRI = Instrument("BBRI", "IDX", IDR)
@@ -116,20 +125,22 @@ def test_the_view_checks_its_arguments() -> None:
 
 
 def test_tradable_says_why_a_stock_cannot_be_traded() -> None:
-    tradable = Tradable(
-        D0, frozenset({BBCA}), frozenset({BBCA, BBRI}), {TLKM: "frozen: rights issue"}
-    )
+    tradable = Tradable(D0, frozenset({BBCA}), frozenset({BBCA, BBRI}), {TLKM: RIGHTS})
     assert tradable.why_not(BBCA, Side.BUY) is None
     assert tradable.why_not(BBRI, Side.SELL) is None
-    assert tradable.why_not(BBRI, Side.BUY) == "not in the universe on 2025-06-02"
-    assert tradable.why_not(TLKM, Side.BUY) == "frozen: rights issue"
-    assert tradable.why_not(TLKM, Side.SELL) == "frozen: rights issue"
-    assert tradable.why_not(Instrument("ASII", "IDX", IDR), Side.SELL) == "not held"
+    assert tradable.why_not(BBRI, Side.BUY) == Note(
+        TRADE_NOT_IN_UNIVERSE, "not in the universe on 2025-06-02"
+    )
+    assert tradable.why_not(TLKM, Side.BUY) == RIGHTS
+    assert tradable.why_not(TLKM, Side.SELL) == RIGHTS
+    assert tradable.why_not(Instrument("ASII", "IDX", IDR), Side.SELL) == Note(
+        TRADE_NOT_HELD, "not held"
+    )
 
 
 def test_a_stock_cannot_be_both_tradable_and_kept_out() -> None:
     with pytest.raises(ValueError, match=r"^BBCA, BBRI cannot be both tradable and kept out$"):
-        Tradable(D0, frozenset({BBCA}), frozenset({BBRI}), {BBRI: "no bar", BBCA: "no bar"})
+        Tradable(D0, frozenset({BBCA}), frozenset({BBRI}), {BBRI: NO_BAR, BBCA: NO_BAR})
     with pytest.raises(TypeError, match=r"^buyable must be a frozenset, got set$"):
         Tradable(D0, {BBCA}, frozenset(), {})  # type: ignore[arg-type]
 

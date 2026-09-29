@@ -10,6 +10,19 @@ from hypothesis import strategies as st
 
 from steadyhand.broker import FillResult, FillSettings, Opening, SimulatedBroker
 from steadyhand.money import IDR, Money
+from steadyhand.notes import (
+    FILL_CASH_CUT,
+    FILL_CASH_SHORT,
+    FILL_CHARGES_UNPAID,
+    FILL_FROZEN,
+    FILL_NO_BAR,
+    FILL_NO_REFERENCE,
+    FILL_NO_TRADES,
+    FILL_OUTSIDE_BAND,
+    FILL_VOLUME_CUT,
+    FILL_VOLUME_TOO_SMALL,
+    Note,
+)
 from steadyhand.portfolio import MovementKind, Portfolio
 from steadyhand.types import Bar, Costs, Fill, Instrument, Order, Side
 from steadyhand_idx import IdxMarketRules
@@ -112,24 +125,25 @@ def test_every_sell_fills_before_any_buy() -> None:
 
 
 @pytest.mark.parametrize(
-    ("bars", "frozen", "reason"),
+    ("bars", "frozen", "key", "reason"),
     [
-        ([bar(BBCA, 9_000)], {"BBCA": "rights issue"}, "frozen: rights issue"),
-        ([], {}, "no bar for BBCA on 2025-06-03"),
-        ([bar(BBCA, 9_000, volume=0)], {}, "BBCA did not trade on 2025-06-03"),
+        ([bar(BBCA, 9_000)], {"BBCA": "rights issue"}, FILL_FROZEN, "frozen: rights issue"),
+        ([], {}, FILL_NO_BAR, "no bar for BBCA on 2025-06-03"),
+        ([bar(BBCA, 9_000, volume=0)], {}, FILL_NO_TRADES, "BBCA did not trade on 2025-06-03"),
         (
             [bar(BBCA, 10_800)],
             {},
+            FILL_OUTSIDE_BAND,
             "fill price IDR 10,825 is outside the band IDR 7,650 to IDR 10,800",
         ),
     ],
 )
 def test_an_order_that_cannot_trade_is_rejected_with_its_reason(
-    bars: list[Bar], frozen: dict[str, str], reason: str
+    bars: list[Bar], frozen: dict[str, str], key: str, reason: str
 ) -> None:
     result = run(portfolio(10_000_000), buy(100), bars=bars, **frozen)
     assert result.fills == ()
-    assert [(r.order, r.reason) for r in result.rejected] == [(buy(100), reason)]
+    assert [(r.order, r.reason) for r in result.rejected] == [(buy(100), Note(key, reason))]
     assert result.portfolio == portfolio(10_000_000)
 
 
@@ -137,7 +151,7 @@ def test_a_price_band_needs_a_previous_close() -> None:
     stock = Instrument("GOTO", "IDX", IDR)
     result = run(portfolio(10_000_000), buy(100, stock), bars=[bar(stock, 60)])
     assert [r.reason for r in result.rejected] == [
-        "no previous close for GOTO to set the price band"
+        Note(FILL_NO_REFERENCE, "no previous close for GOTO to set the price band")
     ]
 
 
@@ -150,14 +164,14 @@ def test_an_order_is_cut_to_a_tenth_of_the_volume_in_whole_lots() -> None:
     result = run(portfolio(10_000_000), buy(500), bars=[bar(BBCA, 9_000, volume=1_999)])
     assert [f.quantity for f in result.fills] == [100]
     assert [(c.quantity, c.reason) for c in result.cuts] == [
-        (100, "cut to 10% of the day's 1,999 shares traded")
+        (100, Note(FILL_VOLUME_CUT, "cut to 10% of the day's 1,999 shares traded"))
     ]
 
 
 def test_an_order_is_rejected_when_a_tenth_of_the_volume_is_under_a_lot() -> None:
     result = run(portfolio(10_000_000), buy(100), bars=[bar(BBCA, 9_000, volume=999)])
     assert [r.reason for r in result.rejected] == [
-        "10% of the day's 999 shares traded is less than a lot"
+        Note(FILL_VOLUME_TOO_SMALL, "10% of the day's 999 shares traded is less than a lot")
     ]
 
 
@@ -166,7 +180,7 @@ def test_a_buy_is_cut_to_the_lots_the_cash_pays_for() -> None:
     result = run(portfolio(cash), buy(300))
     assert [f.quantity for f in result.fills] == [200]
     assert [(c.quantity, c.reason) for c in result.cuts] == [
-        (200, "cut to the IDR 1,808,788 that can be spent")
+        (200, Note(FILL_CASH_CUT, "cut to the IDR 1,808,788 that can be spent"))
     ]
     # The costs of a trade round once, so two lots cost a rupiah less than two single lots.
     assert result.fills[0].costs.total == rp(3_787)
@@ -175,7 +189,9 @@ def test_a_buy_is_cut_to_the_lots_the_cash_pays_for() -> None:
 
 def test_a_buy_the_cash_cannot_pay_for_is_rejected() -> None:
     result = run(portfolio(902_500 + 1_893), buy(100))
-    assert [r.reason for r in result.rejected] == ["not enough cash: IDR 904,393 can be spent"]
+    assert [r.reason for r in result.rejected] == [
+        Note(FILL_CASH_SHORT, "not enough cash: IDR 904,393 can be spent")
+    ]
 
 
 def test_the_days_stamp_duty_is_held_back_from_a_buy_and_charged_once() -> None:
@@ -222,7 +238,10 @@ def test_a_sale_is_refused_when_even_its_proceeds_cannot_pay_the_days_charge() -
         Opening(day, today, {stock: rp(60)}, {}),
     )
     assert [r.reason for r in result.rejected] == [
-        "the day's charges of IDR 10,000 exceed the IDR 5,881 that could pay them"
+        Note(
+            FILL_CHARGES_UNPAID,
+            "the day's charges of IDR 10,000 exceed the IDR 5,881 that could pay them",
+        )
     ]
     assert result.daily_cost == rp(0)
 

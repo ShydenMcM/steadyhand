@@ -15,7 +15,11 @@ from steadyhand.corporate import (
 )
 from steadyhand.exemption import DividendClaim
 from steadyhand.money import IDR, Currency, CurrencyMismatchError, Money
-from steadyhand.notes import CORPORATE_SPLIT_FRACTION_DROPPED, Note
+from steadyhand.notes import (
+    CORPORATE_SPLIT_FRACTION_DROPPED,
+    CORPORATE_SPLIT_ORDER_CANCELLED,
+    Note,
+)
 from steadyhand.portfolio import MovementKind, Portfolio
 from steadyhand.types import (
     CashDividend,
@@ -93,7 +97,8 @@ def test_a_split_scales_the_holding_and_the_last_close_and_cancels_its_orders() 
     assert shares(outcome.holdings.portfolio, BBCA) == 1_500
     assert outcome.holdings.last_closes == {BBCA: rp(1_800)}
     assert outcome.holdings.pending == (pending[1],)
-    assert [(r.order, r.reason) for r in outcome.cancelled] == [(pending[0], "split on ex-date")]
+    cancelled = Note(CORPORATE_SPLIT_ORDER_CANCELLED, "split on ex-date")
+    assert [(r.order, r.reason) for r in outcome.cancelled] == [(pending[0], cancelled)]
     assert outcome.warnings == ()
 
 

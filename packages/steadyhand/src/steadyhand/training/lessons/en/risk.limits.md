@@ -2,7 +2,15 @@
 id = "risk.limits"
 title = "The safety limits steadyhand applies"
 summary = "The limits that cut or stop a strategy's orders, whatever the strategy wants to do."
-explains = ["risk.halt.daily_loss", "risk.halt.drawdown"]
+explains = [
+    "risk.halt.daily_loss",
+    "risk.halt.drawdown",
+    "limit.weight.full",
+    "limit.weight.cut",
+    "limit.min_lots",
+    "limit.cash.short",
+    "limit.cash.cut",
+]
 module = "risk"
 position = 3
 see_also = ["risk.drawdown"]
@@ -15,7 +23,8 @@ your configuration. These are the defaults:
 - **Cash only.** No borrowing and no short selling. A buy that needs more settled cash than you
   have is cut down or dropped.
 - **At most 10% in one stock.** A buy that would take one stock above 10% of the portfolio's
-  value is cut back to 10%.
+  value is cut back to 10%, and is not placed at all if the stock is already there.
+- **A smallest buy.** A buy smaller than the minimum number of lots is not placed.
 - **Daily loss limit.** If the portfolio falls 5% in one day, the strategy **halts**: it places
   no new orders until you resume it.
 - **Drawdown limit.** If the portfolio falls 25% below its high-water mark, the strategy halts
