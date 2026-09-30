@@ -4,6 +4,10 @@ Every key but ``[consent] disclaimer_accepted`` is optional and takes the value 
 An unknown key, a wrong type or an out-of-range value is a ``DataFileError`` that names the table
 and the key. Rates are strings parsed to ``Decimal``, so a TOML float is refused.
 
+``[strategy]`` holds ``name`` and, flat beside it, every registered strategy's settings (M6 spec
+§4.5). Each is checked whichever strategy runs, so a mistake is found before anyone switches to
+that strategy, and a file written before a setting existed takes its default.
+
 The ``[training]`` table is carried on unread: ``steadyhand_idx.output`` parses it (T1 spec §5
 item 3), so this module, which every command reads, never imports training.
 """
@@ -26,6 +30,7 @@ from steadyhand import (
     FillSettings,
     IncomeGoal,
     Money,
+    Registered,
     RiskLimits,
 )
 from steadyhand_idx._datafile import (
@@ -59,6 +64,21 @@ class Key:
     comment: str
 
 
+def strategy_keys(strategies: Mapping[str, Registered]) -> tuple[Key, ...]:
+    """``[strategy]``'s keys: ``name``, then each registered strategy's settings, in registry
+    order. A setting's name may belong to one strategy only, so the flat table stays unambiguous
+    (M6 spec §4.5)."""
+    keys = [Key("name", "buy-and-hold", "The strategy to run: see steadyhand-idx strategies.")]
+    for entry in strategies.values():
+        keys += [Key(setting.name, setting.default, setting.help) for setting in entry.settings]
+    names = [key.name for key in keys]
+    twice = sorted({name for name in names if names.count(name) > 1})
+    if twice:
+        msg = f"[strategy] {twice[0]} would be the key of more than one setting"
+        raise ValueError(msg)
+    return tuple(keys)
+
+
 KEYS: Final[Mapping[str, tuple[Key, ...]]] = MappingProxyType(
     {
         "account": (
@@ -85,9 +105,7 @@ KEYS: Final[Mapping[str, tuple[Key, ...]]] = MappingProxyType(
                 "The monthly take-home dividend income you are working towards, in whole rupiah.",
             ),
         ),
-        "strategy": (
-            Key("name", "buy-and-hold", "The strategy to run: see steadyhand-idx strategies."),
-        ),
+        "strategy": strategy_keys(STRATEGIES),
         "risk": (
             Key(
                 "max_weight",
@@ -163,13 +181,15 @@ class ConfigMissingError(LookupError):
 class Config:
     """``steadyhand.toml``, checked. ``settings`` carries the engine settings, the starting cash
     and the income goal, which the file always has and ``goal`` holds as well;
-    ``training`` is the ``[training]`` table, unread."""
+    ``strategy_settings`` every registered strategy's settings, by name; ``training`` is the
+    ``[training]`` table, unread."""
 
     path: Path
     settings: BacktestSettings
     goal: IncomeGoal
     broker_fees: str
     strategy: str
+    strategy_settings: Mapping[str, int]
     lq45_members: Path
     exclusions: Path
     training: Mapping[str, object]
@@ -227,6 +247,9 @@ def load(path: Path) -> Config:
             account, "broker_fees", where["account"], FeeSchedule.shipped().presets
         ),
         strategy=_choice(tables["strategy"], "name", where["strategy"], STRATEGIES),
+        strategy_settings=MappingProxyType(
+            _strategy_settings(tables["strategy"], where["strategy"])
+        ),
         lq45_members=path.parent / get_str(tables["universe"], "lq45_members", where["universe"]),
         exclusions=path.parent / EXCLUSIONS_FILE,
         training=MappingProxyType(dict(tables["training"])),
@@ -313,6 +336,19 @@ def _choice(row: Row, key: str, where: Where, known: Mapping[str, object]) -> st
         msg = f"{where}: {key} must be one of {', '.join(sorted(known))}, got {value!r}"
         raise DataFileError(msg)
     return value
+
+
+def _strategy_settings(row: Row, where: Where) -> dict[str, int]:
+    """Every registered strategy's settings, each a whole number within its bounds."""
+    values: dict[str, int] = {}
+    for entry in STRATEGIES.values():
+        for setting in entry.settings:
+            value = get_int(row, setting.name, where, minimum=setting.minimum)
+            if value > setting.maximum:
+                msg = f"{where}: {setting.name} must be at most {setting.maximum}, got {value}"
+                raise DataFileError(msg)
+            values[setting.name] = value
+    return values
 
 
 def _consent(row: Row, where: Where) -> date:
