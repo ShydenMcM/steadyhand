@@ -4,18 +4,21 @@
 import csv
 import json
 import stat
+from datetime import date
 from pathlib import Path
 
 import pytest
-from cli_world import GOLDEN_CONFIG, PLACEHOLDERS, Cli, market_cli
+from cli_world import GOLDEN_CONFIG, PLACEHOLDERS, Cli, golden_backtest, market_cli
 from record_golden import END, GOLDEN, RECORDED, START, recorded, run, settings, universe
 
 from steadyhand import (
     DATA_BAR_REFUSED,
     DISCLAIMER,
+    IDR,
     BacktestResult,
     BuyAndHold,
     Market,
+    Money,
     backtest,
 )
 from steadyhand_idx import BarCache, CachedDataSource, IdxMarketRules, YahooDataSource
@@ -234,18 +237,20 @@ def test_backtest_needs_the_configuration(cli: Cli) -> None:
     )
 
 
-def test_history_the_source_cannot_recover_stops_the_run_safely_with_exit_3(market: Cli) -> None:
-    # The income report reads five years before the last day, and Yahoo's BBRI prices before
-    # 2021-09-07 carry an event it does not report: an income report is never built on missing
-    # history (M4 spec §8), so the run stops and trades nothing.
+def test_a_holding_whose_old_prices_cannot_be_recovered_keeps_its_dividend_history(
+    market: Cli,
+) -> None:
+    # The income report reads five years before the last day. Yahoo's BBRI prices before
+    # 2021-09-07 carry an event it does not report, so they cannot be recovered, but a dividend
+    # needs no price: the report is built, with BBRI's 6 April 2021 dividend in its run-rate
+    # (M6 spec §4.3). Before M6 the whole run stopped with exit 3.
     result = market("backtest", "--from", "2022-01-25", "--to", "2022-01-31")
-    assert result.code == 3
-    assert result.out == ""
-    assert result.err.startswith(
-        "steadyhand-idx: BBRI.JK: Yahoo's prices for 1111 day(s) from 2017-01-31 to 2021-09-07 "
-    )
-    assert result.err.endswith("so the prices traded on those days cannot be recovered\n")
-    assert not (market.home / "reports").exists()
+    assert (result.code, result.err) == (0, "")
+    assert "Run-rate a month           IDR 208,538\n" in result.out
+    found = golden_backtest(market, date(2022, 1, 31), goal=True, start=date(2022, 1, 25))
+    assert found.run.income is not None
+    held = {h.instrument.symbol: h.dividends for h in found.run.income.run_rate.holdings}
+    assert [(d.ex_date, d.gross) for d in held["BBRI"]] == [(date(2021, 4, 6), Money(440_572, IDR))]
 
 
 def test_the_starting_cash_and_goal_come_from_the_configuration(tmp_path: Path) -> None:

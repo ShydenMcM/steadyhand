@@ -14,6 +14,12 @@ up to 2021-09-07, SMGR up to 2022-12-12, MDKA up to 2022-04-13 and five INCO day
 Trading days come from ``holidays.toml``, never from which days have bars. A flat bar with no
 volume on a holiday is a Yahoo placeholder and is dropped. A bar with trading on a holiday
 contradicts the calendar, and is refused.
+
+Corporate actions need neither: a dividend is restated through the reported splits alone. So
+``corporate_actions`` reads only splits and dividends, and a range whose prices cannot be
+recovered, or which the holiday calendar does not cover, still gives its actions. That is what a
+strategy's look-back reads (M6 spec §4.3): on 2026-09-30 the price checks refused 11 of the 45
+LQ45 members' six-year look-backs, and reading the actions alone refused 2 (unusable splits).
 """
 
 from __future__ import annotations
@@ -201,15 +207,40 @@ def _whole(value: Decimal) -> int | None:
     return int(nearest) if abs(value - nearest) <= WHOLE_RUPIAH_TOLERANCE else None
 
 
+def actions_in(
+    history: YahooHistory, instrument: Instrument, start: date, end: date
+) -> list[CorporateAction]:
+    """The splits and cash dividends with an ex-date from *start* to *end*, in date order.
+
+    A dividend is restated through every reported split after its ex-date, as prices are. No
+    price is recovered and no calendar is read, so actions never depend on either.
+    """
+    actions: list[CorporateAction] = [
+        _split(instrument, day, ratio) for day, ratio in history.splits if start <= day <= end
+    ]
+    for row in history.rows:
+        if start <= row.day <= end and row.dividend > 0:
+            factor = _factor(history, row.day)
+            actions.append(CashDividend(instrument, row.day, row.dividend * factor))
+    actions.sort(key=lambda action: action.ex_date)
+    return actions
+
+
+def _factor(history: YahooHistory, day: date) -> Decimal:
+    """The product of every reported split ratio after *day*, which Yahoo divided *day* by."""
+    factor = Decimal(1)
+    for split_day, ratio in history.splits:
+        if split_day > day:
+            factor *= ratio
+    return factor
+
+
 def unadjust(
     history: YahooHistory, instrument: Instrument, calendar: IdxCalendar, start: date, end: date
 ) -> tuple[list[Bar], list[CorporateAction]]:
     """The bars and actions from *start* to *end*, with Yahoo's split adjustments reversed."""
-    splits = [(day, ratio) for day, ratio in history.splits]
+    actions = actions_in(history, instrument, start, end)
     bars: list[Bar] = []
-    actions: list[CorporateAction] = [
-        _split(instrument, day, ratio) for day, ratio in splits if start <= day <= end
-    ]
     unrecoverable: list[date] = []
     for row in history.rows:
         if not start <= row.day <= end:
@@ -223,10 +254,7 @@ def unadjust(
                 "which the IDX calendar says was a holiday"
             )
             raise DataUnavailableError(msg)
-        factor = Decimal(1)
-        for day, ratio in splits:
-            if day > row.day:
-                factor *= ratio
+        factor = _factor(history, row.day)
         prices = [_whole(value * factor) for value in (row.open, row.high, row.low, row.close)]
         volume = _whole(row.volume / factor)
         if None in prices or volume is None:
@@ -238,11 +266,8 @@ def unadjust(
         except InvalidBarError as error:
             msg = f"{history.ticker}: {error}"
             raise DataUnavailableError(msg) from error
-        if row.dividend > 0:
-            actions.append(CashDividend(instrument, row.day, row.dividend * factor))
     if unrecoverable:
         raise UnrecoverablePricesError(history.ticker, unrecoverable)
-    actions.sort(key=lambda action: action.ex_date)
     return bars, actions
 
 
@@ -274,21 +299,20 @@ class YahooDataSource:
         self._last: tuple[tuple[str, date, date], YahooHistory] | None = None
 
     def bars(self, instrument: Instrument, start: date, end: date) -> Sequence[Bar]:
-        return self._unadjusted(instrument, start, end)[0]
+        history = self._history(instrument, start, end)
+        return unadjust(history, instrument, self._calendar, start, end)[0]
 
     def corporate_actions(
         self, instrument: Instrument, start: date, end: date
     ) -> Sequence[CorporateAction]:
-        return self._unadjusted(instrument, start, end)[1]
+        """The splits and dividends in the range, read without its prices (``actions_in``)."""
+        return actions_in(self._history(instrument, start, end), instrument, start, end)
 
-    def _unadjusted(
-        self, instrument: Instrument, start: date, end: date
-    ) -> tuple[list[Bar], list[CorporateAction]]:
+    def _history(self, instrument: Instrument, start: date, end: date) -> YahooHistory:
         if end < start:
             msg = f"end {end.isoformat()} is before start {start.isoformat()}"
             raise ValueError(msg)
-        ticker = ticker_for(instrument)
-        return unadjust(self._fetch(ticker, start, end), instrument, self._calendar, start, end)
+        return self._fetch(ticker_for(instrument), start, end)
 
     def _fetch(self, ticker: str, start: date, end: date) -> YahooHistory:
         """One download per range: ``bars`` then ``corporate_actions`` reuse it."""

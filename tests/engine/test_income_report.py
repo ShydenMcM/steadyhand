@@ -177,17 +177,28 @@ def test_a_run_with_no_days_has_no_income_report() -> None:
         income_report([], final(), history(), rules(), settings)
 
 
-def test_a_year_window_before_the_rules_first_day_is_refused_not_guessed() -> None:
-    # A report on 30 June 2021 reads the dividends back to 1 July 2020, and IDX's rules start on
-    # 1 January 2021: the pay month of a dividend on 8 December 2020 is not known.
-    early: dict[Instrument, Sequence[CorporateAction]] = {
-        BBCA: [CashDividend(BBCA, date(2020, 12, 8), Decimal(50))]
-    }
+def test_a_year_window_before_the_holiday_data_is_refused_not_guessed() -> None:
+    # A report on 30 June 2021 reads the dividends back to 1 July 2020. The IDX holidays reach
+    # back to 2016, so a dividend on 8 December 2020 is paid 14 trading days later, on 4 January
+    # 2021: 9, 24, 25 and 31 December and 1 January were holidays (M6 spec §4.1). One on 8
+    # December 2015, read by a report in 2016, has no pay month anyone knows.
     settings = IncomeSettings(IncomeGoal(rp(10_000)))
-    with pytest.raises(
-        UnsupportedDateError, match=r"^steadyhand's IDX rules are primary-verified from 2021-01-01"
-    ):
-        income_report([report(date(2021, 6, 30))], final(), early, rules(), settings)
+    placed = income_report(
+        [report(date(2021, 6, 30))],
+        final(),
+        {BBCA: [CashDividend(BBCA, date(2020, 12, 8), Decimal(50))]},
+        rules(),
+        settings,
+    )
+    paid = [dividend for held in placed.run_rate.holdings for dividend in held.dividends]
+    assert [(dividend.ex_date, dividend.pay_date) for dividend in paid] == [
+        (date(2020, 12, 8), date(2021, 1, 4))
+    ]
+    early: dict[Instrument, Sequence[CorporateAction]] = {
+        BBCA: [CashDividend(BBCA, date(2015, 12, 8), Decimal(50))]
+    }
+    with pytest.raises(UnsupportedDateError, match=r"^holidays\.toml has no IDX holidays for 2015"):
+        income_report([report(date(2016, 6, 30))], final(), early, rules(), settings)
 
 
 def test_a_holding_without_history_stops_the_report() -> None:

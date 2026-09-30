@@ -165,8 +165,9 @@ class Comparison:
 class _Window:
     """Everything both runs read: the trading days, the universe on each, and the fetched data.
 
-    ``past`` holds every corporate action fetched, the look-back's included; ``lookback`` is the
-    look-back's first and last day, and ``history_refused`` why the source refused a stock's.
+    ``past`` holds every corporate action fetched, the look-back's and a refused stock's refused
+    days' included; ``lookback`` is the look-back's first and last day, and ``history_refused``
+    why the source refused a stock's.
     """
 
     days: tuple[date, ...]
@@ -305,7 +306,10 @@ def _calendar_days(start: date, end: date) -> Iterator[date]:
 def _fetch(market: Market, days: tuple[date, ...], lookback_years: int) -> _Window:
     """Fetch every stock the universe holds on any of *days*, over all of them (M3 spec §7.1).
 
-    A stock whose source refuses some days is fetched again over the clean ranges around them.
+    A stock whose source refuses some days is fetched again over the clean ranges around them;
+    for its history, its actions over the whole run are read in a call of their own, which a
+    source that reads them without prices answers for the refused days too. If the source
+    refuses that call, those days' actions are unknown and the stock's history is incomplete.
     With a look-back, each stock's corporate actions from 1 January, *lookback_years* years
     before the first day, to the day before it are fetched in a call of their own: a refusal
     there is history the run can do without, so it marks the stock's history incomplete and the
@@ -319,6 +323,8 @@ def _fetch(market: Market, days: tuple[date, ...], lookback_years: int) -> _Wind
     bars: list[Bar] = []
     actions: list[CorporateAction] = []
     refused: dict[Instrument, tuple[date, ...]] = {}
+    past: list[CorporateAction] = []
+    unknown: set[Instrument] = set()
     for stock in stocks:
         try:
             found = (source.bars(stock, start, end), source.corporate_actions(stock, start, end))
@@ -327,17 +333,23 @@ def _fetch(market: Market, days: tuple[date, ...], lookback_years: int) -> _Wind
             if not named:
                 raise
             refused[stock] = named
+            whole = _unpriced_actions(source, stock, start, end)
+            clean: list[CorporateAction] = []
             for low, high in _clean_ranges(days, frozenset(named)):
                 bars += source.bars(stock, low, high)
-                actions += source.corporate_actions(stock, low, high)
+                clean += source.corporate_actions(stock, low, high)
+            actions += clean
+            if whole is None:
+                unknown.add(stock)
+            past += clean if whole is None else whole
             continue
         bars += found[0]
         actions += found[1]
+        past += found[1]
     by_day: dict[date, list[CorporateAction]] = {}
     for action in actions:
         by_day.setdefault(action.ex_date, []).append(action)
     grouped = {day: tuple(found) for day, found in by_day.items()}
-    past = list(actions)
     lookback = None
     history_refused: dict[Instrument, str] = {}
     if lookback_years:
@@ -354,10 +366,21 @@ def _fetch(market: Market, days: tuple[date, ...], lookback_years: int) -> _Wind
         PriceHistory(bars),
         grouped,
         refused,
-        ActionHistory(past, history_refused),
+        ActionHistory(past, {*history_refused, *unknown}),
         lookback,
         history_refused,
     )
+
+
+def _unpriced_actions(
+    source: DataSource, stock: Instrument, start: date, end: date
+) -> Sequence[CorporateAction] | None:
+    """A refused stock's actions from *start* to *end*, refused days included, or ``None`` when
+    the source refuses them as well (M6 plan scope decision 13)."""
+    try:
+        return source.corporate_actions(stock, start, end)
+    except DataUnavailableError:
+        return None
 
 
 def _clean_ranges(days: Sequence[date], refused: frozenset[date]) -> Iterator[tuple[date, date]]:

@@ -313,7 +313,9 @@ def test_the_pay_date_is_the_engines_and_a_later_ex_date_is_look_ahead() -> None
 
 
 def test_an_ex_date_the_rules_cannot_place_raises_their_own_error() -> None:
-    with pytest.raises(UnsupportedDateError, match=r"; 2015-12-31 is earlier$"):
+    # The IDX holidays start in 2016; 2020's are there, before the rules' verified tables begin.
+    assert view_on(0).pay_date(date(2020, 6, 10)) == date(2020, 6, 30)
+    with pytest.raises(UnsupportedDateError, match=r"^holidays\.toml has no IDX holidays for 2015"):
         view_on(0).pay_date(date(2015, 12, 30))
 
 

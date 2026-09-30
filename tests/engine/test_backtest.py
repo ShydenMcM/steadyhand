@@ -358,6 +358,8 @@ def test_refused_days_are_fetched_around_and_the_stock_sits_them_out() -> None:
         ("bars", "BBCA", START, END),
         ("actions", "BBCA", START, END),
         ("bars", "BBRI", START, END),
+        # Its actions over the whole run, for its history: this source refuses those too.
+        ("actions", "BBRI", START, END),
         ("bars", "BBRI", START, date(2025, 7, 2)),
         ("actions", "BBRI", START, date(2025, 7, 2)),
         ("bars", "BBRI", date(2025, 7, 8), date(2025, 7, 9)),
@@ -417,6 +419,7 @@ def test_refusals_on_the_first_and_last_days_leave_one_range_between() -> None:
     result = run(source, strategy=BuyAndHold())
     assert [r for r in source.requests if r[1] == "BBRI"] == [
         ("bars", "BBRI", START, END),
+        ("actions", "BBRI", START, END),
         ("bars", "BBRI", DAYS[1], DAYS[-2]),
         ("actions", "BBRI", DAYS[1], DAYS[-2]),
     ]
@@ -729,6 +732,70 @@ def test_a_refusal_in_the_runs_own_days_keeps_its_rules_beside_a_look_back() -> 
     result = run(source, chosen=looking_back())
     assert [warning.key for warning in result.warnings] == [DATA_BAR_REFUSED]
     assert ("actions", "BBRI", SINCE, UNTIL) in source.requests
+
+
+class _Unpriced(_Source):
+    """A source that reads corporate actions without prices, as the IDX source does (M6 plan
+    scope decision 13): it refuses a stock's bars on its refused days, never its actions."""
+
+    def corporate_actions(
+        self, instrument: Instrument, start: date, end: date
+    ) -> Sequence[CorporateAction]:
+        self.requests.append(("actions", instrument.symbol, start, end))
+        return [
+            a for a in self._actions if a.instrument == instrument and start <= a.ex_date <= end
+        ]
+
+
+REFUSED_DIVIDEND = CashDividend(BBCA, date(2025, 7, 3), Decimal(40))
+"""A BBCA dividend whose ex-date is one of its refused days."""
+
+
+@pytest.mark.parametrize("years", [0, 2])
+def test_a_dividend_on_a_refused_day_reaches_the_history_when_read_without_prices(
+    years: int,
+) -> None:
+    refused = {BBCA: [date(2025, 7, 3), date(2025, 7, 4)]}
+    source = _Unpriced(calm(), [*LOOKED_BACK, REFUSED_DIVIDEND], refused=refused)
+    reader = _Reader()
+    result = run(source, strategy=reader, chosen=looking_back(years))
+    assert ("actions", "BBCA", START, END) in source.requests
+    # The strategy sees it from its ex-date, and BBCA's history is complete ...
+    before, on = reader.seen[date(2025, 7, 2)], reader.seen[date(2025, 7, 3)]
+    assert REFUSED_DIVIDEND.ex_date not in [dividend.ex_date for dividend in before[0]]
+    assert on[0][-1] == PastDividend(date(2025, 7, 3), Decimal(40))
+    assert on[1:] == (True, True)
+    # ... while the engine still credits nothing on a refused day, as its warning says.
+    assert all(e.ex_date != REFUSED_DIVIDEND.ex_date for r in result.run.reports for e in r.paid)
+    assert [warning.key for warning in result.warnings] == [DATA_BAR_REFUSED]
+
+
+class _Failing(_Source):
+    """A source whose read of BBCA's actions over the whole run fails outright, as Yahoo's does
+    after its retries: a plain ``DataUnavailableError``, naming no day."""
+
+    def corporate_actions(
+        self, instrument: Instrument, start: date, end: date
+    ) -> Sequence[CorporateAction]:
+        if (instrument, start, end) == (BBCA, START, END):
+            self.requests.append(("actions", instrument.symbol, start, end))
+            msg = "BBCA.JK: no data from Yahoo after 3 attempts"
+            raise DataUnavailableError(msg)
+        return super().corporate_actions(instrument, start, end)
+
+
+@pytest.mark.parametrize("source_type", [_Source, _Failing], ids=["days refused", "read failed"])
+def test_a_source_that_refuses_the_actions_too_leaves_that_history_incomplete(
+    source_type: type[_Source],
+) -> None:
+    refused = {BBCA: [date(2025, 7, 3), date(2025, 7, 4)]}
+    source = source_type(calm(), [*LOOKED_BACK, REFUSED_DIVIDEND], refused=refused)
+    reader = _Reader()
+    result = run(source, strategy=reader, chosen=looking_back())
+    # Only the clean days' actions are known, so BBCA's history is incomplete from the start.
+    assert reader.seen[START][1:] == (False, True)
+    assert reader.seen[END][0][-1] == PastDividend(date(2025, 7, 2), Decimal(25))
+    assert [warning.key for warning in result.warnings] == [DATA_BAR_REFUSED]
 
 
 def test_compare_fetches_the_look_back_once_for_every_strategy() -> None:

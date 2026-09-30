@@ -3,7 +3,9 @@
 Every value is looked up for the date it applies to (spec §9.1). The rules refuse any day before
 ``verified_from``, the latest first date of any table in ``tick_sizes.toml``, ``auto_reject.toml``,
 ``fees.toml`` and ``holidays.toml``, and the refusal names the table that sets it. The date is
-derived from the files and never written into code.
+derived from the files and never written into code. ``is_trading_day`` alone answers for every
+year ``holidays.toml`` covers, from 2016: counting trading days needs only the holidays, and a
+strategy models the pay date of a dividend from before ``verified_from`` (M6 spec §4.1).
 """
 
 from __future__ import annotations
@@ -148,7 +150,6 @@ class IdxMarketRules:
         return self._tables.fees.protection_end(purchase_day)
 
     def is_trading_day(self, day: date) -> bool:
-        self.require_supported(day)
         return self._tables.calendar.is_trading_day(day)
 
     def _check(self, instrument: Instrument, on: date) -> None:
