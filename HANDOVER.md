@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-09-30 01:30 WIB (2026-09-29 18:30 UTC) (**The M5b plan is approved** after five review passes, the last with no finding, and replays byte-identical. **Next: Task 0 (the plan PR, then file S5–S9), then execute Tasks 1–5.**)
+**Updated:** 2026-09-30 07:40 WIB (2026-09-30 00:40 UTC) (**M5b is done and M5 with it**: S5–S9 merged into `develop`, each deployed with `publish-dev` green, #135–#139 closed and Done, epic #120 closed and Done. **Next: M6, strategy wave 1** (core spec §13), starting at brainstorming.)
 **Local:** `~/Developer/Repos/steadyhand`. `develop` holds the T1 spec and plan, and `main` has no release yet. `t1/training-spec` and `m4/m4b-plan` are merged or superseded and deleted. Start each story's branch from `origin/develop`. Read heads with `git rev-parse`; never retype one.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
@@ -95,7 +95,20 @@
 - **Found while building (carried forward):** a backtest ending on the recordings' last day but starting late (25–31 January 2022) stops with exit 3: its income report reads five years back into BBRI's unrecoverable prices. M4 §8's rule, kept; whether an income report should leave out such a stock is a question for its own ticket.
 - **M5a tools** (git-ignored, newest copy): `.superpowers/sdd/2026-09-27-m5a-cli/`. New: `render.py` and `redrun.py` list files with `--no-renames` (a moved file was rendered with no delete); `wheel_check.sh <tree>` runs CI's guide step locally from `ci.yml` itself; `prose_check.py <plan>` checks every cited test exists and each task's mutation range; `rerun.sh`; worktrees `wt-red`, `wt-mut`, `wt-replay`, `wt-wheel`.
 
-## M5b paper trading (plan approved 2026-09-30, epic #120)
+## M5b paper trading (plan approved 2026-09-30, done 2026-09-30, epic #120 Done)
+- **Merged into `develop`, each deployed with `publish-dev` green:**
+
+  | Story | Issue | PR | Merge | Develop run | Gate | Mutations |
+  |---|---|---|---|---|---|---|
+  | S5 snapshot codec | #135 | #140 | fd90040 | 36633548195 | 1323 | M220–M236 |
+  | S6 state database | #136 | #141 | 5c5ba81 | 36648875544 | 1354 | M237–M246, M264 |
+  | S7 `paper run` | #137 | #142 | a09c39e | 36650250101 | 1390 | M247–M263, M265 |
+  | S8 every order reason keyed | #138 | #143 | 6f5afb5 | 36650747043 | 1389 | M266–M273 |
+  | S9 the paper commands | #139 | #144 | 434d886 | 36651146684 | 1443 | M274–M295 |
+
+  Every gate at 100% branch coverage on Python 3.12, with the suite also passing on 3.13 under `-W error`; every mutation red exactly as predicted, with the total unchanged; each PR carries its mutation comment.
+- **Execution finding** (the plan's `## Execution findings`): S6 failed CI's `test (py3.13)` on 15 `ResourceWarning: unclosed database` from a test helper; 3.12 does not warn, and the plan had been gated on 3.12 alone. Fixed with `closing(...)`, the same sweep hardened one S7 test, and `gate-local.sh` now runs 3.13 too.
+- **Tooling change:** `merge_story.sh` selects a story's mutations by the story label in the log, since S6's and S7's sets are not contiguous, and refuses a log with an anchor failure, a missed catcher, a crash, a wrong total or a line not PREDICTED/SUPERSET.
 - **Plan:** `docs/superpowers/plans/2026-09-29-m5b-paper-trading.md`, built by extraction and reviewed to zero on pass 5. Five stories: S5 snapshot codec, S6 state database, S7 `paper run`, S8 every order reason keyed, S9 the paper commands (M5 §10's S8 split in two, scope decision 14). Twenty-three scope decisions amend the M5 spec (among them: no `Portfolio.restore`, `Config.goal` non-optional, `resume` refused while the drawdown is at or past the limit, a prompt's change refused if another run saved a day meanwhile).
 - **Scratch chain** (`.superpowers/sdd/2026-09-29-m5b-paper/repo`, branch `m5b-chain2`) on `develop` `9cd514c`: S5 `a583773`, S6 `f41d97e`, S7 `e8bab1e`, S8 `dabc803`, S9 `a33a143` (full SHAs in `stories.txt`). Gates 1323, 1354, 1390, 1389, 1443 at 100%; red 41, 30, 51, 31, 55; 76 mutations M220–M295 all red exactly as predicted (`mut-final.log`); the plan replays byte-identical (`replay.out`).
 - **Tools** (git-ignored, newest copy): `.superpowers/sdd/2026-09-29-m5b-paper/`. New: `stubgen` keeps a removed top-level function's old definition in the red phase (a rename); `prose_check.py` reads every story's tree; `interface_check.py` (every Produces name defined in its story's tree, with a positive control); `gate-local.sh`, `chain-final.sh`; worktrees `wt-dev`, `wt-red`, `wt-mut`, `wt-replay`. Build findings: `build-log.md`.
@@ -127,8 +140,8 @@
 - Brainstormed 2026-09-27: see the T1 section above.
 
 ## Resume steps
-0. **Read `.superpowers/sdd/2026-09-29-m5b-paper/PROGRESS.md` first** ("Still to do", step 0): it holds the plan PR's state and head SHA file. Task 0 is done apart from merging: the plan PR is #134 (`m5/m5b-plan`), and the stories are **already filed**, S5 #135, S6 #136, S7 #137, S8 #138, S9 #139, each on board 1 as Todo. Never file them again. Merge #134 when green, as the plan's **Merging a story** says, and check `publish-dev`.
-1. **Execute Tasks 1–5** (#135–#139) with `apply_task.py <plan> <tree> <task> red|green` (tools directory), as M5a was: each story's red count must match, its tree byte-identical to the scratch commit, its gate green, its mutations caught on the real commit, then merge (`merge_story.sh`), `publish-dev`, and close (`close_story.sh`). After Task 5, move #120 to Done.
+0. M5 is done; nothing is in flight. `main` still has no release (M10).
+1. **M6, strategy wave 1** (core spec §13, item 6): start with `superpowers:brainstorming` on which strategies make up wave 1, then a spec in `docs/superpowers/specs/`, reviewed to zero, then a plan built by extraction as M5b's was (tools: newest copy in `.superpowers/sdd/2026-09-29-m5b-paper/`). File the epic and stories on board 1 (assert the title "steadyhand") before implementing.
 
 ## Research technique
 - **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid scraping. Try the Internet Archive, KSEI, KPEI (idclear) or BPK first. Use idx.co.id only when none has a readable copy, and say so in the research doc.
