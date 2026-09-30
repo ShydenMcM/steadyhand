@@ -26,6 +26,7 @@ from steadyhand.notes import (
     DATA_BAR_MISSING,
     EXEMPTION_CLAIM_BROKEN,
     EXEMPTION_DEADLINE_MISSED,
+    RISK_HALT_DAILY_LOSS,
     Note,
 )
 from steadyhand.portfolio import MissingPriceError, MovementKind
@@ -210,7 +211,8 @@ def test_a_loss_at_the_limit_halts_ordering_for_the_rest_of_the_run() -> None:
     )
     assert report.halt is not None
     assert report.halt.day == D3
-    assert report.halt.cause.startswith("daily loss limit: the unit value fell ")
+    assert report.halt.cause.key == RISK_HALT_DAILY_LOSS
+    assert report.halt.cause.text.startswith("daily loss limit: the unit value fell ")
     assert (report.queued, state.holdings.pending) == ((), ())
     assert state.halt == report.halt
     later = market(
@@ -230,7 +232,10 @@ def test_dividends_still_arrive_while_halted() -> None:
     state, _ = day_one()
     due = Entitlement(BBCA, D1, D2, rp(12_500))
     halted = EngineState(
-        Holdings(state.holdings.portfolio, (), (due,)), state.units, Halt(D1, "test"), D1
+        Holdings(state.holdings.portfolio, (), (due,)),
+        state.units,
+        Halt(D1, Note(RISK_HALT_DAILY_LOSS, "test")),
+        D1,
     )
     after, report = run_day(
         halted, DayInputs(D2, steady(), members=MEMBERS), _Untouchable(), rules()
@@ -245,7 +250,10 @@ def test_with_the_exemption_on_a_dividend_opens_a_claim_the_next_state_keeps() -
     state, _ = day_one()
     due = Entitlement(BBCA, D1, D2, rp(12_500))
     halted = EngineState(
-        Holdings(state.holdings.portfolio, (), (due,)), state.units, Halt(D1, "test"), D1
+        Holdings(state.holdings.portfolio, (), (due,)),
+        state.units,
+        Halt(D1, Note(RISK_HALT_DAILY_LOSS, "test")),
+        D1,
     )
     exempt = EngineSettings(dividend_reinvestment_exemption=True)
     inputs = DayInputs(D2, steady(), members=MEMBERS)
@@ -295,7 +303,7 @@ def test_a_shortfall_is_kept_across_days_and_breaks_when_its_trade_would_settle(
         BBCA, date(2025, 5, 27), date(2025, 5, 28), rp(12_500), date(2026, 3, 31), rp(0), protected
     )
     holdings = Holdings(state.holdings.portfolio, claims=(claim,))
-    current = EngineState(holdings, state.units, Halt(D1, "test"), D1)
+    current = EngineState(holdings, state.units, Halt(D1, Note(RISK_HALT_DAILY_LOSS, "test")), D1)
     kept: list[tuple[date | None, Money]] = []
     for day in (D2, D3, D4):  # D2's trade would settle on D4
         current, report = run_day(

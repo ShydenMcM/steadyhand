@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from itertools import product
+from multiprocessing.synchronize import Event
 from pathlib import Path
 from typing import NamedTuple
 
@@ -144,6 +145,14 @@ def market_cli(home: Path, config: str = GOLDEN_CONFIG) -> Cli:
     (home / "steadyhand.toml").write_text(config, encoding="utf-8")
     write_universe(home)
     return Cli(home, recorded_source)
+
+
+def paper_process(home: str, now: str, start: Event) -> None:
+    """One ``paper run --catch-up`` in a process of its own, for the concurrency test: it waits
+    for *start*, runs over the recorded data at *now*, and exits with the command's code."""
+    start.wait()
+    cli = Cli(Path(home), recorded_source, datetime.fromisoformat(now))
+    sys.exit(cli("paper", "run", "--catch-up").code)
 
 
 SCRIPT = Path(sys.executable).with_name("steadyhand-idx")

@@ -37,6 +37,12 @@ INCOME_GROWTH_SHORT_HISTORY = "income.growth.short_history"
 INCOME_PROJECTION_COSTS_IGNORED = "income.projection.costs_ignored"
 """On every projection: the trading costs of reinvesting are left out."""
 
+RISK_HALT_DAILY_LOSS = "risk.halt.daily_loss"
+"""The unit value fell by the daily loss limit or more in one day, so ordering stopped."""
+
+RISK_HALT_DRAWDOWN = "risk.halt.drawdown"
+"""The unit value fell by the drawdown limit or more below its high-water mark: ordering stopped."""
+
 _KEY = re.compile(r"[a-z]+(\.[a-z_]+)+")
 
 

@@ -231,9 +231,13 @@ def _by_run(
     return [[run.strategy, *(form(values(run)[figure.name]) for figure in shown)] for run in runs]
 
 
-def _halts(runs: Sequence[RunResult]) -> list[str]:
+def _halts(runs: Sequence[RunResult]) -> list[tuple[str, str]]:
+    """Each halt's line, and the key of the limit it reached."""
     return [
-        f"{run.strategy} stopped ordering on {run.halt.day}: {run.halt.cause}"
+        (
+            f"{run.strategy} stopped ordering on {run.halt.day}: {run.halt.cause.text}",
+            run.halt.cause.key,
+        )
         for run in runs
         if run.halt is not None
     ]
@@ -242,9 +246,9 @@ def _halts(runs: Sequence[RunResult]) -> list[str]:
 def _page_notes(
     page: Page, runs: Sequence[RunResult], warnings: Sequence[Note], written: Sequence[Path]
 ) -> None:
-    for halt in _halts(runs):
+    for halt, key in _halts(runs):
         page.add()
-        page.add(halt)
+        page.add(halt, key)
     if warnings:
         page.add()
         page.add("Warnings:")
@@ -256,7 +260,7 @@ def _page_notes(
 
 
 def _markdown_notes(runs: Sequence[RunResult], warnings: Sequence[Note]) -> list[str]:
-    lines = [line for halt in _halts(runs) for line in ("", halt)]
+    lines = [line for halt, _key in _halts(runs) for line in ("", halt)]
     if warnings:
         lines += ["", "## Warnings", "", *(f"- {warning.text}" for warning in warnings)]
     day_warnings = [

@@ -11,6 +11,7 @@ from record_golden import END, RECORDED, START, recorded, settings, universe
 
 from steadyhand import (
     IDR,
+    RISK_HALT_DAILY_LOSS,
     BacktestResult,
     BacktestSettings,
     Decision,
@@ -113,8 +114,11 @@ def test_a_halt_is_reported_on_screen_and_in_the_file(market: Market, tmp_path: 
     assert result.baseline is not None
     halt = result.baseline.halt
     assert halt is not None
-    line = f"buy-and-hold stopped ordering on {halt.day}: {halt.cause}"
-    assert line in backtest_page(result, ()).lines
+    line = f"buy-and-hold stopped ordering on {halt.day}: {halt.cause.text}"
+    page = backtest_page(result, ())
+    assert line in page.lines
+    assert halt.cause.key == RISK_HALT_DAILY_LOSS
+    assert RISK_HALT_DAILY_LOSS in page.keys
     summary, _ = backtest_files(result, tmp_path)
     assert f"\n\n{line}\n" in summary.read_text(encoding="utf-8")
 

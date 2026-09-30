@@ -30,6 +30,7 @@ from steadyhand import (
     InvalidBarError,
     Market,
     NoTradingDaysError,
+    SnapshotVersionError,
     Strategy,
     UniverseCoverageError,
     UnsupportedDateError,
@@ -51,6 +52,15 @@ from steadyhand_idx.output import (
     training_level,
     with_training_level,
 )
+from steadyhand_idx.paper import (
+    CATCH_UP_CAP,
+    AccountHaltedError,
+    CatchUpError,
+    StaleDataError,
+    StrategyChangedError,
+    run_paper,
+)
+from steadyhand_idx.paper_pages import paper_run_page
 from steadyhand_idx.paths import (
     APP,
     CONFIG_FILE,
@@ -67,6 +77,7 @@ from steadyhand_idx.reports import (
     comparison_page,
 )
 from steadyhand_idx.rules import IdxMarketRules
+from steadyhand_idx.state import STATE_FILE, StateSchemaError, StateStore
 from steadyhand_idx.universe import Exclusions, Lq45Membership, Lq45Universe
 from steadyhand_idx.yahoo import YahooDataSource
 
@@ -98,9 +109,15 @@ EXIT_CODES: Final[tuple[tuple[type[Exception], int], ...]] = (
     (UnsupportedDateError, 2),
     (UniverseCoverageError, 2),
     (NoTradingDaysError, 2),
+    (SnapshotVersionError, 2),
+    (StateSchemaError, 2),
+    (CatchUpError, 2),
+    (StrategyChangedError, 2),
     (DataUnavailableError, 3),
     (DataValidationError, 3),
     (InvalidBarError, 3),
+    (StaleDataError, 3),
+    (AccountHaltedError, 3),
 )
 """Each error a command raises on purpose, and its exit code (core spec §9.6). The first row
 that matches wins. Anything else is unexpected, and exits 1."""
@@ -211,6 +228,14 @@ def _parser(stdout: TextIO) -> argparse.ArgumentParser:
     explain = commands.add_parser("explain", help="print a strategy's plain-English guide")
     explain.add_argument("strategy")
     explain.set_defaults(run=_explain)
+
+    paper = commands.add_parser("paper", help="paper trading: run the days, follow the account")
+    paper_commands = paper.add_subparsers(dest="paper_command", metavar="command", required=True)
+    paper_run = paper_commands.add_parser("run", help="run every trading day not yet run")
+    paper_run.add_argument(
+        "--catch-up", action="store_true", help=f"run more than {CATCH_UP_CAP} missed days"
+    )
+    paper_run.set_defaults(run=_paper_run)
     return parser
 
 
@@ -384,6 +409,24 @@ def _compare(ctx: Context) -> str:
         comparison = compare(strategies, _market(config, source), start, end, config.settings)
     written = comparison_files(comparison, config.data_dir / REPORTS)
     return render(comparison_page(comparison, written), config.training)
+
+
+def _paper_run(ctx: Context) -> str:
+    """Run every trading day the paper account has not run (M5 spec §6.1). A halted account
+    still runs its days, prints them, and exits 3 with the command that resumes it."""
+    config = ctx.config()
+    with (
+        ctx.world.source(config.data_dir) as source,
+        StateStore(config.data_dir / STATE_FILE) as store,
+    ):
+        done = run_paper(
+            store, config, _market(config, source), ctx.world.now(), catch_up=ctx.args.catch_up
+        )
+    text = render(paper_run_page(done), config.training)
+    if done.halt is not None:
+        ctx.say(text)
+        raise AccountHaltedError(done.halt, config.strategy)
+    return text
 
 
 def _strategy(name: str) -> Strategy:

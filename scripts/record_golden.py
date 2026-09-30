@@ -207,7 +207,7 @@ def summary(result: BacktestResult) -> dict[str, object]:
         "cash": portfolio.cash_balance().amount,
         "halt": None
         if outcome.halt is None
-        else [outcome.halt.day.isoformat(), outcome.halt.cause],
+        else [outcome.halt.day.isoformat(), outcome.halt.cause.text],
         "warnings": [[note.key, note.text] for note in (*result.warnings, *outcome.warnings)],
         "metrics": {
             "final_value": metrics.final_value.amount,
