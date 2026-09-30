@@ -1,6 +1,6 @@
 # steadyhand M6: Strategy wave 1
 
-**Status:** design approved by Shyden in conversation on 2026-09-30, in three parts, after six decisions (§2). One of them replaced part of an approved design once a measurement contradicted it (§3). Review loop: see the log at the end.
+**Status:** design approved by Shyden in conversation on 2026-09-30, in three parts, after six decisions (§2). One of them replaced part of an approved design once a measurement contradicted it (§3). The review loop closed on pass 6. The written spec was approved by Shyden on 2026-09-30, including five details the design parts had not shown (listed to him one by one: the instalment sized from cash, a refused look-back as a warning, a suspended passer kept, the new keys optional, the settings mechanism in S1).
 **Parent spec:** `2026-09-24-steadyhand-core-design.md` (the "core spec"): §4.3 (strategies return weights), §8 (the strategy library, wave 1), §10.1 (guides), §13 item 6 and §14 AC1, AC2 and AC6. M6 also builds what earlier specs left to it: the `dividend-growth` golden test (M3 spec, scope table), a look-back before a run's first day (M3 spec, scope table: "price history before the backtest's start", moved to M6; M6 builds it for corporate actions and moves bars on to M7, SD4), and course module 8's first lessons (training spec, module table).
 
 ## 1. What M6 delivers
