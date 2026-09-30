@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-09-30 12:45 WIB (2026-09-30 05:45 UTC) (**M6 spec approved** and reviewed to zero on pass 6: `docs/superpowers/specs/2026-09-30-m6-strategy-wave-1-design.md`, PR #147, epic #146 In Progress. **Next: the M6 plan, built by extraction.**)
+**Updated:** 2026-10-01 (**M6 plan built by extraction and reviewed to zero on pass 8**: `docs/superpowers/plans/2026-09-30-m6-strategy-wave-1.md`, on branch `m6/m6-plan`, Refs #146. **Next: its PR, then Task 0 (file S1–S5), then execute S1–S5.**)
 **Local:** `~/Developer/Repos/steadyhand`. `develop` holds the T1 spec and plan, and `main` has no release yet. `t1/training-spec` and `m4/m4b-plan` are merged or superseded and deleted. Start each story's branch from `origin/develop`. Read heads with `git rev-parse`; never retype one.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
@@ -114,6 +114,13 @@
 - **Tools** (git-ignored, newest copy): `.superpowers/sdd/2026-09-29-m5b-paper/`. New: `stubgen` keeps a removed top-level function's old definition in the red phase (a rename); `prose_check.py` reads every story's tree; `interface_check.py` (every Produces name defined in its story's tree, with a positive control); `gate-local.sh`, `chain-final.sh`; worktrees `wt-dev`, `wt-red`, `wt-mut`, `wt-replay`. Build findings: `build-log.md`.
 - **Performance** (idle machine): one day on a five-year account 0.17 s (budget 1 s), a 30-day catch-up 1.64 s (10 s), a five-year state 650,053 bytes (800,000). A perf run beside another session's Playwright starved 7 of 8 tests: time nothing beside a heavy job.
 
+## M6 strategy wave 1 (spec approved 2026-09-30, epic #146)
+- **Spec:** `docs/superpowers/specs/2026-09-30-m6-strategy-wave-1-design.md` (PR #147, `e2d36e4`).
+- **Plan:** `docs/superpowers/plans/2026-09-30-m6-strategy-wave-1.md`, built by extraction and reviewed to zero on pass 8 (its review log). Five stories, not the spec's four (Shyden's decision, 2026-09-30): S1 engine data path, S2 the IDX dividends-only look-back, S3 `monthly-savings`, S4 `dividend-growth` + default + golden run, S5 module 8. Fifteen scope decisions amend the spec.
+- **Scratch chain** (`.superpowers/sdd/2026-09-30-m6-wave1/repo`, branch `m6-chain`) on `develop` `e2d36e4`: SHAs in `stories.txt` there (S1 `31ff423`, S2 `3726991`, S3 `e6c5a1f`, S4 `c1745a7`, S5 `9c87c50`). Gates 1486, 1500, 1529, 1594, 1595 at 100% on 3.12 and 3.13 (`gates.py` now runs 3.13); red 35, 20, 29, 58, 2; 77 mutations M296–M372 all red (`mut-final.log`); the plan replays byte-identical (`replay2.out`).
+- **Tools** (git-ignored, newest copy): `.superpowers/sdd/2026-09-30-m6-wave1/`. New: `stubgen` stubs a new `__post_init__` as `return`, keeps the body of a function the module calls at import, and re-adds a renamed method's old text; `redrun.py`, `check_plan.py` and the plan's red step pass `--continue-on-collection-errors`; `gates.py` runs Python 3.13; `prose_check.py` and `interface_check.py` carry M6's ranges and search `scripts/`. Build findings: `build-log.md`; state: `PROGRESS.md`.
+- **For Shyden (carried forward):** the engine still credits nothing on a day whose prices the source refused, although the IDX source can now read that day's dividend; crediting it changes M3's figures, so it wants its own ticket and his decision.
+
 ## T1 training foundation (spec approved 2026-09-27, ticket #96)
 - **Spec:** `docs/superpowers/specs/2026-09-27-training-design.md`, approved by Shyden after a section-by-section design and 3 review passes. It records the decisions: any self-hoster in English (with an `en/` folder), three levels plus off, the foundation built before M4b, M3's warnings keyed, `term.*` keys derived by a type walk from the report roots, lessons shipped in both wheels, and an import allowlist as the legal control.
 - **Plan:** `docs/superpowers/plans/2026-09-27-t1-training-foundation.md`, built by extraction and reviewed to zero on pass 2. Every story was built and gated first in a scratch chain (`develop` `acca50e` + the spec, then S1 `0779c10`, S2 `9867efe`, S3 `aae3144`, S4 `1053538`). The plan replays byte-identical from its own text, and 36 mutations (M104–M139) all go red, 35 of them exactly as predicted and M138 by hand. Its scope decisions 1–3 amend the T1 spec: `LessonNotFoundError`, `LESSONS` and `catalogue()` in S4, and the figure walk reading properties and skipping private names.
@@ -141,10 +148,10 @@
 
 ## Resume steps
 0. M5 is done. `main` still has no release (M10).
-1. **Check PR #147 (the M6 spec) merged into `develop`** with every check `success` by name; if not, merge it by the standing rule (head SHA from a file, `--match-head-commit`).
-2. **Build the M6 plan by extraction** (`superpowers:writing-plans`), as M5b's was: tools are the newest copy in `.superpowers/sdd/2026-09-29-m5b-paper/` (copy to `.superpowers/sdd/2026-09-30-m6-wave1/`). Four stories, spec §10: S1 engine data path + settings mechanism, S2 `monthly-savings`, S3 `dividend-growth` + default + golden test, S4 module-8 lessons. Review the plan to zero, open its PR (Refs #146), then **file S1–S4 on board 1** (assert title "steadyhand") with each story's task and mutation IDs, as M5b's stories were.
-3. Spec facts the plan must honour (read in code 2026-09-30): `_fetch` re-raises a refusal whose days all fall outside the run (`backtest.py`, `if not named: raise`), so the look-back is a separate fetch; `paper.py` builds inputs with `day_inputs(market, opened_on, target)`; `get_int` refuses a missing key, so strategy keys need an optional path; `is_trading_day` raises before 2016; every note key needs a lesson (`test_every_key_has_a_lesson`).
-4. **The M6 measurement** (spec §3) came from `yfinance` 1.7.0 and two archived LQ45 booklets; its scripts are throwaway and not kept. Re-run only if the rule is questioned.
+1. **The M6 plan PR** from `m6/m6-plan` (this handover and the plan, Refs #146): merge it by the standing rule (head SHA from a file, every job `success` by name, `--match-head-commit`).
+2. **Task 0:** file S1–S5 on board 1 (assert title "steadyhand", read each card back through its `PVTI_` node), each issue's body its task's acceptance criteria.
+3. **Execute** S1–S5 in order, as M5b's were: `apply_task.py <plan> <tree> <task> red|green` from the tools directory; each red count and kind as the plan says, each tree byte-identical to the scratch commit, the gate green, the story's mutations red on the real commit, `merge_story.sh`, `publish-dev` green, `close_story.sh`.
+4. After S5, move #146 to Done and write the handover.
 
 ## Research technique
 - **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid scraping. Try the Internet Archive, KSEI, KPEI (idclear) or BPK first. Use idx.co.id only when none has a readable copy, and say so in the research doc.
