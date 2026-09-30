@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Protocol, runtime_checkable
 
-from steadyhand._validate import require_int
+from steadyhand._validate import require_int, require_type
 from steadyhand.money import Currency, Money
 from steadyhand.types import Costs, Instrument, Side
 
@@ -107,3 +108,20 @@ def add_trading_days(rules: MarketRules, day: date, count: int) -> date:
         while not rules.is_trading_day(current):
             current += timedelta(days=1)
     return current
+
+
+@dataclass(frozen=True, slots=True)
+class PayDates:
+    """When a dividend is modelled as paid: ``lag_trading_days`` trading days after its ex-date,
+    by ``rules`` (core spec §5 step 2), through ``add_trading_days`` like the engine's payout."""
+
+    rules: MarketRules
+    lag_trading_days: int
+
+    def __post_init__(self) -> None:
+        require_type(self.rules, MarketRules, "rules")
+        require_int(self.lag_trading_days, "lag_trading_days", minimum=1)
+
+    def of(self, ex_date: date) -> date:
+        """The modelled pay date of a dividend with *ex_date*."""
+        return add_trading_days(self.rules, ex_date, self.lag_trading_days)

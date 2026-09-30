@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-10-01 (**M6 plan built by extraction and reviewed to zero on pass 8**: `docs/superpowers/plans/2026-09-30-m6-strategy-wave-1.md`, on branch `m6/m6-plan`, Refs #146. **Next: its PR, then Task 0 (file S1–S5), then execute S1–S5.**)
+**Updated:** 2026-10-01 01:45 WIB (2026-09-30 18:45 UTC) (**M6 plan merged** (#148, `dc80666`) and stories filed: S1 #149, S2 #150, S3 #151, S4 #152, S5 #153 (board: Todo). **Next: confirm the plan's develop run, then execute S1.** This file's change is local and uncommitted; fold it into S1's PR.)
 **Local:** `~/Developer/Repos/steadyhand`. `develop` holds the T1 spec and plan, and `main` has no release yet. `t1/training-spec` and `m4/m4b-plan` are merged or superseded and deleted. Start each story's branch from `origin/develop`. Read heads with `git rev-parse`; never retype one.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
@@ -148,10 +148,10 @@
 
 ## Resume steps
 0. M5 is done. `main` still has no release (M10).
-1. **The M6 plan PR** from `m6/m6-plan` (this handover and the plan, Refs #146): merge it by the standing rule (head SHA from a file, every job `success` by name, `--match-head-commit`).
-2. **Task 0:** file S1–S5 on board 1 (assert title "steadyhand", read each card back through its `PVTI_` node), each issue's body its task's acceptance criteria.
-3. **Execute** S1–S5 in order, as M5b's were: `apply_task.py <plan> <tree> <task> red|green` from the tools directory; each red count and kind as the plan says, each tree byte-identical to the scratch commit, the gate green, the story's mutations red on the real commit, `merge_story.sh`, `publish-dev` green, `close_story.sh`.
-4. After S5, move #146 to Done and write the handover.
+1. **Confirm the plan's deploy:** develop run 36759934703 (for merge `dc80666`, PR #148) must read `completed` with every job `success` by name, `publish-dev` included (`gh run view 36759934703 --json status,jobs`). If a TestPyPI publish failed on an OIDC or TLS timeout, `gh run rerun <id> --failed`.
+2. **Execute S1 (#149), then S2–S5 in order**, as M5b's stories were, from `.superpowers/sdd/2026-09-30-m6-wave1/` (read `PROGRESS.md` there first): branch from `origin/develop` as the task's Step 1 says; `uv run --no-project --python 3.12 python apply_task.py <plan> <repo> <task> red`, run the red step exactly as the plan prints it (`--continue-on-collection-errors`) and check its count and kinds; `apply_task.py … green`, run the recorder where Task 4 says, check the tree byte-identical to the scratch commit (`git diff --stat <sN-sha>` shows only this HANDOVER), run the gate (3.12 and 3.13), run the story's mutations against the real commit (`mutations.py <repo> <worktree> <stories file> <ids>`, the stories file listing the real commits, as M5b's `stories-real.txt` did; line N is story N, since `FIRST_STORY` is 1), then `merge_story.sh`, confirm `publish-dev`, `close_story.sh`. Waiting on CI: run `wait_ci.sh <sha file> <branch>` with run_in_background (it no longer sleeps).
+3. After S5, move #146 to Done and write the handover.
+4. **For Shyden:** the plan's *Carried forward* leaves one decision open, whether the engine should credit a dividend on a day whose prices the source refused (it changes M3's figures).
 
 ## Research technique
 - **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid scraping. Try the Internet Archive, KSEI, KPEI (idclear) or BPK first. Use idx.co.id only when none has a readable copy, and say so in the research doc.

@@ -121,7 +121,7 @@ def test_no_key_is_defined_twice() -> None:
         for path, source in package_sources().items()
         if path not in KEY_MODULES
     }
-    assert len(elsewhere) >= 30, "the packages' modules were not found"
+    assert len(elsewhere) >= 30, "fewer than 30 of the packages' modules were found"
     assert any(name.startswith("steadyhand-idx/") for name in elsewhere)
     assert {name: found for name, found in elsewhere.items() if found} == {}
 
@@ -134,7 +134,7 @@ def test_every_note_is_built_from_a_note_key_and_every_note_key_is_used() -> Non
         for path, source in sources.items()
         for key in note_keys(source, reader=SAVED_NOTE_READERS.get(path))
     ]
-    assert len(used) >= len(names) >= 6, "no Note(...) call was found in the packages"
+    assert len(used) >= len(names) >= 6, "fewer Note(...) calls in the packages than note keys"
     assert any(note_keys(source) for path, source in sources.items() if IDX in path.parents)
     assert sorted(set(used) - names) == []
     assert sorted(names - set(used)) == []

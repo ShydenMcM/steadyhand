@@ -223,7 +223,7 @@ def test_training_imports_nothing_that_decides() -> None:
                 checked += 1
                 if not allowed(statement, allowlist, own):
                     found.append(f"{name}: {statement[0]}")
-    assert checked >= 8, "no training module's imports were read"
+    assert checked >= 8, "fewer than 8 training modules' imports were read"
     assert found == []
 
 

@@ -25,6 +25,10 @@ DATA_BAR_MISSING = "data.bar.missing"
 DATA_BAR_REFUSED = "data.bar.refused"
 """The data source refused a stock's days in a backtest, so it was not traded on them."""
 
+DATA_DIVIDENDS_HISTORY_REFUSED = "data.dividends.history_refused"
+"""The data source refused a stock's corporate actions before the run, so its dividend history
+is incomplete (M6 spec §4.3)."""
+
 EXEMPTION_CLAIM_BROKEN = "exemption.claim_broken"
 """Protected dividend money left the portfolio past the settlement grace, so its tax is booked."""
 

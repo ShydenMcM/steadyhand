@@ -7,10 +7,13 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from steadyhand.market import PayDates
 from steadyhand.money import IDR, Money
+from steadyhand.notes import DATA_BAR_MISSING, Note
 from steadyhand.strategies import BuyAndHold, Decision, InvalidWeightsError, Strategy
 from steadyhand.types import Instrument
-from steadyhand.view import MarketView, PortfolioView, PriceHistory, Tradable
+from steadyhand.view import ActionHistory, MarketView, PortfolioView, PriceHistory, Tradable
+from steadyhand_idx import IdxMarketRules
 
 D0 = date(2025, 6, 2)
 STOCKS = [Instrument(code, "IDX", IDR) for code in ("ASII", "BBCA", "BBRI", "TLKM", "UNVR")]
@@ -22,8 +25,12 @@ def rp(amount: int) -> Money:
 
 
 def view(buyable: set[Instrument], sellable: set[Instrument] | None = None) -> MarketView:
-    tradable = Tradable(D0, frozenset(buyable), frozenset(sellable or set()), {})
-    return MarketView(PriceHistory([]), D0, tradable)
+    tradable = Tradable(
+        D0, frozenset(buyable), frozenset(sellable or set()), {}, frozenset(buyable)
+    )
+    return MarketView(
+        PriceHistory([]), D0, tradable, ActionHistory(), PayDates(IdxMarketRules(), 14)
+    )
 
 
 def test_a_decision_holds_weights_and_memory() -> None:
@@ -56,6 +63,16 @@ def test_a_decision_checks_its_keys_and_memory() -> None:
         Decision({}, {"set": 1})  # type: ignore[dict-item]
     with pytest.raises(TypeError, match=r"^memory key must be a str, got int$"):
         Decision({}, {1: "x"})  # type: ignore[dict-item]
+
+
+def test_a_decision_carries_notes_and_checks_each_is_a_note() -> None:
+    said = Note(DATA_BAR_MISSING, "what the strategy said about the day")
+    assert Decision({}).notes == ()
+    assert Decision({}, {}, (said,)).notes == (said,)
+    with pytest.raises(TypeError, match=r"^note must be a Note, got str$"):
+        Decision({}, {}, ("said",))  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match=r"^notes must be a tuple, got list$"):
+        Decision({}, {}, [said])  # type: ignore[arg-type]
 
 
 def test_it_is_a_strategy_named_buy_and_hold() -> None:

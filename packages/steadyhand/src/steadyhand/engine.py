@@ -23,7 +23,7 @@ from steadyhand.corporate import (
     apply_actions,
 )
 from steadyhand.exemption import cover_claims, settle_claims
-from steadyhand.market import MarketRules
+from steadyhand.market import MarketRules, PayDates
 from steadyhand.money import Money
 from steadyhand.notes import (
     DATA_BAR_MISSING,
@@ -39,7 +39,7 @@ from steadyhand.risk import Halt, RiskLimits, RiskManager, UnitValue
 from steadyhand.sizing import CompoundingSizer
 from steadyhand.strategies.protocol import Memory, Strategy
 from steadyhand.types import CorporateAction, Fill, Instrument, Order, Split
-from steadyhand.view import MarketView, PortfolioView, PriceHistory, Tradable
+from steadyhand.view import ActionHistory, MarketView, PortfolioView, PriceHistory, Tradable
 
 
 class DataValidationError(ValueError):
@@ -110,7 +110,8 @@ class DayInputs:
     ``actions`` are the corporate actions with today's ex-date. ``members`` and ``excluded`` come
     from the universe. ``refused`` names the stocks whose data source refused today (M3 spec
     §7.3), and ``resumed`` those whose data is clean again today after refused days, which have
-    no usable previous close for the band check.
+    no usable previous close for the band check. ``past_actions`` holds every corporate action
+    the run loaded, the look-back's included, for the strategy's view (M6 spec §4.1).
     """
 
     day: date
@@ -120,12 +121,14 @@ class DayInputs:
     excluded: Mapping[Instrument, str] = field(default_factory=dict)
     refused: frozenset[Instrument] = frozenset()
     resumed: frozenset[Instrument] = frozenset()
+    past_actions: ActionHistory = field(default_factory=ActionHistory)
 
     def __post_init__(self) -> None:
         require_date(self.day, "day")
         require_type(self.history, PriceHistory, "history")
         for name in ("members", "refused", "resumed"):
             require_type(getattr(self, name), frozenset, name)
+        require_type(self.past_actions, ActionHistory, "past_actions")
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,7 +155,8 @@ class DayReport:
     """The price of one unit at today's close, which a deposit leaves unchanged (M3 spec §6.3)."""
     warnings: tuple[Note, ...]
     notes: tuple[Note, ...] = ()
-    """The day's exemption-claim events (M4 spec §6.3, §6.4). Empty with the switch off."""
+    """The day's exemption-claim events (M4 spec §6.3, §6.4), then what the strategy said about
+    the day (M6 spec §4.4)."""
 
 
 def run_day(
@@ -199,22 +203,27 @@ def run_day(
     rejected = [*corporate.cancelled, *filled.rejected]
     cuts = list(filled.cuts)
     memory = state.memory
+    strategy_notes: tuple[Note, ...] = ()
     if halt is None:
         spendable = max(portfolio.spendable_cash(day), Money.zero(portfolio.currency))
         worth = {stock: closes[stock] * quantity for stock, quantity in held.items()}
         seen = PortfolioView(value, spendable, worth)
-        view = MarketView(history, day, tradable)
+        view = MarketView(
+            history,
+            day,
+            tradable,
+            inputs.past_actions,
+            PayDates(rules, settings.pay_lag_trading_days),
+        )
         decision = strategy.decide(view, seen, state.memory)
-        prices = dict(closes)
-        for stock in decision.weights:
-            if stock not in prices and (close := view.last_close(stock)) is not None:
-                prices[stock] = close
+        prices = _prices(closes, decision.weights, view)
         sized = CompoundingSizer(rules).size(decision.weights, seen, held, prices, day)
         checked = risk.check(sized, seen, tradable, prices)
         queued = checked.orders
         rejected += checked.rejected
         cuts += checked.cuts
         memory = decision.memory
+        strategy_notes = decision.notes
 
     new_holdings = Holdings(
         portfolio,
@@ -244,7 +253,7 @@ def run_day(
         value=value,
         unit_price=units.price,
         warnings=(*corporate.warnings, *warnings),
-        notes=claimed.notes,
+        notes=(*claimed.notes, *strategy_notes),
     )
     return EngineState(new_holdings, units, halt, day, memory), report
 
@@ -262,6 +271,17 @@ def _fill(
         holdings.frozen,
     )
     return SimulatedBroker(rules, settings).fill(holdings.portfolio, holdings.pending, opening)
+
+
+def _prices(
+    closes: Mapping[Instrument, Money], weights: Mapping[Instrument, Decimal], view: MarketView
+) -> dict[Instrument, Money]:
+    """Each held stock's close, and the last close of each other stock the strategy weighted."""
+    prices = dict(closes)
+    for stock in weights:
+        if stock not in prices and (close := view.last_close(stock)) is not None:
+            prices[stock] = close
+    return prices
 
 
 def _validate(inputs: DayInputs, rules: MarketRules) -> None:
@@ -335,7 +355,7 @@ def _tradable(
         warnings.append(Note(DATA_BAR_MISSING, warning))
     buyable = frozenset(inputs.members - reasons.keys())
     sellable = frozenset(held - reasons.keys())
-    return Tradable(day, buyable, sellable, reasons), warnings
+    return Tradable(day, buyable, sellable, reasons, inputs.members), warnings
 
 
 def _top_up(

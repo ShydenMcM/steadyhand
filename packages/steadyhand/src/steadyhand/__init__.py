@@ -78,7 +78,7 @@ from steadyhand.income import (
     run_rate,
     years_before,
 )
-from steadyhand.market import MarketRules, UnsupportedDateError, add_trading_days
+from steadyhand.market import MarketRules, PayDates, UnsupportedDateError, add_trading_days
 from steadyhand.metrics import (
     RATIO_PLACES,
     YEAR_DAYS,
@@ -102,6 +102,7 @@ from steadyhand.notes import (
     CORPORATE_SPLIT_ORDER_CANCELLED,
     DATA_BAR_MISSING,
     DATA_BAR_REFUSED,
+    DATA_DIVIDENDS_HISTORY_REFUSED,
     EXEMPTION_CLAIM_BROKEN,
     EXEMPTION_DEADLINE_MISSED,
     FILL_CASH_CUT,
@@ -167,6 +168,7 @@ from steadyhand.strategies import (
     InvalidWeightsError,
     Memory,
     Registered,
+    Setting,
     Strategy,
     Turnover,
     guide,
@@ -233,7 +235,15 @@ from steadyhand.types import (
     Split,
 )
 from steadyhand.universe import Universe
-from steadyhand.view import LookAheadError, MarketView, PortfolioView, PriceHistory, Tradable
+from steadyhand.view import (
+    ActionHistory,
+    LookAheadError,
+    MarketView,
+    PastDividend,
+    PortfolioView,
+    PriceHistory,
+    Tradable,
+)
 
 __version__: str = version("steadyhand")
 
@@ -244,6 +254,7 @@ __all__ = [
     "CORPORATE_SPLIT_ORDER_CANCELLED",
     "DATA_BAR_MISSING",
     "DATA_BAR_REFUSED",
+    "DATA_DIVIDENDS_HISTORY_REFUSED",
     "DISCLAIMER",
     "EXEMPTION_CLAIM_BROKEN",
     "EXEMPTION_DEADLINE_MISSED",
@@ -332,6 +343,7 @@ __all__ = [
     "TRADE_NO_BAR",
     "TRADE_REFUSED",
     "YEAR_DAYS",
+    "ActionHistory",
     "BacktestResult",
     "BacktestSettings",
     "Bar",
@@ -401,6 +413,8 @@ __all__ = [
     "Order",
     "OrderAck",
     "OtherAction",
+    "PastDividend",
+    "PayDates",
     "PaymentCalendar",
     "Payout",
     "Portfolio",
@@ -420,6 +434,7 @@ __all__ = [
     "RunResult",
     "Scenario",
     "ScenarioProjection",
+    "Setting",
     "Side",
     "SimulatedBroker",
     "Sizer",

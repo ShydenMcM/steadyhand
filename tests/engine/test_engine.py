@@ -39,7 +39,7 @@ from steadyhand.portfolio import MissingPriceError, MovementKind
 from steadyhand.risk import Halt, RiskLimits
 from steadyhand.strategies import BuyAndHold, Decision, Memory
 from steadyhand.types import Bar, CashDividend, Instrument, Order, Side, Split
-from steadyhand.view import MarketView, PortfolioView, PriceHistory
+from steadyhand.view import ActionHistory, MarketView, PastDividend, PortfolioView, PriceHistory
 from steadyhand_idx import IdxMarketRules
 
 D1, D2, D3, D4 = date(2025, 6, 2), date(2025, 6, 3), date(2025, 6, 4), date(2025, 6, 5)
@@ -530,3 +530,83 @@ def test_every_day_keeps_cash_whole_and_the_value_adding_up(
             m for m in portfolio.ledger if m.kind is MovementKind.DAILY_COST and m.day == day
         ]
         assert len(charges) == (1 if report.daily_cost.amount else 0)
+
+
+class _Says:
+    """``buy-and-hold``, saying one thing about each day it decides."""
+
+    def __init__(self, note: Note) -> None:
+        self._note = note
+
+    @property
+    def name(self) -> str:
+        return "says"
+
+    def decide(self, view: MarketView, portfolio: PortfolioView, memory: Memory) -> Decision:
+        decided = BuyAndHold().decide(view, portfolio, memory)
+        return Decision(decided.weights, decided.memory, (self._note,))
+
+
+class _Looks:
+    """A strategy that records what its view shows, and asks for nothing."""
+
+    def __init__(self) -> None:
+        self.members: frozenset[Instrument] = frozenset()
+        self.buyable: frozenset[Instrument] = frozenset()
+        self.dividends: tuple[PastDividend, ...] = ()
+        self.complete: tuple[bool, bool] = (False, False)
+        self.pay_date = D1
+
+    @property
+    def name(self) -> str:
+        return "looks"
+
+    def decide(self, view: MarketView, portfolio: PortfolioView, memory: Memory) -> Decision:
+        self.members, self.buyable = view.tradable.members, view.tradable.buyable
+        self.dividends = view.dividends(BBCA)
+        self.complete = (view.history_complete(BBCA), view.history_complete(BBRI))
+        self.pay_date = view.pay_date(view.today)
+        return Decision({})
+
+
+SAID = Note(DATA_BAR_MISSING, "what the strategy said about the day")
+
+
+def test_a_strategys_notes_follow_the_engines_own_in_the_days_report() -> None:
+    state, _ = day_one()
+    claim = DividendClaim(BBCA, date(2025, 5, 27), date(2025, 5, 28), rp(12_500), D1, rp(12_500))
+    exempt = replace(half(), dividend_reinvestment_exemption=True)
+    inputs = DayInputs(D2, steady(), members=MEMBERS)
+    _, report = run_day(with_claim(state, claim), inputs, _Says(SAID), rules(), exempt)
+    assert [note.key for note in report.notes] == [EXEMPTION_DEADLINE_MISSED, DATA_BAR_MISSING]
+    assert report.notes[-1] == SAID
+    _, quiet = run_day(state, inputs, _Says(SAID), rules(), half())
+    assert quiet.notes == (SAID,)
+
+
+def test_a_halted_day_asks_the_strategy_nothing_so_it_says_nothing() -> None:
+    state, _ = day_one()
+    halted = replace(state, halt=Halt(D1, Note(RISK_HALT_DAILY_LOSS, "a fall")))
+    _, report = run_day(halted, DayInputs(D2, steady(), members=MEMBERS), _Untouchable(), rules())
+    assert report.notes == ()
+
+
+def test_the_strategy_sees_the_days_members_the_past_dividends_and_the_engines_pay_date() -> None:
+    tlkm = Instrument("TLKM", "IDX", IDR)
+    past = ActionHistory([CashDividend(BBCA, date(2025, 5, 2), Decimal(100))], [BBRI])
+    inputs = DayInputs(D1, steady(), members=MEMBERS | {tlkm}, past_actions=past)
+    looks = _Looks()
+    lag = replace(half(), pay_lag_trading_days=3)
+    run_day(EngineState.opening(rp(10_000_000), D1), inputs, looks, rules(), lag)
+    # TLKM is a member with no bar today: kept out of the buyable set, not out of the universe.
+    assert (looks.members, looks.buyable) == (MEMBERS | {tlkm}, MEMBERS)
+    assert looks.dividends == (PastDividend(date(2025, 5, 2), Decimal(100)),)
+    assert looks.complete == (True, False)
+    # Three trading days after Monday 2 June 2025.
+    assert looks.pay_date == date(2025, 6, 5)
+
+
+def test_day_inputs_hold_an_action_history() -> None:
+    assert DayInputs(D1, steady()).past_actions.incomplete == frozenset()
+    with pytest.raises(TypeError, match=r"^past_actions must be an ActionHistory, got tuple$"):
+        DayInputs(D1, steady(), past_actions=())  # type: ignore[arg-type]

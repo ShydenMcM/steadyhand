@@ -18,6 +18,7 @@ from steadyhand.backtest import (
     UniverseCoverageError,
     backtest,
     compare,
+    day_inputs,
 )
 from steadyhand.corporate import Entitlement
 from steadyhand.data import DataUnavailableError, UnavailableDaysError
@@ -29,6 +30,7 @@ from steadyhand.money import IDR, Currency, CurrencyMismatchError, Money
 from steadyhand.notes import (
     DATA_BAR_MISSING,
     DATA_BAR_REFUSED,
+    DATA_DIVIDENDS_HISTORY_REFUSED,
     RISK_HALT_DAILY_LOSS,
     TRADE_NOT_IN_UNIVERSE,
     Note,
@@ -36,7 +38,7 @@ from steadyhand.notes import (
 from steadyhand.risk import RiskLimits
 from steadyhand.strategies import BuyAndHold, Decision, Memory, Strategy
 from steadyhand.types import Bar, CashDividend, CorporateAction, Instrument
-from steadyhand.view import MarketView, PortfolioView
+from steadyhand.view import MarketView, PastDividend, PortfolioView
 from steadyhand_idx import UNIVERSE_SURVIVORSHIP_GAP, IdxMarketRules
 
 BBCA = Instrument("BBCA", "IDX", IDR)
@@ -623,3 +625,137 @@ def test_compare_needs_each_strategy_named_once() -> None:
 def test_compare_checks_its_window_as_backtest_does() -> None:
     with pytest.raises(ValueError, match=r"^the backtest ends on 2025-06-30, before it starts on"):
         compare([BuyAndHold()], market(_Source(calm())), END, START, settings())
+
+
+class _Reader:
+    """A strategy that records, each day, BBCA's dividends and whether BBCA's and BBRI's
+    histories are complete, and asks for nothing."""
+
+    def __init__(self) -> None:
+        self.seen: dict[date, tuple[tuple[PastDividend, ...], bool, bool]] = {}
+
+    @property
+    def name(self) -> str:
+        return "reader"
+
+    def decide(self, view: MarketView, portfolio: PortfolioView, memory: Memory) -> Decision:
+        self.seen[view.today] = (
+            view.dividends(BBCA),
+            view.history_complete(BBCA),
+            view.history_complete(BBRI),
+        )
+        return Decision({})
+
+
+class _Delisted(_Source):
+    """A source with nothing at all for BBRI before the run, as Yahoo answers for a delisted
+    stock (M6 spec §11): a plain ``DataUnavailableError``, naming no day."""
+
+    def corporate_actions(
+        self, instrument: Instrument, start: date, end: date
+    ) -> Sequence[CorporateAction]:
+        if instrument == BBRI and end < START:
+            self.requests.append(("actions", instrument.symbol, start, end))
+            msg = "BBRI.JK: the request to Yahoo failed: HTTP Error 404"
+            raise DataUnavailableError(msg)
+        return super().corporate_actions(instrument, start, end)
+
+
+LOOKED_BACK: list[CorporateAction] = [
+    CashDividend(BBCA, date(2022, 12, 30), Decimal(90)),
+    CashDividend(BBCA, date(2023, 3, 1), Decimal(100)),
+    CashDividend(BBCA, date(2025, 7, 2), Decimal(25)),
+]
+# Two years back from Monday 30 June 2025: from 1 January 2023 to the day before the first day.
+SINCE, UNTIL = date(2023, 1, 1), date(2025, 6, 29)
+
+
+def looking_back(years: int = 2) -> BacktestSettings:
+    return replace(settings(), lookback_years=years)
+
+
+def test_a_look_back_fetches_actions_from_1_january_and_bars_from_the_first_day() -> None:
+    source = _Source(calm(), LOOKED_BACK)
+    reader = _Reader()
+    result = run(source, strategy=reader, chosen=looking_back())
+    assert source.requests == [
+        ("bars", "BBCA", START, END),
+        ("actions", "BBCA", START, END),
+        ("bars", "BBRI", START, END),
+        ("actions", "BBRI", START, END),
+        ("actions", "BBCA", SINCE, UNTIL),
+        ("actions", "BBRI", SINCE, UNTIL),
+    ]
+    # 30 December 2022 is before the look-back; the run's own dividend shows from its ex-date.
+    assert reader.seen[START] == ((PastDividend(date(2023, 3, 1), Decimal(100)),), True, True)
+    assert reader.seen[END][0] == (
+        PastDividend(date(2023, 3, 1), Decimal(100)),
+        PastDividend(date(2025, 7, 2), Decimal(25)),
+    )
+    assert result.warnings == ()
+
+
+def test_a_refused_look_back_warns_once_and_the_run_goes_on_without_that_history() -> None:
+    source = _Source(calm(), LOOKED_BACK, refused={BBRI: [date(2024, 5, 6)]})
+    reader = _Reader()
+    result = run(source, strategy=reader, chosen=looking_back())
+    assert [report.day for report in result.run.reports] == list(DAYS)
+    assert result.warnings == (
+        Note(
+            DATA_DIVIDENDS_HISTORY_REFUSED,
+            "BBRI: the data source refused its corporate actions from 2023-01-01 to 2025-06-29, "
+            "before the run (BBRI: refused), so its dividend history is incomplete for any "
+            "strategy that reads it.",
+        ),
+    )
+    assert reader.seen[START][1:] == (True, False)
+    assert reader.seen[END][1:] == (True, False)
+
+
+def test_a_look_back_the_source_has_nothing_for_is_refused_history_too() -> None:
+    source = _Delisted(calm())
+    reader = _Reader()
+    result = run(source, strategy=reader, chosen=looking_back(1))
+    assert [warning.key for warning in result.warnings] == [DATA_DIVIDENDS_HISTORY_REFUSED]
+    assert result.warnings[0].text.startswith(
+        "BBRI: the data source refused its corporate actions from 2024-01-01 to 2025-06-29, "
+        "before the run (BBRI.JK: the request to Yahoo failed: HTTP Error 404)"
+    )
+    assert reader.seen[END][1:] == (True, False)
+
+
+def test_a_refusal_in_the_runs_own_days_keeps_its_rules_beside_a_look_back() -> None:
+    source = _Source(calm(), refused={BBRI: [date(2025, 7, 3)]})
+    result = run(source, chosen=looking_back())
+    assert [warning.key for warning in result.warnings] == [DATA_BAR_REFUSED]
+    assert ("actions", "BBRI", SINCE, UNTIL) in source.requests
+
+
+def test_compare_fetches_the_look_back_once_for_every_strategy() -> None:
+    source = _Source(calm(), LOOKED_BACK)
+    reader = _Reader()
+    compare([_Fixed({BBCA: Decimal("0.5")}), reader], market(source), START, END, looking_back(1))
+    assert [request for request in source.requests if request[2] < START] == [
+        ("actions", "BBCA", date(2024, 1, 1), UNTIL),
+        ("actions", "BBRI", date(2024, 1, 1), UNTIL),
+    ]
+    assert reader.seen[START][0] == ()
+
+
+def test_day_inputs_give_every_day_the_look_back() -> None:
+    source = _Source(calm(), LOOKED_BACK, refused={BBRI: [date(2024, 5, 6)]})
+    inputs = day_inputs(market(source), START, END, 2)
+    assert all(day.past_actions is inputs[0].past_actions for day in inputs)
+    history = inputs[0].past_actions
+    assert history.dividends(BBCA, START) == (PastDividend(date(2023, 3, 1), Decimal(100)),)
+    assert history.incomplete == frozenset({BBRI})
+    assert day_inputs(market(_Source(calm())), START, END)[0].past_actions.incomplete == frozenset()
+    with pytest.raises(ValueError, match=r"^lookback_years must be at least 0, got -1$"):
+        day_inputs(market(source), START, END, -1)
+
+
+def test_the_look_back_is_a_whole_number_of_years() -> None:
+    with pytest.raises(ValueError, match=r"^lookback_years must be at least 0, got -1$"):
+        BacktestSettings(rp(1), lookback_years=-1)
+    with pytest.raises(TypeError, match=r"^lookback_years must be an int, got bool$"):
+        BacktestSettings(rp(1), lookback_years=True)
