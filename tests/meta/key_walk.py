@@ -14,11 +14,10 @@ NOTE_MODULES = (ENGINE / "notes.py", IDX / "notes.py")
 TERM_MODULE = ENGINE / "terms.py"
 KEY_MODULES = (*NOTE_MODULES, TERM_MODULE)
 TERM_PREFIX = "term."
-SAVED_NOTES = ENGINE / "snapshot.py"
-SAVED_NOTE_READER = "_read_note"
-"""The one function allowed to build a ``Note`` from a key that is not a constant: the snapshot
-reader, which rebuilds a saved note exactly as it was written (M5 spec §6.3). The note was built
-from a constant when it was made; read back, its key is data, and it cannot drift."""
+SAVED_NOTE_READERS = {ENGINE / "snapshot.py": "_read_note", IDX / "state.py": "_audit_line"}
+"""The functions allowed to build a ``Note`` from a key that is not a constant, one per module:
+each reads a saved note back exactly as it was written (M5 spec §6.3). The note was built from a
+constant when it was made; read back, its key is data, and it cannot drift."""
 
 
 def key_constants(source: str) -> list[tuple[str, str]]:
