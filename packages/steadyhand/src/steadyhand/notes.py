@@ -43,6 +43,72 @@ RISK_HALT_DAILY_LOSS = "risk.halt.daily_loss"
 RISK_HALT_DRAWDOWN = "risk.halt.drawdown"
 """The unit value fell by the drawdown limit or more below its high-water mark: ordering stopped."""
 
+CORPORATE_SPLIT_ORDER_CANCELLED = "corporate.split.order_cancelled"
+"""An order for a stock that splits that day is cancelled: its quantity no longer fits."""
+
+FILL_CASH_CUT = "fill.cash.cut"
+"""A buy at the open was made smaller to the cash that could be spent."""
+
+FILL_CASH_SHORT = "fill.cash.short"
+"""A buy at the open found no cash to spend, so it was not filled."""
+
+FILL_CHARGES_UNPAID = "fill.charges_unpaid"
+"""A sale was refused: the day's charges would exceed the cash and proceeds to pay them."""
+
+FILL_FROZEN = "fill.frozen"
+"""An order for a frozen stock was not filled at the open."""
+
+FILL_NO_BAR = "fill.no_bar"
+"""An order was not filled: its stock has no bar that day."""
+
+FILL_NO_REFERENCE = "fill.no_reference"
+"""An order was not filled: there is no previous close to set its price band."""
+
+FILL_NO_TRADES = "fill.no_trades"
+"""An order was not filled: its stock did not trade that day."""
+
+FILL_OUTSIDE_BAND = "fill.outside_band"
+"""An order was not filled: its price at the open was outside the day's price band."""
+
+FILL_VOLUME_CUT = "fill.volume.cut"
+"""An order was made smaller to its share of the day's traded volume."""
+
+FILL_VOLUME_TOO_SMALL = "fill.volume.too_small"
+"""An order was not filled: its share of the day's volume is less than a lot."""
+
+LIMIT_CASH_CUT = "limit.cash.cut"
+"""A buy was made smaller to the cash that can be spent."""
+
+LIMIT_CASH_SHORT = "limit.cash.short"
+"""A buy was not placed: there is no cash to spend."""
+
+LIMIT_MIN_LOTS = "limit.min_lots"
+"""A buy was not placed: it is below the smallest buy allowed."""
+
+LIMIT_WEIGHT_CUT = "limit.weight.cut"
+"""A buy was made smaller to the most one stock may be of the portfolio."""
+
+LIMIT_WEIGHT_FULL = "limit.weight.full"
+"""A buy was not placed: the stock is already at its weight limit."""
+
+TRADE_EXCLUDED = "trade.excluded"
+"""A stock you excluded is not traded."""
+
+TRADE_FROZEN = "trade.frozen"
+"""A frozen stock is not traded."""
+
+TRADE_NO_BAR = "trade.no_bar"
+"""A stock with no bar today is not traded."""
+
+TRADE_NOT_HELD = "trade.not_held"
+"""A stock that is not held cannot be sold."""
+
+TRADE_NOT_IN_UNIVERSE = "trade.not_in_universe"
+"""A stock outside the universe on the day cannot be bought."""
+
+TRADE_REFUSED = "trade.refused"
+"""A stock whose data the source refused today is not traded."""
+
 _KEY = re.compile(r"[a-z]+(\.[a-z_]+)+")
 
 

@@ -291,7 +291,7 @@ def _decisions(report: DayReport) -> list[AuditLine]:
             Note(
                 PAPER_ORDER_CUT,
                 f"cut: {cut.order.side.value} {cut.order.instrument.symbol} from "
-                f"{cut.order.quantity} to {cut.quantity} shares: {cut.reason}",
+                f"{cut.order.quantity} to {cut.quantity} shares: {cut.reason.text}",
             ),
         )
         for cut in report.cuts
@@ -302,7 +302,7 @@ def _decisions(report: DayReport) -> list[AuditLine]:
             Note(
                 PAPER_ORDER_SKIPPED,
                 f"skipped: {rejected.order.side.value} {rejected.order.quantity} "
-                f"{rejected.order.instrument.symbol}: {rejected.reason}",
+                f"{rejected.order.instrument.symbol}: {rejected.reason.text}",
             ),
         )
         for rejected in report.rejected

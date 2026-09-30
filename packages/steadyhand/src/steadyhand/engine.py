@@ -25,7 +25,14 @@ from steadyhand.corporate import (
 from steadyhand.exemption import cover_claims, settle_claims
 from steadyhand.market import MarketRules
 from steadyhand.money import Money
-from steadyhand.notes import DATA_BAR_MISSING, Note
+from steadyhand.notes import (
+    DATA_BAR_MISSING,
+    TRADE_EXCLUDED,
+    TRADE_FROZEN,
+    TRADE_NO_BAR,
+    TRADE_REFUSED,
+    Note,
+)
 from steadyhand.outcomes import Cut, Rejected
 from steadyhand.portfolio import Portfolio
 from steadyhand.risk import Halt, RiskLimits, RiskManager, UnitValue
@@ -310,18 +317,18 @@ def _tradable(
 ) -> tuple[Tradable, list[Note]]:
     """Today's buyable and sellable stocks (M3 spec §6.4), and a warning for each missing bar."""
     day = inputs.day
-    reasons: dict[Instrument, str] = {}
+    reasons: dict[Instrument, Note] = {}
     for instrument in inputs.refused:
-        reasons[instrument] = f"the data source refused {day.isoformat()}"
+        reasons[instrument] = Note(TRADE_REFUSED, f"the data source refused {day.isoformat()}")
     for instrument, reason in frozen.items():
-        reasons.setdefault(instrument, f"frozen: {reason}")
+        reasons.setdefault(instrument, Note(TRADE_FROZEN, f"frozen: {reason}"))
     for instrument, reason in inputs.excluded.items():
-        reasons.setdefault(instrument, f"excluded: {reason}")
+        reasons.setdefault(instrument, Note(TRADE_EXCLUDED, f"excluded: {reason}"))
     warnings: list[Note] = []
     for instrument in sorted(inputs.members | held, key=lambda i: (i.market, i.symbol)):
         if instrument in reasons or inputs.history.on(instrument, day) is not None:
             continue
-        reasons[instrument] = f"no bar on {day.isoformat()}"
+        reasons[instrument] = Note(TRADE_NO_BAR, f"no bar on {day.isoformat()}")
         warning = f"{instrument.symbol} has no bar on {day.isoformat()}, so it is not traded"
         if instrument in held:
             warning += f"; it is valued at its last close, {closes[instrument]}"

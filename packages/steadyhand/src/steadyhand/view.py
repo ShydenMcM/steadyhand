@@ -17,6 +17,7 @@ from itertools import pairwise
 from steadyhand._ratio import ratio_down
 from steadyhand._validate import require_date, require_type
 from steadyhand.money import CurrencyMismatchError, Money
+from steadyhand.notes import TRADE_NOT_HELD, TRADE_NOT_IN_UNIVERSE, Note
 from steadyhand.types import Bar, Instrument, Side
 
 
@@ -81,7 +82,7 @@ class Tradable:
     day: date
     buyable: frozenset[Instrument]
     sellable: frozenset[Instrument]
-    reasons: Mapping[Instrument, str]
+    reasons: Mapping[Instrument, Note]
 
     def __post_init__(self) -> None:
         require_date(self.day, "tradable day")
@@ -92,7 +93,7 @@ class Tradable:
             msg = f"{', '.join(clash)} cannot be both tradable and kept out"
             raise ValueError(msg)
 
-    def why_not(self, instrument: Instrument, side: Side) -> str | None:
+    def why_not(self, instrument: Instrument, side: Side) -> Note | None:
         """Why *instrument* cannot be traded on *side* today, or ``None`` when it can."""
         allowed = self.buyable if side is Side.BUY else self.sellable
         if instrument in allowed:
@@ -100,8 +101,8 @@ class Tradable:
         if instrument in self.reasons:
             return self.reasons[instrument]
         if side is Side.BUY:
-            return f"not in the universe on {self.day.isoformat()}"
-        return "not held"
+            return Note(TRADE_NOT_IN_UNIVERSE, f"not in the universe on {self.day.isoformat()}")
+        return Note(TRADE_NOT_HELD, "not held")
 
 
 class MarketView:

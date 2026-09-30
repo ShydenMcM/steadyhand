@@ -2,7 +2,7 @@
 id = "shares.splits"
 title = "Stock splits"
 summary = "A split changes how many shares you hold and the price of each, without changing what the holding is worth."
-explains = ["corporate.split.fraction_dropped"]
+explains = ["corporate.split.fraction_dropped", "corporate.split.order_cancelled"]
 module = "shares-and-dividends"
 position = 5
 see_also = ["shares.cost_basis"]
@@ -18,3 +18,6 @@ a 1-for-5 reverse split make 240.6 shares. A share cannot be held in parts, so y
 the 0.6 share is left over. In a real account that part may be paid out to you in cash,
 called cash in lieu. steadyhand does not model that payment: it drops the fraction and says so
 in a note, so a report shows slightly less than a real account would.
+
+An order queued for a stock whose split takes effect that day is cancelled: it was sized for
+the old share count, so the strategy decides again after the split.

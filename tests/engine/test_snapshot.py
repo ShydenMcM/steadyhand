@@ -87,7 +87,7 @@ def fills(draw: st.DrawFn) -> Fill:
 @st.composite
 def cuts(draw: st.DrawFn) -> Cut:
     order = draw(st.builds(Order, INSTRUMENTS, st.sampled_from(Side), st.integers(2, 10**6), DAYS))
-    return Cut(order, draw(st.integers(1, order.quantity - 1)), draw(TEXT))
+    return Cut(order, draw(st.integers(1, order.quantity - 1)), draw(NOTES))
 
 
 @st.composite
@@ -163,7 +163,7 @@ REPORTS = st.builds(
     DayReport,
     day=DAYS,
     fills=tuples(fills()),
-    rejected=tuples(st.builds(Rejected, ORDERS, TEXT)),
+    rejected=tuples(st.builds(Rejected, ORDERS, NOTES)),
     cuts=tuples(cuts()),
     queued=tuples(ORDERS),
     entitled=tuples(entitlements()),

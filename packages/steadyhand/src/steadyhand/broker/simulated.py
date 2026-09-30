@@ -19,6 +19,19 @@ from decimal import ROUND_FLOOR, Decimal
 
 from steadyhand.market import MarketRules
 from steadyhand.money import Money, Rounding
+from steadyhand.notes import (
+    FILL_CASH_CUT,
+    FILL_CASH_SHORT,
+    FILL_CHARGES_UNPAID,
+    FILL_FROZEN,
+    FILL_NO_BAR,
+    FILL_NO_REFERENCE,
+    FILL_NO_TRADES,
+    FILL_OUTSIDE_BAND,
+    FILL_VOLUME_CUT,
+    FILL_VOLUME_TOO_SMALL,
+    Note,
+)
 from steadyhand.outcomes import Cut, Rejected
 from steadyhand.portfolio import MovementKind, Portfolio
 from steadyhand.types import Bar, Fill, Instrument, Order, Side
@@ -87,11 +100,11 @@ class SimulatedBroker:
         session = _Session(self._rules, portfolio, opening.day)
         for order in sorted(orders, key=lambda order: order.side is Side.BUY):
             price = self._price(order, opening)
-            if isinstance(price, str):
+            if isinstance(price, Note):
                 session.reject(order, price)
                 continue
             wanted = self._volume_capped(order, opening, session)
-            if isinstance(wanted, str):
+            if isinstance(wanted, Note):
                 session.reject(order, wanted)
             elif order.side is Side.BUY:
                 session.buy(order, wanted, price)
@@ -99,16 +112,16 @@ class SimulatedBroker:
                 session.sell(order, wanted, price)
         return session.close()
 
-    def _price(self, order: Order, opening: Opening) -> Money | str:
+    def _price(self, order: Order, opening: Opening) -> Money | Note:
         instrument = order.instrument
         day = opening.day
         bar = opening.bars.get(instrument)
         if instrument in opening.frozen:
-            return f"frozen: {opening.frozen[instrument]}"
+            return Note(FILL_FROZEN, f"frozen: {opening.frozen[instrument]}")
         if bar is None:
-            return f"no bar for {instrument.symbol} on {day.isoformat()}"
+            return Note(FILL_NO_BAR, f"no bar for {instrument.symbol} on {day.isoformat()}")
         if bar.volume == 0:
-            return f"{instrument.symbol} did not trade on {day.isoformat()}"
+            return Note(FILL_NO_TRADES, f"{instrument.symbol} did not trade on {day.isoformat()}")
         slippage = self._settings.slippage
         if order.side is Side.BUY:
             slipped = bar.open.times(1 + slippage, Rounding.UP)
@@ -117,22 +130,34 @@ class SimulatedBroker:
         price = self._rules.round_to_tick(instrument, slipped, order.side, day)
         reference = opening.references.get(instrument)
         if reference is None:
-            return f"no previous close for {instrument.symbol} to set the price band"
+            return Note(
+                FILL_NO_REFERENCE,
+                f"no previous close for {instrument.symbol} to set the price band",
+            )
         low, high = self._rules.price_band(instrument, reference, day)
         if not low <= price <= high:
-            return f"fill price {price} is outside the band {low} to {high}"
+            return Note(
+                FILL_OUTSIDE_BAND, f"fill price {price} is outside the band {low} to {high}"
+            )
         return price
 
-    def _volume_capped(self, order: Order, opening: Opening, session: _Session) -> int | str:
+    def _volume_capped(self, order: Order, opening: Opening, session: _Session) -> int | Note:
         cap = self._settings.volume_cap
         volume = opening.bars[order.instrument].volume
         lot = self._rules.lot_size(order.instrument, opening.day)
         allowed = int((volume * cap).to_integral_value(rounding=ROUND_FLOOR)) // lot * lot
         if allowed == 0:
-            return f"{_percent(cap)} of the day's {volume:,} shares traded is less than a lot"
+            return Note(
+                FILL_VOLUME_TOO_SMALL,
+                f"{_percent(cap)} of the day's {volume:,} shares traded is less than a lot",
+            )
         if order.quantity <= allowed:
             return order.quantity
-        session.cut(order, allowed, f"cut to {_percent(cap)} of the day's {volume:,} shares traded")
+        session.cut(
+            order,
+            allowed,
+            Note(FILL_VOLUME_CUT, f"cut to {_percent(cap)} of the day's {volume:,} shares traded"),
+        )
         return allowed
 
 
@@ -150,10 +175,10 @@ class _Session:
         self._proceeds = Money.zero(portfolio.currency)
         self._bought = False
 
-    def reject(self, order: Order, reason: str) -> None:
+    def reject(self, order: Order, reason: Note) -> None:
         self._rejected.append(Rejected(order, reason))
 
-    def cut(self, order: Order, quantity: int, reason: str) -> None:
+    def cut(self, order: Order, quantity: int, reason: Note) -> None:
         self._cuts.append(Cut(order, quantity, reason))
 
     def buy(self, order: Order, wanted: int, price: Money) -> None:
@@ -164,10 +189,12 @@ class _Session:
         while quantity > 0 and self._cost(price * quantity) > available:
             quantity -= lot
         if quantity == 0:
-            self.reject(order, f"not enough cash: {available} can be spent")
+            self.reject(order, Note(FILL_CASH_SHORT, f"not enough cash: {available} can be spent"))
             return
         if quantity < wanted:
-            self.cut(order, quantity, f"cut to the {available} that can be spent")
+            self.cut(
+                order, quantity, Note(FILL_CASH_CUT, f"cut to the {available} that can be spent")
+            )
         self._book(order, quantity, price)
         self._bought = True
 
@@ -179,7 +206,11 @@ class _Session:
         covering = self._portfolio.spendable_cash(self._day) + self._proceeds + net
         if daily > covering:
             self.reject(
-                order, f"the day's charges of {daily} exceed the {covering} that could pay them"
+                order,
+                Note(
+                    FILL_CHARGES_UNPAID,
+                    f"the day's charges of {daily} exceed the {covering} that could pay them",
+                ),
             )
             return
         self._book(order, quantity, price)
