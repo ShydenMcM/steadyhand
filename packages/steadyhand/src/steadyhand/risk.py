@@ -30,7 +30,9 @@ from steadyhand.types import Instrument, Order, Side
 from steadyhand.view import PortfolioView, Tradable
 
 
-def _percent(rate: Decimal) -> str:
+def percent(rate: Decimal) -> str:
+    """*rate* as a percentage to two places, rounded down: how a limit and a breach of it are
+    written, so a breach never reads as more than it is."""
     return f"{(rate * 100).quantize(Decimal('0.01'), rounding=ROUND_FLOOR)}%"
 
 
@@ -98,6 +100,11 @@ class UnitValue:
             if getattr(self, name) < 0:
                 msg = f"{name} cannot be negative, got {getattr(self, name)}"
                 raise ValueError(msg)
+
+    @property
+    def drawdown(self) -> Decimal:
+        """How far the price is below the high-water mark, as a share of it."""
+        return 1 - ratio_down(self.price, self.high_water)
 
     def revalue(self, value: Money) -> UnitValue:
         """The price per unit when the portfolio is worth *value*. Nothing changes before units."""
@@ -168,7 +175,7 @@ class RiskManager:
             room = (cap - held).amount // (price * lot).amount * lot
             quantity = min(order.quantity, max(room, 0))
             if quantity < order.quantity:
-                limit = _percent(self._limits.max_weight)
+                limit = percent(self._limits.max_weight)
                 if quantity == 0:
                     full = Note(LIMIT_WEIGHT_FULL, f"already at the {limit} limit per stock")
                     rejected.append(Rejected(order, full))
@@ -199,16 +206,16 @@ class RiskManager:
         if before.units > 0:
             fall = 1 - ratio_down(after.price, before.price)
             if fall >= self._limits.daily_loss:
-                limit = _percent(self._limits.daily_loss)
+                limit = percent(self._limits.daily_loss)
                 cause = (
-                    f"daily loss limit: the unit value fell {_percent(fall)}, the limit is {limit}"
+                    f"daily loss limit: the unit value fell {percent(fall)}, the limit is {limit}"
                 )
                 return Halt(day, Note(RISK_HALT_DAILY_LOSS, cause))
-        drawdown = 1 - ratio_down(after.price, after.high_water)
+        drawdown = after.drawdown
         if after.units > 0 and drawdown >= self._limits.max_drawdown:
-            limit = _percent(self._limits.max_drawdown)
+            limit = percent(self._limits.max_drawdown)
             cause = (
-                f"drawdown kill switch: the unit value is {_percent(drawdown)} below its "
+                f"drawdown kill switch: the unit value is {percent(drawdown)} below its "
                 f"high-water mark, the limit is {limit}"
             )
             return Halt(day, Note(RISK_HALT_DRAWDOWN, cause))

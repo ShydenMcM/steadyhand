@@ -164,7 +164,7 @@ def backtest_page(result: BacktestResult, written: Sequence[Path]) -> Page:
     page.add()
     header = ["", *(run.strategy for run in runs)]
     for line, figure in zip(
-        _text_table([header, *_by_figure(runs)]), [None, *figures(runs)], strict=True
+        text_table([header, *_by_figure(runs)]), [None, *figures(runs)], strict=True
     ):
         page.add(line, *([] if figure is None else [figure.key]))
     _page_notes(page, runs, result.warnings, written)
@@ -200,7 +200,7 @@ def comparison_page(comparison: Comparison, written: Sequence[Path]) -> Page:
     )
     page.add()
     header = ["Strategy", *(figure.label for figure in shown)]
-    lines = _text_table([header, *_by_run(runs, shown, show)])
+    lines = text_table([header, *_by_run(runs, shown, show)])
     page.add(lines[0], *(figure.key for figure in shown))
     for line in lines[1:]:
         page.add(line)
@@ -274,7 +274,7 @@ def _markdown_notes(runs: Sequence[RunResult], warnings: Sequence[Note]) -> list
     return [*lines, "", "---", "", DISCLAIMER]
 
 
-def _text_table(rows: Sequence[Sequence[str]]) -> list[str]:
+def text_table(rows: Sequence[Sequence[str]]) -> list[str]:
     """*rows* in columns: the first left-aligned, the rest right-aligned, two spaces apart."""
     widths = [max(len(row[column]) for row in rows) for column in range(len(rows[0]))]
     return [

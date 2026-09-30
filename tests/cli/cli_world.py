@@ -5,23 +5,30 @@ fixed clock and a data source."""
 
 import io
 import os
+import sqlite3
 import stat
 import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from dataclasses import dataclass, field, replace
+from datetime import UTC, date, datetime, timedelta, timezone
+from functools import cache
 from itertools import product
 from multiprocessing.synchronize import Event
 from pathlib import Path
 from typing import NamedTuple
 
-from record_golden import RECORDED, START, STOCKS, recorded
+from record_golden import END, RECORDED, START, STOCKS, recorded
 
-from steadyhand import DataSource
+from steadyhand import BacktestResult, BuyAndHold, DataSource, Market, backtest
 from steadyhand_idx import BarCache, CachedDataSource, YahooDataSource
 from steadyhand_idx.cli import SourceFactory, World, main
+from steadyhand_idx.config import load
+from steadyhand_idx.paper import days_to_run
+from steadyhand_idx.rules import IdxMarketRules
+from steadyhand_idx.state import STATE_FILE, StateStore
+from steadyhand_idx.universe import Exclusions, Lq45Membership, Lq45Universe
 from steadyhand_idx.yahoo import YahooHistory
 
 NOW = datetime(2026, 9, 27, 18, 0, tzinfo=UTC)
@@ -59,11 +66,12 @@ class Result(NamedTuple):
 
 @dataclass(frozen=True, slots=True)
 class Cli:
-    """``steadyhand-idx`` with its data directory at ``home``."""
+    """``steadyhand-idx`` with its data directory at ``home``, and *env* besides."""
 
     home: Path
     source: SourceFactory = no_data
     now: datetime = NOW
+    env: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def config(self) -> Path:
@@ -71,7 +79,7 @@ class Cli:
 
     def __call__(self, *argv: str, stdin: str = "") -> Result:
         out, err = io.StringIO(), io.StringIO()
-        env = {"STEADYHAND_HOME": str(self.home)}
+        env = {**self.env, "STEADYHAND_HOME": str(self.home)}
         world = World(io.StringIO(stdin), out, err, env, lambda: self.now, self.source)
         code = main(list(argv), world)
         return Result(code, out.getvalue(), err.getvalue())
@@ -167,3 +175,67 @@ def installed(home: Path, *argv: str, stdin: str = "") -> Result:
         [str(SCRIPT), *argv], input=stdin, capture_output=True, text=True, env=env, check=False
     )
     return Result(done.returncode, done.stdout, done.stderr)
+
+
+WIB = timezone(timedelta(hours=7))
+
+
+@cache
+def rules() -> IdxMarketRules:
+    return IdxMarketRules()
+
+
+@cache
+def trading_days() -> tuple[date, ...]:
+    """The golden window's trading days, from the IDX calendar."""
+    return days_to_run(START - timedelta(days=1), END, rules())
+
+
+def at(day: date, hour: int = 17, minute: int = 0, second: int = 0) -> datetime:
+    return datetime(day.year, day.month, day.day, hour, minute, second, tzinfo=WIB)
+
+
+def paper(tmp_path: Path, config: str = GOLDEN_CONFIG) -> Cli:
+    return market_cli(tmp_path / "home", config)
+
+
+def run_on(cli: Cli, day: date, *extra: str) -> Result:
+    return replace(cli, now=at(day))("paper", "run", *extra)
+
+
+@contextmanager
+def opened(cli: Cli) -> Iterator[StateStore]:
+    with StateStore(cli.home / STATE_FILE) as store:
+        yield store
+
+
+def tables(cli: Cli) -> dict[str, list[tuple[object, ...]]]:
+    """Every row of the account, the day reports and the audit log, as SQLite holds them."""
+    database = sqlite3.connect(cli.home / STATE_FILE)
+    try:
+        return {
+            table: database.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall()  # noqa: S608
+            for table in ("account", "day_reports", "audit")
+        }
+    finally:
+        database.close()
+
+
+def golden_backtest(cli: Cli, end: date, *, goal: bool = False) -> BacktestResult:
+    """``buy-and-hold`` from the golden window's first day to *end*, as ``backtest`` runs it over
+    the same configuration, universe files and recorded data. Without the income goal unless
+    *goal*: its report reads five years before *end* (M4 spec §8), which the recordings do not
+    cover for an early *end*, and it changes neither the states nor the day reports."""
+    config = load(cli.config)
+    universe = Lq45Universe(
+        Lq45Membership.load(config.lq45_members), Exclusions.load(config.exclusions)
+    )
+    with recorded_source(cli.home) as source:
+        market = Market(universe, source, IdxMarketRules(broker_fees=config.broker_fees))
+        return backtest(
+            BuyAndHold(),
+            market,
+            START,
+            end,
+            config.settings if goal else replace(config.settings, goal=None),
+        )

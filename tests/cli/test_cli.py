@@ -4,6 +4,7 @@ import io
 import sys
 from collections.abc import Callable
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -38,10 +39,16 @@ from steadyhand_idx.cli import (
 from steadyhand_idx.config import ConfigMissingError
 from steadyhand_idx.output import UnknownNameError
 from steadyhand_idx.paper import (
+    AccountChangedError,
     AccountHaltedError,
     CatchUpError,
+    HaltCausePresentError,
+    NoAccountError,
+    NoReportError,
     StaleDataError,
     StrategyChangedError,
+    SwitchRefusedError,
+    WrongStrategyError,
 )
 from steadyhand_idx.state import StateSchemaError
 
@@ -61,11 +68,17 @@ def test_the_exit_code_table_is_pinned_row_by_row() -> None:
         (StateSchemaError, 2),
         (CatchUpError, 2),
         (StrategyChangedError, 2),
+        (NoAccountError, 2),
+        (NoReportError, 2),
+        (WrongStrategyError, 2),
+        (SwitchRefusedError, 2),
         (DataUnavailableError, 3),
         (DataValidationError, 3),
         (InvalidBarError, 3),
         (StaleDataError, 3),
         (AccountHaltedError, 3),
+        (HaltCausePresentError, 3),
+        (AccountChangedError, 3),
     ) == EXIT_CODES
 
 
@@ -85,6 +98,11 @@ def test_the_exit_code_table_is_pinned_row_by_row() -> None:
         (lambda: StateSchemaError("x"), 2),
         (lambda: CatchUpError(31, date(2021, 2, 1)), 2),
         (lambda: StrategyChangedError("buy-and-hold", "retired"), 2),
+        (NoAccountError, 2),
+        (lambda: NoReportError(date(2021, 2, 6), date(2021, 2, 1), date(2021, 2, 5)), 2),
+        (lambda: WrongStrategyError("momentum", "buy-and-hold"), 2),
+        (lambda: SwitchRefusedError.not_configured("momentum", "buy-and-hold"), 2),
+        (lambda: SwitchRefusedError.already("buy-and-hold"), 2),
         (lambda: DataUnavailableError("x"), 3),
         (lambda: UnavailableDaysError("x", [date(2021, 2, 1)]), 3),
         (lambda: DataValidationError(BBCA, date(2021, 2, 1), "x"), 3),
@@ -96,6 +114,8 @@ def test_the_exit_code_table_is_pinned_row_by_row() -> None:
             ),
             3,
         ),
+        (lambda: HaltCausePresentError(Decimal("0.0937918"), Decimal("0.05")), 3),
+        (AccountChangedError, 3),
         (lambda: SnapshotError("x"), 1),
         (lambda: ConfigRewriteError("x"), 1),
         (lambda: RuntimeError("x"), 1),
