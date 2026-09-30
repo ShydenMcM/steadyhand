@@ -87,7 +87,6 @@ def test_a_year_past_the_holiday_data_is_refused() -> None:
         lambda: rules().dividend_tax(rp(1000), on=date(2020, 12, 31)),
         lambda: rules().reinvestment_deadline(date(2020, 12, 31)),
         lambda: rules().protection_end(date(2020, 12, 31)),
-        lambda: rules().is_trading_day(date(2020, 12, 31)),
     ],
 )
 def test_every_rule_refuses_an_unverified_day(call: object) -> None:
@@ -203,3 +202,14 @@ def test_dividend_tax_and_trading_days() -> None:
     assert rules().dividend_tax(rp(1_000), on=TODAY) == rp(100)
     assert rules().is_trading_day(date(2021, 1, 4))
     assert not rules().is_trading_day(date(2026, 12, 31))
+
+
+def test_trading_days_answer_for_every_year_of_holiday_data_before_the_rules_are_verified() -> None:
+    # A pay date modelled for a 2020 dividend counts 2020's trading days (M6 spec §4.1).
+    assert rules().is_trading_day(date(2020, 12, 30))
+    assert not rules().is_trading_day(date(2020, 12, 31))
+    assert rules().is_trading_day(date(2016, 1, 4))
+    with pytest.raises(UnsupportedDateError, match=r"^holidays\.toml has no IDX holidays for 2015"):
+        rules().is_trading_day(date(2015, 12, 31))
+    with pytest.raises(UnsupportedDateError, match="primary-verified from 2021-01-01"):
+        rules().require_supported(date(2020, 12, 30))

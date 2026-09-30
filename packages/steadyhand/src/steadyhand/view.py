@@ -93,8 +93,9 @@ class PastDividend:
 
 
 class ActionHistory:
-    """Every corporate action a run loaded, the look-back's included, and the stocks whose
-    look-back the data source refused (M6 spec §4.1, §4.3). It answers for any day."""
+    """Every corporate action a run loaded, the look-back's included, and the stocks whose history
+    is incomplete: the data source refused their look-back, or their actions on days whose prices
+    it refused (M6 spec §4.1, §4.3). It answers for any day."""
 
     def __init__(
         self, actions: Iterable[CorporateAction] = (), incomplete: Iterable[Instrument] = ()
@@ -128,7 +129,7 @@ class ActionHistory:
 
     @property
     def incomplete(self) -> frozenset[Instrument]:
-        """The stocks whose look-back the data source refused."""
+        """The stocks whose history the data source did not give in full."""
         return self._incomplete
 
     def dividends(self, instrument: Instrument, today: date) -> tuple[PastDividend, ...]:
@@ -153,7 +154,7 @@ class ActionHistory:
         )
 
     def complete(self, instrument: Instrument) -> bool:
-        """Whether the data source gave the stock's whole look-back."""
+        """Whether the data source gave the stock's whole history."""
         return instrument not in self._incomplete
 
 
@@ -276,7 +277,8 @@ class MarketView:
         return self._pay_dates.of(self._checked(ex_date))
 
     def history_complete(self, instrument: Instrument) -> bool:
-        """False when the data source refused any part of the stock's look-back (M6 §4.3)."""
+        """False when the data source refused any part of the stock's corporate actions: its
+        look-back, or those of the days whose prices it refused (M6 §4.3)."""
         return self._actions.complete(instrument)
 
     def _checked(self, day: date) -> date:

@@ -221,11 +221,14 @@ def tables(cli: Cli) -> dict[str, list[tuple[object, ...]]]:
         database.close()
 
 
-def golden_backtest(cli: Cli, end: date, *, goal: bool = False) -> BacktestResult:
-    """``buy-and-hold`` from the golden window's first day to *end*, as ``backtest`` runs it over
-    the same configuration, universe files and recorded data. Without the income goal unless
-    *goal*: its report reads five years before *end* (M4 spec §8), which the recordings do not
-    cover for an early *end*, and it changes neither the states nor the day reports."""
+def golden_backtest(
+    cli: Cli, end: date, *, goal: bool = False, start: date = START
+) -> BacktestResult:
+    """``buy-and-hold`` from *start*, the golden window's first day by default, to *end*, as
+    ``backtest`` runs it over the same configuration, universe files and recorded data. Without
+    the income goal unless *goal*: its report reads five years before *end* (M4 spec §8), which
+    the recordings do not cover for an early *end*, and it changes neither the states nor the
+    day reports."""
     config = load(cli.config)
     universe = Lq45Universe(
         Lq45Membership.load(config.lq45_members), Exclusions.load(config.exclusions)
@@ -235,7 +238,7 @@ def golden_backtest(cli: Cli, end: date, *, goal: bool = False) -> BacktestResul
         return backtest(
             BuyAndHold(),
             market,
-            START,
+            start,
             end,
             config.settings if goal else replace(config.settings, goal=None),
         )

@@ -40,7 +40,8 @@ class MarketRules(Protocol):
     def require_supported(self, day: date) -> None:
         """Raise ``UnsupportedDateError`` for a day the rule data does not cover.
 
-        The message names the rule table that sets the limit. Every other method checks this.
+        The message names the rule table that sets the limit. Every other method checks this,
+        except ``is_trading_day``, which answers for every year of holiday data (M6 spec §4.1).
         """
         ...
 

@@ -20,6 +20,7 @@ from steadyhand import (
     Side,
     Split,
     UnavailableDaysError,
+    UnsupportedDateError,
 )
 from steadyhand_idx.calendar import IdxCalendar
 from steadyhand_idx.rules import IdxMarketRules
@@ -29,6 +30,7 @@ from steadyhand_idx.yahoo import (
     YahooDataSource,
     YahooHistory,
     YahooRow,
+    actions_in,
     history_from_frames,
     history_from_json,
     history_to_json,
@@ -40,6 +42,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "yahoo"
 BBCA_FILE = FIXTURES / "BBCA.JK_2021-09-01_2021-11-30.json"
 BBRI_FILE = FIXTURES / "BBRI.JK_2021-08-02_2021-09-30.json"
 UNVR_FILE = FIXTURES / "UNVR.JK_2023-05-15_2023-06-09.json"
+BBRI_FIVE_YEARS = FIXTURES / "BBRI.JK_2017-01-31_2022-01-31.json"
 BBCA = Instrument("BBCA", "IDX", IDR)
 BBRI = Instrument("BBRI", "IDX", IDR)
 UNVR = Instrument("UNVR", "IDX", IDR)
@@ -296,8 +299,50 @@ def test_a_reversed_range_is_refused() -> None:
     source = YahooDataSource(calendar(), download=Replay(BBCA_FILE))
     with pytest.raises(ValueError, match=r"^end 2021-10-01 is before start 2021-10-02$"):
         source.bars(BBCA, date(2021, 10, 2), date(2021, 10, 1))
+    with pytest.raises(ValueError, match=r"^end 2021-10-01 is before start 2021-10-02$"):
+        source.corporate_actions(BBCA, date(2021, 10, 2), date(2021, 10, 1))
 
 
 def test_the_default_source_uses_the_shipped_calendar() -> None:
     source = YahooDataSource(download=Replay(UNVR_FILE))
     assert len(source.bars(UNVR, date(2023, 5, 15), date(2023, 6, 9))) == 17
+
+
+def test_actions_are_read_where_the_prices_cannot_be_recovered() -> None:
+    # BBRI's prices before 2021-09-07 carry a rights issue Yahoo does not report, so no bar can
+    # be recovered there, but a dividend needs no price (M6 spec §4.3).
+    history = history_from_json(BBRI_FIVE_YEARS)
+    refused = (date(2021, 2, 1), date(2021, 9, 7))
+    with pytest.raises(UnrecoverablePricesError):
+        unadjust(history, BBRI, calendar(), *refused)
+    assert actions_in(history, BBRI, *refused) == [
+        CashDividend(BBRI, date(2021, 4, 6), Decimal("89.91268"))
+    ]
+    # Yahoo divided the 2017 dividend by the 5-for-1 split of 10 November 2017; it is restated.
+    assert actions_in(history, BBRI, date(2017, 1, 31), date(2017, 12, 29)) == [
+        CashDividend(BBRI, date(2017, 3, 23), Decimal("389.63463")),
+        Split(BBRI, date(2017, 11, 10), 1, 5),
+    ]
+
+
+def test_actions_need_no_calendar() -> None:
+    # 2015 is before the IDX holidays begin: its bars cannot be checked, but its actions can be
+    # read, restated through the 2-for-1 split that followed.
+    row = YahooRow(date(2015, 6, 1), *(Decimal(1000),) * 4, volume=100, dividend=Decimal(50))
+    history = YahooHistory("BBCA.JK", (row,), ((date(2016, 6, 1), Decimal("2.0")),))
+    year = (date(2015, 1, 1), date(2015, 12, 31))
+    assert actions_in(history, BBCA, *year) == [CashDividend(BBCA, date(2015, 6, 1), Decimal(100))]
+    with pytest.raises(UnsupportedDateError, match=r"^holidays\.toml has no IDX holidays for 2015"):
+        unadjust(history, BBCA, calendar(), *year)
+
+
+def test_the_source_reads_a_ranges_actions_without_its_prices() -> None:
+    replay = Replay(BBRI_FIVE_YEARS)
+    source = YahooDataSource(calendar(), download=replay, sleep=lambda _: None)
+    refused = (date(2021, 2, 1), date(2021, 9, 7))
+    assert source.corporate_actions(BBRI, *refused) == [
+        CashDividend(BBRI, date(2021, 4, 6), Decimal("89.91268"))
+    ]
+    with pytest.raises(UnrecoverablePricesError):
+        source.bars(BBRI, *refused)
+    assert replay.calls == [("BBRI.JK", *refused)]

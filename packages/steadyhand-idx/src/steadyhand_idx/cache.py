@@ -9,6 +9,10 @@ so good cached data survives a bad fetch (spec §5 step 1).
 ranges it is missing (spec §9.2). A day counts as fetched only once it is over in Jakarta, so
 today's bar is always fetched afresh and never stored here; it is stored by the first read
 after the day is over.
+
+Corporate actions can also be fetched alone (M6 spec §4.3): a strategy's look-back reads the
+years before a run, whose prices it never needs. Such a range is recorded as fetched for
+actions only, so its bars still count as missing.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ from steadyhand import (
     Money,
     OtherAction,
     Split,
+    UnsupportedDateError,
 )
 from steadyhand_idx.calendar import IdxCalendar
 
@@ -64,6 +69,14 @@ MIGRATIONS: tuple[str, ...] = (
         PRIMARY KEY (symbol, ex_date, kind)
     ) STRICT;
     CREATE TABLE fetched (
+        symbol TEXT NOT NULL,
+        start TEXT NOT NULL,
+        end TEXT NOT NULL,
+        PRIMARY KEY (symbol, start, end)
+    ) STRICT;
+    """,
+    """
+    CREATE TABLE fetched_actions (
         symbol TEXT NOT NULL,
         start TEXT NOT NULL,
         end TEXT NOT NULL,
@@ -163,10 +176,7 @@ class BarCache:
         located = [(b.instrument, b.day) for b in bars] + [
             (a.instrument, a.ex_date) for a in actions
         ]
-        for owner, day in located:
-            if owner != instrument or not start <= day <= end:
-                msg = f"{owner.symbol} {day.isoformat()} is not {symbol} in {start} to {end}"
-                raise ValueError(msg)
+        self._require_within(instrument, span, located)
         with self._write():
             for bar in bars:
                 row: _BarRow = (
@@ -184,6 +194,36 @@ class BarCache:
                 "INSERT OR IGNORE INTO fetched VALUES (?, ?, ?)",
                 (symbol, start.isoformat(), end.isoformat()),
             )
+
+    def store_actions(
+        self, instrument: Instrument, span: tuple[date, date], actions: Sequence[CorporateAction]
+    ) -> None:
+        """Store one range's actions, fetched without its bars, all of them or none, and mark the
+        range as fetched for actions only (M6 spec §4.3)."""
+        start, end = span
+        symbol = self._symbol(instrument)
+        self._require_within(instrument, span, [(a.instrument, a.ex_date) for a in actions])
+        with self._write():
+            for action in actions:
+                kind, values = _action_row(action)
+                self._insert_action(symbol, action.ex_date, kind, values)
+            self._db.execute(
+                "INSERT OR IGNORE INTO fetched_actions VALUES (?, ?, ?)",
+                (symbol, start.isoformat(), end.isoformat()),
+            )
+
+    def _require_within(
+        self,
+        instrument: Instrument,
+        span: tuple[date, date],
+        located: Sequence[tuple[Instrument, date]],
+    ) -> None:
+        start, end = span
+        for owner, day in located:
+            if owner != instrument or not start <= day <= end:
+                symbol = instrument.symbol
+                msg = f"{owner.symbol} {day.isoformat()} is not {symbol} in {start} to {end}"
+                raise ValueError(msg)
 
     def _insert_bar(self, symbol: str, day: date, row: _BarRow) -> None:
         found = self._db.execute(
@@ -262,14 +302,17 @@ class BarCache:
             "SELECT start, end FROM fetched WHERE symbol = ? ORDER BY start, end",
             (self._symbol(instrument),),
         ).fetchall()
-        merged: list[tuple[date, date]] = []
-        for first, last in rows:
-            start, end = date.fromisoformat(first), date.fromisoformat(last)
-            if merged and start <= merged[-1][1] + _ONE_DAY:
-                merged[-1] = (merged[-1][0], max(merged[-1][1], end))
-            else:
-                merged.append((start, end))
-        return merged
+        return _merged(rows)
+
+    def fetched_actions(self, instrument: Instrument) -> list[tuple[date, date]]:
+        """Every range whose actions are stored for *instrument*, with or without its bars,
+        merged where they touch or overlap."""
+        rows = self._db.execute(
+            "SELECT start, end FROM fetched WHERE symbol = ? "
+            "UNION SELECT start, end FROM fetched_actions WHERE symbol = ? ORDER BY start, end",
+            (self._symbol(instrument), self._symbol(instrument)),
+        ).fetchall()
+        return _merged(rows)
 
     @staticmethod
     def _symbol(instrument: Instrument) -> str:
@@ -277,6 +320,18 @@ class BarCache:
             msg = f"this cache holds IDX IDR stocks, not {instrument.symbol} on {instrument.market}"
             raise ValueError(msg)
         return instrument.symbol
+
+
+def _merged(rows: Sequence[tuple[str, str]]) -> list[tuple[date, date]]:
+    """Stored ``(start, end)`` rows, in start order, merged where they touch or overlap."""
+    merged: list[tuple[date, date]] = []
+    for first, last in rows:
+        start, end = date.fromisoformat(first), date.fromisoformat(last)
+        if merged and start <= merged[-1][1] + _ONE_DAY:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
 
 
 def jakarta_today() -> date:
@@ -310,8 +365,15 @@ class CachedDataSource:
     def corporate_actions(
         self, instrument: Instrument, start: date, end: date
     ) -> Sequence[CorporateAction]:
-        today = self._fill(instrument, start, end)
-        cached = self._cache.actions(instrument, start, min(end, today - _ONE_DAY))
+        """The range's actions. A part not yet stored is fetched without its bars and stored
+        as fetched for actions only, so a look-back never reads a price (M6 spec §4.3)."""
+        today = self._today_for(start, end)
+        complete = min(end, today - _ONE_DAY)
+        if start <= complete:
+            for first, last in self.missing_actions(instrument, start, complete):
+                actions = self._upstream.corporate_actions(instrument, first, last)
+                self._cache.store_actions(instrument, (first, last), actions)
+        cached = self._cache.actions(instrument, start, complete)
         if end < today:
             return cached
         return [*cached, *self._upstream.corporate_actions(instrument, today, today)]
@@ -322,27 +384,36 @@ class CachedDataSource:
         A gap holding no trading day (a weekend, a holiday) is not missing: there is nothing
         there to fetch, and asking Yahoo for it would fail.
         """
-        gaps: list[tuple[date, date]] = []
-        cursor = start
-        for first, last in self._cache.fetched(instrument):
-            if last < cursor:
-                continue
-            if first > end:
-                break
-            if first > cursor:
-                gaps.append((cursor, first - _ONE_DAY))
-            cursor = last + _ONE_DAY
-        if cursor <= end:
-            gaps.append((cursor, end))
-        trimmed: list[tuple[date, date]] = []
-        for first, last in gaps:
-            days = self._calendar.trading_days(first, last)
-            if days:
-                trimmed.append((days[0], days[-1]))
-        return trimmed
+        gaps = _gaps(self._cache.fetched(instrument), start, end)
+        return [span for first, last in gaps if (span := self._trading(first, last)) is not None]
 
-    def _fill(self, instrument: Instrument, start: date, end: date) -> date:
-        """Fetch and store every missing range that is over, and return today."""
+    def missing_actions(
+        self, instrument: Instrument, start: date, end: date
+    ) -> list[tuple[date, date]]:
+        """The parts of *start* to *end* whose actions are not yet stored, with or without bars.
+
+        A gap in years the holiday calendar covers is trimmed to its trading days, as in
+        ``missing``. A gap reaching into a year it does not cover is asked for whole: actions
+        need no calendar, and such a gap is the start of a look-back, years long.
+        """
+        found: list[tuple[date, date]] = []
+        for first, last in _gaps(self._cache.fetched_actions(instrument), start, end):
+            try:
+                span = self._trading(first, last)
+            except UnsupportedDateError:
+                span = (first, last)
+            if span is not None:
+                found.append(span)
+        return found
+
+    def _trading(self, first: date, last: date) -> tuple[date, date] | None:
+        """*first* to *last* narrowed to its first and last trading day, or ``None`` if it has
+        none."""
+        days = self._calendar.trading_days(first, last)
+        return (days[0], days[-1]) if days else None
+
+    def _today_for(self, start: date, end: date) -> date:
+        """Today, once *start* to *end* is a range that can be read today."""
         if end < start:
             msg = f"end {end.isoformat()} is before start {start.isoformat()}"
             raise ValueError(msg)
@@ -352,6 +423,11 @@ class CachedDataSource:
                 f"no bars exist yet after today ({today.isoformat()}); asked for {end.isoformat()}"
             )
             raise ValueError(msg)
+        return today
+
+    def _fill(self, instrument: Instrument, start: date, end: date) -> date:
+        """Fetch and store every missing range that is over, and return today."""
+        today = self._today_for(start, end)
         complete = min(end, today - _ONE_DAY)
         if start <= complete:
             for first, last in self.missing(instrument, start, complete):
@@ -359,3 +435,20 @@ class CachedDataSource:
                 actions = self._upstream.corporate_actions(instrument, first, last)
                 self._cache.store(instrument, (first, last), bars, actions)
         return today
+
+
+def _gaps(covered: Sequence[tuple[date, date]], start: date, end: date) -> list[tuple[date, date]]:
+    """The parts of *start* to *end* outside *covered*, merged ranges in start order."""
+    gaps: list[tuple[date, date]] = []
+    cursor = start
+    for first, last in covered:
+        if last < cursor:
+            continue
+        if first > end:
+            break
+        if first > cursor:
+            gaps.append((cursor, first - _ONE_DAY))
+        cursor = last + _ONE_DAY
+    if cursor <= end:
+        gaps.append((cursor, end))
+    return gaps
