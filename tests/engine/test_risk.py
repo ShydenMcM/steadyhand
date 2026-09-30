@@ -32,7 +32,13 @@ BBRI = Instrument("BBRI", "IDX", IDR)
 TLKM = Instrument("TLKM", "IDX", IDR)
 PRICES = {BBCA: Money(9_000, IDR), BBRI: Money(4_000, IDR)}
 MERGER = Note(TRADE_FROZEN, "frozen: merger")
-OPEN = Tradable(DAY, frozenset({BBCA, BBRI}), frozenset({BBCA, BBRI}), {TLKM: MERGER})
+OPEN = Tradable(
+    DAY,
+    frozenset({BBCA, BBRI}),
+    frozenset({BBCA, BBRI}),
+    {TLKM: MERGER},
+    frozenset({BBCA, BBRI, TLKM}),
+)
 
 
 @cache

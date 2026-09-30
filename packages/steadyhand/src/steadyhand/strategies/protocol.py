@@ -13,6 +13,7 @@ from decimal import Decimal
 from typing import Protocol, runtime_checkable
 
 from steadyhand._validate import require_type
+from steadyhand.notes import Note
 from steadyhand.types import Instrument
 from steadyhand.view import MarketView, PortfolioView
 
@@ -26,14 +27,17 @@ class InvalidWeightsError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class Decision:
-    """A strategy's answer for one day: target weights, and what to remember until tomorrow.
+    """A strategy's answer for one day: target weights, what to remember until tomorrow, and
+    anything it says about the day.
 
     A stock missing from ``weights`` is targeted at zero. Weights are ``Decimal``, none is
-    negative, and together they are at most 1; the rest is held as cash.
+    negative, and together they are at most 1; the rest is held as cash. The engine adds
+    ``notes`` to the day's report after its own (M6 spec §4.4).
     """
 
     weights: Mapping[Instrument, Decimal]
     memory: Memory = field(default_factory=dict)
+    notes: tuple[Note, ...] = ()
 
     def __post_init__(self) -> None:
         total = Decimal(0)
@@ -54,6 +58,9 @@ class Decision:
         for key, value in self.memory.items():
             require_type(key, str, "memory key")
             require_type(value, str, "memory value")
+        require_type(self.notes, tuple, "notes")
+        for note in self.notes:
+            require_type(note, Note, "note")
 
 
 @runtime_checkable

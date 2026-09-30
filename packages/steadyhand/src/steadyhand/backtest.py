@@ -1,8 +1,9 @@
 """The backtester: a strategy and the ``buy-and-hold`` baseline over a range of days (M3 spec §7).
 
 ``backtest`` checks the range before day one, fetches every bar and corporate action the run can
-need, then repeats ``run_day`` over the trading days: once for the strategy and once, with the
-same settings, for the baseline. Nothing is guessed: a start the rules or the universe do not
+need, and with a look-back the corporate actions of the years before it (M6 spec §4.3), then
+repeats ``run_day`` over the trading days: once for the strategy and once, with the same
+settings, for the baseline. Nothing is guessed: a start the rules or the universe do not
 cover stops the run with an error that names the first date that would work. With an income goal
 set, each run also gets an income report on its last day, from dividend history fetched then.
 """
@@ -14,8 +15,8 @@ from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 
-from steadyhand._validate import require_date, require_type
-from steadyhand.data import DataSource, UnavailableDaysError
+from steadyhand._validate import require_date, require_int, require_type
+from steadyhand.data import DataSource, DataUnavailableError, UnavailableDaysError
 from steadyhand.engine import DayInputs, DayReport, EngineSettings, EngineState, run_day
 from steadyhand.income import (
     HISTORY_YEARS,
@@ -28,13 +29,13 @@ from steadyhand.income import (
 from steadyhand.market import MarketRules
 from steadyhand.metrics import Metrics, measure
 from steadyhand.money import CurrencyMismatchError, Money
-from steadyhand.notes import DATA_BAR_REFUSED, Note
+from steadyhand.notes import DATA_BAR_REFUSED, DATA_DIVIDENDS_HISTORY_REFUSED, Note
 from steadyhand.risk import Halt
 from steadyhand.strategies.buy_and_hold import BuyAndHold
 from steadyhand.strategies.protocol import Strategy
 from steadyhand.types import Bar, CorporateAction, Instrument
 from steadyhand.universe import Universe
-from steadyhand.view import PriceHistory
+from steadyhand.view import ActionHistory, PriceHistory
 
 
 class UniverseCoverageError(LookupError):
@@ -67,18 +68,23 @@ class Market:
 
 @dataclass(frozen=True, slots=True)
 class BacktestSettings:
-    """The capital a run starts with, how the engine runs each day, and an optional income goal.
+    """The capital a run starts with, how the engine runs each day, an optional income goal, and
+    how many calendar years of corporate actions before the first day to fetch.
 
-    Both runs share them. With a ``goal``, each run's result carries an income report.
+    Both runs share them. With a ``goal``, each run's result carries an income report. The
+    caller sets ``lookback_years`` from the registered strategy's (M6 spec §4.3), so the engine
+    never reads the registry.
     """
 
     capital: Money
     engine: EngineSettings = field(default_factory=EngineSettings)
     goal: IncomeGoal | None = None
+    lookback_years: int = 0
 
     def __post_init__(self) -> None:
         require_type(self.capital, Money, "capital")
         require_type(self.engine, EngineSettings, "engine")
+        require_int(self.lookback_years, "lookback_years", minimum=0)
         if self.capital.amount <= 0:
             msg = f"the starting capital must be positive, got {self.capital}"
             raise ValueError(msg)
@@ -157,7 +163,11 @@ class Comparison:
 
 @dataclass(frozen=True, slots=True)
 class _Window:
-    """Everything both runs read: the trading days, the universe on each, and the fetched data."""
+    """Everything both runs read: the trading days, the universe on each, and the fetched data.
+
+    ``past`` holds every corporate action fetched, the look-back's included; ``lookback`` is the
+    look-back's first and last day, and ``history_refused`` why the source refused a stock's.
+    """
 
     days: tuple[date, ...]
     members: Mapping[date, frozenset[Instrument]]
@@ -165,6 +175,9 @@ class _Window:
     history: PriceHistory
     actions: Mapping[date, tuple[CorporateAction, ...]]
     refused: Mapping[Instrument, tuple[date, ...]]
+    past: ActionHistory
+    lookback: tuple[date, date] | None
+    history_refused: Mapping[Instrument, str]
 
 
 def backtest(
@@ -192,7 +205,7 @@ def compare(
     settings: BacktestSettings,
 ) -> Comparison:
     """Run each of *strategies*, and the baseline unless it is one of them, over one window
-    fetched once (M5 spec §5.4)."""
+    fetched once (M5 spec §5.4). The caller sets the longest look-back among them."""
     for strategy in strategies:
         require_type(strategy, Strategy, "strategy")
     names = [strategy.name for strategy in strategies]
@@ -214,21 +227,24 @@ def compare(
     return Comparison(start, end, runs, _data_warnings(market, window, start, end))
 
 
-def day_inputs(market: Market, start: date, end: date) -> tuple[DayInputs, ...]:
+def day_inputs(
+    market: Market, start: date, end: date, lookback_years: int = 0
+) -> tuple[DayInputs, ...]:
     """Every trading day's inputs from *start* to *end*, both inclusive, oldest first.
 
     This is a backtest's fetch step, public so that paper trading builds each day exactly as a
     backtest over the same range does (M5 spec §6.2). ``refused`` and ``resumed`` depend on the
     days before the one run, so a caller that runs only the later days still fetches from the
-    first.
+    first, and the look-back reaches back from *start* as a backtest's does (M6 spec §4.3).
     """
     require_type(market, Market, "market")
     require_date(start, "start")
     require_date(end, "end")
+    require_int(lookback_years, "lookback_years", minimum=0)
     if end < start:
         msg = f"the range ends on {end.isoformat()}, before it starts on {start.isoformat()}"
         raise ValueError(msg)
-    return _inputs(_fetch(market, _days(market, start, end)))
+    return _inputs(_fetch(market, _days(market, start, end), lookback_years))
 
 
 def _window(market: Market, start: date, end: date, settings: BacktestSettings) -> _Window:
@@ -247,7 +263,7 @@ def _window(market: Market, start: date, end: date, settings: BacktestSettings) 
             f"but the market trades in {rules.currency.code}"
         )
         raise ValueError(msg)
-    return _fetch(market, _days(market, start, end))
+    return _fetch(market, _days(market, start, end), settings.lookback_years)
 
 
 def _days(market: Market, start: date, end: date) -> tuple[date, ...]:
@@ -272,7 +288,11 @@ def _complete(run: RunResult, market: Market, settings: BacktestSettings) -> Run
 
 
 def _data_warnings(market: Market, window: _Window, start: date, end: date) -> tuple[Note, ...]:
-    return (*market.universe.survivorship_warnings(start, end), *_refused_warnings(window))
+    return (
+        *market.universe.survivorship_warnings(start, end),
+        *_refused_warnings(window),
+        *_history_warnings(window),
+    )
 
 
 def _calendar_days(start: date, end: date) -> Iterator[date]:
@@ -282,19 +302,24 @@ def _calendar_days(start: date, end: date) -> Iterator[date]:
         day += timedelta(days=1)
 
 
-def _fetch(market: Market, days: tuple[date, ...]) -> _Window:
+def _fetch(market: Market, days: tuple[date, ...], lookback_years: int) -> _Window:
     """Fetch every stock the universe holds on any of *days*, over all of them (M3 spec §7.1).
 
     A stock whose source refuses some days is fetched again over the clean ranges around them.
+    With a look-back, each stock's corporate actions from 1 January, *lookback_years* years
+    before the first day, to the day before it are fetched in a call of their own: a refusal
+    there is history the run can do without, so it marks the stock's history incomplete and the
+    run goes on (M6 spec §4.3).
     """
     members = {day: market.universe.members_on(day) for day in days}
     excluded = {day: market.universe.excluded_on(day) for day in days}
     source = market.source
     start, end = days[0], days[-1]
+    stocks = sorted(frozenset().union(*members.values()), key=lambda i: (i.market, i.symbol))
     bars: list[Bar] = []
     actions: list[CorporateAction] = []
     refused: dict[Instrument, tuple[date, ...]] = {}
-    for stock in sorted(frozenset().union(*members.values()), key=lambda i: (i.market, i.symbol)):
+    for stock in stocks:
         try:
             found = (source.bars(stock, start, end), source.corporate_actions(stock, start, end))
         except UnavailableDaysError as error:
@@ -312,7 +337,27 @@ def _fetch(market: Market, days: tuple[date, ...]) -> _Window:
     for action in actions:
         by_day.setdefault(action.ex_date, []).append(action)
     grouped = {day: tuple(found) for day, found in by_day.items()}
-    return _Window(days, members, excluded, PriceHistory(bars), grouped, refused)
+    past = list(actions)
+    lookback = None
+    history_refused: dict[Instrument, str] = {}
+    if lookback_years:
+        lookback = (date(start.year - lookback_years, 1, 1), start - timedelta(days=1))
+        for stock in stocks:
+            try:
+                past += source.corporate_actions(stock, *lookback)
+            except DataUnavailableError as error:
+                history_refused[stock] = str(error)
+    return _Window(
+        days,
+        members,
+        excluded,
+        PriceHistory(bars),
+        grouped,
+        refused,
+        ActionHistory(past, history_refused),
+        lookback,
+        history_refused,
+    )
 
 
 def _clean_ranges(days: Sequence[date], refused: frozenset[date]) -> Iterator[tuple[date, date]]:
@@ -345,6 +390,7 @@ def _inputs(window: _Window) -> tuple[DayInputs, ...]:
                 window.excluded[day],
                 refused,
                 _resumed(window, day) - refused,
+                window.past,
             )
         )
     return tuple(inputs)
@@ -438,3 +484,19 @@ def _refused_warnings(window: _Window) -> list[Note]:
             )
         )
     return warnings
+
+
+def _history_warnings(window: _Window) -> list[Note]:
+    """One warning per stock whose look-back the source refused, naming the range and why."""
+    if window.lookback is None:
+        return []
+    since, until = (day.isoformat() for day in window.lookback)
+    return [
+        Note(
+            DATA_DIVIDENDS_HISTORY_REFUSED,
+            f"{stock.symbol}: the data source refused its corporate actions from {since} to "
+            f"{until}, before the run ({window.history_refused[stock]}), so its dividend "
+            "history is incomplete for any strategy that reads it.",
+        )
+        for stock in sorted(window.history_refused, key=lambda i: (i.market, i.symbol))
+    ]

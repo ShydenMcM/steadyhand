@@ -1,5 +1,6 @@
 """Every registered strategy has a complete plain-English guide (core spec §8, §10.1), shipped
-inside the package (M5 spec §5.6).
+inside the package (M5 spec §5.6), whose *Settings you can change* names each of the strategy's
+registered settings (M6 spec §7).
 
 The guide is read with its HTML comments removed, so a section commented out is missing.
 """
@@ -9,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from steadyhand.strategies import STRATEGIES, Strategy
+from steadyhand.strategies import STRATEGIES, Setting, Strategy
 
 ROOT = Path(__file__).resolve().parents[2]
 GUIDES = ROOT / "packages/steadyhand/src/steadyhand/strategies/guides"
@@ -36,9 +37,15 @@ def sections(markdown: str) -> dict[str, str]:
     return {heading: " ".join(" ".join(lines).split()) for heading, lines in found.items()}
 
 
-def problems(name: str, markdown: str) -> list[str]:
+def problems(name: str, markdown: str, settings: tuple[Setting, ...] = ()) -> list[str]:
     found = sections(markdown)
     wrong = [f"missing or empty: {section}" for section in SECTIONS if not found.get(section)]
+    named = found.get("Settings you can change", "")
+    wrong += [
+        f"Settings you can change must name `{setting.name}`"
+        for setting in settings
+        if f"`{setting.name}`" not in named
+    ]
     risks = found.get("Risks", "").lower()
     wrong += [
         f"Risks must say {phrase!r}"
@@ -55,8 +62,33 @@ def complete(name: str) -> str:
     return f"# {name}\n{body}"
 
 
+ROUNDS = Setting("rounds", 3, 1, 9, "How many rounds to play.")
+
+
 def test_a_complete_guide_has_no_problems() -> None:
     assert problems("x", complete("x")) == []
+    named = complete("x").replace(
+        "## Settings you can change\nWords.", "## Settings you can change\n`rounds`."
+    )
+    assert problems("x", named, (ROUNDS,)) == []
+
+
+@pytest.mark.parametrize(
+    "settings_text",
+    [
+        "Words.",
+        "rounds, written without its backticks.",
+        "<!-- `rounds` -->",
+    ],
+)
+def test_the_checker_wants_each_setting_named_in_its_section(settings_text: str) -> None:
+    guide = complete("x").replace(
+        "## Settings you can change\nWords.", f"## Settings you can change\n{settings_text}"
+    )
+    # Named elsewhere does not count: only the settings section says what can be changed.
+    guide = guide.replace("## Risks\nWords.", "## Risks\nWords. `rounds`.")
+    assert guide.count("## Settings you can change\n") == 1
+    assert "Settings you can change must name `rounds`" in problems("x", guide, (ROUNDS,))
 
 
 @pytest.mark.parametrize(
@@ -93,8 +125,12 @@ def test_every_registered_strategy_has_a_complete_guide() -> None:
     assert missing == []
     found = {
         name: wrong
-        for name in STRATEGIES
-        if (wrong := problems(name, (GUIDES / f"{name}.md").read_text(encoding="utf-8")))
+        for name, entry in STRATEGIES.items()
+        if (
+            wrong := problems(
+                name, (GUIDES / f"{name}.md").read_text(encoding="utf-8"), entry.settings
+            )
+        )
     }
     assert found == {}
 
