@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-09-30 07:40 WIB (2026-09-30 00:40 UTC) (**M5b is done and M5 with it**: S5–S9 merged into `develop`, each deployed with `publish-dev` green, #135–#139 closed and Done, epic #120 closed and Done. **Next: M6, strategy wave 1** (core spec §13), starting at brainstorming.)
+**Updated:** 2026-09-30 12:45 WIB (2026-09-30 05:45 UTC) (**M6 spec approved** and reviewed to zero on pass 6: `docs/superpowers/specs/2026-09-30-m6-strategy-wave-1-design.md`, PR #147, epic #146 In Progress. **Next: the M6 plan, built by extraction.**)
 **Local:** `~/Developer/Repos/steadyhand`. `develop` holds the T1 spec and plan, and `main` has no release yet. `t1/training-spec` and `m4/m4b-plan` are merged or superseded and deleted. Start each story's branch from `origin/develop`. Read heads with `git rev-parse`; never retype one.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
@@ -140,8 +140,11 @@
 - Brainstormed 2026-09-27: see the T1 section above.
 
 ## Resume steps
-0. M5 is done; nothing is in flight. `main` still has no release (M10).
-1. **M6, strategy wave 1** (core spec §13, item 6): start with `superpowers:brainstorming` on which strategies make up wave 1, then a spec in `docs/superpowers/specs/`, reviewed to zero, then a plan built by extraction as M5b's was (tools: newest copy in `.superpowers/sdd/2026-09-29-m5b-paper/`). File the epic and stories on board 1 (assert the title "steadyhand") before implementing.
+0. M5 is done. `main` still has no release (M10).
+1. **Check PR #147 (the M6 spec) merged into `develop`** with every check `success` by name; if not, merge it by the standing rule (head SHA from a file, `--match-head-commit`).
+2. **Build the M6 plan by extraction** (`superpowers:writing-plans`), as M5b's was: tools are the newest copy in `.superpowers/sdd/2026-09-29-m5b-paper/` (copy to `.superpowers/sdd/2026-09-30-m6-wave1/`). Four stories, spec §10: S1 engine data path + settings mechanism, S2 `monthly-savings`, S3 `dividend-growth` + default + golden test, S4 module-8 lessons. Review the plan to zero, open its PR (Refs #146), then **file S1–S4 on board 1** (assert title "steadyhand") with each story's task and mutation IDs, as M5b's stories were.
+3. Spec facts the plan must honour (read in code 2026-09-30): `_fetch` re-raises a refusal whose days all fall outside the run (`backtest.py`, `if not named: raise`), so the look-back is a separate fetch; `paper.py` builds inputs with `day_inputs(market, opened_on, target)`; `get_int` refuses a missing key, so strategy keys need an optional path; `is_trading_day` raises before 2016; every note key needs a lesson (`test_every_key_has_a_lesson`).
+4. **The M6 measurement** (spec §3) came from `yfinance` 1.7.0 and two archived LQ45 booklets; its scripts are throwaway and not kept. Re-run only if the rule is questioned.
 
 ## Research technique
 - **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid scraping. Try the Internet Archive, KSEI, KPEI (idclear) or BPK first. Use idx.co.id only when none has a readable copy, and say so in the research doc.
