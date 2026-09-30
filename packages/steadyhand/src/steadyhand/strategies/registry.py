@@ -16,6 +16,7 @@ from typing import Final
 
 from steadyhand._validate import require_type
 from steadyhand.strategies.buy_and_hold import BuyAndHold
+from steadyhand.strategies.monthly_savings import MonthlySavings
 from steadyhand.strategies.protocol import Strategy
 
 _NAME = re.compile(r"[a-z]+(_[a-z]+)*")
@@ -131,6 +132,21 @@ STRATEGIES: Final[Mapping[str, Registered]] = MappingProxyType(
             BuyAndHold,
             "Buys every stock it can on its first day in equal parts, then holds and reinvests.",
             Turnover.LOW,
+        ),
+        "monthly-savings": Registered(
+            MonthlySavings,
+            "Invests the starting cash in monthly instalments across every stock it can buy, "
+            "and never sells.",
+            Turnover.LOW,
+            (
+                Setting(
+                    "instalments",
+                    12,
+                    1,
+                    120,
+                    "The months monthly-savings spreads the starting cash over: 1 to 120.",
+                ),
+            ),
         ),
     }
 )

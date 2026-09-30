@@ -213,9 +213,14 @@ def days_to_run(last: date | None, target: date, rules: MarketRules) -> tuple[da
 
 
 def settings_of(config: Config) -> dict[str, str]:
-    """The settings a day runs with, by configuration key, as the audit log shows them."""
+    """The settings a day runs with, by configuration key, as the audit log shows them: the
+    engine's, and the settings of the strategy that runs (M6 spec §4.5)."""
     engine = config.settings.engine
     contribution = engine.monthly_contribution
+    strategy = {
+        f"strategy.{setting.name}": str(config.strategy_settings[setting.name])
+        for setting in STRATEGIES[config.strategy].settings
+    }
     return {
         STARTING_CASH: str(config.settings.capital.amount),
         "account.monthly_contribution_idr": str(0 if contribution is None else contribution.amount),
@@ -227,6 +232,7 @@ def settings_of(config: Config) -> dict[str, str]:
         "risk.max_volume_participation": str(engine.fills.volume_cap),
         "dividends.pay_lag_trading_days": str(engine.pay_lag_trading_days),
         "tax.dividend_reinvestment_exemption": str(engine.dividend_reinvestment_exemption).lower(),
+        **strategy,
     }
 
 
@@ -303,9 +309,8 @@ def _run_one(
         opened_on = account.opened_on
         lines = _changes(account.settings, settings, day)
     _require_fresh(inputs, state)
-    state, report = run_day(
-        state, inputs, STRATEGIES[config.strategy](), rules, config.settings.engine
-    )
+    strategy = STRATEGIES[config.strategy](config.strategy_settings)
+    state, report = run_day(state, inputs, strategy, rules, config.settings.engine)
     lines += _decisions(report)
     saved = store.save(
         Account(opened_on, config.strategy, state, settings),
@@ -396,13 +401,27 @@ def _require_fresh(inputs: DayInputs, state: EngineState) -> None:
 
 
 def _changes(before: Mapping[str, str], after: Mapping[str, str], day: date) -> list[AuditLine]:
-    """An audit line for each setting that changed since the last day run (M5 spec §6.5)."""
+    """An audit line for each setting that changed since the last day run (M5 spec §6.5).
+
+    A strategy's setting is recorded the first time a day runs with it, as after ``paper
+    switch``, and its guide, not this line, says when a change takes effect: ``monthly-savings``
+    fixes its instalments on its first day (M6 spec §5).
+    """
     lines: list[AuditLine] = []
     for key in sorted(after):
         old, new = before.get(key), after[key]
         if old == new:
             continue
-        if key == STARTING_CASH:
+        if old is None:
+            text = f"{key} is {new}, recorded for the first time"
+            lines.append(AuditLine(day, Note(PAPER_SETTING_CHANGED, text)))
+        elif key.startswith("strategy."):
+            text = (
+                f"{key} changed from {old} to {new}; the strategy's guide says when a change "
+                "takes effect"
+            )
+            lines.append(AuditLine(day, Note(PAPER_SETTING_CHANGED, text)))
+        elif key == STARTING_CASH:
             text = (
                 f"{key} changed from {old} to {new}; it is used only when the account opens, so "
                 "the account's cash is unchanged"

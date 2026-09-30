@@ -427,7 +427,7 @@ def _learn(ctx: Context) -> str:
 def _backtest(ctx: Context) -> str:
     """Back-test a strategy beside ``buy-and-hold`` and write its report files (M5 spec §5.3)."""
     config = ctx.config()
-    strategy = _strategy(ctx.args.strategy or config.strategy)
+    strategy = _strategy(ctx.args.strategy or config.strategy, config)
     start, end = _window(ctx)
     with ctx.world.source(config.data_dir) as source:
         result = backtest(strategy, _market(config, source), start, end, config.settings)
@@ -443,7 +443,7 @@ def _compare(ctx: Context) -> str:
     if twice:
         msg = f"{twice[0]} is named twice; name each strategy once"
         raise UsageError(msg)
-    strategies = [_strategy(name) for name in names]
+    strategies = [_strategy(name, config) for name in names]
     start, end = _window(ctx)
     with ctx.world.source(config.data_dir) as source:
         comparison = compare(strategies, _market(config, source), start, end, config.settings)
@@ -548,10 +548,11 @@ def _user(ctx: Context) -> str:
     return env.get("USER") or env.get("LOGNAME") or "unknown"
 
 
-def _strategy(name: str) -> Strategy:
+def _strategy(name: str, config: Config) -> Strategy:
+    """The registered strategy *name*, made with the settings in the configuration."""
     if name not in STRATEGIES:
         raise UnknownNameError.among(name, STRATEGIES, kind="strategy")
-    return STRATEGIES[name]()
+    return STRATEGIES[name](config.strategy_settings)
 
 
 def _window(ctx: Context) -> tuple[date, date]:

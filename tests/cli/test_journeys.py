@@ -39,7 +39,8 @@ def test_a_first_time_users_journey(tmp_path: Path) -> None:
 
     listed = installed(home, "strategies")
     assert listed.code == 0
-    assert "buy-and-hold  low" in listed.out
+    assert "buy-and-hold     low" in listed.out
+    assert "monthly-savings  low" in listed.out
     assert "What this means" in listed.out
 
     explained = installed(home, "explain", "buy-and-hold")

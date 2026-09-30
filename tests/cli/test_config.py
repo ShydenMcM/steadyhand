@@ -11,14 +11,25 @@ import pytest
 from steadyhand import (
     IDR,
     BacktestSettings,
+    BuyAndHold,
     EngineSettings,
     FillSettings,
     IncomeGoal,
     Money,
+    Registered,
     RiskLimits,
+    Setting,
+    Turnover,
 )
 from steadyhand_idx._datafile import DataFileError
-from steadyhand_idx.config import KEYS, Config, ConfigMissingError, load, starter
+from steadyhand_idx.config import (
+    KEYS,
+    Config,
+    ConfigMissingError,
+    load,
+    starter,
+    strategy_keys,
+)
 
 ACCEPTED = date(2026, 9, 27)
 CONSENT = "[consent]\ndisclaimer_accepted = 2026-09-27\n"
@@ -57,6 +68,7 @@ def test_a_file_with_only_the_consent_takes_every_default(tmp_path: Path) -> Non
     )
     assert config.broker_fees == "custom"
     assert config.strategy == "buy-and-hold"
+    assert config.strategy_settings == {"instalments": 12}
     assert config.lq45_members == tmp_path / "lq45_members.toml"
     assert config.exclusions == tmp_path / "exclusions.csv"
     assert config.training == {}
@@ -86,7 +98,11 @@ def test_the_starter_file_writes_every_key_under_its_comment() -> None:
             (index,) = [i for i, line in enumerate(lines) if line.startswith(f"{key.name} = ")]
             assert lines[index - 1] == f"# {key.comment}"
             written += 1
-    assert written == 14
+    assert written == 15
+    assert "# The months monthly-savings spreads the starting cash over: 1 to 120.\n" in "\n".join(
+        lines
+    )
+    assert "instalments = 12" in lines
 
 
 def test_the_starter_file_writes_toml_values_a_person_can_read() -> None:
@@ -219,6 +235,9 @@ GOOD: list[tuple[str, str, Callable[[Config], bool]]] = [
         "dividend_reinvestment_exemption = true",
         lambda c: c.settings.engine.dividend_reinvestment_exemption,
     ),
+    ("strategy", "instalments = 1", lambda c: c.strategy_settings == {"instalments": 1}),
+    ("strategy", "instalments = 120", lambda c: c.strategy_settings == {"instalments": 120}),
+    ("strategy", 'name = "monthly-savings"', lambda c: c.strategy == "monthly-savings"),
 ]
 
 
@@ -270,8 +289,14 @@ BAD = [
     (
         "strategy",
         'name = "dividend-growth"',
-        "name must be one of buy-and-hold, got 'dividend-growth'",
+        "name must be one of buy-and-hold, monthly-savings, got 'dividend-growth'",
     ),
+    # A setting of a strategy that is not running is checked all the same (M6 spec §4.5).
+    ("strategy", "instalments = 0", "instalments must be an integer of at least 1, got 0"),
+    ("strategy", "instalments = 121", "instalments must be at most 120, got 121"),
+    ("strategy", 'instalments = "12"', "instalments must be an integer of at least 1, got '12'"),
+    ("strategy", "instalments = true", "instalments must be an integer of at least 1, got True"),
+    ("strategy", "instalment = 12", "unknown key 'instalment'"),
     ("risk", 'max_weight = "0"', 'max_weight must be above 0 and at most 1, got "0"'),
     ("risk", 'max_weight = "1.0001"', 'max_weight must be above 0 and at most 1, got "1.0001"'),
     ("risk", 'daily_loss_limit = "1"', 'daily_loss_limit must be above 0 and below 1, got "1"'),
@@ -339,3 +364,17 @@ def test_the_training_table_is_carried_unread_and_read_only(tmp_path: Path) -> N
     assert config.training == {"level": 7, "other": "x"}
     with pytest.raises(TypeError):
         config.training["level"] = "new"  # type: ignore[index]
+
+
+def test_a_setting_name_may_belong_to_one_strategy_only() -> None:
+    rounds = Setting("rounds", 3, 1, 9, "How many rounds.")
+    one = Registered(BuyAndHold, "One.", Turnover.LOW, (rounds,))
+    assert [key.name for key in strategy_keys({"one": one})] == ["name", "rounds"]
+    with pytest.raises(
+        ValueError, match=r"^\[strategy\] rounds would be the key of more than one setting$"
+    ):
+        strategy_keys({"one": one, "two": Registered(BuyAndHold, "Two.", Turnover.LOW, (rounds,))})
+    named = Registered(BuyAndHold, "Named.", Turnover.LOW, (Setting("name", 1, 1, 1, "x"),))
+    with pytest.raises(ValueError, match=r"^\[strategy\] name would be the key of more than"):
+        strategy_keys({"named": named})
+    assert [key.name for key in KEYS["strategy"]] == ["name", "instalments"]

@@ -29,12 +29,14 @@ from cli_world import (
 from record_golden import END, START
 
 from steadyhand import (
+    IDR,
     RISK_HALT_DAILY_LOSS,
     Bar,
     CorporateAction,
     DataSource,
     Instrument,
     Market,
+    Money,
     day_inputs,
 )
 from steadyhand_idx.cli import SourceFactory
@@ -549,3 +551,72 @@ def test_two_runs_started_together_run_each_day_exactly_once(tmp_path: Path) -> 
     with opened(together) as store:
         assert store.days() == trading_days()[:9]
         assert len(store.runs()) == 3
+
+
+MONTHLY_CONFIG = GOLDEN_CONFIG + '\n[strategy]\nname = "monthly-savings"\ninstalments = 4\n'
+"""The golden settings with ``monthly-savings`` spreading the starting cash over four months."""
+
+
+def test_the_settings_of_the_strategy_that_runs_are_recorded_with_the_engines(
+    tmp_path: Path,
+) -> None:
+    monthly = settings_of(load(paper(tmp_path, MONTHLY_CONFIG).config))
+    assert monthly["strategy.instalments"] == "4"
+    plain = settings_of(load(paper(tmp_path / "plain").config))
+    assert [key for key in plain if key.startswith("strategy.")] == []
+
+
+def test_a_changed_strategy_setting_is_recorded_and_its_guide_says_when_it_applies(
+    tmp_path: Path,
+) -> None:
+    cli = paper(tmp_path, MONTHLY_CONFIG)
+    run_on(cli, START)
+    cli.config.write_text(
+        MONTHLY_CONFIG.replace("instalments = 4", "instalments = 6"), encoding="utf-8"
+    )
+    run_on(cli, trading_days()[1])
+    with opened(cli) as store:
+        changed = [
+            (line.day, line.note.text)
+            for line in store.audit()
+            if line.note.key == PAPER_SETTING_CHANGED
+        ]
+        account = store.account()
+    assert changed == [
+        (
+            trading_days()[1],
+            (
+                "strategy.instalments changed from 4 to 6; the strategy's guide says when a "
+                "change takes effect"
+            ),
+        )
+    ]
+    assert account is not None
+    # monthly-savings fixed its instalment on its first day: a quarter of the starting cash.
+    assert account.state.memory["instalment"] == "25000000"
+
+
+def test_a_strategy_switched_to_records_its_settings_the_first_day_it_runs(
+    tmp_path: Path,
+) -> None:
+    cli = paper(tmp_path)
+    run_on(cli, START)
+    cli.config.write_text(MONTHLY_CONFIG, encoding="utf-8")
+    assert cli("paper", "switch", "monthly-savings", stdin="monthly-savings\n").code == 0
+    run_on(cli, trading_days()[1])
+    with opened(cli) as store:
+        recorded = [
+            (line.day, line.note.text)
+            for line in store.audit()
+            if line.note.key == PAPER_SETTING_CHANGED
+        ]
+        account = store.account()
+    assert recorded == [
+        (trading_days()[1], "strategy.instalments is 4, recorded for the first time")
+    ]
+    assert account is not None
+    # buy-and-hold had spent all but Rp 341,160 of the starting cash: monthly-savings sizes its
+    # instalment from that cash, not from the portfolio's value (M6 spec §5).
+    cash = account.state.holdings.portfolio.spendable_cash(trading_days()[1])
+    assert cash == Money(341_160, IDR)
+    assert account.state.memory == {"instalment": "85290", "due": "3", "month": "2021-02"}

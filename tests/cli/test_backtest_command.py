@@ -280,3 +280,27 @@ def test_the_broker_fee_preset_comes_from_the_configuration(
 
 def no_wait(seconds: float) -> None:
     del seconds
+
+
+def test_monthly_savings_spreads_the_starting_cash_over_its_instalments(tmp_path: Path) -> None:
+    market = market_cli(tmp_path / "home", GOLDEN_CONFIG + "\n[strategy]\ninstalments = 4\n")
+    result = market("backtest", *WINDOW, "--strategy", "monthly-savings")
+    assert (result.code, result.err) == (0, "")
+    assert result.out.startswith(
+        "Backtest: monthly-savings, 2021-02-01 to 2022-01-31, 248 trading days\n\n"
+    )
+    assert result.out.split("\n\n")[1].splitlines()[:2] == [
+        "                       monthly-savings     buy-and-hold",
+        "Final value            IDR 100,655,756   IDR 97,889,490",
+    ]
+    daily = market.home / "reports" / "backtest-monthly-savings-2021-02-01-2022-01-31.csv"
+    cash: dict[str, list[int]] = {}
+    with daily.open(encoding="utf-8", newline="") as file:
+        for row in csv.DictReader(file):
+            held = int(row["settled_cash"]) + int(row["unsettled_cash"])
+            cash.setdefault(row["day"][:7], []).append(held)
+    # Each instalment of 25,000,000 fills the day after the month's first trading day, and the
+    # instalments still due stay back as cash until their month.
+    for bought, month in enumerate(["2021-02", "2021-03", "2021-04", "2021-05"], start=1):
+        reserve = (4 - bought) * 25_000_000
+        assert reserve <= cash[month][1] < reserve + 25_000_000, month

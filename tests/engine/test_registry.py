@@ -13,6 +13,7 @@ from steadyhand import (
     Decision,
     MarketView,
     Memory,
+    MonthlySavings,
     PortfolioView,
     Registered,
     Setting,
@@ -176,3 +177,24 @@ def test_an_entry_refuses_a_setting_twice_or_one_that_is_not_a_setting() -> None
         Registered(_Rounds, "x", Turnover.LOW, [ROUNDS])  # type: ignore[arg-type]
     with pytest.raises(TypeError, match=r"^setting must be a Setting, got str$"):
         Registered(_Rounds, "x", Turnover.LOW, ("rounds",))  # type: ignore[arg-type]
+
+
+def test_monthly_savings_spreads_the_starting_cash_over_12_instalments_by_default() -> None:
+    entry = STRATEGIES["monthly-savings"]
+    assert entry.make is MonthlySavings
+    assert entry.turnover is Turnover.LOW
+    assert entry.settings == (
+        Setting(
+            "instalments",
+            12,
+            1,
+            120,
+            "The months monthly-savings spreads the starting cash over: 1 to 120.",
+        ),
+    )
+    assert entry.lookback_years() == 0
+    made = entry({"instalments": 6, "rounds": 1})
+    assert isinstance(made, MonthlySavings)
+    assert made.instalments == 6
+    assert isinstance(entry(), MonthlySavings)
+    assert entry().name == "monthly-savings"
