@@ -68,7 +68,7 @@ def strategy_keys(strategies: Mapping[str, Registered]) -> tuple[Key, ...]:
     """``[strategy]``'s keys: ``name``, then each registered strategy's settings, in registry
     order. A setting's name may belong to one strategy only, so the flat table stays unambiguous
     (M6 spec §4.5)."""
-    keys = [Key("name", "buy-and-hold", "The strategy to run: see steadyhand-idx strategies.")]
+    keys = [Key("name", "dividend-growth", "The strategy to run: see steadyhand-idx strategies.")]
     for entry in strategies.values():
         keys += [Key(setting.name, setting.default, setting.help) for setting in entry.settings]
     names = [key.name for key in keys]
@@ -339,7 +339,9 @@ def _choice(row: Row, key: str, where: Where, known: Mapping[str, object]) -> st
 
 
 def _strategy_settings(row: Row, where: Where) -> dict[str, int]:
-    """Every registered strategy's settings, each a whole number within its bounds."""
+    """Every registered strategy's settings, each a whole number within its bounds, and each
+    strategy made from them once, so a rule across its settings (``max_stocks`` at least
+    ``min_stocks``) is checked too (M6 spec §4.5)."""
     values: dict[str, int] = {}
     for entry in STRATEGIES.values():
         for setting in entry.settings:
@@ -348,6 +350,11 @@ def _strategy_settings(row: Row, where: Where) -> dict[str, int]:
                 msg = f"{where}: {setting.name} must be at most {setting.maximum}, got {value}"
                 raise DataFileError(msg)
             values[setting.name] = value
+        try:
+            entry(values)
+        except ValueError as error:
+            msg = f"{where}: {error}"
+            raise DataFileError(msg) from None
     return values
 
 

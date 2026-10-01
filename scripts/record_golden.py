@@ -15,6 +15,12 @@ to 29 April 2022, over longer recordings of the same stocks, and writes
 ``tests/fixtures/golden/exemption-script_2021-02-01_2022-04-29.json``. That window passes the
 31 March 2022 deadline of the 2021 dividends, so the run holds a claim of each kind.
 
+Last it runs ``dividend-growth`` over the first run's window with ``VALUES``, a two-year test
+whose three-year look-back (from 1 January 2018) fits in the recordings, and with TLKM's
+look-back refused by script, and writes
+``tests/fixtures/golden/dividend-growth_2021-02-01_2022-01-31.json``. The look-back holds UNVR's
+2020 split, and the window crosses into 2022, where the strategy reviews again.
+
 Run it only after a change that moves the numbers on purpose, and review the diff: the files are
 never edited by hand.
 """
@@ -25,6 +31,7 @@ import json
 import sys
 import tempfile
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -34,6 +41,7 @@ from steadyhand import (
     STRATEGIES,
     BacktestResult,
     BacktestSettings,
+    DataUnavailableError,
     Decision,
     DividendClaim,
     EngineSettings,
@@ -65,6 +73,12 @@ TOP_UP, SELL_DOWN = date(2021, 7, 1), date(2021, 11, 1)
 HISTORY_START = date(2017, 1, 31)
 """Where the recordings start: five years before the run ends (M4 spec §9)."""
 STOCKS = ("ASII", "BBCA", "BBRI", "TLKM", "UNVR")
+GROWTH_GOLDEN = TESTS / "fixtures" / "golden" / "dividend-growth_2021-02-01_2022-01-31.json"
+VALUES = {"instalments": 12, "min_stocks": 2, "max_stocks": 2, "growth_years": 2}
+"""Every registered strategy's settings in the golden runs. ``dividend-growth`` tests two years
+of growth, so its look-back of three years, from 1 January 2018, fits in the recordings."""
+REFUSED_HISTORY = "TLKM.JK"
+"""The stock whose look-back the ``dividend-growth`` golden run is refused."""
 RECORDED = date(2026, 9, 27)
 """The day the fixtures were recorded; the cache treats it as today."""
 
@@ -86,6 +100,16 @@ def recorded(ticker: str, start: date, end: date, *, last: date = END) -> YahooH
         raise ValueError(msg)
     name = f"{ticker}_{HISTORY_START.isoformat()}_{last.isoformat()}.json"
     return history_from_json(FIXTURES / name)
+
+
+def recorded_refusing_history(ticker: str, start: date, end: date) -> YahooHistory:
+    """The recordings, except that TLKM's look-back is refused, as Yahoo refuses a stock it
+    has nothing for: a range that ends before the run and starts after ``HISTORY_START``, where
+    the income report's history starts."""
+    if ticker == REFUSED_HISTORY and start > HISTORY_START and end < START:
+        msg = f"{ticker}: refused by the golden test's script"
+        raise DataUnavailableError(msg)
+    return recorded(ticker, start, end)
 
 
 def recorded_to_exempt_end(ticker: str, start: date, end: date) -> YahooHistory:
@@ -135,14 +159,27 @@ def universe() -> Lq45Universe:
 
 
 def run(
-    folder: Path, strategy: str = "buy-and-hold", end: date = END, *, income: bool = True
+    folder: Path,
+    strategy: str = "buy-and-hold",
+    end: date = END,
+    *,
+    income: bool = True,
+    download: Callable[[str, date, date], YahooHistory] = recorded,
 ) -> BacktestResult:
-    """Back-test *strategy* from ``START`` to *end* through the real source, cache and rules.
+    """Back-test *strategy*, made from ``VALUES`` with its look-back, from ``START`` to *end*
+    through the real source, cache and rules.
 
     Without *income* there is no goal, so no history is fetched before ``START``: an earlier
     *end* would need recordings from before ``HISTORY_START``.
     """
-    return _backtest(folder, STRATEGIES[strategy](), end, settings(income=income), recorded)
+    entry = STRATEGIES[strategy]
+    chosen = replace(settings(income=income), lookback_years=entry.lookback_years(VALUES))
+    return _backtest(folder, entry(VALUES), end, chosen, download)
+
+
+def run_growth(folder: Path) -> BacktestResult:
+    """Back-test ``dividend-growth`` over the first run's window, TLKM's look-back refused."""
+    return run(folder, "dividend-growth", download=recorded_refusing_history)
 
 
 def run_exempt(folder: Path) -> BacktestResult:
@@ -332,6 +369,12 @@ def record_exempt(folder: Path, golden: Path = EXEMPT_GOLDEN) -> Path:
     return _write(summary(run_exempt(folder)), golden)
 
 
+def record_growth(folder: Path, golden: Path = GROWTH_GOLDEN) -> Path:
+    """Run the ``dividend-growth`` golden backtest with its cache in *folder*, and write its
+    summary to *golden*."""
+    return _write(summary(run_growth(folder)), golden)
+
+
 def _write(pinned: dict[str, object], golden: Path) -> Path:
     text = json.dumps(pinned, indent=1, sort_keys=True) + "\n"
     golden.parent.mkdir(parents=True, exist_ok=True)
@@ -346,6 +389,7 @@ def main(argv: list[str]) -> int:
     with tempfile.TemporaryDirectory() as scratch:
         print(record(Path(scratch) / "buy-and-hold"))
         print(record_exempt(Path(scratch) / "exemption"))
+        print(record_growth(Path(scratch) / "dividend-growth"))
     return 0
 
 

@@ -95,6 +95,10 @@ LIMIT_WEIGHT_CUT = "limit.weight.cut"
 LIMIT_WEIGHT_FULL = "limit.weight.full"
 """A buy was not placed: the stock is already at its weight limit."""
 
+STRATEGY_TOO_FEW_QUALIFIED = "strategy.too_few_qualified"
+"""``dividend-growth`` found fewer stocks passing its test than its ``min_stocks``, so the rest
+of the portfolio is held as cash (M6 spec §6)."""
+
 TRADE_EXCLUDED = "trade.excluded"
 """A stock you excluded is not traded."""
 

@@ -22,6 +22,7 @@ from record_golden import START
 
 from steadyhand import DISCLAIMER, RISK_HALT_DAILY_LOSS
 from steadyhand_idx import __version__
+from steadyhand_idx.config import load
 from steadyhand_idx.notes import PAPER_RESUMED
 
 
@@ -36,16 +37,26 @@ def test_a_first_time_users_journey(tmp_path: Path) -> None:
     assert started.out.startswith(DISCLAIMER)
     assert stat.S_IMODE(home.stat().st_mode) == 0o700
     assert stat.S_IMODE((home / "steadyhand.toml").stat().st_mode) == 0o600
+    written = load(home / "steadyhand.toml")
+    assert written.strategy == "dividend-growth"
+    assert written.strategy_settings == {
+        "instalments": 12,
+        "min_stocks": 15,
+        "max_stocks": 25,
+        "growth_years": 5,
+    }
 
     listed = installed(home, "strategies")
     assert listed.code == 0
     assert "buy-and-hold     low" in listed.out
     assert "monthly-savings  low" in listed.out
+    assert "dividend-growth  low" in listed.out
     assert "What this means" in listed.out
 
     explained = installed(home, "explain", "buy-and-hold")
     assert explained.code == 0
     assert explained.out.startswith("# buy-and-hold\n")
+    assert installed(home, "explain", "dividend-growth").out.startswith("# dividend-growth\n")
 
     course = installed(home, "learn")
     assert course.code == 0

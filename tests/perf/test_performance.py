@@ -1,18 +1,22 @@
-"""A ten-year backtest over 45 stocks finishes in under 30 seconds (core spec §10.4, M3 §9).
+"""A ten-year backtest over 45 stocks finishes in under 30 seconds (core spec §10.4, M3 §9), and
+a year of ``dividend-growth`` over them in under 3 (M6 spec §9.4).
 
 The market is ``synthetic``'s, which also shows the engine running a market other than IDX.
 The strategy rebalances to equal weights every day, so the strategy's run and the baseline's
-both trade, value and size every day.
+both trade, value and size every day. The ``dividend-growth`` year took 0.37 to 0.40 s at a
+load of 10 on four cores (0.67 to 0.74 s at 30); its budget leaves about eight times that for a
+slower CI runner.
 """
 
 import time
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pytest
 from synthetic import END, START, All, EqualWeight, PlainRules, Synthetic
 
 from steadyhand import (
     IDR,
+    STRATEGIES,
     BacktestSettings,
     EngineSettings,
     IncomeGoal,
@@ -22,6 +26,7 @@ from steadyhand import (
 )
 
 BUDGET_SECONDS = 30
+GROWTH_BUDGET_SECONDS = 3
 
 
 @pytest.mark.perf
@@ -51,3 +56,20 @@ def test_ten_years_of_45_stocks_run_inside_the_budget() -> None:
     )
     assert result.income_impact is not None
     assert seconds < BUDGET_SECONDS, f"took {seconds:.1f} s, over the {BUDGET_SECONDS} s budget"
+
+
+@pytest.mark.perf
+def test_a_year_of_dividend_growth_over_45_stocks_runs_inside_its_budget() -> None:
+    source = Synthetic()
+    entry = STRATEGIES["dividend-growth"]
+    # The default six years of look-back, from 1 January 2017: the synthetic data starts in 2016.
+    settings = BacktestSettings(Money(1_000_000_000, IDR), lookback_years=entry.lookback_years())
+    market = Market(All(source.stocks), source, PlainRules())
+    began = time.perf_counter()
+    result = backtest(entry(), market, date(2023, 1, 2), date(2023, 12, 29), settings)
+    seconds = time.perf_counter() - began
+    # It did the work it is timed on: more stocks passed than max_stocks, so the review picked
+    # 25 by their pay months, reading six years of dividends for each of the 45.
+    assert len(result.run.reports) == 260
+    assert len(result.run.final.holdings.portfolio.positions) == 25
+    assert seconds < GROWTH_BUDGET_SECONDS, f"took {seconds:.1f} s"

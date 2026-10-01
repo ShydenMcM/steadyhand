@@ -6,6 +6,9 @@ result, its income report included, must equal the stored file exactly, in integ
 After a change that moves the numbers on purpose, re-record with
 ``uv run python scripts/record_golden.py`` and review the diff.
 
+``dividend-growth`` has a golden run of its own, over the same window with a two-year test, a
+look-back holding UNVR's 2020 split, TLKM's look-back refused, and a review in January 2022.
+
 The truncation check: every registered strategy, run to day D and to D plus 20 trading days,
 makes the same decisions up to D, so no decision can have read a later price.
 """
@@ -20,25 +23,30 @@ from record_golden import (
     END,
     EXEMPT_GOLDEN,
     GOLDEN,
+    GROWTH_GOLDEN,
     HISTORY_START,
     STOCKS,
     main,
     record,
     record_exempt,
+    record_growth,
     recorded,
     run,
     run_exempt,
+    run_growth,
     summary,
 )
 
 from steadyhand import (
     CLAIMS_LABEL,
     DATA_BAR_REFUSED,
+    DATA_DIVIDENDS_HISTORY_REFUSED,
     EXEMPTION_CLAIM_BROKEN,
     EXEMPTION_DEADLINE_MISSED,
     HISTORY_YEARS,
     IDR,
     STRATEGIES,
+    STRATEGY_TOO_FEW_QUALIFIED,
     Money,
     years_before,
 )
@@ -107,6 +115,52 @@ def test_the_switch_on_run_holds_a_claim_of_each_kind_as_worked_by_hand() -> Non
     # Tax shows in the month it was booked, not the month its dividend was paid (M4 spec §6.5).
     taxed = {month[0]: month[2] for month in stored["income"]["received"]["by_month"] if month[2]}
     assert taxed == {"2021-11-01": 22_450, "2022-04-01": 16_000}
+
+
+def test_the_dividend_growth_run_reproduces_its_stored_results_exactly(tmp_path: Path) -> None:
+    stored = json.loads(GROWTH_GOLDEN.read_text(encoding="utf-8"))
+    assert summary(run_growth(tmp_path)) == stored
+
+
+def test_the_recorder_writes_the_dividend_growth_file_byte_for_byte(tmp_path: Path) -> None:
+    written = record_growth(tmp_path / "cache", tmp_path / "growth.json")
+    assert written.read_bytes() == GROWTH_GOLDEN.read_bytes()
+
+
+def test_the_dividend_growth_run_reviews_as_worked_by_hand() -> None:
+    stored = json.loads(GROWTH_GOLDEN.read_text(encoding="utf-8"))
+    # 1 February 2021 tests the dividends of 2018 to 2020, a share in today's shares. BBCA's
+    # 260, 355, 553 grew. UNVR's 183, 241, 194 are its dividends of before its 1-for-5 split of
+    # January 2020 restated, so 194 >= 183 passes (unrestated, 915 would not). BBRI passes but
+    # its prices are refused that day, so it cannot be bought; ASII's 184 < 190 fails, and
+    # TLKM's look-back was refused. Two picks at half each, the risk limit's 25% bought on the
+    # 2nd: 700 x 34,875 and 3,500 x 7,125, just under Rp25,000,000 each.
+    assert [fill[:5] for fill in stored["fills"] if fill[0] == "2021-02-02"] == [
+        ["2021-02-02", "BBCA", "buy", 700, 34_875],
+        ["2021-02-02", "UNVR", "buy", 3_500, 7_125],
+    ]
+    # 3 January 2022 tests 2019 to 2021. BBCA's 71, 110.6, 111.4 (restated by its October 2021
+    # split) pass; UNVR's 166 < 241 fails, and so do BBRI's 89.9 < 120.2 and ASII; TLKM's
+    # history is still incomplete. One pick under min_stocks 2: the note, and UNVR is sold.
+    assert stored["notes"] == [
+        [
+            "2022-01-03",
+            STRATEGY_TOO_FEW_QUALIFIED,
+            "Only 1 stock passed the dividend test; the rest is held as cash until more do.",
+        ]
+    ]
+    assert [fill[:3] for fill in stored["fills"] if fill[2] == "sell"] == [
+        ["2022-01-04", "UNVR", "sell"]
+    ]
+    assert stored["positions"] == {"BBCA": 3_500}
+    assert [warning[0] for warning in stored["warnings"]] == [
+        DATA_BAR_REFUSED,
+        DATA_DIVIDENDS_HISTORY_REFUSED,
+    ]
+    assert stored["warnings"][1][1].startswith(
+        "TLKM: the data source refused its corporate actions from 2018-01-01 to 2021-01-31, "
+        "before the run"
+    )
 
 
 def test_the_recorder_takes_no_arguments(capsys: pytest.CaptureFixture[str]) -> None:

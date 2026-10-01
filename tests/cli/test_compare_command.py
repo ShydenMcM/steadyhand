@@ -6,8 +6,8 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from cli_world import Cli, market_cli
-from record_golden import GOLDEN
+from cli_world import GROWTH_CONFIG, Cli, market_cli
+from record_golden import GOLDEN, run
 
 from steadyhand import DISCLAIMER
 
@@ -18,6 +18,19 @@ STEM = "compare-2021-02-01-2022-01-31"
 @pytest.fixture
 def market(tmp_path: Path) -> Cli:
     return market_cli(tmp_path / "home")
+
+
+def test_each_strategy_ends_as_it_does_alone_with_the_longest_look_back(tmp_path: Path) -> None:
+    market = market_cli(tmp_path / "home", GROWTH_CONFIG)
+    names = ("buy-and-hold", "monthly-savings", "dividend-growth")
+    assert market("compare", *WINDOW, *names).code == 0
+    with (market.home / "reports" / f"{STEM}.csv").open(encoding="utf-8", newline="") as file:
+        final = {row["strategy"]: int(row["final_value"]) for row in csv.DictReader(file)}
+    # One fetch with dividend-growth's three-year look-back serves all three; each run alone
+    # takes its own (none for the other two), so any difference would show here.
+    alone = {name: run(tmp_path / name, name).run.metrics.final_value.amount for name in names}
+    assert final == alone
+    assert len(set(alone.values())) == 3
 
 
 def test_the_csv_row_is_the_golden_runs_figures(market: Cli) -> None:

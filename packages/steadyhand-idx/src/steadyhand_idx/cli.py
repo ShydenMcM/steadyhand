@@ -15,7 +15,7 @@ import sys
 import traceback
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, NoReturn, TextIO
@@ -30,8 +30,8 @@ from steadyhand import (
     InvalidBarError,
     Market,
     NoTradingDaysError,
+    Registered,
     SnapshotVersionError,
-    Strategy,
     UniverseCoverageError,
     UnsupportedDateError,
     backtest,
@@ -427,10 +427,15 @@ def _learn(ctx: Context) -> str:
 def _backtest(ctx: Context) -> str:
     """Back-test a strategy beside ``buy-and-hold`` and write its report files (M5 spec §5.3)."""
     config = ctx.config()
-    strategy = _strategy(ctx.args.strategy or config.strategy, config)
+    entry = _entry(ctx.args.strategy or config.strategy)
     start, end = _window(ctx)
+    settings = replace(
+        config.settings, lookback_years=entry.lookback_years(config.strategy_settings)
+    )
     with ctx.world.source(config.data_dir) as source:
-        result = backtest(strategy, _market(config, source), start, end, config.settings)
+        result = backtest(
+            entry(config.strategy_settings), _market(config, source), start, end, settings
+        )
     written = backtest_files(result, config.data_dir / REPORTS)
     return render(backtest_page(result, written), config.training)
 
@@ -443,10 +448,14 @@ def _compare(ctx: Context) -> str:
     if twice:
         msg = f"{twice[0]} is named twice; name each strategy once"
         raise UsageError(msg)
-    strategies = [_strategy(name, config) for name in names]
+    entries = [_entry(name) for name in names]
     start, end = _window(ctx)
+    # One window for every strategy: the longest look-back among them (M6 spec §4.3).
+    lookback = max(entry.lookback_years(config.strategy_settings) for entry in entries)
+    strategies = [entry(config.strategy_settings) for entry in entries]
+    settings = replace(config.settings, lookback_years=lookback)
     with ctx.world.source(config.data_dir) as source:
-        comparison = compare(strategies, _market(config, source), start, end, config.settings)
+        comparison = compare(strategies, _market(config, source), start, end, settings)
     written = comparison_files(comparison, config.data_dir / REPORTS)
     return render(comparison_page(comparison, written), config.training)
 
@@ -548,11 +557,11 @@ def _user(ctx: Context) -> str:
     return env.get("USER") or env.get("LOGNAME") or "unknown"
 
 
-def _strategy(name: str, config: Config) -> Strategy:
-    """The registered strategy *name*, made with the settings in the configuration."""
+def _entry(name: str) -> Registered:
+    """The registry's entry for the strategy *name*."""
     if name not in STRATEGIES:
         raise UnknownNameError.among(name, STRATEGIES, kind="strategy")
-    return STRATEGIES[name](config.strategy_settings)
+    return STRATEGIES[name]
 
 
 def _window(ctx: Context) -> tuple[date, date]:
