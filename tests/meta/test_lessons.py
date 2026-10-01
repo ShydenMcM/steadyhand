@@ -18,7 +18,7 @@ from lesson_rules import (
     unknown,
 )
 
-from steadyhand import DISCLAIMER
+from steadyhand import DISCLAIMER, STRATEGIES
 from steadyhand.training import Catalogue, Level, explain
 from steadyhand_idx.training import catalogue
 
@@ -75,12 +75,25 @@ def test_the_engine_lessons_are_market_neutral(real: Catalogue) -> None:
     assert found == []
 
 
-def test_the_modules_written_in_t1_have_lessons(real: Catalogue) -> None:
+def test_every_module_has_lessons(real: Catalogue) -> None:
     counts = {module.slug: len(module.lessons) for module in real.course()}
-    written = [slug for slug in counts if slug != "strategies"]
-    assert len(written) == 7
-    assert [slug for slug in written if counts[slug] == 0] == []
-    assert counts["strategies"] == 0
+    assert len(counts) == 8
+    assert [slug for slug, count in counts.items() if count == 0] == []
+
+
+def test_module_8_has_a_lesson_for_each_strategy_citing_its_guide(real: Catalogue) -> None:
+    """One lesson per registered strategy, pointing at its guide rather than copying it (M6
+    spec §7), then the lesson on the cash dividend-growth holds."""
+    (strategies,) = [module for module in real.course() if module.slug == "strategies"]
+    lessons = {lesson.id: lesson for lesson in strategies.lessons}
+    expected = [f"strategies.{name.replace('-', '_')}" for name in STRATEGIES]
+    assert len(expected) == 3
+    assert list(lessons) == [*expected, "strategies.holding_cash"]
+    for name, lesson_id in zip(STRATEGIES, expected, strict=True):
+        guide = f"packages/steadyhand/src/steadyhand/strategies/guides/{name}.md"
+        assert guide in lessons[lesson_id].sources, lesson_id
+        words = " ".join(lessons[lesson_id].body.split())
+        assert "Its guide, which the explain command prints" in words, lesson_id
 
 
 def test_the_spec_example_renders_as_written(real: Catalogue) -> None:

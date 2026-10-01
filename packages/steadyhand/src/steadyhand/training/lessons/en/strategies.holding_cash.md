@@ -3,6 +3,8 @@ id = "strategies.holding_cash"
 title = "When a strategy holds cash"
 summary = "Why dividend-growth keeps part of the portfolio in cash when too few stocks pass its test, and what that costs."
 explains = ["strategy.too_few_qualified"]
+module = "strategies"
+position = 4
 see_also = ["dividends.basics", "risk.backtests_mislead"]
 sources = ["docs/superpowers/specs/2026-09-30-m6-strategy-wave-1-design.md"]
 +++
