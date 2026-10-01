@@ -1,7 +1,7 @@
 # steadyhand: Recovering Yahoo's unreported price factor (#160)
 
-**Status:** design approved by Shyden in conversation on 2026-10-01, in three parts, after four decisions (§2). One of them was asked twice, because the measurement behind his first answer was wrong (§3.4). The written spec is awaiting review.
-**Amends:** the core spec (`2026-09-24-steadyhand-core-design.md`) §9.2, which refuses every day whose prices are not whole rupiah after the reported splits are reversed, and the M6 spec (`2026-09-30-m6-strategy-wave-1-design.md`) §4.3, whose look-back reads dividends on those days unchanged.
+**Status:** design approved by Shyden in conversation on 2026-10-01, in three parts, after six decisions (§2). One of them was asked twice, because the measurement behind his first answer was wrong (§3.4). The written spec is awaiting review.
+**Amends:** the core spec (`2026-09-24-steadyhand-core-design.md`) §4.3, whose `DataSource` protocol gains `data_notes` (§7), and §9.2, which refuses every day whose prices are not whole rupiah after the reported splits are reversed, and the M6 spec (`2026-09-30-m6-strategy-wave-1-design.md`) §4.3, whose look-back reads dividends on those days unchanged.
 **Ticket:** #160. It was filed as "credit a dividend whose ex-date falls on a refused day (measure first)". Its measurement (AC1) found that the amounts themselves are wrong, so Shyden re-directed it on 2026-10-01: recover the factor (§3.1).
 
 ## 1. What this delivers
@@ -14,6 +14,7 @@ This work infers that factor from the IDX tick grid, proves it, and restores the
 
 - **BRPT.** Its refused days fit the grid at f = 1 exactly (§3.2): its prices need no factor, so something else refuses them, probably a volume that is not whole after a split is reversed. That gets a ticket of its own.
 - **Days before 2014-01-06.** No tick grid is known for them (§4.2), so they stay refused.
+- **Paper reports.** No data warning reaches them today, so the note does not either; the whole class has a ticket of its own, #161 (decision 6).
 - **Volume.** Yahoo does not scale it (§3.2), so it is never restored.
 - **A factor of 2 or more.** It cannot be told apart from a grid ratio (§3.3), so a run whose true factor is 2 or more stays refused, or in a one-tier span is read as f/2 (§11).
 
@@ -27,6 +28,7 @@ Each was asked with its reasoning, measured options and a recommendation, and th
 4. **Where recovery lives: the source, from the whole history (1).** `YahooDataSource` infers from the ticker's whole history, caches the restored bars, and keeps a record of each restoration. Rejected: caching Yahoo's raw rows and restoring on every read (it changes core §9.3's validated-rows-only cache), and a shipped file of measured factors (it misses any new rights issue until someone measures it).
 
 5. **How the note reaches a run: a core `DataSource.data_notes` method (1).** Asked after review pass 1 found that section 2's premise was false: `survivorship_warnings` reaches runs through the core engine (`backtest._data_warnings` reads the Universe protocol), not through the commands. Rejected: the CLI printing notes beside a run (saved runs and paper reports would carry no trail, against decision 3). This is the one core interface change.
+6. **Paper reports: a separate ticket (A).** Asked after review pass 1 found that no data warning reaches a paper report today. Paper accounts build each day through `day_inputs` and `DayReport`, never through `_data_warnings`, so survivorship, refused days and refused history are all missing there as well. Every proven span ends by 2024-06-14, so a paper account opened now never trades a restored price; only its look-back's dividends can be restored values. This ticket covers backtests, comparisons and their saved reports, and the whole class goes to its own ticket, #161. Rejected: the restored note alone in paper (one data warning of four), and all four inside #160 (paper code no part of this design covered).
 
 ## 3. Measurement
 
@@ -114,23 +116,24 @@ The safety claim is that a proven factor is the true one, within [1, 2). Two arg
 
 ## 5. The source
 
-- **Whole-history inference.** When the reversal finds refused days in a fetched range, `YahooDataSource` fetches that ticker's whole history once, from 2014-01-06 to today in Jakarta, through the same `download_history` and request policy. It builds the runs over all of it. Each run is therefore complete whatever range was asked for, so a day always gets the same factor and the same restored values. That keeps the cache, the golden files and the paper account consistent with each other. The whole history is fetched at most once per ticker per source instance.
+- **Whole-history inference.** When the reversal finds refused days in a fetched range, `YahooDataSource` fetches that ticker's whole history once, from 2014-01-06 to today in Jakarta, through the same `download_history` and request policy. It builds the runs over all of it, and restores from those rows. Each run is therefore complete whatever range was asked for, so a day always gets the same factor and the same restored values. That keeps the cache, the golden files and the paper account consistent with each other. The whole history is fetched at most once per ticker per source instance.
+- **`today`.** `YahooDataSource` has no clock now. It gains a `today` callable, defaulting to the date in Jakarta, injected the way `CachedDataSource`'s is, so a test fixes the whole history's end.
 - **`bars`** returns restored bars for days in proven runs and raises `UnrecoverablePricesError` for the days left (unproven runs, and days before 2014-01-06), naming them as today.
-- **`corporate_actions`** stays calendar-free. Its dividends go through the same runs: a dividend in a proven run is restored (§4.5). A dividend whose ex-date falls in an unproven run is now refused with `UnavailableDaysError` naming that ex-date, because its amount is known to be wrong. M6's look-back then marks the stock incomplete (`history_complete` false, warning `data.dividends.history_refused`), as for any refused look-back (M6 §4.3). Measured impact: ARTO's and MAPI's refused spans from 2016 carry no dividends.
+- **`corporate_actions`** stays calendar-free. Its dividends go through the same runs: a dividend in a proven run is restored (§4.5). A dividend whose ex-date falls in an unproven run is now refused with `UnavailableDaysError` naming that ex-date, because its amount is known to be wrong. M6's look-back then marks the stock incomplete (`history_complete` false, warning `data.dividends.history_refused`), as for any refused look-back (M6 §4.3). Inside a run's own window the same refusal reaches `backtest._unpriced_actions`, which returns `None`, so the stock's actions over the run are unknown and its history is incomplete (M6 plan scope decision 13), where today the scaled amount is read. Measured impact: ARTO's and MAPI's refused spans from 2016 carry no dividends.
 - **`restorations(instrument, start, end) -> tuple[Restoration, ...]`** returns the proven runs overlapping the range. `Restoration` is a frozen dataclass holding `instrument`, `first`, `last`, `factor: Decimal` and `prices: int`.
 
 ## 6. The cache
 
 - Restored bars are stored as ordinary validated bars (core §9.3 unchanged).
 - A new table `restorations (symbol TEXT, first TEXT, last TEXT, factor TEXT, prices INTEGER, PRIMARY KEY (symbol, first))` records each proven run, so the note can be rebuilt from a cache read without refetching. `CachedDataSource.restorations` reads it.
-- **Migration** (the next entry in `cache.py`'s ordered list): it creates the table, and deletes every row of `actions`, `fetched_actions` and `fetched`. Everything is then re-read once under the new rules. That is what corrects a cache that already holds BBRI's Rp89.91268. Bars from refused days were never stored, so no stored bar is wrong, and clearing `fetched` makes the cache fetch the newly restorable days.
+- **Migration** (the next entry in `cache.py`'s `MIGRATIONS`): it creates the table, and deletes every row of `actions`, `fetched_actions` and `fetched`. Everything is then re-read once under the new rules. That is what corrects a cache that already holds BBRI's Rp89.91268. Bars from refused days were never stored, so no stored bar is wrong, and clearing `fetched` makes the cache fetch the newly restorable days.
 
 ## 7. Notes and the lesson
 
 - **Key** `data.prices.restored`, defined in `steadyhand_idx.notes` and checked by the key meta-test (`tests/meta/test_note_keys.py`).
 - **Text**, once per stock per proven run overlapping the run's range, look-back included: "`<SYMBOL>`: Yahoo's prices from `<first>` to `<last>` carry an adjustment Yahoo does not report, so steadyhand restored them: every price and dividend in that span is multiplied by `<f>`, proven by `<n>` prices that fit the IDX tick grid at that factor and at no other."
-- **Path (decision 5):** the core `DataSource` protocol gains `data_notes(instruments, start, end) -> Sequence[Note]`, and `backtest._data_warnings` includes it over the run's whole window, look-back included, beside `market.universe.survivorship_warnings` (which reaches runs the same way). The note therefore appears wherever data warnings appear: backtests, comparisons, paper reports and saved runs. `YahooDataSource` and `CachedDataSource` build it from their restorations; the test fakes return `()`.
-- **Lesson** `idx.restored_prices` (`explains = ["data.prices.restored"]`, `see_also = ["backtest.data_gaps", "idx.ticks"]`). It explains what an unreported adjustment is, why the tick grid proves the factor, and that a restored figure can differ from what Yahoo shows.
+- **Path (decision 5):** the core `DataSource` protocol gains `data_notes(instruments, start, end) -> Sequence[Note]`, and `backtest._data_warnings` includes it over the run's whole window, look-back included, beside `market.universe.survivorship_warnings` (which reaches runs the same way). The note therefore appears wherever data warnings appear: backtests, comparisons and their saved reports (`reports.py`). Paper reports carry no data warning of any kind, so they do not carry this one either (decision 6). `DataSource` is `runtime_checkable` and `Market` checks its source against it, so every implementation gains the method: `YahooDataSource` and `CachedDataSource` build the note from their restorations, and the test fakes return `()`. Those are `Edited` and `Interrupted` (`tests/cli/test_paper_run.py`), `Synthetic` (`tests/perf/synthetic.py`), `_Source` (`tests/engine/test_backtest.py`, whose four subclasses inherit it) and `_MinimalSource` (`tests/engine/test_protocols.py`).
+- **Lesson** `idx.restored_prices`, in the `how-idx-works` module (`explains = ["data.prices.restored"]`, `see_also = ["backtest.data_gaps", "idx.ticks"]`). It explains what an unreported adjustment is, why the tick grid proves the factor, and that a restored figure can differ from what Yahoo shows.
 
 ## 8. Errors
 
@@ -148,13 +151,14 @@ TDD throughout, at 100% branch coverage, with each guard proven by a mutation th
 - **Property (Hypothesis, `ci` profile):** random true grid prices × a random f in [1, 2) either recover that f or stay refused, and never give a different f. This is §4.4's safety claim as a test.
 - **The BBRI recording:** f = 1.100019, and the 2021-04-06 dividend restores to 98.9057, within Rp0.0001 of BRI's announced 98.905659443.
 - **Restoring:** prices land on ticks as `Money`; dividends are quantised to Rp0.0001; volume is unchanged.
-- **Source:** the whole history is fetched once per ticker; a restored day is identical whatever range was asked for; a dividend in an unproven run is refused; `restorations` returns exactly the overlapping runs.
+- **Source:** the whole history is fetched once per ticker and ends on the injected `today`; a restored day is identical whatever range was asked for; a dividend in an unproven run is refused, in a look-back and inside a run's window; `restorations` returns exactly the overlapping runs.
 - **Cache migration:** the table exists; actions and both coverage tables are cleared; the migration runs once (idempotent at the version); a restoration survives a round trip.
-- **Notes:** one note per stock per run, with the exact text; the key passes the meta-test; the lesson renders and lists the key.
+- **Notes:** one note per stock per run, with the exact text; `_data_warnings` includes `data_notes` over the window, look-back included, in a backtest and in a comparison; the key passes the meta-test; the lesson renders and lists the key.
 
 ### 9.2 Golden runs and other consequences (intended, each explained in its PR)
 
 - **Golden runs.** Of the golden fixtures (ASII, BBCA, BBRI, TLKM, UNVR), only BBRI has refused days. It becomes priced and tradable from 2017-01-31 to 2021-09-07, so the golden figures change. Each changed figure is re-recorded with its cause stated.
+- **The recordings.** The golden replay (`record_golden.recorded`) refuses any range outside a recording, and every recording starts on 2017-01-31, so it would refuse the whole-history fetch. BBRI therefore gains a whole-history recording, from 2014-01-06 to the day it is recorded, which the replay serves for that request; the replay's sources pass that day as `today`. A test asserts it agrees row for row with BBRI's existing recordings wherever they overlap, so a change in Yahoo's data between the two recording days is caught rather than baked into the golden figures.
 - **M6's look-back** reads BBRI's corrected 2019 and 2020 dividends (each about 10% higher).
 - **The M4 income report** shows BBRI's 2021 dividend as 98.9057.
 
@@ -166,8 +170,8 @@ TDD throughout, at 100% branch coverage, with each guard proven by a mutation th
 ## 10. Stories
 
 1. **S1 `factor.py`:** the pure inference (§4): grids, candidates, runs, proof, restoration, with the property test.
-2. **S2 the source and the cache:** whole-history inference, restored `bars` and `corporate_actions`, `restorations`, the cache table and migration (§5, §6), and the BBRI recording tests.
-3. **S3 notes, lesson and golden runs:** the key, the helper, the commands' warnings, the lesson (§7), the golden re-records (§9.2), and the amendment text in core §9.2 and M6 §4.3.
+2. **S2 the source and the cache:** whole-history inference with the injected `today`, restored `bars` and `corporate_actions`, `restorations`, the cache table and migration (§5, §6), BBRI's whole-history recording, the BBRI recording tests, and the golden re-records (§9.2), which change in this story because it is the one that prices BBRI.
+3. **S3 notes and the lesson:** the key, the core `DataSource.data_notes` method in every implementation and in `_data_warnings` (§7), the lesson, the golden runs' new warning, and the amendment text in core §4.3 and §9.2 and M6 §4.3.
 
 ## 11. Risks
 
@@ -179,3 +183,5 @@ TDD throughout, at 100% branch coverage, with each guard proven by a mutation th
 ## Spec review log
 
 (Review passes are logged here. The loop closes on a pass that finds nothing.)
+
+- **Pass 1 (2026-10-01).** Every named file, symbol, table, marker and cited section was grepped. Found and fixed: (1) the status line counted four decisions; (2) §7's premise that the commands carry notes was false, so decision 5 was asked; (3) §7 claimed paper reports, which carry no data warning at all, so decision 6 was asked; (4) the implementations that must gain `data_notes` were miscounted in conversation, which named an `InMemoryDataSource` that does not exist: there are seven classes, now listed in §7; (5) `YahooDataSource` has no clock, so `today` is added (§5); (6) the golden replay refuses ranges outside its recordings, so BBRI needs a whole-history recording (§9.2); (7) the golden re-records sat in S3, but S2 is the story that prices BBRI, so they moved; (8) §5 omitted the refusal's effect inside a run's own window; (9) S3 still named "the helper" and "the commands' warnings" from the rejected path; (10) the protocol change amends core §4.3; (11) `MIGRATIONS` and the lesson's module are now named. The M4 income report reads no warnings (`income.py`), so §9.2's line about it concerns the dividend amount only, which is correct.
