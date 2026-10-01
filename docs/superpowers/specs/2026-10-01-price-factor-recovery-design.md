@@ -1,6 +1,6 @@
 # steadyhand: Recovering Yahoo's unreported price factor (#160)
 
-**Status:** design approved by Shyden in conversation on 2026-10-01, in three parts, after four decisions; three more were decided during review (§2). One of them was asked twice, because the measurement behind his first answer was wrong (§3.4). The written spec is awaiting review.
+**Status:** design approved by Shyden in conversation on 2026-10-01, in three parts, after four decisions; three more were decided during review (§2). One of them was asked twice, because the measurement behind his first answer was wrong (§3.4). The written spec was reviewed to zero (pass 7 found nothing) and approved on 2026-10-01 under Shyden's standing rule for reviewed specs; decisions 5 to 7 came out of that review.
 **Amends:** the core spec (`2026-09-24-steadyhand-core-design.md`) §4.3, whose `DataSource` protocol gains `data_notes` (§7), and §9.2, which refuses every day whose prices are not whole rupiah after the reported splits are reversed, and the M6 spec (`2026-09-30-m6-strategy-wave-1-design.md`) §4.3, whose look-back reads dividends on those days unchanged.
 **Ticket:** #160. It was filed as "credit a dividend whose ex-date falls on a refused day (measure first)". Its measurement (AC1) found that the amounts themselves are wrong, so Shyden re-directed it on 2026-10-01: recover the factor (§3.1).
 
@@ -215,3 +215,5 @@ TDD throughout, at 100% branch coverage, with each guard proven by a mutation th
 - **Pass 5 (2026-10-01).** Every backticked name checked mechanically (`names_check.py`). Its first run reported nothing missing, because `git grep` matched the spec itself; excluding the spec, it reports exactly the names this work creates, plus `InMemoryDataSource`, which the pass 1 entry cites as absent. Every cited section was re-read. Found and fixed: §5 cited M6 plan scope decision 13 for the refused stock's actions, copying the code, which was wrong too: it is 14 (13 is the golden harness). `backtest._unpriced_actions` and the `_Unpriced` test source are corrected in their own commit; no other code cites a scope decision.
 
 - **Pass 6 (2026-10-01).** A full read. Found and fixed: "prices off the grid" named the proof's input, but a whole-rupiah price can be off its tick grid and never enters the input; the input is now named by its test, a price that is not whole rupiah after the reported splits are reversed ("an unwhole price"), defined once in §3.2.
+
+- **Pass 7 (2026-10-01).** A full read of every section and every log entry, and the name check re-run (only names this work creates are missing). Nothing found. The loop is closed.
