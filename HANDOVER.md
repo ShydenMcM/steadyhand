@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-10-01 01:45 WIB (2026-09-30 18:45 UTC) (**M6 plan merged** (#148, `dc80666`) and stories filed: S1 #149, S2 #150, S3 #151, S4 #152, S5 #153 (board: Todo). **Next: confirm the plan's develop run, then execute S1.** This file's change is local and uncommitted; fold it into S1's PR.)
+**Updated:** 2026-10-01 07:40 WIB (2026-10-01 00:40 UTC) (**M6 done:** S1–S5 merged and deployed, #149–#153 closed, epic #146 Done. **Next: M7, strategy wave 2, starting with its spec.**)
 **Local:** `~/Developer/Repos/steadyhand`. `develop` holds the T1 spec and plan, and `main` has no release yet. `t1/training-spec` and `m4/m4b-plan` are merged or superseded and deleted. Start each story's branch from `origin/develop`. Read heads with `git rev-parse`; never retype one.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
@@ -114,11 +114,22 @@
 - **Tools** (git-ignored, newest copy): `.superpowers/sdd/2026-09-29-m5b-paper/`. New: `stubgen` keeps a removed top-level function's old definition in the red phase (a rename); `prose_check.py` reads every story's tree; `interface_check.py` (every Produces name defined in its story's tree, with a positive control); `gate-local.sh`, `chain-final.sh`; worktrees `wt-dev`, `wt-red`, `wt-mut`, `wt-replay`. Build findings: `build-log.md`.
 - **Performance** (idle machine): one day on a five-year account 0.17 s (budget 1 s), a 30-day catch-up 1.64 s (10 s), a five-year state 650,053 bytes (800,000). A perf run beside another session's Playwright starved 7 of 8 tests: time nothing beside a heavy job.
 
-## M6 strategy wave 1 (spec approved 2026-09-30, epic #146)
+## M6 strategy wave 1 (spec approved 2026-09-30, done 2026-10-01, epic #146 Done)
+- **Merged into `develop`, each deployed with `publish-dev` green:**
+
+  | Story | Issue | PR | Merge | Develop run |
+  |---|---|---|---|---|
+  | S1 | #149 | #154 | 32015b2 | 36790760852 |
+  | S2 | #150 | #155 | 05f33f4 | 36792120737 |
+  | S3 | #151 | #156 | c3a939c | 36793660355 |
+  | S4 | #152 | #157 | 5d5b9f5 | 36796224511 |
+  | S5 | #153 | #158 | 0226bb2 | 36797176250 |
+
+  Every story's red phase matched the plan by count and by kind, its tree was byte-identical to the scratch commit (new files compared with `git add -N`), and its gate matched the plan (1486, 1500, 1529, 1594, 1595 at 100% on 3.12 and 3.13). All 77 mutations M296–M372 ran red on the real commits with the total unchanged; every SUPERSET had exactly the plan run's catchers. Each PR carries its mutation comment.
 - **Spec:** `docs/superpowers/specs/2026-09-30-m6-strategy-wave-1-design.md` (PR #147, `e2d36e4`).
 - **Plan:** `docs/superpowers/plans/2026-09-30-m6-strategy-wave-1.md`, built by extraction and reviewed to zero on pass 8 (its review log). Five stories, not the spec's four (Shyden's decision, 2026-09-30): S1 engine data path, S2 the IDX dividends-only look-back, S3 `monthly-savings`, S4 `dividend-growth` + default + golden run, S5 module 8. Fifteen scope decisions amend the spec.
 - **Scratch chain** (`.superpowers/sdd/2026-09-30-m6-wave1/repo`, branch `m6-chain`) on `develop` `e2d36e4`: SHAs in `stories.txt` there (S1 `31ff423`, S2 `3726991`, S3 `e6c5a1f`, S4 `c1745a7`, S5 `9c87c50`). Gates 1486, 1500, 1529, 1594, 1595 at 100% on 3.12 and 3.13 (`gates.py` now runs 3.13); red 35, 20, 29, 58, 2; 77 mutations M296–M372 all red (`mut-final.log`); the plan replays byte-identical (`replay2.out`).
-- **Tools** (git-ignored, newest copy): `.superpowers/sdd/2026-09-30-m6-wave1/`. New: `stubgen` stubs a new `__post_init__` as `return`, keeps the body of a function the module calls at import, and re-adds a renamed method's old text; `redrun.py`, `check_plan.py` and the plan's red step pass `--continue-on-collection-errors`; `gates.py` runs Python 3.13; `prose_check.py` and `interface_check.py` carry M6's ranges and search `scripts/`. Build findings: `build-log.md`; state: `PROGRESS.md`.
+- **Tools** (git-ignored, newest copy): `.superpowers/sdd/2026-09-30-m6-wave1/`. New: `stubgen` stubs a new `__post_init__` as `return`, keeps the body of a function the module calls at import, and re-adds a renamed method's old text; `redrun.py`, `check_plan.py` and the plan's red step pass `--continue-on-collection-errors`; `gates.py` runs Python 3.13; `prose_check.py` and `interface_check.py` carry M6's ranges and search `scripts/`. Build findings: `build-log.md`; state: `PROGRESS.md`. Added while executing: `red_kinds.sh <pytest output>` (failure kinds per section, validated against every story's plan answer), `mut_summary.sh <log>` (the story's lines, and each SUPERSET compared with the plan's run), and `wait_ci.sh` now re-watches until the run reads `completed` and exits 0 only on completed + success (`gh run watch` returned on S4's develop run before `publish-dev` had started).
 - **For Shyden (carried forward):** the engine still credits nothing on a day whose prices the source refused, although the IDX source can now read that day's dividend; crediting it changes M3's figures, so it wants its own ticket and his decision.
 
 ## T1 training foundation (spec approved 2026-09-27, ticket #96)
@@ -147,11 +158,9 @@
 - Brainstormed 2026-09-27: see the T1 section above.
 
 ## Resume steps
-0. M5 is done. `main` still has no release (M10).
-1. **Confirm the plan's deploy:** develop run 36759934703 (for merge `dc80666`, PR #148) must read `completed` with every job `success` by name, `publish-dev` included (`gh run view 36759934703 --json status,jobs`). If a TestPyPI publish failed on an OIDC or TLS timeout, `gh run rerun <id> --failed`.
-2. **Execute S1 (#149), then S2–S5 in order**, as M5b's stories were, from `.superpowers/sdd/2026-09-30-m6-wave1/` (read `PROGRESS.md` there first): branch from `origin/develop` as the task's Step 1 says; `uv run --no-project --python 3.12 python apply_task.py <plan> <repo> <task> red`, run the red step exactly as the plan prints it (`--continue-on-collection-errors`) and check its count and kinds; `apply_task.py … green`, run the recorder where Task 4 says, check the tree byte-identical to the scratch commit (`git diff --stat <sN-sha>` shows only this HANDOVER), run the gate (3.12 and 3.13), run the story's mutations against the real commit (`mutations.py <repo> <worktree> <stories file> <ids>`, the stories file listing the real commits, as M5b's `stories-real.txt` did; line N is story N, since `FIRST_STORY` is 1), then `merge_story.sh`, confirm `publish-dev`, `close_story.sh`. Waiting on CI: run `wait_ci.sh <sha file> <branch>` with run_in_background (it no longer sleeps).
-3. After S5, move #146 to Done and write the handover.
-4. **For Shyden:** the plan's *Carried forward* leaves one decision open, whether the engine should credit a dividend on a day whose prices the source refused (it changes M3's figures).
+0. M6 is done. `main` still has no release (M10).
+1. **M7, strategy wave 2** (core design §M6–M9: "Strategy waves 1–4, each with its guides"). It has no spec yet: start with brainstorming, then the spec reviewed to zero, then the plan built by extraction as M6's was (copy the tools from `.superpowers/sdd/2026-09-30-m6-wave1/`, the newest copy). The M3 spec's table puts **bars before the backtest's start** (a price look-back) in M7; M6 built only the dividend look-back.
+2. **For Shyden, before M7's spec:** M6's *Carried forward* leaves one decision open: should the engine credit a dividend on a day whose prices the source refused? The IDX source can read that dividend since S2, but crediting it changes M3's golden figures, so it wants its own ticket and his decision.
 
 ## Research technique
 - **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid scraping. Try the Internet Archive, KSEI, KPEI (idclear) or BPK first. Use idx.co.id only when none has a readable copy, and say so in the research doc.
