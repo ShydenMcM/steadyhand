@@ -67,8 +67,13 @@ def test_a_file_with_only_the_consent_takes_every_default(tmp_path: Path) -> Non
         goal=IncomeGoal(Money(10_000_000, IDR)),
     )
     assert config.broker_fees == "custom"
-    assert config.strategy == "buy-and-hold"
-    assert config.strategy_settings == {"instalments": 12}
+    assert config.strategy == "dividend-growth"
+    assert config.strategy_settings == {
+        "instalments": 12,
+        "min_stocks": 15,
+        "max_stocks": 25,
+        "growth_years": 5,
+    }
     assert config.lq45_members == tmp_path / "lq45_members.toml"
     assert config.exclusions == tmp_path / "exclusions.csv"
     assert config.training == {}
@@ -98,11 +103,18 @@ def test_the_starter_file_writes_every_key_under_its_comment() -> None:
             (index,) = [i for i, line in enumerate(lines) if line.startswith(f"{key.name} = ")]
             assert lines[index - 1] == f"# {key.comment}"
             written += 1
-    assert written == 15
+    assert written == 18
     assert "# The months monthly-savings spreads the starting cash over: 1 to 120.\n" in "\n".join(
         lines
     )
     assert "instalments = 12" in lines
+    assert 'name = "dividend-growth"' in lines
+    (index,) = [i for i, line in enumerate(lines) if line == "max_stocks = 25"]
+    assert lines[index - 1] == (
+        "# The most stocks dividend-growth holds: 1 to 45, and at least min_stocks."
+    )
+    assert "min_stocks = 15" in lines
+    assert "growth_years = 5" in lines
 
 
 def test_the_starter_file_writes_toml_values_a_person_can_read() -> None:
@@ -235,9 +247,17 @@ GOOD: list[tuple[str, str, Callable[[Config], bool]]] = [
         "dividend_reinvestment_exemption = true",
         lambda c: c.settings.engine.dividend_reinvestment_exemption,
     ),
-    ("strategy", "instalments = 1", lambda c: c.strategy_settings == {"instalments": 1}),
-    ("strategy", "instalments = 120", lambda c: c.strategy_settings == {"instalments": 120}),
+    ("strategy", "instalments = 1", lambda c: c.strategy_settings["instalments"] == 1),
+    ("strategy", "instalments = 120", lambda c: c.strategy_settings["instalments"] == 120),
     ("strategy", 'name = "monthly-savings"', lambda c: c.strategy == "monthly-savings"),
+    ("strategy", 'name = "buy-and-hold"', lambda c: c.strategy == "buy-and-hold"),
+    ("strategy", "min_stocks = 1", lambda c: c.strategy_settings["min_stocks"] == 1),
+    # max_stocks equal to min_stocks is allowed: both at the default max, then the default min.
+    ("strategy", "min_stocks = 25", lambda c: c.strategy_settings["min_stocks"] == 25),
+    ("strategy", "max_stocks = 15", lambda c: c.strategy_settings["max_stocks"] == 15),
+    ("strategy", "max_stocks = 45", lambda c: c.strategy_settings["max_stocks"] == 45),
+    ("strategy", "growth_years = 1", lambda c: c.strategy_settings["growth_years"] == 1),
+    ("strategy", "growth_years = 10", lambda c: c.strategy_settings["growth_years"] == 10),
 ]
 
 
@@ -288,8 +308,23 @@ BAD = [
     ),
     (
         "strategy",
-        'name = "dividend-growth"',
-        "name must be one of buy-and-hold, monthly-savings, got 'dividend-growth'",
+        'name = "momentum"',
+        "name must be one of buy-and-hold, dividend-growth, monthly-savings, got 'momentum'",
+    ),
+    ("strategy", "min_stocks = 0", "min_stocks must be an integer of at least 1, got 0"),
+    ("strategy", "min_stocks = 46", "min_stocks must be at most 45, got 46"),
+    ("strategy", "max_stocks = 0", "max_stocks must be an integer of at least 1, got 0"),
+    ("strategy", "max_stocks = 46", "max_stocks must be at most 45, got 46"),
+    ("strategy", "growth_years = 0", "growth_years must be an integer of at least 1, got 0"),
+    ("strategy", "growth_years = 11", "growth_years must be at most 10, got 11"),
+    # The rule across two settings names both, whichever one moved.
+    ("strategy", "max_stocks = 14", "max_stocks must be at least min_stocks (15), got 14"),
+    ("strategy", "min_stocks = 26", "max_stocks must be at least min_stocks (26), got 25"),
+    # ... and holds while another strategy runs (M6 spec §4.5).
+    (
+        "strategy",
+        'name = "buy-and-hold"\nmin_stocks = 20\nmax_stocks = 19',
+        "max_stocks must be at least min_stocks (20), got 19",
     ),
     # A setting of a strategy that is not running is checked all the same (M6 spec §4.5).
     ("strategy", "instalments = 0", "instalments must be an integer of at least 1, got 0"),
@@ -377,4 +412,10 @@ def test_a_setting_name_may_belong_to_one_strategy_only() -> None:
     named = Registered(BuyAndHold, "Named.", Turnover.LOW, (Setting("name", 1, 1, 1, "x"),))
     with pytest.raises(ValueError, match=r"^\[strategy\] name would be the key of more than"):
         strategy_keys({"named": named})
-    assert [key.name for key in KEYS["strategy"]] == ["name", "instalments"]
+    assert [key.name for key in KEYS["strategy"]] == [
+        "name",
+        "instalments",
+        "min_stocks",
+        "max_stocks",
+        "growth_years",
+    ]

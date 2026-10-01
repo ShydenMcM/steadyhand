@@ -8,7 +8,14 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from cli_world import GOLDEN_CONFIG, PLACEHOLDERS, Cli, golden_backtest, market_cli
+from cli_world import (
+    GOLDEN_CONFIG,
+    GROWTH_CONFIG,
+    PLACEHOLDERS,
+    Cli,
+    golden_backtest,
+    market_cli,
+)
 from record_golden import END, GOLDEN, RECORDED, START, recorded, run, settings, universe
 
 from steadyhand import (
@@ -282,8 +289,27 @@ def no_wait(seconds: float) -> None:
     del seconds
 
 
+def test_dividend_growth_reads_its_look_back_and_ends_as_the_library_run(tmp_path: Path) -> None:
+    market = market_cli(tmp_path / "home", GROWTH_CONFIG)
+    result = market("backtest", *WINDOW, "--strategy", "dividend-growth")
+    assert (result.code, result.err) == (0, "")
+    assert result.out.startswith(
+        "Backtest: dividend-growth, 2021-02-01 to 2022-01-31, 248 trading days\n\n"
+    )
+    daily = market.home / "reports" / "backtest-dividend-growth-2021-02-01-2022-01-31.csv"
+    with daily.open(encoding="utf-8", newline="") as file:
+        last = list(csv.reader(file))[-1]
+    expected = run(tmp_path / "library", "dividend-growth").run.reports[-1].value.amount
+    assert int(last[1]) == expected
+    # Blind to its three years of dividends, nothing would pass and it would hold only cash.
+    assert expected != 100_000_000
+
+
 def test_monthly_savings_spreads_the_starting_cash_over_its_instalments(tmp_path: Path) -> None:
-    market = market_cli(tmp_path / "home", GOLDEN_CONFIG + "\n[strategy]\ninstalments = 4\n")
+    config = GOLDEN_CONFIG.replace(
+        'name = "buy-and-hold"', 'name = "buy-and-hold"\ninstalments = 4'
+    )
+    market = market_cli(tmp_path / "home", config)
     result = market("backtest", *WINDOW, "--strategy", "monthly-savings")
     assert (result.code, result.err) == (0, "")
     assert result.out.startswith(

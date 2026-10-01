@@ -21,7 +21,7 @@ from typing import NamedTuple
 
 from record_golden import END, RECORDED, START, STOCKS, recorded
 
-from steadyhand import BacktestResult, BuyAndHold, DataSource, Market, backtest
+from steadyhand import STRATEGIES, BacktestResult, DataSource, Market, backtest
 from steadyhand_idx import BarCache, CachedDataSource, YahooDataSource
 from steadyhand_idx.cli import SourceFactory, World, main
 from steadyhand_idx.config import load
@@ -103,6 +103,9 @@ starting_cash_idr = 100_000_000
 [goal]
 monthly_income_target_idr = 1_000_000
 
+[strategy]
+name = "buy-and-hold"
+
 [risk]
 max_weight = "0.25"
 
@@ -110,7 +113,15 @@ max_weight = "0.25"
 disclaimer_accepted = 2026-09-27
 """
 """The golden run's settings (``record_golden.settings``), so a CLI backtest over its window must
-reproduce its figures exactly."""
+reproduce its figures exactly. It names ``buy-and-hold``, the golden run's strategy, since the
+default is ``dividend-growth`` (M6 spec §7)."""
+
+GROWTH_CONFIG = GOLDEN_CONFIG.replace(
+    'name = "buy-and-hold"',
+    'name = "dividend-growth"\nmin_stocks = 2\nmax_stocks = 2\ngrowth_years = 2',
+)
+"""The golden settings running ``dividend-growth`` with the golden run's values
+(``record_golden.VALUES``): a two-year test, whose look-back fits in the recordings."""
 
 
 def recorded_or_empty(ticker: str, start: date, end: date) -> YahooHistory:
@@ -224,8 +235,9 @@ def tables(cli: Cli) -> dict[str, list[tuple[object, ...]]]:
 def golden_backtest(
     cli: Cli, end: date, *, goal: bool = False, start: date = START
 ) -> BacktestResult:
-    """``buy-and-hold`` from *start*, the golden window's first day by default, to *end*, as
-    ``backtest`` runs it over the same configuration, universe files and recorded data. Without
+    """The configured strategy, with its look-back, from *start*, the golden window's first day
+    by default, to *end*, as ``backtest`` runs it over the same configuration, universe files and
+    recorded data. Without
     the income goal unless *goal*: its report reads five years before *end* (M4 spec §8), which
     the recordings do not cover for an early *end*, and it changes neither the states nor the
     day reports."""
@@ -233,12 +245,15 @@ def golden_backtest(
     universe = Lq45Universe(
         Lq45Membership.load(config.lq45_members), Exclusions.load(config.exclusions)
     )
+    entry = STRATEGIES[config.strategy]
+    lookback = entry.lookback_years(config.strategy_settings)
+    chosen = replace(config.settings, lookback_years=lookback)
     with recorded_source(cli.home) as source:
         market = Market(universe, source, IdxMarketRules(broker_fees=config.broker_fees))
         return backtest(
-            BuyAndHold(),
+            entry(config.strategy_settings),
             market,
             start,
             end,
-            config.settings if goal else replace(config.settings, goal=None),
+            chosen if goal else replace(chosen, goal=None),
         )

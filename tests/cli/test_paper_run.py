@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from cli_world import (
     GOLDEN_CONFIG,
+    GROWTH_CONFIG,
     at,
     golden_backtest,
     opened,
@@ -265,6 +266,25 @@ def test_a_changed_strategy_is_refused_naming_both_and_the_switch_command(tmp_pa
     assert result.err == (
         "steadyhand-idx: steadyhand.toml names the strategy buy-and-hold, but the paper account "
         "runs retired; to change it, run: steadyhand-idx paper switch buy-and-hold\n"
+    )
+    assert tables(cli) == before
+
+
+def test_a_file_without_a_strategy_name_now_means_dividend_growth_so_paper_refuses(
+    tmp_path: Path,
+) -> None:
+    cli = paper(tmp_path)
+    run_on(cli, START)
+    # Without [strategy] name a file meant buy-and-hold before M6; it now means the new default.
+    unnamed = GOLDEN_CONFIG.replace('name = "buy-and-hold"\n', "")
+    assert unnamed != GOLDEN_CONFIG
+    cli.config.write_text(unnamed, encoding="utf-8")
+    before = tables(cli)
+    result = run_on(cli, trading_days()[1])
+    assert (result.code, result.out) == (2, "")
+    assert result.err == (
+        "steadyhand-idx: steadyhand.toml names the strategy dividend-growth, but the paper account "
+        "runs buy-and-hold; to change it, run: steadyhand-idx paper switch dividend-growth\n"
     )
     assert tables(cli) == before
 
@@ -553,8 +573,34 @@ def test_two_runs_started_together_run_each_day_exactly_once(tmp_path: Path) -> 
         assert len(store.runs()) == 3
 
 
-MONTHLY_CONFIG = GOLDEN_CONFIG + '\n[strategy]\nname = "monthly-savings"\ninstalments = 4\n'
+MONTHLY_CONFIG = GOLDEN_CONFIG.replace(
+    'name = "buy-and-hold"', 'name = "monthly-savings"\ninstalments = 4'
+)
 """The golden settings with ``monthly-savings`` spreading the starting cash over four months."""
+
+
+def test_dividend_growth_reviews_again_on_the_first_trading_day_of_2022(tmp_path: Path) -> None:
+    cli = paper(tmp_path, GROWTH_CONFIG)
+    run_on(cli, START)
+    result = run_on(cli, END, "--catch-up")
+    assert result.code == 0, result.err
+    expected = golden_backtest(cli, END).run
+    with opened(cli) as store:
+        reports = store.reports()
+        account = store.account()
+    assert reports == expected.reports
+    assert account is not None
+    assert account.state == expected.final
+    # 3 January 2022 tests 2019 to 2021: TLKM now passes and UNVR no longer does. The orders
+    # it places that day fill on the 4th.
+    filled = {
+        (fill.order.instrument.symbol, fill.order.side.value)
+        for report in reports
+        if report.day == date(2022, 1, 4)
+        for fill in report.fills
+    }
+    assert {("TLKM", "buy"), ("UNVR", "sell")} <= filled
+    assert account.state.memory == {"set": "IDX:BBCA IDX:TLKM", "year": "2022"}
 
 
 def test_the_settings_of_the_strategy_that_runs_are_recorded_with_the_engines(

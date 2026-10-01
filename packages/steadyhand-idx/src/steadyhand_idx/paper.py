@@ -258,7 +258,9 @@ def run_paper(
     day = days[0]
     try:
         opened_on = target if account is None else account.opened_on
-        inputs = {found.day: found for found in day_inputs(market, opened_on, target)}
+        entry = STRATEGIES[config.strategy]
+        lookback = entry.lookback_years(config.strategy_settings)
+        inputs = {found.day: found for found in day_inputs(market, opened_on, target, lookback)}
         for day in days:
             report = _run_one(store, config, inputs[day], rules)
             if report is not None:

@@ -15,6 +15,8 @@ def test_strategies_lists_each_name_turnover_and_summary(cli: Cli) -> None:
             "Strategy         Turnover  What it does\n"
             "buy-and-hold     low       Buys every stock it can on its first day in equal parts, "
             "then holds and reinvests.\n"
+            "dividend-growth  low       Holds the stocks that paid a dividend in each of the last "
+            "six years and grew it, spread across pay months, and reviews them yearly.\n"
             "monthly-savings  low       Invests the starting cash in monthly instalments across "
             "every stock it can buy, and never sells.\n\n"
             "Read a strategy's guide with: steadyhand-idx explain <strategy>\n\n"
@@ -34,7 +36,7 @@ def test_strategies_follows_the_configured_level(cli: Cli) -> None:
     assert result.out.endswith(f"explain <strategy>\n\n{DISCLAIMER}\n")
 
 
-@pytest.mark.parametrize("name", ["buy-and-hold", "monthly-savings"])
+@pytest.mark.parametrize("name", ["buy-and-hold", "dividend-growth", "monthly-savings"])
 def test_explain_prints_the_guide_then_the_footer(cli: Cli, name: str) -> None:
     assert guide(name).startswith(f"# {name}\n")
     assert cli("explain", name) == (0, f"{guide(name).rstrip()}\n\n{DISCLAIMER}\n", "")

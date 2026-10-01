@@ -11,6 +11,7 @@ from steadyhand import (
     STRATEGIES,
     BuyAndHold,
     Decision,
+    DividendGrowthStrategy,
     MarketView,
     Memory,
     MonthlySavings,
@@ -198,3 +199,55 @@ def test_monthly_savings_spreads_the_starting_cash_over_12_instalments_by_defaul
     assert made.instalments == 6
     assert isinstance(entry(), MonthlySavings)
     assert entry().name == "monthly-savings"
+
+
+def test_dividend_growth_holds_15_to_25_stocks_grown_over_5_years_by_default() -> None:
+    entry = STRATEGIES["dividend-growth"]
+    assert entry.make is DividendGrowthStrategy
+    assert entry.turnover is Turnover.LOW
+    assert entry.summary == (
+        "Holds the stocks that paid a dividend in each of the last six years and grew it, "
+        "spread across pay months, and reviews them yearly."
+    )
+    assert entry.settings == (
+        Setting(
+            "min_stocks",
+            15,
+            1,
+            45,
+            "Below this many passing stocks, dividend-growth holds the rest as cash: 1 to 45.",
+        ),
+        Setting(
+            "max_stocks",
+            25,
+            1,
+            45,
+            "The most stocks dividend-growth holds: 1 to 45, and at least min_stocks.",
+        ),
+        Setting(
+            "growth_years",
+            5,
+            1,
+            10,
+            "The years over which dividend-growth wants dividends to have grown: 1 to 10.",
+        ),
+    )
+    made = entry()
+    assert isinstance(made, DividendGrowthStrategy)
+    assert (made.name, made.min_stocks, made.max_stocks, made.growth_years) == (
+        "dividend-growth",
+        15,
+        25,
+        5,
+    )
+    given = entry({"min_stocks": 2, "max_stocks": 3, "growth_years": 4, "instalments": 9})
+    assert isinstance(given, DividendGrowthStrategy)
+    assert (given.min_stocks, given.max_stocks, given.growth_years) == (2, 3, 4)
+    # The test reads a dividend in each of growth_years + 1 years before the run's first.
+    assert entry.lookback_years() == 6
+    assert entry.lookback_years({"min_stocks": 15, "max_stocks": 25, "growth_years": 2}) == 3
+    assert entry.lookback_years({"min_stocks": 15, "max_stocks": 25, "growth_years": 10}) == 11
+    with pytest.raises(
+        ValueError, match=r"^max_stocks must be at least min_stocks \(15\), got 14$"
+    ):
+        entry({"min_stocks": 15, "max_stocks": 14, "growth_years": 5})

@@ -16,6 +16,7 @@ from typing import Final
 
 from steadyhand._validate import require_type
 from steadyhand.strategies.buy_and_hold import BuyAndHold
+from steadyhand.strategies.dividend_growth import DividendGrowthStrategy
 from steadyhand.strategies.monthly_savings import MonthlySavings
 from steadyhand.strategies.protocol import Strategy
 
@@ -75,6 +76,11 @@ class Setting:
 def _no_lookback(values: Mapping[str, int]) -> int:
     del values
     return 0
+
+
+def _dividend_growth_lookback(values: Mapping[str, int]) -> int:
+    """The years ``dividend-growth`` tests before a run's first year: ``growth_years`` + 1."""
+    return values["growth_years"] + 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +153,37 @@ STRATEGIES: Final[Mapping[str, Registered]] = MappingProxyType(
                     "The months monthly-savings spreads the starting cash over: 1 to 120.",
                 ),
             ),
+        ),
+        "dividend-growth": Registered(
+            DividendGrowthStrategy,
+            "Holds the stocks that paid a dividend in each of the last six years and grew it, "
+            "spread across pay months, and reviews them yearly.",
+            Turnover.LOW,
+            (
+                Setting(
+                    "min_stocks",
+                    15,
+                    1,
+                    45,
+                    "Below this many passing stocks, dividend-growth holds the rest as cash: "
+                    "1 to 45.",
+                ),
+                Setting(
+                    "max_stocks",
+                    25,
+                    1,
+                    45,
+                    "The most stocks dividend-growth holds: 1 to 45, and at least min_stocks.",
+                ),
+                Setting(
+                    "growth_years",
+                    5,
+                    1,
+                    10,
+                    "The years over which dividend-growth wants dividends to have grown: 1 to 10.",
+                ),
+            ),
+            _dividend_growth_lookback,
         ),
     }
 )
