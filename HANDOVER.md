@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-10-01 07:40 WIB (2026-10-01 00:40 UTC) (**M6 done:** S1–S5 merged and deployed, #149–#153 closed, epic #146 Done. **Next: M7, strategy wave 2, starting with its spec.**)
+**Updated:** 2026-10-01 18:23 WIB (2026-10-01 11:23 UTC) (**M6 done.** #160's spec is approved after seven review passes; its PR is in CI. See Resume steps 2.)
 **Local:** `~/Developer/Repos/steadyhand`. `develop` holds the T1 spec and plan, and `main` has no release yet. `t1/training-spec` and `m4/m4b-plan` are merged or superseded and deleted. Start each story's branch from `origin/develop`. Read heads with `git rev-parse`; never retype one.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
@@ -160,7 +160,11 @@
 ## Resume steps
 0. M6 is done. `main` still has no release (M10).
 1. **M7, strategy wave 2** (core design §M6–M9: "Strategy waves 1–4, each with its guides"). It has no spec yet: start with brainstorming, then the spec reviewed to zero, then the plan built by extraction as M6's was (copy the tools from `.superpowers/sdd/2026-09-30-m6-wave1/`, the newest copy). The M3 spec's table puts **bars before the backtest's start** (a price look-back) in M7; M6 built only the dividend look-back.
-2. **For Shyden, before M7's spec:** M6's *Carried forward* leaves one decision open: should the engine credit a dividend on a day whose prices the source refused? The IDX source can read that dividend since S2, but crediting it changes M3's golden figures, so it wants its own ticket and his decision.
+2. **#160 recover Yahoo's unreported price factor: SPEC APPROVED (reviewed to zero on pass 7, 2026-10-01 18:23 WIB).** Spec `docs/superpowers/specs/2026-10-01-price-factor-recovery-design.md`, branch `feat/160-refused-day-dividends`, PR into `develop` (number in `.superpowers/sdd/2026-10-01-160-refused-dividends/pr-number`). The branch also corrects two docstrings that cited M6 plan scope decision 13 for decision 14 (commit `736b09c`).
+   - **Seven decisions** in spec §2. Review added three: (5) a core `DataSource.data_notes` method feeds `backtest._data_warnings`; (6) paper reports carry no data warning of any kind, so the class went to **#161**; (7) split-reversed volumes that are not whole shares refuse many restored days (SIDO 1,852 of 1,859), so that defect, BRPT included, went to **#162**. #161 and #162 are on the board as Todo.
+   - **Review found a wrong proof:** TINS 2014 "proved" f = 1.9999995 because candidates started at ceil(p1) and float noise put p1 just above a whole rupiah. Candidates now start at round(p1) (spec §3.5, §4.3). Measurements re-run from 2014-01-06 over all 62 stocks; the rule as specified is `unique6.py` in `.superpowers/sdd/2026-10-01-160-refused-dividends/` (see `findings.md`'s last section).
+   - **Resume:** (a) Read the PR's head SHA into a file, wait for CI on that SHA, check every job `success` by name, merge with `--match-head-commit`, then confirm `publish-dev` on the develop run. (b) writing-plans for #160's three stories (spec §10), built by extraction as M6's was: copy the tools from `.superpowers/sdd/2026-09-30-m6-wave1/`, build each story in a scratch clone first, render the plan from verified commits, review it to zero. (c) The #160 ticket's title and ACs still say "credit a dividend…": rewriting them to the spec is a write on the operator's issue that the classifier denied before; ask Shyden, or give him the command. The AC1 comment is still unposted: `! gh issue comment 160 --body-file .superpowers/sdd/2026-10-01-160-refused-dividends/ac1-comment.md`.
+3. **Session naming:** `.claude/settings.local.json` has a SessionStart hook returning `sessionTitle: "Steadyhand"` (Shyden 2026-10-01). `/color` has no documented automatic route; Shyden types it.
 
 ## Research technique
 - **Shyden's decision (2026-09-25): use another source before idx.co.id.** IDX's Terms of Use forbid scraping. Try the Internet Archive, KSEI, KPEI (idclear) or BPK first. Use idx.co.id only when none has a readable copy, and say so in the research doc.

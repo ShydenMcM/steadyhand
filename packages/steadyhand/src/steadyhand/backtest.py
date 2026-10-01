@@ -376,7 +376,7 @@ def _unpriced_actions(
     source: DataSource, stock: Instrument, start: date, end: date
 ) -> Sequence[CorporateAction] | None:
     """A refused stock's actions from *start* to *end*, refused days included, or ``None`` when
-    the source refuses them as well (M6 plan scope decision 13)."""
+    the source refuses them as well (M6 plan scope decision 14)."""
     try:
         return source.corporate_actions(stock, start, end)
     except DataUnavailableError:
