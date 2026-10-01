@@ -736,7 +736,7 @@ def test_a_refusal_in_the_runs_own_days_keeps_its_rules_beside_a_look_back() -> 
 
 class _Unpriced(_Source):
     """A source that reads corporate actions without prices, as the IDX source does (M6 plan
-    scope decision 13): it refuses a stock's bars on its refused days, never its actions."""
+    scope decision 14): it refuses a stock's bars on its refused days, never its actions."""
 
     def corporate_actions(
         self, instrument: Instrument, start: date, end: date
