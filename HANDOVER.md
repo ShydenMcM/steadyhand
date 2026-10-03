@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-10-03 12:30 WIB (2026-10-03 05:30 UTC) (**#160 is executed**: S1-S3 merged into `develop` and deployed; #160 left open for Shyden to rewrite its title and criteria. Next: M7, Resume steps 1.)
+**Updated:** 2026-10-03 14:05 WIB (2026-10-03 07:05 UTC) (**the standing test clean-ups come before M7**: #173, #179 and #174 are merged and deployed; next #175, then #176, #177 and #178, then M7. See Resume steps 1.)
 **Local:** `~/Developer/Repos/steadyhand`. `develop` holds the T1 spec and plan, and `main` has no release yet. `t1/training-spec` and `m4/m4b-plan` are merged or superseded and deleted. Start each story's branch from `origin/develop`. Read heads with `git rev-parse`; never retype one.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
@@ -157,9 +157,33 @@
 - M4 leaves the hook: every note M4 adds has a stable key (spec §7). Keying M3's existing warnings belongs to the training sub-project.
 - Brainstormed 2026-09-27: see the T1 section above.
 
+## Standing test clean-ups (global rules of 2026-10-02; started 2026-10-03, before M7)
+Shyden's global CLAUDE.md requires three clean-ups in every repo before other test work: one test per case, every guard proving what it saw, and no retries. They are tickets #173–#179 on the steadyhand board.
+
+| Ticket | What | State |
+|---|---|---|
+| #173 | `tests/meta/test_one_test_per_case.py` + `looped_cases.py`: refuses a judging loop in a test body, with a shrink-only `BURN_DOWN` (88 sites in 66 tests on 2026-10-03) | Done (PR #180, `c373cd1`) |
+| #179 | Yahoo asks once and fails fast by name; `tests/meta/test_no_retry.py` refuses any retry in `packages/` | Done (PR #181, `8a071fc`) |
+| #174 | convert `tests/cli` + `tests/scripts` (12 sites) | Done (PR #182, `07d65a5`) |
+| #175 | convert `tests/engine` (35 sites) | Todo |
+| #176 | convert `tests/idx` + `tests/golden` (25 sites) | Todo |
+| #177 | convert `tests/meta` + `tests/perf` (16 sites) | Todo |
+| #178 | guard-liveness audit of every guard (15 test files + 3 reader modules) | Todo |
+
+- **How a conversion ticket runs** (as #174 did):
+  1. Classify each site in the ticket before changing anything: known before the run → `@pytest.mark.parametrize`; runtime population or one sequential journey → `# runtime population: <why>` on the loop's first line. For an `all(`/`any(` call, open it on its own line so the comment sits on the call's line.
+  2. Keep every assertion. A whole-population fact (a count, an exit code) becomes its own test. An expensive setup becomes a module-scoped fixture.
+  3. Run #173's guard: every converted file must fail "these no longer loop" and none "a fixed population". Then delete those `BURN_DOWN` entries by script, asserting the count.
+  4. Make one production mutation per converted test that breaks a single case. A mutation in the constant the test reads is tautological; break the code that uses it. A state that carries forward (monthly savings) leaks into the next case, so pick the case whose successor tolerates it.
+  5. Record `--durations` before and after on an idle machine, and say when load explains a difference.
+- **Live check of #179:** the daily `yahoo-shape` schedule ran against Yahoo on `8a071fc`, the one-attempt client, and passed (run 37104917431).
+- **Already flagged for #178:** `test_no_float.py` asserts `findings == {}` with only a file-name subset as liveness, which is files opened, not judged units.
+- **Tools** (git-ignored, `.superpowers/sdd/2026-10-03-test-audit/`): `judging.py` (an independent scan of judging loops), `burn_down.py` (prints the totals and the `BURN_DOWN` literal from the guard's reader), `file_ticket.sh <title> <body>` (asserts the board title, files the issue, sets Todo, reads it back), `mutate173.py`, `mutate179.py` (whole suite per mutation), `mutate174.py` (one file per mutation, the exact failing set), `classify174.md`, `pr*.md`, and the worktree `wt-mut`. Run the mutation scripts with `python -u` so their logs stream.
+- **Lessons recorded in memory this session:** build a mutation's prediction from the guard's own findings, never from a looser scan or a list cut with `tail`, and reconcile its sum against the printed total. The reply header opens the turn's final text block.
+
 ## Resume steps
 0. M6 is done. `main` still has no release (M10).
-1. **M7, strategy wave 2** (core design §M6–M9: "Strategy waves 1–4, each with its guides"). It has no spec yet: start with brainstorming, then the spec reviewed to zero, then the plan built by extraction as M6's was (copy the tools from `.superpowers/sdd/2026-09-30-m6-wave1/`, the newest copy). The M3 spec's table puts **bars before the backtest's start** (a price look-back) in M7; M6 built only the dividend look-back.
+1. **First, the standing test clean-ups** (section above): #175 (`tests/engine`, 35 sites), then #176, #177, #178, one branch and PR each, merged into `develop` when CI is green. Start each by re-reading the ticket and `git show origin/develop:tests/meta/test_one_test_per_case.py` for its `BURN_DOWN` entries. **Then M7, strategy wave 2** (core design §M6–M9: "Strategy waves 1–4, each with its guides"). It has no spec yet: start with brainstorming, then the spec reviewed to zero, then the plan built by extraction as M6's was (copy the tools from `.superpowers/sdd/2026-09-30-m6-wave1/`, the newest copy). The M3 spec's table puts **bars before the backtest's start** (a price look-back) in M7; M6 built only the dividend look-back.
 2. **#160 recover Yahoo's unreported price factor: DONE 2026-10-03** (plan `docs/superpowers/plans/2026-10-01-price-factor-recovery.md`, spec `docs/superpowers/specs/2026-10-01-price-factor-recovery-design.md`, both merged in PR #165 `833005a`). Every story was applied from the plan by `apply_task.py`, is byte-identical to the verified chain commit, matched the plan's red count and failure kinds, was green at 100% branch coverage, had all its mutations caught on the real commit, and was deployed with `publish-dev` green:
 
    | Story | Issue | PR | Merge | Red | Gate | Mutations |
