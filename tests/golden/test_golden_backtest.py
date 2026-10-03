@@ -220,12 +220,15 @@ def test_a_fetch_outside_the_recording_is_refused(tmp_path: Path) -> None:
         recorded("ASII.JK", date(2017, 1, 30), END)
 
 
-def test_the_recordings_reach_five_years_before_the_run_ends() -> None:
+def test_the_recordings_start_five_years_before_the_run_ends() -> None:
     # Growth reads a year window four years back, so five years of history must be there.
     assert years_before(END, HISTORY_YEARS) == HISTORY_START
-    for stock in STOCKS:
-        rows = recorded(f"{stock}.JK", HISTORY_START, END).rows
-        assert (rows[0].day, rows[-1].day) == (HISTORY_START, END), stock
+
+
+@pytest.mark.parametrize("stock", STOCKS)
+def test_the_recordings_reach_five_years_before_the_run_ends(stock: str) -> None:
+    rows = recorded(f"{stock}.JK", HISTORY_START, END).rows
+    assert (rows[0].day, rows[-1].day) == (HISTORY_START, END)
 
 
 def test_the_income_report_agrees_with_what_the_engine_paid(tmp_path: Path) -> None:
@@ -238,7 +241,9 @@ def test_the_income_report_agrees_with_what_the_engine_paid(tmp_path: Path) -> N
     expected = [dividend for held in income.run_rate.holdings for dividend in held.dividends]
     # Every dividend of the trailing year was paid in the run, on the pay date the calendar uses.
     assert len(expected) == len(paid) == 8
-    assert all(e.pay_date == paid[(e.instrument.symbol, e.ex_date)].pay_date for e in expected)
+    assert all(  # runtime population: the dividends the run's income report holds
+        e.pay_date == paid[(e.instrument.symbol, e.ex_date)].pay_date for e in expected
+    )
     # BBCA's 2021-04-08 dividend: Rp432 a share on the 500 shares held before the 1-for-5 split,
     # and Rp86.4 a share, restated, on the 2,500 held after it. Rp216,000 either way.
     bbca = paid[("BBCA", date(2021, 4, 8))]

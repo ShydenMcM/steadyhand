@@ -72,8 +72,12 @@ def test_rounding_is_tight_and_valid(price: int) -> None:
     assert low <= price <= high
     assert row().is_valid(low)
     assert row().is_valid(high)
-    assert not any(row().is_valid(p) for p in range(low + 1, price))
-    assert not any(row().is_valid(p) for p in range(price + 1, high))
+    assert not any(  # runtime population: the prices between the rounded-down and the drawn
+        row().is_valid(p) for p in range(low + 1, price)
+    )
+    assert not any(  # runtime population: the prices between the drawn and the rounded-up
+        row().is_valid(p) for p in range(price + 1, high)
+    )
 
 
 @pytest.mark.parametrize("price", [0, -5, True, "200"])
