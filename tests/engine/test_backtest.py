@@ -31,8 +31,10 @@ from steadyhand.notes import (
     DATA_BAR_MISSING,
     DATA_BAR_REFUSED,
     DATA_DIVIDENDS_HISTORY_REFUSED,
+    FILL_NO_BAR,
     RISK_HALT_DAILY_LOSS,
     TRADE_NOT_IN_UNIVERSE,
+    TRADE_REFUSED,
     Note,
 )
 from steadyhand.risk import RiskLimits
@@ -369,9 +371,8 @@ def test_every_stock_the_universe_holds_on_any_day_is_fetched_for_the_whole_wind
 REFUSED = (date(2025, 7, 3), date(2025, 7, 4), date(2025, 7, 7), date(2025, 7, 10))
 
 
-@pytest.fixture(scope="module")
-def refused_run() -> tuple[_Source, _Universe, BacktestResult]:
-    """A buy-and-hold run in which the source refuses BBRI on the four ``REFUSED`` days."""
+def refused_market() -> tuple[_Source, _Universe]:
+    """BBCA and BBRI, with the source refusing BBRI on the four ``REFUSED`` days."""
     clean = [day for day in DAYS if day not in REFUSED]
     # BBRI reopens on 8 July at 5,200, outside the band around its last clean close of 4,000:
     # after refused days that close says nothing, so the band check must skip it.
@@ -379,25 +380,85 @@ def refused_run() -> tuple[_Source, _Universe, BacktestResult]:
         bar(BBRI, day, 5_200) for day in clean if day >= date(2025, 7, 8)
     ]
     source = _Source(flat(BBCA, 9_000) + bbri, refused={BBRI: REFUSED})
-    universe = _Universe([(START, frozenset({BBCA, BBRI}))], warnings=[GAP])
+    return source, _Universe([(START, frozenset({BBCA, BBRI}))], warnings=[GAP])
+
+
+@pytest.fixture(scope="module")
+def refused_run() -> tuple[_Source, _Universe, BacktestResult]:
+    """A buy-and-hold run in which the source refuses BBRI on the four ``REFUSED`` days."""
+    source, universe = refused_market()
     return source, universe, run(source, universe, strategy=BuyAndHold())
 
 
 @pytest.mark.parametrize("day", REFUSED, ids=str)
-def test_the_stock_sits_out_each_refused_day(
+def test_a_refused_stock_is_valued_at_its_last_clean_close(
     refused_run: tuple[_Source, _Universe, BacktestResult], day: date
 ) -> None:
     _, _, result = refused_run
     reports = {report.day: report for report in result.run.reports}
-    report = reports[day]
     held = {fill.order.instrument: fill.quantity for fill in reports[date(2025, 7, 1)].fills}
     # Valued at its last clean close: 4,000 before it reopens on 8 July, 5,200 after. Buy-and-hold
     # queues nothing after its first day, so this is what each refused day can be seen to get wrong.
     close = 4_000 if day < date(2025, 7, 8) else 5_200
-    assert report.holdings_value == rp(9_000 * held[BBCA] + close * held[BBRI])
+    assert reports[day].holdings_value == rp(9_000 * held[BBCA] + close * held[BBRI])
+
+
+class _Churn:
+    """A strategy that asks every day for the opposite of the BBRI it holds, so that it has a
+    BBRI order to make on every day, a refused one included (#184)."""
+
+    @property
+    def name(self) -> str:
+        return "churn"
+
+    def decide(self, view: MarketView, portfolio: PortfolioView, memory: Memory) -> Decision:
+        bbri = Decimal("0.5") if portfolio.weight(BBRI) < Decimal("0.35") else Decimal("0.2")
+        return Decision({BBCA: Decimal("0.3"), BBRI: bbri})
+
+
+@pytest.fixture(scope="module")
+def churned_run() -> BacktestResult:
+    """The refused days of ``refused_run`` under a strategy that wants BBRI traded every day."""
+    source, universe = refused_market()
+    return run(source, universe, strategy=_Churn())
+
+
+@pytest.mark.parametrize("day", REFUSED, ids=str)
+def test_the_stock_is_never_queued_on_a_refused_day(churned_run: BacktestResult, day: date) -> None:
+    report = next(report for report in churned_run.run.reports if report.day == day)
+    # The strategy asks for BBRI and is told the source refused the day ...
+    refused = Note(TRADE_REFUSED, f"the data source refused {day.isoformat()}")
+    assert refused in [r.reason for r in report.rejected if r.order.instrument == BBRI]
+    # ... so no BBRI order waits for the next open.
     assert all(  # runtime population: the orders this day's report queued
         order.instrument != BBRI for order in report.queued
     )
+
+
+@pytest.mark.parametrize(
+    ("day", "waiting"),
+    [
+        # A BBRI order queued on a clean day meets a refused open ...
+        pytest.param(date(2025, 7, 3), 1, id="2025-07-03"),
+        # ... while after a refused day none can be waiting, so a fill here would need an order
+        # queued on a refused day as well, which the test above refuses.
+        pytest.param(date(2025, 7, 4), 0, id="2025-07-04"),
+        pytest.param(date(2025, 7, 7), 0, id="2025-07-07"),
+        pytest.param(date(2025, 7, 10), 1, id="2025-07-10"),
+    ],
+)
+def test_the_stock_never_fills_on_a_refused_day(
+    churned_run: BacktestResult, day: date, waiting: int
+) -> None:
+    reports = churned_run.run.reports
+    index = next(i for i, report in enumerate(reports) if report.day == day)
+    orders = [order for order in reports[index - 1].queued if order.instrument == BBRI]
+    assert len(orders) == waiting
+    # Each BBRI order waiting for this open reaches the broker and is turned away for want of a
+    # bar ...
+    report = reports[index]
+    assert [r.order for r in report.rejected if r.reason.key == FILL_NO_BAR] == orders
+    # ... and none of them fills.
     assert all(  # runtime population: the fills this day's report holds
         fill.order.instrument != BBRI for fill in report.fills
     )
@@ -496,9 +557,11 @@ def test_a_close_outside_the_band_stops_the_backtest() -> None:
 
 
 def test_a_halt_lasts_to_the_end_of_the_run_and_is_recorded() -> None:
-    # Fully invested half and half; BBCA's 15% fall on 7 July takes the portfolio past 5%.
+    # Fully invested half and half by a strategy that rebalances to half and half every day, so
+    # it would trade again after the fall were the halt not to stop it (#184). BBCA's 15% fall
+    # on 7 July takes the portfolio past 5%.
     fall = flat(BBCA, 9_000, DAYS[:5]) + flat(BBCA, 7_650, DAYS[5:]) + flat(BBRI, 4_000)
-    result = run(_Source(fall), strategy=BuyAndHold())
+    result = run(_Source(fall), strategy=_Fixed({BBCA: Decimal("0.5"), BBRI: Decimal("0.5")}))
     assert result.run.halt is not None
     assert result.run.halt.day == date(2025, 7, 7)
     assert result.run.halt.cause == Note(
@@ -691,10 +754,11 @@ def test_compare_checks_its_window_as_backtest_does() -> None:
 
 class _Reader:
     """A strategy that records, each day, BBCA's dividends and whether BBCA's and BBRI's
-    histories are complete, and asks for nothing."""
+    histories are complete, and asks for the weights it is given, nothing by default."""
 
-    def __init__(self) -> None:
+    def __init__(self, weights: Mapping[Instrument, Decimal] | None = None) -> None:
         self.seen: dict[date, tuple[tuple[PastDividend, ...], bool, bool]] = {}
+        self._weights = {} if weights is None else dict(weights)
 
     @property
     def name(self) -> str:
@@ -706,7 +770,7 @@ class _Reader:
             view.history_complete(BBCA),
             view.history_complete(BBRI),
         )
-        return Decision({})
+        return Decision(dict(self._weights))
 
 
 class _Delisted(_Source):
@@ -816,15 +880,27 @@ def test_a_dividend_on_a_refused_day_reaches_the_history_when_read_without_price
 ) -> None:
     refused = {BBCA: [date(2025, 7, 3), date(2025, 7, 4)]}
     source = _Unpriced(calm(), [*LOOKED_BACK, REFUSED_DIVIDEND], refused=refused)
-    reader = _Reader()
-    result = run(source, strategy=reader, chosen=looking_back(years))
+    # The reader holds BBCA from 1 July and a dividend is paid the next trading day, so the
+    # engine would credit the refused day's dividend inside the run were it to credit it (#184).
+    reader = _Reader({BBCA: Decimal("0.5")})
+    chosen = looking_back(years)
+    next_day = replace(chosen, engine=replace(chosen.engine, pay_lag_trading_days=1))
+    result = run(source, strategy=reader, chosen=next_day)
     assert ("actions", "BBCA", START, END) in source.requests
     # The strategy sees it from its ex-date, and BBCA's history is complete ...
     before, on = reader.seen[date(2025, 7, 2)], reader.seen[date(2025, 7, 3)]
     assert REFUSED_DIVIDEND.ex_date not in [dividend.ex_date for dividend in before[0]]
     assert on[0][-1] == PastDividend(date(2025, 7, 3), Decimal(40))
     assert on[1:] == (True, True)
-    # ... while the engine still credits nothing on a refused day, as its warning says.
+    # ... while the engine still credits nothing on a refused day, as its warning says: the
+    # dividend that went ex on clean 2 July is entitled that day and paid the next, refused or
+    # not, while the refused day's own dividend is neither.
+    assert [(r.day, e.ex_date) for r in result.run.reports for e in r.entitled] == [
+        (date(2025, 7, 2), date(2025, 7, 2))
+    ]
+    assert [(r.day, e.ex_date) for r in result.run.reports for e in r.paid] == [
+        (date(2025, 7, 3), date(2025, 7, 2))
+    ]
     assert all(  # runtime population: the dividends the run's reports paid
         e.ex_date != REFUSED_DIVIDEND.ex_date for r in result.run.reports for e in r.paid
     )

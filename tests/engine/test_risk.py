@@ -218,10 +218,18 @@ def test_a_drawdown_at_the_kill_switch_halts() -> None:
     assert manager.halt(fund("0.76", "1"), fund("0.7501", "1"), DAY) is None
 
 
-def test_no_halt_before_there_are_units() -> None:
-    empty = UnitValue()
-    assert RiskManager(rules()).halt(empty, UnitValue(Decimal(0), Decimal("0.1")), DAY) is None
-    assert RiskManager(rules()).halt(empty, fund("0.96"), DAY) is None
+@pytest.mark.parametrize(
+    "after",
+    [
+        # No units today either: a 90% fall and a 90% drawdown, each of which halts a fund.
+        pytest.param(UnitValue(Decimal(0), Decimal("0.1")), id="no-units-after"),
+        # Units today: a 6% fall, past the 5% limit, which would halt had there been units the
+        # day before (#184: 0.96 was a 4% fall, under the limit, so it could not tell).
+        pytest.param(fund("0.94"), id="units-after"),
+    ],
+)
+def test_no_halt_before_there_are_units(after: UnitValue) -> None:
+    assert RiskManager(rules()).halt(UnitValue(), after, DAY) is None
 
 
 def test_a_halt_needs_a_day_and_a_cause() -> None:
