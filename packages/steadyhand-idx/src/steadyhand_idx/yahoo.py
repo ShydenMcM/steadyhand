@@ -374,10 +374,9 @@ def unadjust(
 
 @dataclass(frozen=True, slots=True)
 class RequestPolicy:
-    """How politely and how persistently Yahoo is asked (spec §9.2)."""
+    """How politely Yahoo is asked (spec §9.2): a pause before every request after the first.
+    It is asked once; a failure stops the run by name, never retried (#179)."""
 
-    attempts: int = 3
-    backoff_seconds: float = 1.0
     pause_seconds: float = 1.0
 
 
@@ -466,23 +465,17 @@ class YahooDataSource:
         return history
 
     def _request(self, ticker: str, start: date, end: date) -> YahooHistory:
-        """Ask Yahoo, under the request policy: a pause between requests, retries with backoff."""
-        failure: DataUnavailableError | None = None
-        for attempt in range(self._policy.attempts):
-            if attempt:
-                self._sleep(self._policy.backoff_seconds * 2 ** (attempt - 1))
-            elif self._requests:
-                self._sleep(self._policy.pause_seconds)
-            self._requests += 1
-            try:
-                return self._download(ticker, start, end)
-            except DataUnavailableError as error:
-                failure = error
-        msg = (
-            f"{ticker}: no data from Yahoo for {start.isoformat()} to {end.isoformat()} "
-            f"after {self._policy.attempts} attempts: {failure}"
-        )
-        raise DataUnavailableError(msg) from failure
+        """Ask Yahoo once, after the policy's pause if a request came before. A failure is raised
+        at once, naming the ticker and the range: a retry would hide it (#179)."""
+        if self._requests:
+            self._sleep(self._policy.pause_seconds)
+        self._requests += 1
+        try:
+            return self._download(ticker, start, end)
+        except DataUnavailableError as error:
+            span = f"{start.isoformat()} to {end.isoformat()}"
+            msg = f"{ticker}: no data from Yahoo for {span}: {error}"
+            raise DataUnavailableError(msg) from error
 
 
 def _proven(

@@ -187,7 +187,7 @@
 - Agent git and gh act as the `steadyhand-agent` App (administration: read). An admin write is Shyden's decision.
 - The `python3` on this machine is Xcode's 3.9, which has no `tomllib` and no `X | Y` in `isinstance`. The code uses uv's Python 3.12 and 3.13, and uv is pinned to 0.12.18.
 - **zsh:** an unquoted `$VAR` holding a command does not split into words; write `${=VAR}`. And a pytest status read through `| tail` is `tail`'s: capture `rc=$?` with no pipe in between.
-- **A TestPyPI publish failure is not always ours.** An OIDC or TLS timeout goes away with `gh run rerun <id> --failed`, and `skip-existing` makes that safe.
+- **Never re-run a failed job to make it pass** (Shyden's rule, 2026-10-02; #179). A TestPyPI publish failure is read and named: if the cause is ours, fix it; if it is outside our control (an OIDC or TLS timeout), report it to Shyden by name with the run id, and do not re-run.
 - **Mutation tallies:** print the full `FAILED` ids, not `sort -u` of names, because parametrised cases collapse into one name.
 - **Timestamps:** stamp status lines only from a `date -u` read.
 - **macOS has no `tac`** (use `tail -r`). A `$(tac …)` that fails leaves an empty list, and `git switch -C` then resets the branch with nothing to pick: check the list is non-empty before any reset. Recovered from the reflog on 2026-09-27.

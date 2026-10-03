@@ -131,8 +131,10 @@ def test_a_minimal_class_satisfies_broker() -> None:
 
 
 def test_data_unavailable_keeps_the_callers_message() -> None:
-    message = "BBRI.JK bars after 3 attempts"
-    with pytest.raises(DataUnavailableError, match=r"^BBRI\.JK bars after 3 attempts$"):
+    message = "BBRI.JK bars: the request to Yahoo failed: timeout"
+    with pytest.raises(
+        DataUnavailableError, match=r"^BBRI\.JK bars: the request to Yahoo failed: timeout$"
+    ):
         raise DataUnavailableError(message)
 
 

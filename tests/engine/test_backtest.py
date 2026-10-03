@@ -782,15 +782,15 @@ def test_a_dividend_on_a_refused_day_reaches_the_history_when_read_without_price
 
 
 class _Failing(_Source):
-    """A source whose read of BBCA's actions over the whole run fails outright, as Yahoo's does
-    after its retries: a plain ``DataUnavailableError``, naming no day."""
+    """A source whose read of BBCA's actions over the whole run fails outright, as Yahoo's does:
+    a plain ``DataUnavailableError``, naming no day."""
 
     def corporate_actions(
         self, instrument: Instrument, start: date, end: date
     ) -> Sequence[CorporateAction]:
         if (instrument, start, end) == (BBCA, START, END):
             self.requests.append(("actions", instrument.symbol, start, end))
-            msg = "BBCA.JK: no data from Yahoo after 3 attempts"
+            msg = "BBCA.JK: no data from Yahoo: the request to Yahoo failed: timeout"
             raise DataUnavailableError(msg)
         return super().corporate_actions(instrument, start, end)
 

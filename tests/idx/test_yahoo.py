@@ -1,6 +1,6 @@
 """The Yahoo data source, run on real recorded responses (spec §10.3: real data, replayed)."""
 
-from dataclasses import replace
+from dataclasses import fields, replace
 from datetime import date
 from decimal import Decimal
 from functools import cache
@@ -306,24 +306,36 @@ def test_the_source_is_a_data_source_and_downloads_each_range_once() -> None:
     assert slept == [1.0]  # a pause before every request after the first
 
 
-def test_failures_are_retried_with_backoff_then_raised() -> None:
-    replay, slept = Replay(BBCA_FILE, failures=2), list[float]()
+def test_a_failure_is_raised_at_once_naming_the_range() -> None:
+    # No retry (#179): a retry hides the failure, so Yahoo is asked once and the run stops.
+    replay, slept = Replay(BBCA_FILE, failures=1), list[float]()
     source = YahooDataSource(calendar(), download=replay, sleep=slept.append)
-    assert source.bars(BBCA, date(2021, 10, 1), date(2021, 10, 1))
-    assert slept == [1.0, 2.0]
-    replay, slept = Replay(BBCA_FILE, failures=3), list[float]()
-    source = YahooDataSource(
-        calendar(), download=replay, sleep=slept.append, policy=RequestPolicy(attempts=3)
-    )
     with pytest.raises(
         DataUnavailableError,
         match=(
-            r"^BBCA\.JK: no data from Yahoo for 2021-10-01 to 2021-10-01 after 3 attempts: "
-            r"BBCA\.JK: the request to Yahoo failed: timeout 3$"
+            r"^BBCA\.JK: no data from Yahoo for 2021-10-01 to 2021-10-01: "
+            r"BBCA\.JK: the request to Yahoo failed: timeout 1$"
         ),
     ) as caught:
         source.bars(BBCA, date(2021, 10, 1), date(2021, 10, 1))
     assert isinstance(caught.value.__cause__, DataUnavailableError)
+    assert replay.calls == [("BBCA.JK", date(2021, 10, 1), date(2021, 10, 1))]
+    assert slept == []
+
+
+def test_a_request_after_a_failed_one_still_pauses_first() -> None:
+    replay, slept = Replay(BBCA_FILE, failures=1), list[float]()
+    source = YahooDataSource(calendar(), download=replay, sleep=slept.append)
+    with pytest.raises(DataUnavailableError):
+        source.bars(BBCA, date(2021, 10, 1), date(2021, 10, 1))
+    assert source.bars(BBCA, date(2021, 10, 1), date(2021, 10, 1))
+    assert len(replay.calls) == 2
+    assert slept == [1.0]
+
+
+def test_the_request_policy_is_a_pause_and_nothing_else() -> None:
+    assert [field.name for field in fields(RequestPolicy)] == ["pause_seconds"]
+    assert RequestPolicy().pause_seconds == 1.0
 
 
 def test_a_reversed_range_is_refused() -> None:
@@ -558,10 +570,13 @@ def test_a_failed_whole_history_read_fails_closed() -> None:
     )
     with pytest.raises(
         DataUnavailableError,
-        match=r"^BBRI\.JK: no data from Yahoo for 2014-01-06 to 2026-09-25 after 3 attempts",
+        match=(
+            r"^BBRI\.JK: no data from Yahoo for 2014-01-06 to 2026-09-25: "
+            r"BBRI\.JK: the request to Yahoo failed: timeout$"
+        ),
     ):
         source.bars(BBRI, date(2021, 3, 1), date(2021, 3, 5))
-    assert slept == [1.0, 1.0, 2.0]  # the pause after the range, then the backoff
+    assert slept == [1.0]  # the pause after the range's request, and no retry
 
 
 BBRI_WHOLE = FIXTURES / "BBRI.JK_2014-01-06_2026-10-01.json"

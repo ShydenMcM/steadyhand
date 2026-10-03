@@ -157,7 +157,7 @@ The safety claim is that a proven factor is the true one, for a true factor from
 
 - Unproven days: `UnrecoverablePricesError`, unchanged, naming every such day in the range.
 - A dividend in an unproven run: `UnavailableDaysError` naming the ex-date (new for `corporate_actions`).
-- Network failure on the whole-history fetch: `DataUnavailableError` after the request policy's retries, as for any fetch (fail closed).
+- Network failure on the whole-history fetch: `DataUnavailableError` at once, naming the ticker and the range, as for any fetch (fail closed; no retry since #179).
 
 ## 9. Testing
 
