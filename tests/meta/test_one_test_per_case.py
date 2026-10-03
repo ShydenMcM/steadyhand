@@ -25,28 +25,6 @@ TESTS_READ_FLOOR = 1_082
 # removes its entries, and an entry that no longer loops fails until it is removed, so this list
 # can only shrink.
 BURN_DOWN: dict[str, dict[str, int]] = {
-    "tests/cli/test_backtest_command.py": {
-        "test_monthly_savings_spreads_the_starting_cash_over_its_instalments": 1,
-        "test_the_reports_are_private_and_a_second_run_replaces_them": 1,
-    },
-    "tests/cli/test_cli.py": {
-        "test_help_goes_to_stdout_and_exits_0": 1,
-    },
-    "tests/cli/test_config.py": {
-        "test_the_starter_file_writes_every_key_under_its_comment": 2,
-    },
-    "tests/cli/test_output.py": {
-        "test_a_page_that_shows_a_key_with_no_lesson_is_a_bug_at_every_level": 1,
-        "test_with_no_keys_there_is_no_block_at_any_level": 1,
-    },
-    "tests/cli/test_paper_run.py": {
-        "test_a_paper_account_run_day_by_day_ends_where_the_backtest_does": 1,
-        "test_the_public_fetch_gives_each_trading_day_its_inputs_oldest_first": 1,
-    },
-    "tests/cli/test_reports.py": {
-        "test_a_run_with_no_goal_shows_no_income_figures": 1,
-        "test_each_figure_reads_the_report_field_it_names": 1,
-    },
     "tests/engine/test_backtest.py": {
         "test_a_dividend_on_a_refused_day_reaches_the_history_when_read_without_prices": 1,
         "test_a_halt_lasts_to_the_end_of_the_run_and_is_recorded": 2,
@@ -163,9 +141,6 @@ BURN_DOWN: dict[str, dict[str, int]] = {
     },
     "tests/perf/test_performance.py": {
         "test_ten_years_of_45_stocks_run_inside_the_budget": 4,
-    },
-    "tests/scripts/test_record_yahoo_fixture.py": {
-        "test_a_recording_reads_back_as_the_history_it_was_given": 1,
     },
 }
 

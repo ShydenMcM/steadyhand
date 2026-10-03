@@ -14,6 +14,7 @@ from cli_world import (
     PLACEHOLDERS,
     RESTORED,
     Cli,
+    Result,
     golden_backtest,
     market_cli,
 )
@@ -155,7 +156,7 @@ def test_the_reports_are_private_and_a_second_run_replaces_them(market: Cli) -> 
     assert {path.name: path.read_bytes() for path in reports.iterdir()} == first
     assert sorted(first) == [f"{STEM}.csv", f"{STEM}.md"]
     assert stat.S_IMODE(reports.stat().st_mode) == 0o700
-    for path in reports.iterdir():
+    for path in reports.iterdir():  # runtime population: the files the run wrote
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
@@ -305,12 +306,30 @@ def test_dividend_growth_reads_its_look_back_and_ends_as_the_library_run(tmp_pat
     assert expected != 100_000_000
 
 
-def test_monthly_savings_spreads_the_starting_cash_over_its_instalments(tmp_path: Path) -> None:
+SAVINGS_MONTHS = ("2021-02", "2021-03", "2021-04", "2021-05")
+
+
+@pytest.fixture(scope="module")
+def savings(tmp_path_factory: pytest.TempPathFactory) -> tuple[Result, dict[str, list[int]]]:
+    """One monthly-savings run over four instalments, and the cash it held each day, by month."""
     config = GOLDEN_CONFIG.replace(
         'name = "buy-and-hold"', 'name = "buy-and-hold"\ninstalments = 4'
     )
-    market = market_cli(tmp_path / "home", config)
+    market = market_cli(tmp_path_factory.mktemp("savings") / "home", config)
     result = market("backtest", *WINDOW, "--strategy", "monthly-savings")
+    daily = market.home / "reports" / "backtest-monthly-savings-2021-02-01-2022-01-31.csv"
+    cash: dict[str, list[int]] = {}
+    with daily.open(encoding="utf-8", newline="") as file:
+        for row in csv.DictReader(file):
+            held = int(row["settled_cash"]) + int(row["unsettled_cash"])
+            cash.setdefault(row["day"][:7], []).append(held)
+    return result, cash
+
+
+def test_monthly_savings_runs_against_buy_and_hold(
+    savings: tuple[Result, dict[str, list[int]]],
+) -> None:
+    result, _ = savings
     assert (result.code, result.err) == (0, "")
     assert result.out.startswith(
         "Backtest: monthly-savings, 2021-02-01 to 2022-01-31, 248 trading days\n\n"
@@ -319,14 +338,14 @@ def test_monthly_savings_spreads_the_starting_cash_over_its_instalments(tmp_path
         "                       monthly-savings     buy-and-hold",
         "Final value             IDR 98,752,838   IDR 96,825,198",
     ]
-    daily = market.home / "reports" / "backtest-monthly-savings-2021-02-01-2022-01-31.csv"
-    cash: dict[str, list[int]] = {}
-    with daily.open(encoding="utf-8", newline="") as file:
-        for row in csv.DictReader(file):
-            held = int(row["settled_cash"]) + int(row["unsettled_cash"])
-            cash.setdefault(row["day"][:7], []).append(held)
+
+
+@pytest.mark.parametrize("month", SAVINGS_MONTHS)
+def test_monthly_savings_keeps_back_the_instalments_still_due(
+    savings: tuple[Result, dict[str, list[int]]], month: str
+) -> None:
     # Each instalment of 25,000,000 fills the day after the month's first trading day, and the
     # instalments still due stay back as cash until their month.
-    for bought, month in enumerate(["2021-02", "2021-03", "2021-04", "2021-05"], start=1):
-        reserve = (4 - bought) * 25_000_000
-        assert reserve <= cash[month][1] < reserve + 25_000_000, month
+    _, cash = savings
+    reserve = (len(SAVINGS_MONTHS) - 1 - SAVINGS_MONTHS.index(month)) * 25_000_000
+    assert reserve <= cash[month][1] < reserve + 25_000_000

@@ -134,9 +134,12 @@ def test_help_goes_to_stdout_and_exits_0(cli: Cli) -> None:
     result = cli("--help")
     assert result.code == 0
     assert result.out.startswith("usage: steadyhand-idx ")
-    for command in ("init", "training", "learn"):
-        assert f"    {command} " in result.out
     assert result.err == ""
+
+
+@pytest.mark.parametrize("command", ["init", "training", "learn"])
+def test_help_lists_the_command(cli: Cli, command: str) -> None:
+    assert f"    {command} " in cli("--help").out
 
 
 def test_a_commands_help_goes_to_stdout(cli: Cli) -> None:

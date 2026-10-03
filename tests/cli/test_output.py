@@ -88,17 +88,17 @@ def test_at_experienced_and_off_there_is_no_block_and_the_same_footer(level: str
     )
 
 
-def test_with_no_keys_there_is_no_block_at_any_level() -> None:
-    for level in LEVELS:
-        assert render(page_showing(), {"level": level}) == (
-            f"Run-rate: IDR 1,200,000\n\n{DISCLAIMER}\n"
-        )
+@pytest.mark.parametrize("level", LEVELS)
+def test_with_no_keys_there_is_no_block_at_any_level(level: str) -> None:
+    assert render(page_showing(), {"level": level}) == (
+        f"Run-rate: IDR 1,200,000\n\n{DISCLAIMER}\n"
+    )
 
 
-def test_a_page_that_shows_a_key_with_no_lesson_is_a_bug_at_every_level() -> None:
-    for level in LEVELS:
-        with pytest.raises(LookupError, match=r"no lesson for 'term\.nothing'"):
-            render(page_showing("term.nothing"), {"level": level})
+@pytest.mark.parametrize("level", LEVELS)
+def test_a_page_that_shows_a_key_with_no_lesson_is_a_bug_at_every_level(level: str) -> None:
+    with pytest.raises(LookupError, match=r"no lesson for 'term\.nothing'"):
+        render(page_showing("term.nothing"), {"level": level})
 
 
 def lesson(see_also: tuple[str, ...]) -> Lesson:

@@ -26,6 +26,7 @@ from steadyhand_idx.config import (
     KEYS,
     Config,
     ConfigMissingError,
+    Key,
     load,
     starter,
     strategy_keys,
@@ -94,16 +95,34 @@ def test_the_starter_file_loads_to_the_defaults_and_the_choices(tmp_path: Path) 
     assert config.disclaimer_accepted == ACCEPTED
 
 
-def test_the_starter_file_writes_every_key_under_its_comment() -> None:
-    lines = starter("new", exemption=False, accepted=ACCEPTED).splitlines()
-    written = 0
-    for table, keys in KEYS.items():
-        assert f"[{table}]" in lines
-        for key in keys:
-            (index,) = [i for i, line in enumerate(lines) if line.startswith(f"{key.name} = ")]
-            assert lines[index - 1] == f"# {key.comment}"
-            written += 1
-    assert written == 18
+STARTER_KEYS = [(table, key) for table, keys in KEYS.items() for key in keys]
+
+
+def starter_lines() -> list[str]:
+    return starter("new", exemption=False, accepted=ACCEPTED).splitlines()
+
+
+def test_the_starter_file_writes_all_18_keys() -> None:
+    assert len(STARTER_KEYS) == 18
+
+
+@pytest.mark.parametrize("table", KEYS)
+def test_the_starter_file_writes_each_table(table: str) -> None:
+    assert f"[{table}]" in starter_lines()
+
+
+@pytest.mark.parametrize(
+    ("table", "key"), STARTER_KEYS, ids=[f"{table}.{key.name}" for table, key in STARTER_KEYS]
+)
+def test_the_starter_file_writes_each_key_under_its_comment(table: str, key: Key) -> None:
+    lines = starter_lines()
+    (index,) = [i for i, line in enumerate(lines) if line.startswith(f"{key.name} = ")]
+    assert lines[index - 1] == f"# {key.comment}"
+    assert lines.index(f"[{table}]") < index
+
+
+def test_the_starter_file_writes_the_strategy_settings() -> None:
+    lines = starter_lines()
     assert "# The months monthly-savings spreads the starting cash over: 1 to 120.\n" in "\n".join(
         lines
     )

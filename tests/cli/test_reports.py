@@ -31,6 +31,7 @@ from steadyhand_idx import BarCache, CachedDataSource, IdxMarketRules
 from steadyhand_idx.reports import (
     GOAL_FIGURES,
     RUN_FIGURES,
+    Figure,
     backtest_files,
     backtest_page,
     comparison_files,
@@ -125,7 +126,9 @@ def test_a_run_with_no_goal_shows_no_income_figures(market: Market, tmp_path: Pa
     shown = figures((result.run,))
     assert [figure.name for figure in shown] == [figure.name for figure, _ in RUN_FIGURES]
     assert set(values(result.run)) == {figure.name for figure, _ in RUN_FIGURES}
-    assert not any("goal" in line for line in backtest_page(result, ()).lines)
+    assert not any(  # runtime population: the lines the page rendered
+        "goal" in line for line in backtest_page(result, ()).lines
+    )
     quiet = replace(result, warnings=())
     warned = replace(result, warnings=(Note(DATA_BAR_REFUSED, "BBRI: the source refused a day"),))
     assert "Warnings:" in backtest_page(warned, ()).lines
@@ -155,13 +158,26 @@ def test_values_are_shown_to_people_and_written_raw_for_spreadsheets(
     assert raw(value) == raw_form
 
 
-def test_each_figure_reads_the_report_field_it_names(beside: BacktestResult) -> None:
+def test_the_baseline_run_has_figures_that_differ(beside: BacktestResult) -> None:
     # The baseline's run, whose figures differ from one another: the cash run's are mostly 0,
     # so a figure reading the wrong field could still match it.
     run = beside.baseline
     assert run is not None
     assert run.income is not None
     assert run.metrics.total_return != run.metrics.drawdown.depth
+
+
+@pytest.mark.parametrize(
+    "figure",
+    [figure for figure, _ in (*RUN_FIGURES, *GOAL_FIGURES)],
+    ids=lambda figure: figure.name,
+)
+def test_each_figure_reads_the_report_field_it_names(
+    beside: BacktestResult, figure: Figure
+) -> None:
+    run = beside.baseline
+    assert run is not None
+    assert run.income is not None
     metrics = run.metrics
     owners: dict[str, object] = {
         "Metrics": metrics,
@@ -170,10 +186,8 @@ def test_each_figure_reads_the_report_field_it_names(beside: BacktestResult) -> 
         "DividendTotals": metrics.dividends,
         "GoalProgress": run.income.goal,
     }
-    shown = values(run)
-    for figure, _ in (*RUN_FIGURES, *GOAL_FIGURES):
-        owner, attribute = figure.field.split(".")
-        assert shown[figure.name] == getattr(owners[owner], attribute), figure.name
+    owner, attribute = figure.field.split(".")
+    assert values(run)[figure.name] == getattr(owners[owner], attribute)
 
 
 def test_each_figures_term_is_pinned() -> None:
