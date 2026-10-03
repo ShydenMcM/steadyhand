@@ -81,11 +81,15 @@ def run(
 
 
 def test_a_buy_pays_the_open_plus_slippage_rounded_up_to_a_tick() -> None:
-    result = run(portfolio(10_000_000), buy(100))
+    # Two lots, so the order could be cut: a one-lot order cut to nothing is rejected, and its
+    # empty cuts could never fail (#193).
+    result = run(portfolio(10_000_000), buy(200))
     (only,) = result.fills
-    assert (only.day, only.quantity, only.price) == (TODAY, 100, rp(9_025))
-    assert only.costs == Costs(rp(1_504), rp(390), rp(0))
-    assert result.portfolio.cash_balance() == rp(10_000_000 - 902_500 - 1_894)
+    assert (only.day, only.quantity, only.price) == (TODAY, 200, rp(9_025))
+    # On 1,805,000: the levy is 0.03% x 1.11 VAT + 0.01% = 0.0433%, rounded down to 781; the
+    # commission 0.15% x 1.11 = 0.1665%, so 0.2098% in all, 3,786.89 rounded up to 3,787.
+    assert only.costs == Costs(rp(3_006), rp(781), rp(0))
+    assert result.portfolio.cash_balance() == rp(10_000_000 - 1_805_000 - 3_787)
     assert (result.rejected, result.cuts, result.daily_cost) == ((), (), rp(0))
 
 
