@@ -86,7 +86,9 @@ def test_all_lists_only_defined_names() -> None:
 
 
 def test_training_is_left_out_of_the_engine_and_exports_its_own_names() -> None:
-    assert not any(module.startswith(TRAINING) for module in public_modules())
+    assert not any(  # runtime population: the public modules the walk found
+        module.startswith(TRAINING) for module in public_modules()
+    )
     # The training package defines its lesson root in its own __init__, as well as re-exporting.
     own = SRC / "steadyhand/training/__init__.py"
     found = {

@@ -36,7 +36,12 @@ def test_every_lesson_file_is_loaded(real: Catalogue) -> None:
     files = sorted(path for folder in FOLDERS for path in folder.rglob("*.md"))
     assert len(files) >= 30
     assert len(real.lessons()) == len(files)
-    assert all(any(path.is_relative_to(folder) for folder in FOLDERS) for path in files)
+    assert all(  # runtime population: the files the walk found
+        any(  # runtime population: a disjunction over the folders, not cases
+            path.is_relative_to(folder) for folder in FOLDERS
+        )
+        for path in files
+    )
 
 
 def test_every_key_has_a_lesson(real: Catalogue) -> None:
@@ -86,14 +91,22 @@ def test_module_8_has_a_lesson_for_each_strategy_citing_its_guide(real: Catalogu
     spec §7), then the lesson on the cash dividend-growth holds."""
     (strategies,) = [module for module in real.course() if module.slug == "strategies"]
     lessons = {lesson.id: lesson for lesson in strategies.lessons}
-    expected = [f"strategies.{name.replace('-', '_')}" for name in STRATEGIES]
+    expected = [lesson_of(name) for name in STRATEGIES]
     assert len(expected) == 3
     assert list(lessons) == [*expected, "strategies.holding_cash"]
-    for name, lesson_id in zip(STRATEGIES, expected, strict=True):
-        guide = f"packages/steadyhand/src/steadyhand/strategies/guides/{name}.md"
-        assert guide in lessons[lesson_id].sources, lesson_id
-        words = " ".join(lessons[lesson_id].body.split())
-        assert "Its guide, which the explain command prints" in words, lesson_id
+
+
+def lesson_of(strategy: str) -> str:
+    return f"strategies.{strategy.replace('-', '_')}"
+
+
+@pytest.mark.parametrize("name", STRATEGIES)
+def test_each_strategys_lesson_cites_its_guide(real: Catalogue, name: str) -> None:
+    (strategies,) = [module for module in real.course() if module.slug == "strategies"]
+    lesson = {lesson.id: lesson for lesson in strategies.lessons}[lesson_of(name)]
+    assert f"packages/steadyhand/src/steadyhand/strategies/guides/{name}.md" in lesson.sources
+    words = " ".join(lesson.body.split())
+    assert "Its guide, which the explain command prints" in words
 
 
 def test_the_spec_example_renders_as_written(real: Catalogue) -> None:

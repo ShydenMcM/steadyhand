@@ -141,8 +141,8 @@ def test_every_guide_is_for_a_registered_strategy() -> None:
     assert [name for name in guides if name not in STRATEGIES] == []
 
 
-def test_each_registered_name_is_the_strategys_own() -> None:
-    for name, make in STRATEGIES.items():
-        strategy = make()
-        assert isinstance(strategy, Strategy)
-        assert strategy.name == name
+@pytest.mark.parametrize("name", STRATEGIES)
+def test_each_registered_name_is_the_strategys_own(name: str) -> None:
+    strategy = STRATEGIES[name]()
+    assert isinstance(strategy, Strategy)
+    assert strategy.name == name

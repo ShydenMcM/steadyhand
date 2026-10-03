@@ -19,7 +19,7 @@ def test_a_command_that_reads_no_market_data_starts_within_budget(
     tmp_path: Path, argv: tuple[str, ...]
 ) -> None:
     best = float("inf")
-    for _ in range(5):
+    for _ in range(5):  # runtime population: five timing samples of one command, the best judged
         started = time.perf_counter()
         result = installed(tmp_path / "home", *argv)
         best = min(best, time.perf_counter() - started)

@@ -97,7 +97,7 @@ def test_the_literal_detector() -> None:
 def test_every_key_is_a_dotted_lowercase_identifier_named_after_itself() -> None:
     keys = constants_in(KEY_MODULES)
     assert {value for _, value in keys} >= KNOWN
-    for name, value in keys:
+    for name, value in keys:  # runtime population: the constants the reader found
         assert re.fullmatch(KEY, value), f"{name} = {value!r} is not a dotted lowercase identifier"
         assert name == value.upper().replace(".", "_"), f"{name} is not named after {value!r}"
 
@@ -122,7 +122,9 @@ def test_no_key_is_defined_twice() -> None:
         if path not in KEY_MODULES
     }
     assert len(elsewhere) >= 30, "fewer than 30 of the packages' modules were found"
-    assert any(name.startswith("steadyhand-idx/") for name in elsewhere)
+    assert any(  # runtime population: the modules the walk found; a disjunction
+        name.startswith("steadyhand-idx/") for name in elsewhere
+    )
     assert {name: found for name, found in elsewhere.items() if found} == {}
 
 
@@ -135,6 +137,8 @@ def test_every_note_is_built_from_a_note_key_and_every_note_key_is_used() -> Non
         for key in note_keys(source, reader=SAVED_NOTE_READERS.get(path))
     ]
     assert len(used) >= len(names) >= 6, "fewer Note(...) calls in the packages than note keys"
-    assert any(note_keys(source) for path, source in sources.items() if IDX in path.parents)
+    assert any(  # runtime population: the sources the walk found; a disjunction
+        note_keys(source) for path, source in sources.items() if IDX in path.parents
+    )
     assert sorted(set(used) - names) == []
     assert sorted(names - set(used)) == []
