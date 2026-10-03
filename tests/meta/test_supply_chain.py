@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from population import searched, tracked
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
@@ -22,6 +23,10 @@ PINNED = re.compile(r"[\w.-]+/[\w.-]+(?:/[\w./-]+)?@[0-9a-f]{40}")
 USES_LINE = re.compile(r"^\s*(?:-\s+)?uses:\s*(?P<value>\S+)(?P<tail>.*)$")
 VERSION_COMMENT = re.compile(r"\s+# v\d+\.\d+\.\d+\s*")
 SUB_PATH_PATTERN = re.compile(r"[\w.-]+/[\w.-]+\*")
+
+# Measured on 2026-10-03 (#178): 13 `uses` in 2 workflow files. Lower it only by a deliberate edit
+# when the workflows shrink.
+USES_FLOOR = 12
 
 
 def workflow_files() -> list[Path]:
@@ -55,15 +60,22 @@ def ecosystems_present() -> set[str]:
     return present
 
 
+def test_the_workflows_read_are_the_ones_git_lists() -> None:
+    # Independent of the walk: the workflow files as git lists them.
+    listed = sorted([*tracked(WORKFLOWS, ".yml"), *tracked(WORKFLOWS, ".yaml")])
+    assert workflow_files() == listed
+    assert len(listed) >= 1
+
+
 def test_every_action_is_pinned_to_a_full_commit_sha() -> None:
     values = [
         value
         for path in workflow_files()
         for value in uses_values(yaml.safe_load(path.read_text(encoding="utf-8")))
     ]
-    assert len(values) >= 8, values  # four CI jobs, each with checkout and setup-uv
+    assert len(values) >= USES_FLOOR, values
     unpinned = [v for v in values if not v.startswith("./") and PINNED.fullmatch(v) is None]
-    assert unpinned == []
+    assert searched(unpinned, of=len(values), what="uses") == []
 
 
 def test_every_pin_carries_its_release_version_as_a_comment() -> None:
@@ -76,7 +88,7 @@ def test_every_pin_carries_its_release_version_as_a_comment() -> None:
             match = USES_LINE.match(line)
             if match is not None:
                 raw.append((match["value"], match["tail"]))
-    assert len(parsed) >= 8, parsed
+    assert len(parsed) >= USES_FLOOR, parsed
     # Every parsed `uses` was seen on a line of its own, so none escapes the comment check.
     assert sorted(value for value, _ in raw) == sorted(parsed)
     missing = [
@@ -84,7 +96,7 @@ def test_every_pin_carries_its_release_version_as_a_comment() -> None:
         for value, tail in raw
         if not value.startswith("./") and VERSION_COMMENT.fullmatch(tail) is None
     ]
-    assert missing == []
+    assert searched(missing, of=len(raw), what="uses lines") == []
 
 
 def test_dependabot_covers_every_ecosystem_in_the_repo() -> None:

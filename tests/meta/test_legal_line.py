@@ -14,6 +14,7 @@ module is never a finding.
 """
 
 import ast
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -21,6 +22,7 @@ from pathlib import Path
 import pytest
 from key_walk import ENGINE, IDX
 from lesson_rules import ADVICE_PHRASES, advice_findings, advice_phrases
+from population import searched, tracked
 
 from steadyhand.training import Catalogue
 
@@ -34,6 +36,14 @@ IDX_TRAINING_MAY_IMPORT = (
     "steadyhand_idx.notes",
 )
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures/training"
+RAW_IMPORT = re.compile(r"^[ \t]*(?:import[ \t]+[\w.]+|from[ \t]+[\w.]+[ \t]+import\b)", re.M)
+
+# Measured on 2026-10-03 (#178): 57 modules in both packages, 489 import statements outside the
+# modules that may import training, and 21 inside the training packages. Lower each only by a
+# deliberate edit when the packages shrink.
+MODULES_FLOOR = 56
+IMPORTS_FLOOR = 488
+TRAINING_IMPORTS_FLOOR = 20
 
 type Statement = tuple[str, tuple[str, ...]]
 """One import statement: the module it names, and for ``from`` imports the names it takes."""
@@ -107,6 +117,8 @@ def test_the_training_import_detector() -> None:
         "import steadyhand.trainingx\n"
         "from steadyhand import Money\n"
         '"""import steadyhand.training"""\n'
+        "def lazy():\n"
+        "    import steadyhand_idx.training\n"
     )
     found = statements(source, "steadyhand.engine", is_package=False)
     assert [imports_training(statement) for statement in found] == [
@@ -116,6 +128,7 @@ def test_the_training_import_detector() -> None:
         True,
         False,
         False,
+        True,
     ]
 
 
@@ -181,17 +194,28 @@ def test_the_idx_training_allowlist(line: str, *, ok: bool) -> None:
 
 def test_only_training_and_the_output_layer_import_training() -> None:
     modules = sources()
+    # Independent of the walk: both packages' modules as git lists them.
+    listed = [*tracked(ENGINE, ".py"), *tracked(IDX, ".py")]
+    assert sorted(name for name, _, _ in modules) == sorted(module_name(p) for p in listed)
+    assert len(modules) >= MODULES_FLOOR, f"read {len(modules)} modules"
     inside = [name for name, _, _ in modules if _within(name, MAY_IMPORT_TRAINING)]
-    assert len(modules) >= 40
     assert {"steadyhand.training", "steadyhand_idx.training", OUTPUT_LAYER} <= set(inside)
-    found = [
-        f"{name}: {base}"
+    judged = [
+        (name, statement)
         for name, is_package, source in modules
         if not _within(name, MAY_IMPORT_TRAINING)
-        for base, names in statements(source, name, is_package=is_package)
-        if imports_training((base, names))
+        for statement in statements(source, name, is_package=is_package)
     ]
-    assert found == []
+    assert len(judged) >= IMPORTS_FLOOR, f"judged {len(judged)} import statements"
+    found = [f"{name}: {base}" for name, (base, names) in judged if imports_training((base, names))]
+    assert searched(found, of=len(judged), what="import statements") == []
+
+
+@pytest.mark.parametrize("module", [name for name, _, _ in sources()])
+def test_the_module_is_read_as_every_import_its_text_holds(module: str) -> None:
+    # Independent of the AST reader: a raw count of the lines that open an import.
+    ((is_package, source),) = [(p, text) for name, p, text in sources() if name == module]
+    assert len(statements(source, module, is_package=is_package)) >= len(RAW_IMPORT.findall(source))
 
 
 def test_the_output_layer_is_the_exception_it_is_listed_as() -> None:
@@ -222,8 +246,8 @@ def test_training_imports_nothing_that_decides() -> None:
                 checked += 1
                 if not allowed(statement, allowlist, own):
                     found.append(f"{name}: {statement[0]}")
-    assert checked >= 8, "fewer than 8 training modules' imports were read"
-    assert found == []
+    assert checked >= TRAINING_IMPORTS_FLOOR, f"read {checked} imports of the training modules"
+    assert searched(found, of=checked, what="imports of the training modules") == []
 
 
 @pytest.mark.parametrize("phrase", ADVICE_PHRASES)
@@ -261,9 +285,20 @@ def test_the_fixture_lessons_carry_no_advice() -> None:
     assert advice_findings(catalogue) == []
 
 
-def test_an_advice_finding_names_the_file_and_the_phrase(tmp_path: Path) -> None:
+PLANTED_ADVICE = {
+    "body": ("A fixture lesson in the other package's folder.\n", "You should buy lots.\n"),
+    "title": ('title = "Lots"\n', 'title = "Lots you should buy"\n'),
+    "summary": ('size."\n', 'size, which you should buy."\n'),
+}
+
+
+@pytest.mark.parametrize("field", PLANTED_ADVICE)
+def test_an_advice_finding_names_the_file_and_the_phrase(tmp_path: Path, field: str) -> None:
     copy = Path(shutil.copytree(FIXTURE, tmp_path / "training"))
     lesson = copy / "idx/en/fixture.lots.md"
-    lesson.write_text(lesson.read_text(encoding="utf-8") + "\nYou should buy lots.\n", "utf-8")
+    old, new = PLANTED_ADVICE[field]
+    text = lesson.read_text(encoding="utf-8")
+    assert text.count(old) == 1
+    lesson.write_text(text.replace(old, new), "utf-8")
     catalogue = Catalogue.load([copy / "engine/en", copy / "idx/en"], copy / "course.toml")
     assert advice_findings(catalogue) == [f"{lesson}: you should buy"]

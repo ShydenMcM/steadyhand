@@ -13,6 +13,7 @@ import re
 from pathlib import Path
 
 import pytest
+from population import tracked
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGES = ROOT / "packages"
@@ -186,6 +187,8 @@ def test_every_loop_in_the_packages_is_read() -> None:
         "packages/steadyhand/src/steadyhand/backtest.py",
         "packages/steadyhand-idx/src/steadyhand_idx/yahoo.py",
     } <= names
+    # Independent of the walk: the packages' modules as git lists them (#178).
+    assert names == {rel(path) for path in tracked(PACKAGES, ".py")}
     total = sum(sum(read(path.read_text(encoding="utf-8"), rel(path))[:2]) for path in FILES)
     assert total >= LOOPS_READ_FLOOR, f"read {total} loops in {len(FILES)} files"
 

@@ -62,6 +62,8 @@ markers = [
 ]
 filterwarnings = ["error"]
 xfail_strict = true
+# A parametrize over a population that came out empty fails, never skips (#178).
+empty_parameter_set_mark = "fail_at_collect"
 
 [tool.coverage.run]
 branch = true

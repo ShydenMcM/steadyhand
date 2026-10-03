@@ -37,8 +37,13 @@ def outcome(history: YahooHistory) -> object:
         return error.days
 
 
+# Measured on 2026-10-03 (#178): 14 recordings. Lower it only by a deliberate edit when a
+# recording is retired.
+RECORDINGS_FLOOR = 13
+
+
 def test_there_are_fixtures_to_check() -> None:
-    assert len(FIXTURES) >= 3
+    assert len(FIXTURES) >= RECORDINGS_FLOOR
 
 
 @pytest.mark.parametrize("fixture", FIXTURES, ids=lambda path: path.stem)

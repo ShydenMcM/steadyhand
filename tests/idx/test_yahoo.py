@@ -589,6 +589,7 @@ def test_a_failed_whole_history_read_fails_closed() -> None:
 
 
 BBRI_WHOLE = FIXTURES / "BBRI.JK_2014-01-06_2026-10-01.json"
+BBRI_OLDER = sorted(path for path in FIXTURES.glob("BBRI.JK_*.json") if path != BBRI_WHOLE)
 
 
 def test_bbri_s_whole_recording_proves_one_factor_up_to_its_rights_issue() -> None:
@@ -626,9 +627,16 @@ def test_bbri_s_golden_years_are_restored_except_where_a_volume_is_not_whole() -
     assert len(bars) == len(calendar().trading_days(date(2017, 11, 10), span[1]))
 
 
-@pytest.mark.parametrize(
-    "older", sorted(FIXTURES.glob("BBRI.JK_20[12]*.json")), ids=lambda p: p.stem
-)
+def test_the_older_bbri_recordings_are_the_three_made_before_the_whole_one() -> None:
+    # The whole recording is left out: compared with itself it could never disagree.
+    assert [path.stem for path in BBRI_OLDER] == [
+        "BBRI.JK_2017-01-31_2022-01-31",
+        "BBRI.JK_2017-01-31_2022-04-29",
+        "BBRI.JK_2021-08-02_2021-09-30",
+    ]
+
+
+@pytest.mark.parametrize("older", BBRI_OLDER, ids=lambda p: p.stem)
 def test_bbri_s_whole_recording_agrees_with_every_older_recording(older: Path) -> None:
     whole = history_from_json(BBRI_WHOLE)
     rows = {row.day: row for row in whole.rows}

@@ -9,9 +9,14 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from population import searched, tracked
 
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE = ROOT / "packages/steadyhand/src/steadyhand"
+
+# Measured on 2026-10-03 (#178): 36 engine modules. Lower it only by a deliberate edit when the
+# engine shrinks.
+MODULES_FLOOR = 35
 
 
 def guarded_files() -> list[Path]:
@@ -69,11 +74,12 @@ def test_detector_ignores_comments_and_plain_strings() -> None:
 
 def test_guarded_engine_modules_contain_no_float() -> None:
     files = guarded_files()
-    names = {path.relative_to(ENGINE).as_posix() for path in files}
-    assert {"money.py", "portfolio.py", "view.py", "strategies/buy_and_hold.py"} <= names
+    # Independent of the walk: the engine's modules as git lists them.
+    assert files == tracked(ENGINE, ".py")
+    assert len(files) >= MODULES_FLOOR, f"read {len(files)} engine modules"
     findings = {
         path.relative_to(ENGINE).as_posix(): uses
         for path in files
         if (uses := float_uses(path.read_text(encoding="utf-8")))
     }
-    assert findings == {}
+    assert searched(findings, of=len(files), what="engine modules") == {}

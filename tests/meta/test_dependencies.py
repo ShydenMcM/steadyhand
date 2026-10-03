@@ -8,9 +8,16 @@ import sys
 import tomllib
 from pathlib import Path
 
+from population import searched, tracked
+
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE = ROOT / "packages/steadyhand/src/steadyhand"
 IDX = ROOT / "packages/steadyhand-idx/src/steadyhand_idx"
+
+# Measured on 2026-10-03 (#178): 36 engine modules and 21 IDX modules. Lower each only by a
+# deliberate edit when the packages shrink.
+ENGINE_FLOOR = 35
+IDX_FLOOR = 20
 
 
 def top_level_imports(source: str) -> set[str]:
@@ -61,7 +68,9 @@ def test_import_detector_sees_absolute_imports_and_skips_relative_ones() -> None
 
 def test_engine_imports_only_the_standard_library() -> None:
     files = sorted(ENGINE.rglob("*.py"))
-    assert len(files) >= 8, files
+    # Independent of the walk: the engine's modules as git lists them.
+    assert files == tracked(ENGINE, ".py")
+    assert len(files) >= ENGINE_FLOOR, f"read {len(files)} engine modules"
     imported = {path: top_level_imports(path.read_text(encoding="utf-8")) for path in files}
     assert "decimal" in set().union(*imported.values())
     allowed = sys.stdlib_module_names | {"steadyhand"}
@@ -70,7 +79,7 @@ def test_engine_imports_only_the_standard_library() -> None:
         for path, names in imported.items()
         if names - allowed
     }
-    assert foreign == {}
+    assert searched(foreign, of=len(files), what="engine modules") == {}
 
 
 def test_private_import_detector() -> None:
@@ -90,10 +99,12 @@ def test_private_import_detector() -> None:
 
 def test_idx_uses_only_the_engine_public_api() -> None:
     files = sorted(IDX.rglob("*.py"))
-    assert files
+    # Independent of the walk: the IDX package's modules as git lists them.
+    assert files == tracked(IDX, ".py")
+    assert len(files) >= IDX_FLOOR, f"read {len(files)} IDX modules"
     found = {
         path.relative_to(IDX).as_posix(): hits
         for path in files
         if (hits := private_engine_imports(path.read_text(encoding="utf-8")))
     }
-    assert found == {}
+    assert searched(found, of=len(files), what="IDX modules") == {}

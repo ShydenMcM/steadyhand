@@ -21,6 +21,11 @@ from steadyhand_idx.paper import PaperRun
 REPORTS: tuple[type, ...] = (DayReport, BacktestResult, IncomeReport, PaperRun)
 FIGURE_TYPES = (Money, Decimal)
 
+# Measured on 2026-10-03 (#178): 69 figures reachable from the reports, and 43 term keys. Lower
+# each only by a deliberate edit when the reports shrink.
+FIGURES_FLOOR = 68
+TERMS_FLOOR = 42
+
 
 def figure_fields(roots: tuple[type, ...]) -> tuple[set[str], dict[str, set[type]]]:
     """Every public ``Money`` or ``Decimal`` field or property reachable from *roots*, as
@@ -101,7 +106,7 @@ def test_the_walk_reaches_every_report() -> None:
         "ScenarioProjection.years",
         "Costs.total",
     } <= figures
-    assert len(figures) >= 60
+    assert len(figures) >= FIGURES_FLOOR
     assert {name: classes for name, classes in visited.items() if len(classes) > 1} == {}
 
 
@@ -117,6 +122,6 @@ def test_figures_names_only_fields_that_exist() -> None:
 
 def test_every_term_is_a_figures_value_and_every_value_is_a_term() -> None:
     terms = {value for _, value in key_constants(TERM_MODULE.read_text(encoding="utf-8"))}
-    assert len(terms) >= 30
+    assert len(terms) >= TERMS_FLOOR
     assert sorted(terms - set(FIGURES.values())) == []
     assert sorted(set(FIGURES.values()) - terms) == []
