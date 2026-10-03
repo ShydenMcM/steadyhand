@@ -89,23 +89,32 @@ def test_a_run_crossing_tiers_is_proven_on_each_price_s_own_tier() -> None:
     assert fitting == [True, False, True]
 
 
+# Multiples of Rp100: halved they sit on the Rp5 or Rp10 tier, doubled on the Rp10 or Rp25 tier.
+WINDOW_DAYS = [
+    [3500, 8400, 6300, 7100],
+    [4200, 9500, 6400, 8600],
+    [8300, 8800, 4700, 7400],
+    [8000, 2100, 5500, 3500],
+    [6200, 2600, 4900, 2600],
+    [7500, 7300, 8500, 6700],
+]
+
+
+@pytest.mark.parametrize(
+    ("day", "price"),
+    [(day, price) for day in range(len(WINDOW_DAYS)) for price in range(4)],
+    ids=lambda n: str(n + 1),
+)
+def test_half_and_double_the_factor_fit_the_grid_on_every_window_price(
+    day: int, price: int
+) -> None:
+    row = recorded(WINDOW_DAYS, Decimal("1.7"))[day]
+    assert grid().fits(row.prices[price], Decimal("0.85"), row.day)
+    assert grid().fits(row.prices[price], Decimal("3.4"), row.day)
+
+
 def test_the_window_rejects_half_and_double_the_factor_although_both_fit_the_grid() -> None:
-    # Multiples of Rp100: halved they sit on the Rp5 or Rp10 tier, doubled on the Rp10 or Rp25 tier.
-    true_days = [
-        [3500, 8400, 6300, 7100],
-        [4200, 9500, 6400, 8600],
-        [8300, 8800, 4700, 7400],
-        [8000, 2100, 5500, 3500],
-        [6200, 2600, 4900, 2600],
-        [7500, 7300, 8500, 6700],
-    ]
-    rows = recorded(true_days, Decimal("1.7"))
-    half, double = Decimal("0.85"), Decimal("3.4")
-    assert all(
-        grid().fits(p, half, row.day) and grid().fits(p, double, row.day)
-        for row in rows
-        for p in row.prices
-    )
+    rows = recorded(WINDOW_DAYS, Decimal("1.7"))
     (run,) = find_runs(rows)
     assert run.factor == Decimal("1.700000")
 
@@ -169,7 +178,11 @@ def test_a_day_before_the_first_grid_is_never_provable() -> None:
     before = GRID_START - timedelta(days=len(TRUE_DAYS))
     rows = recorded(TRUE_DAYS, Decimal("1.1"), first=before)
     assert grid().tiers_on(GRID_START - timedelta(1)) is None
-    assert all(run.factor is None and len(run.days) == 1 for run in find_runs(rows))
+    runs = find_runs(rows)
+    assert len(runs) == len(rows)
+    assert all(  # runtime population: the runs find_runs returned
+        run.factor is None and len(run.days) == 1 for run in runs
+    )
     with pytest.raises(ValueError, match=r"no tick grid for 2013-12-31, before 2014-01-06"):
         restore_price(Decimal(3550), Decimal(1), date(2013, 12, 31))
 
@@ -329,7 +342,7 @@ def test_a_proven_factor_restores_the_true_prices(
     """The safety claim (spec §4.4): a run is either proven at the true factor or left refused."""
     first, true_days = drawn
     rows = recorded(true_days, factor, first=first, noise=noise)
-    for run in find_runs(rows):
+    for run in find_runs(rows):  # runtime population: the runs found in the drawn recording
         if run.factor is not None:
             members = [row for row in rows if run.first <= row.day <= run.last]
             want = [true_days[rows.index(row)] for row in members]

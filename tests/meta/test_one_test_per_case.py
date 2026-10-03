@@ -17,52 +17,14 @@ ROOT = Path(__file__).resolve().parents[2]
 TESTS = ROOT / "tests"
 RAW_TEST = re.compile(r"^[ \t]*(?:async[ \t]+)?def[ \t]+test", re.MULTILINE)
 
-# Measured on 2026-10-03 after #175: 1,101 tests read in 86 files. Lower it only by a deliberate
+# Measured on 2026-10-03 after #176: 1,111 tests read in 86 files. Lower it only by a deliberate
 # edit when the suite shrinks.
-TESTS_READ_FLOOR = 1_100
+TESTS_READ_FLOOR = 1_110
 
 # The looped cases found on 2026-10-03 (88 in 66 tests), by file and test: each conversion
 # removes its entries, and an entry that no longer loops fails until it is removed, so this list
 # can only shrink.
 BURN_DOWN: dict[str, dict[str, int]] = {
-    "tests/golden/test_golden_backtest.py": {
-        "test_the_income_report_agrees_with_what_the_engine_paid": 1,
-        "test_the_recordings_reach_five_years_before_the_run_ends": 1,
-    },
-    "tests/golden/test_golden_snapshot.py": {
-        "test_every_day_report_of_both_golden_runs_reads_back_equal": 2,
-        "test_the_final_state_of_both_golden_runs_reads_back_equal": 1,
-    },
-    "tests/idx/test_bands.py": {
-        "test_every_period_matches_the_research": 1,
-    },
-    "tests/idx/test_cache.py": {
-        "test_a_refused_look_back_is_not_stored": 1,
-        "test_the_restorations_migration_reads_every_range_again": 1,
-    },
-    "tests/idx/test_datafile.py": {
-        "test_dates_must_be_plain_toml_dates": 1,
-        "test_decimals_are_written_as_strings_and_never_negative": 1,
-        "test_ints_must_be_ints_at_or_above_the_minimum": 1,
-        "test_rows_must_be_a_non_empty_array_of_tables": 1,
-        "test_strings_must_be_non_empty": 1,
-    },
-    "tests/idx/test_factor.py": {
-        "test_a_day_before_the_first_grid_is_never_provable": 1,
-        "test_a_proven_factor_restores_the_true_prices": 1,
-        "test_the_window_rejects_half_and_double_the_factor_although_both_fit_the_grid": 1,
-    },
-    "tests/idx/test_rules.py": {
-        "test_band_edges_are_the_widest_valid_prices_inside_the_band": 2,
-    },
-    "tests/idx/test_ticks.py": {
-        "test_rounding_is_tight_and_valid": 2,
-    },
-    "tests/idx/test_yahoo.py": {
-        "test_a_dividend_in_an_unproven_run_is_refused_naming_its_ex_date": 1,
-        "test_bbri_s_whole_recording_agrees_with_every_older_recording": 1,
-        "test_recovered_prices_obey_the_ticks_and_bands": 3,
-    },
     "tests/meta/test_hypothesis_profiles.py": {
         "test_every_profile_has_no_deadline": 1,
     },

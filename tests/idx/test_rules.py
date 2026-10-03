@@ -162,9 +162,13 @@ def test_band_edges_are_the_widest_valid_prices_inside_the_band(reference: int, 
     assert ticks.is_valid(high.amount)
     assert low.amount >= max(bottom, Decimal(band.min_price))
     assert high.amount <= top
-    assert not any(ticks.is_valid(p) for p in range(high.amount + 1, math.floor(top) + 1))
+    assert not any(  # runtime population: the prices above the drawn band's top valid edge
+        ticks.is_valid(p) for p in range(high.amount + 1, math.floor(top) + 1)
+    )
     floor_price = max(math.ceil(bottom), band.min_price)
-    assert not any(ticks.is_valid(p) for p in range(floor_price, low.amount))
+    assert not any(  # runtime population: the prices below the drawn band's bottom valid edge
+        ticks.is_valid(p) for p in range(floor_price, low.amount)
+    )
 
 
 def test_costs_use_the_chosen_broker_preset() -> None:

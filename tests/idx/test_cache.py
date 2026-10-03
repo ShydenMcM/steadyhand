@@ -358,9 +358,12 @@ def test_a_look_back_is_fetched_once_without_its_prices(cache: BarCache) -> None
 def test_a_refused_look_back_is_not_stored(cache: BarCache) -> None:
     source, counting = source_for(cache, "BBCA.JK_2021-09-01_2021-11-30.json", date(2026, 9, 25))
     counting.history = YahooHistory("X.JK", (), ((date(2021, 10, 13), Decimal("0.3333")),))
-    for _ in range(2):
-        with pytest.raises(DataUnavailableError, match=r"^BBCA: Yahoo's split ratio 0\.3333 on"):
-            source.corporate_actions(BBCA, *OCT)
+    refused = r"^BBCA: Yahoo's split ratio 0\.3333 on"
+    with pytest.raises(DataUnavailableError, match=refused):
+        source.corporate_actions(BBCA, *OCT)
+    # Asked again, it is refused again: the first refusal stored nothing to answer from.
+    with pytest.raises(DataUnavailableError, match=refused):
+        source.corporate_actions(BBCA, *OCT)
     # One download, which the Yahoo source keeps for its next call; nothing reaches the cache.
     assert counting.asked == [OCT]
     assert cache.fetched_actions(BBCA) == []
@@ -393,14 +396,19 @@ def test_the_restorations_migration_reads_every_range_again(
         old.store_actions(BBCA, OCT, [Split(BBCA, date(2021, 10, 13), 1, 5)])
         assert old.schema_version == 2
     monkeypatch.setattr("steadyhand_idx.cache.MIGRATIONS", MIGRATIONS)
-    for _ in range(2):  # the second opening finds nothing left to run
-        with BarCache(path) as upgraded:
-            assert upgraded.schema_version == 3
-            assert upgraded.fetched(BBCA) == []
-            assert upgraded.fetched_actions(BBCA) == []
-            assert upgraded.actions(BBCA, SEP[0], OCT[1]) == []
-            assert len(upgraded.bars(BBCA, *SEP)) == len(calendar().trading_days(*SEP))
-            assert upgraded.restorations(BBCA, SEP[0], OCT[1]) == []
+    assert_upgraded(path)
+    assert_upgraded(path)  # the second opening finds nothing left to run
+
+
+def assert_upgraded(path: Path) -> None:
+    """The cache at *path*, opened, is at schema 3 with every fetched range to read again."""
+    with BarCache(path) as upgraded:
+        assert upgraded.schema_version == 3
+        assert upgraded.fetched(BBCA) == []
+        assert upgraded.fetched_actions(BBCA) == []
+        assert upgraded.actions(BBCA, SEP[0], OCT[1]) == []
+        assert len(upgraded.bars(BBCA, *SEP)) == len(calendar().trading_days(*SEP))
+        assert upgraded.restorations(BBCA, SEP[0], OCT[1]) == []
 
 
 def test_a_restoration_round_trips_and_a_different_one_is_a_conflict(cache: BarCache) -> None:

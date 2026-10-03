@@ -111,11 +111,11 @@ def test_recovered_prices_obey_the_ticks_and_bands(
     the reference is the theoretical price (t-verify.md §4.2)."""
     bars, actions = unadjust(history_from_json(path), instrument, calendar(), (start, end))
     split_days = {action.ex_date for action in actions if isinstance(action, Split)}
-    for bar in bars:
-        for price in (bar.open, bar.high, bar.low, bar.close):
+    for bar in bars:  # runtime population: the bars unadjust returned
+        for price in (bar.open, bar.high, bar.low, bar.close):  # runtime population: its prices
             assert rules().round_to_tick(instrument, price, Side.BUY, bar.day) == price, bar.day
     checked = 0
-    for previous, bar in pairwise(bars):
+    for previous, bar in pairwise(bars):  # runtime population: consecutive returned bars
         if bar.day in split_days:
             continue
         low, high = rules().price_band(instrument, previous.close, bar.day)
@@ -447,26 +447,35 @@ def unwhole(day: date, price: str, *, volume: int = 100, dividend: str = "0") ->
     return YahooRow(day, *(Decimal(price),) * 4, volume=volume, dividend=Decimal(dividend))
 
 
-def test_a_dividend_in_an_unproven_run_is_refused_naming_its_ex_date() -> None:
-    # Two days off the grid are 8 prices, too few for a proof: their dividend is known to be
-    # wrong, in a look-back as in a backtest's own days (#160 spec §5).
+def unproven() -> YahooDataSource:
+    """Two days off the grid are 8 prices, too few for a proof, and the second pays a dividend."""
     rows = (
         unwhole(date(2021, 3, 1), "1000.5"),
         unwhole(date(2021, 3, 2), "1001.5", dividend="20.5"),
     )
     history = YahooHistory("BBCA.JK", rows, ())
-    source = YahooDataSource(calendar(), download=lambda *_: history, today=lambda: TODAY)
-    for start in (date(2021, 1, 4), date(2021, 3, 1)):
-        with pytest.raises(
-            UnprovenDividendsError,
-            match=(
-                r"^BBCA\.JK: the dividend\(s\) with ex-date 2021-03-02 fall in days whose prices "
-                r"carry an adjustment Yahoo does not report and steadyhand could not prove"
-            ),
-        ) as caught:
-            source.corporate_actions(BBCA, start, date(2021, 3, 31))
-        assert isinstance(caught.value, UnavailableDaysError)
-        assert caught.value.days == (date(2021, 3, 2),)
+    return YahooDataSource(calendar(), download=lambda *_: history, today=lambda: TODAY)
+
+
+@pytest.mark.parametrize(
+    "start", [date(2021, 1, 4), date(2021, 3, 1)], ids=["a-look-back", "the-backtests-own-days"]
+)
+def test_a_dividend_in_an_unproven_run_is_refused_naming_its_ex_date(start: date) -> None:
+    # Its dividend is known to be wrong, in a look-back as in a backtest's own days (#160 spec §5).
+    with pytest.raises(
+        UnprovenDividendsError,
+        match=(
+            r"^BBCA\.JK: the dividend\(s\) with ex-date 2021-03-02 fall in days whose prices "
+            r"carry an adjustment Yahoo does not report and steadyhand could not prove"
+        ),
+    ) as caught:
+        unproven().corporate_actions(BBCA, start, date(2021, 3, 31))
+    assert isinstance(caught.value, UnavailableDaysError)
+    assert caught.value.days == (date(2021, 3, 2),)
+
+
+def test_the_prices_of_an_unproven_run_are_refused() -> None:
+    source = unproven()
     with pytest.raises(UnrecoverablePricesError) as refused:
         source.bars(BBCA, date(2021, 3, 1), date(2021, 3, 2))
     assert refused.value.days == (date(2021, 3, 1), date(2021, 3, 2))
@@ -625,5 +634,7 @@ def test_bbri_s_whole_recording_agrees_with_every_older_recording(older: Path) -
     rows = {row.day: row for row in whole.rows}
     recorded = history_from_json(older)
     assert recorded.splits == whole.splits
-    assert all(rows[row.day] == row for row in recorded.rows)
+    assert all(  # runtime population: the rows read from the older recording
+        rows[row.day] == row for row in recorded.rows
+    )
     assert len(recorded.rows) > 40

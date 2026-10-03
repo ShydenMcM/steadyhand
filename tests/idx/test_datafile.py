@@ -68,12 +68,16 @@ def test_schema_must_match() -> None:
 def test_rows_must_be_a_non_empty_array_of_tables() -> None:
     where = Where("x.toml", "levy")
     assert rows({"levy": [{"a": 1}]}, "levy", where) == [{"a": 1}]
-    bad_documents: list[dict[str, object]] = [{}, {"levy": []}, {"levy": {"a": 1}}]
-    for bad in bad_documents:
-        with pytest.raises(DataFileError, match=r"x\.toml \[levy\] must be a non-empty array"):
-            rows(bad, "levy", where)
     with pytest.raises(DataFileError, match=r"x\.toml \[\[levy\]\] row 2 must be a table"):
         rows({"levy": [{"a": 1}, 5]}, "levy", where)
+
+
+@pytest.mark.parametrize(
+    "bad", [{}, {"levy": []}, {"levy": {"a": 1}}], ids=["missing", "empty", "a-table"]
+)
+def test_rows_that_are_not_a_non_empty_array_are_refused(bad: dict[str, object]) -> None:
+    with pytest.raises(DataFileError, match=r"x\.toml \[levy\] must be a non-empty array"):
+        rows(bad, "levy", Where("x.toml", "levy"))
 
 
 def test_unknown_keys_are_refused() -> None:
@@ -90,26 +94,36 @@ def test_missing_keys_are_named() -> None:
 def test_dates_must_be_plain_toml_dates() -> None:
     document = tomllib.loads("a = 2021-01-04\nb = 2021-01-04T09:00:00\nc = '2021-01-04'")
     assert get_date(document, "a", HERE) == date(2021, 1, 4)
-    for key in ("b", "c"):
-        with pytest.raises(DataFileError, match=rf"row 2: {key} must be a TOML date"):
-            get_date(document, key, HERE)
     assert as_date(date(2021, 1, 4), "x") == date(2021, 1, 4)
     with pytest.raises(DataFileError, match=r"^holiday 3 must be a TOML date"):
         as_date(datetime(2021, 1, 4, 9, 0), "holiday 3")  # noqa: DTZ001 - naive on purpose
 
 
+@pytest.mark.parametrize("key", ["b", "c"], ids=["a-datetime", "a-string"])
+def test_a_date_that_is_not_a_plain_toml_date_is_refused(key: str) -> None:
+    document = tomllib.loads("b = 2021-01-04T09:00:00\nc = '2021-01-04'")
+    with pytest.raises(DataFileError, match=rf"row 2: {key} must be a TOML date"):
+        get_date(document, key, HERE)
+
+
 def test_ints_must_be_ints_at_or_above_the_minimum() -> None:
     assert get_int({"n": 100}, "n", HERE, minimum=1) == 100
-    for bad in (0, True, "100", 1.0):
-        with pytest.raises(DataFileError, match="n must be an integer of at least 1"):
-            get_int({"n": bad}, "n", HERE, minimum=1)
+
+
+@pytest.mark.parametrize("bad", [0, True, "100", 1.0], ids=repr)
+def test_an_int_below_the_minimum_or_not_an_int_is_refused(bad: object) -> None:
+    with pytest.raises(DataFileError, match="n must be an integer of at least 1"):
+        get_int({"n": bad}, "n", HERE, minimum=1)
 
 
 def test_strings_must_be_non_empty() -> None:
     assert get_str({"s": "IDX"}, "s", HERE) == "IDX"
-    for bad in ("", "  ", 5):
-        with pytest.raises(DataFileError, match="s must be a non-empty string"):
-            get_str({"s": bad}, "s", HERE)
+
+
+@pytest.mark.parametrize("bad", ["", "  ", 5], ids=repr)
+def test_an_empty_or_non_string_is_refused(bad: object) -> None:
+    with pytest.raises(DataFileError, match="s must be a non-empty string"):
+        get_str({"s": bad}, "s", HERE)
 
 
 def test_decimals_are_written_as_strings_and_never_negative() -> None:
@@ -119,9 +133,12 @@ def test_decimals_are_written_as_strings_and_never_negative() -> None:
         get_decimal({"r": 0.018}, "r", HERE)
     with pytest.raises(DataFileError, match="r must be a decimal number, got 'abc'"):
         get_decimal({"r": "abc"}, "r", HERE)
-    for bad in ("NaN", "Infinity", "-0.1"):
-        with pytest.raises(DataFileError, match="r must be a finite decimal of at least 0"):
-            get_decimal({"r": bad}, "r", HERE)
+
+
+@pytest.mark.parametrize("bad", ["NaN", "Infinity", "-0.1"])
+def test_a_decimal_that_is_not_finite_or_is_negative_is_refused(bad: str) -> None:
+    with pytest.raises(DataFileError, match="r must be a finite decimal of at least 0"):
+        get_decimal({"r": bad}, "r", HERE)
 
 
 def test_lists_must_be_arrays() -> None:

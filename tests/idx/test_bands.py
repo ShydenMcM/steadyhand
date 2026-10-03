@@ -46,13 +46,18 @@ RESEARCH = [
 ]
 
 
-def test_every_period_matches_the_research() -> None:
+def test_the_periods_start_where_the_research_says() -> None:
     assert table().starts == tuple(start for start, _, _ in RESEARCH)
-    for start, min_price, tiers in RESEARCH:
-        row = table().on(start)
-        assert row.min_price == min_price, start
-        found = [(t.up_to, str(t.up), str(t.down), t.in_rupiah) for t in row.tiers]
-        assert found == tiers, start
+
+
+@pytest.mark.parametrize(
+    ("start", "min_price", "tiers"), RESEARCH, ids=[str(start) for start, _, _ in RESEARCH]
+)
+def test_every_period_matches_the_research(start: date, min_price: int, tiers: list[Tier]) -> None:
+    row = table().on(start)
+    assert row.min_price == min_price
+    found = [(t.up_to, str(t.up), str(t.down), t.in_rupiah) for t in row.tiers]
+    assert found == tiers
 
 
 def test_the_table_is_verified_from_13_march_2020() -> None:
