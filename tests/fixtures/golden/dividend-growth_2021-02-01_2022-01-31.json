@@ -1766,7 +1766,7 @@
   ],
   [
    "data.dividends.history_refused",
-   "TLKM: the data source refused its corporate actions from 2018-01-01 to 2021-01-31, before the run (TLKM.JK: no data from Yahoo for 2018-01-02 to 2021-01-29 after 3 attempts: TLKM.JK: refused by the golden test's script), so its dividend history is incomplete for any strategy that reads it."
+   "TLKM: the data source refused its corporate actions from 2018-01-01 to 2021-01-31, before the run (TLKM.JK: no data from Yahoo for 2018-01-02 to 2021-01-29: TLKM.JK: refused by the golden test's script), so its dividend history is incomplete for any strategy that reads it."
   ]
  ],
  "window": [
