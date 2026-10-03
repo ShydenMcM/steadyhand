@@ -23,6 +23,7 @@ import pytest
 from key_walk import ENGINE, IDX
 from lesson_rules import ADVICE_PHRASES, advice_findings, advice_phrases
 from population import searched, tracked
+from source_tree import UnreadableSourceError, parse
 
 from steadyhand.training import Catalogue
 
@@ -60,10 +61,12 @@ def module_name(path: Path) -> str:
 
 
 def statements(source: str, module: str, *, is_package: bool) -> list[Statement]:
-    """Every import statement in *source*, each module resolved to its absolute name."""
+    """Every import statement in *source*, each module resolved to its absolute name. Errors
+    name the file *module* lives in."""
     package = module if is_package else module.rpartition(".")[0]
+    path = module.replace(".", "/") + ("/__init__" if is_package else "")
     found: list[Statement] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse(source, f"{path}.py")):
         if isinstance(node, ast.Import):
             found += [(alias.name, ()) for alias in node.names]
         elif isinstance(node, ast.ImportFrom):
@@ -98,6 +101,21 @@ def sources() -> list[tuple[str, bool, str]]:
     """Every module of both packages: (dotted name, is a package, source)."""
     paths = sorted([*ENGINE.rglob("*.py"), *IDX.rglob("*.py")])
     return [(module_name(p), p.name == "__init__.py", p.read_text(encoding="utf-8")) for p in paths]
+
+
+@pytest.mark.parametrize(
+    ("module", "is_package", "file"),
+    [
+        ("broken", False, r"broken\.py"),
+        ("steadyhand.broken", True, r"steadyhand/broken/__init__\.py"),
+    ],
+    ids=["module", "package"],
+)
+def test_statements_names_the_file_it_cannot_parse(
+    module: str, file: str, *, is_package: bool
+) -> None:
+    with pytest.raises(UnreadableSourceError, match=rf"^{file}: "):
+        statements("def (:\n", module, is_package=is_package)
 
 
 def test_the_module_names_are_resolved_from_paths() -> None:

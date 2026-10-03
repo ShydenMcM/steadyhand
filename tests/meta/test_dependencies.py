@@ -6,9 +6,12 @@ Spec §4.2. The pyproject check covers what is declared; the import walk covers 
 import ast
 import sys
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
 
+import pytest
 from population import searched, tracked
+from source_tree import UnreadableSourceError, parse
 
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE = ROOT / "packages/steadyhand/src/steadyhand"
@@ -20,9 +23,10 @@ ENGINE_FLOOR = 35
 IDX_FLOOR = 20
 
 
-def top_level_imports(source: str) -> set[str]:
+def top_level_imports(source: str, name: str) -> set[str]:
+    """The top-level modules *source* imports; *name* names the file in errors."""
     names: set[str] = set()
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse(source, name)):
         if isinstance(node, ast.Import):
             names.update(alias.name.split(".")[0] for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module is not None:
@@ -34,9 +38,10 @@ def _is_private(part: str) -> bool:
     return part.startswith("_") and not (part.startswith("__") and part.endswith("__"))
 
 
-def private_engine_imports(source: str) -> list[str]:
+def private_engine_imports(source: str, name: str) -> list[str]:
+    """The private engine modules and names *source* imports; *name* names the file in errors."""
     found: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse(source, name)):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 parts = alias.name.split(".")
@@ -63,7 +68,17 @@ def test_engine_pyproject_declares_no_runtime_dependencies() -> None:
 
 def test_import_detector_sees_absolute_imports_and_skips_relative_ones() -> None:
     source = "import os.path\nfrom decimal import Decimal\nfrom . import money\nimport yaml as y\n"
-    assert top_level_imports(source) == {"os", "decimal", "yaml"}
+    assert top_level_imports(source, "sample.py") == {"os", "decimal", "yaml"}
+
+
+@pytest.mark.parametrize(
+    "reader", [top_level_imports, private_engine_imports], ids=lambda r: r.__name__
+)
+def test_each_import_reader_names_the_file_it_cannot_parse(
+    reader: Callable[[str, str], object],
+) -> None:
+    with pytest.raises(UnreadableSourceError, match=r"^broken\.py: "):
+        reader("def (:\n", "broken.py")
 
 
 def test_engine_imports_only_the_standard_library() -> None:
@@ -71,7 +86,10 @@ def test_engine_imports_only_the_standard_library() -> None:
     # Independent of the walk: the engine's modules as git lists them.
     assert files == tracked(ENGINE, ".py")
     assert len(files) >= ENGINE_FLOOR, f"read {len(files)} engine modules"
-    imported = {path: top_level_imports(path.read_text(encoding="utf-8")) for path in files}
+    imported = {
+        path: top_level_imports(path.read_text(encoding="utf-8"), path.relative_to(ROOT).as_posix())
+        for path in files
+    }
     assert "decimal" in set().union(*imported.values())
     allowed = sys.stdlib_module_names | {"steadyhand"}
     foreign = {
@@ -90,7 +108,7 @@ def test_private_import_detector() -> None:
         "from steadyhand_idx._x import y\n"
         "import os\n"
     )
-    assert private_engine_imports(source) == [
+    assert private_engine_imports(source, "sample.py") == [
         "steadyhand._validate",
         "steadyhand._validate",
         "steadyhand._hidden",
@@ -105,6 +123,10 @@ def test_idx_uses_only_the_engine_public_api() -> None:
     found = {
         path.relative_to(IDX).as_posix(): hits
         for path in files
-        if (hits := private_engine_imports(path.read_text(encoding="utf-8")))
+        if (
+            hits := private_engine_imports(
+                path.read_text(encoding="utf-8"), path.relative_to(ROOT).as_posix()
+            )
+        )
     }
     assert searched(found, of=len(files), what="IDX modules") == {}

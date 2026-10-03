@@ -12,11 +12,9 @@ import ast
 from dataclasses import dataclass
 from pathlib import Path
 
+from source_tree import parse
+
 ALLOW = "# runtime population:"
-
-
-class UnreadableTestFileError(Exception):
-    """A test file the reader cannot parse: refused by name, never skipped."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,11 +88,7 @@ def _tests(
 def read_tests(source: str, name: str) -> Reading:
     """The tests pytest collects from *source* (module level and ``Test*`` classes), and the
     judging loops inside them that carry no ``ALLOW`` comment. *name* names the file in errors."""
-    try:
-        tree = ast.parse(source)
-    except SyntaxError as error:
-        msg = f"{name}: {error}"
-        raise UnreadableTestFileError(msg) from error
+    tree = parse(source, name)
     lines = source.splitlines()
     tests = _tests(tree.body, "")
     looped = tuple(

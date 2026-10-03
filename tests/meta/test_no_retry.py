@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 from population import tracked
+from source_tree import UnreadableSourceError, parse
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGES = ROOT / "packages"
@@ -24,10 +25,6 @@ RAW_WHILE = re.compile(r"^[ \t]*while[ \t(].*:[ \t]*(?:#.*)?$", re.M)
 # Measured on 2026-10-03 after #179: 180 loops read in 57 files. Lower it only by a deliberate
 # edit when the packages shrink.
 LOOPS_READ_FLOOR = 179
-
-
-class UnreadableSourceError(Exception):
-    """A module the reader cannot parse: refused by name, never skipped."""
 
 
 def _stored(nodes: list[ast.stmt]) -> set[str]:
@@ -69,11 +66,7 @@ def _swallows(handler: ast.ExceptHandler) -> bool:
 
 def read(source: str, name: str) -> tuple[int, int, list[str]]:
     """``(for loops, while loops, retries)`` in *source*; *name* names the file in errors."""
-    try:
-        tree = ast.parse(source)
-    except SyntaxError as error:
-        msg = f"{name}: {error}"
-        raise UnreadableSourceError(msg) from error
+    tree = parse(source, name)
     fors = whiles = 0
     retries: list[str] = []
     for loop in ast.walk(tree):
@@ -125,7 +118,7 @@ PLANTED = {
 @pytest.mark.parametrize("form", PLANTED)
 def test_each_form_of_retry_is_found(form: str) -> None:
     source = PLANTED[form]
-    first = next(n for n in ast.walk(ast.parse(source)) if isinstance(n, LOOP))
+    first = next(n for n in ast.walk(parse(source, "planted.py")) if isinstance(n, LOOP))
     assert read(source, "planted.py")[2] == [f"line {first.lineno}"]
 
 

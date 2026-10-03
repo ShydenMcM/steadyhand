@@ -8,6 +8,7 @@ never a finding.
 """
 
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,7 @@ from key_walk import (
     string_literals,
 )
 from population import searched, tracked
+from source_tree import UnreadableSourceError
 
 KEY = r"[a-z]+(\.[a-z_]+)+"
 KNOWN = {
@@ -48,7 +50,12 @@ NOTE_CALLS_FLOOR = 46
 
 def test_the_constant_detector() -> None:
     source = "A = 'x.y'\n_B = 'z.w'\nC: str = 'c.d'\nD = 2\nE = F = 'e.f'\n"
-    assert key_constants(source) == [("A", "x.y"), ("C", "c.d"), ("E", "e.f"), ("F", "e.f")]
+    assert key_constants(source, "sample.py") == [
+        ("A", "x.y"),
+        ("C", "c.d"),
+        ("E", "e.f"),
+        ("F", "e.f"),
+    ]
 
 
 def test_the_note_detector() -> None:
@@ -62,7 +69,7 @@ def test_the_note_detector() -> None:
         "Note()\n"
         "Other('income.y', 't')\n"
     )
-    assert note_keys(source) == [
+    assert note_keys(source, "sample.py") == [
         "KEY",
         "OTHER",
         "NAMED",
@@ -80,26 +87,37 @@ def test_the_note_detector_leaves_out_only_the_reader_it_is_given() -> None:
         "def other(saved):\n"
         "    return Note(str(saved), 't')\n"
     )
-    assert note_keys(source) == [
+    assert note_keys(source, "sample.py") == [
         "line 2: key is not a constant",
         "line 4: key is not a constant",
     ]
-    assert note_keys(source, reader="_read") == ["line 4: key is not a constant"]
+    assert note_keys(source, "sample.py", reader="_read") == ["line 4: key is not a constant"]
 
 
 @pytest.mark.parametrize("path", sorted(SAVED_NOTE_READERS), ids=lambda path: path.name)
 def test_each_saved_note_reader_is_its_modules_one_note_built_from_saved_data(path: Path) -> None:
     names = {name for name, _ in constants_in(NOTE_MODULES)}
     source = path.read_text(encoding="utf-8")
-    assert len([key for key in note_keys(source) if key not in names]) == 1
-    read = note_keys(source, reader=SAVED_NOTE_READERS[path])
+    assert len([key for key in note_keys(source, path.name) if key not in names]) == 1
+    read = note_keys(source, path.name, reader=SAVED_NOTE_READERS[path])
     assert [key for key in read if key not in names] == []
+
+
+@pytest.mark.parametrize(
+    "reader", [key_constants, note_keys, string_literals], ids=lambda r: r.__name__
+)
+def test_each_key_reader_names_the_file_it_cannot_parse(
+    reader: Callable[[str, str], object],
+) -> None:
+    with pytest.raises(UnreadableSourceError, match=r"^broken\.py: "):
+        reader("def (:\n", "broken.py")
 
 
 def test_the_literal_detector() -> None:
     source = '"""Mentions income.x in passing."""\nK = "income.x"\nNote("income.y", "t")\n'
-    assert {"income.x", "income.y"} <= set(string_literals(source))
-    assert "income.x" not in string_literals('"""Mentions income.x in passing."""\n')
+    assert {"income.x", "income.y"} <= set(string_literals(source, "sample.py"))
+    mention = '"""Mentions income.x in passing."""\n'
+    assert "income.x" not in string_literals(mention, "sample.py")
 
 
 def test_every_key_is_a_dotted_lowercase_identifier_named_after_itself() -> None:
@@ -127,7 +145,7 @@ def test_no_key_is_defined_twice() -> None:
     assert sorted(sources) == sorted([*tracked(ENGINE, ".py"), *tracked(IDX, ".py")])
     elsewhere = {
         path.relative_to(ENGINE.parents[2]).as_posix(): sorted(
-            set(values) & set(string_literals(source))
+            set(values) & set(string_literals(source, path.name))
         )
         for path, source in sources.items()
         if path not in KEY_MODULES
@@ -147,12 +165,12 @@ def test_every_note_is_built_from_a_note_key_and_every_note_key_is_used() -> Non
     used = [
         key
         for path, source in sources.items()
-        for key in note_keys(source, reader=SAVED_NOTE_READERS.get(path))
+        for key in note_keys(source, path.name, reader=SAVED_NOTE_READERS.get(path))
     ]
     assert len(names) >= NOTE_KEYS_FLOOR
     assert len(used) >= max(len(names), NOTE_CALLS_FLOOR), f"read {len(used)} Note(...) calls"
     assert any(  # runtime population: the sources the walk found; a disjunction
-        note_keys(source) for path, source in sources.items() if IDX in path.parents
+        note_keys(source, path.name) for path, source in sources.items() if IDX in path.parents
     )
     assert sorted(set(used) - names) == []
     assert sorted(names - set(used)) == []

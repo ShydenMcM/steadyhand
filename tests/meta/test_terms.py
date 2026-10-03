@@ -121,7 +121,10 @@ def test_figures_names_only_fields_that_exist() -> None:
 
 
 def test_every_term_is_a_figures_value_and_every_value_is_a_term() -> None:
-    terms = {value for _, value in key_constants(TERM_MODULE.read_text(encoding="utf-8"))}
+    terms = {
+        value
+        for _, value in key_constants(TERM_MODULE.read_text(encoding="utf-8"), TERM_MODULE.name)
+    }
     assert len(terms) >= TERMS_FLOOR
     assert sorted(terms - set(FIGURES.values())) == []
     assert sorted(set(FIGURES.values()) - terms) == []

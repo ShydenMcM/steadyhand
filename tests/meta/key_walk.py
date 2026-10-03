@@ -7,6 +7,8 @@ and none keeps a list. A comment or a docstring that mentions a key is never rea
 import ast
 from pathlib import Path
 
+from source_tree import parse
+
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE = ROOT / "packages/steadyhand/src/steadyhand"
 IDX = ROOT / "packages/steadyhand-idx/src/steadyhand_idx"
@@ -20,10 +22,11 @@ each reads a saved note back exactly as it was written (M5 spec §6.3). The note
 constant when it was made; read back, its key is data, and it cannot drift."""
 
 
-def key_constants(source: str) -> list[tuple[str, str]]:
-    """Every public module-level constant in *source* whose value is a string: (name, value)."""
+def key_constants(source: str, name: str) -> list[tuple[str, str]]:
+    """Every public module-level constant in *source* whose value is a string: (name, value).
+    *name* names the file in errors."""
     found: list[tuple[str, str]] = []
-    for node in ast.parse(source).body:
+    for node in parse(source, name).body:
         targets: list[ast.expr] = node.targets if isinstance(node, ast.Assign) else []
         if isinstance(node, ast.AnnAssign):
             targets = [node.target]
@@ -37,12 +40,13 @@ def key_constants(source: str) -> list[tuple[str, str]]:
     return found
 
 
-def note_keys(source: str, *, reader: str | None = None) -> list[str]:
+def note_keys(source: str, name: str, *, reader: str | None = None) -> list[str]:
     """How each ``Note(...)`` call in *source* names its key: a constant's name, or a finding.
+    *name* names the file in errors.
 
     Calls inside the function named *reader* are left out: pass it only for the snapshot module.
     """
-    tree = ast.parse(source)
+    tree = parse(source, name)
     skipped = {
         id(inner)
         for node in ast.walk(tree)
@@ -64,12 +68,13 @@ def note_keys(source: str, *, reader: str | None = None) -> list[str]:
     return found
 
 
-def string_literals(source: str) -> list[str]:
+def string_literals(source: str, name: str) -> list[str]:
     """Every string constant anywhere in *source*. A key matches only a string equal to it, so
-    a docstring or a message that mentions a key among other words is not a finding."""
+    a docstring or a message that mentions a key among other words is not a finding. *name*
+    names the file in errors."""
     return [
         node.value
-        for node in ast.walk(ast.parse(source))
+        for node in ast.walk(parse(source, name))
         if isinstance(node, ast.Constant) and isinstance(node.value, str)
     ]
 
@@ -89,7 +94,11 @@ def package_sources() -> dict[Path, str]:
 
 
 def constants_in(paths: tuple[Path, ...]) -> list[tuple[str, str]]:
-    return [pair for path in paths for pair in key_constants(path.read_text(encoding="utf-8"))]
+    return [
+        pair
+        for path in paths
+        for pair in key_constants(path.read_text(encoding="utf-8"), path.name)
+    ]
 
 
 def note_key_values() -> set[str]:
