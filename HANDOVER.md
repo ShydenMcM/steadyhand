@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-10-02 13:35 WIB (2026-10-02 06:35 UTC) (**#160's plan is approved** (pass 8); PR #165 open, stories #166-#168 filed. Merge #165 when green, then Task 1. See Resume steps 2.)
+**Updated:** 2026-10-03 12:30 WIB (2026-10-03 05:30 UTC) (**#160 is executed**: S1-S3 merged into `develop` and deployed; #160 left open for Shyden to rewrite its title and criteria. Next: M7, Resume steps 1.)
 **Local:** `~/Developer/Repos/steadyhand`. `develop` holds the T1 spec and plan, and `main` has no release yet. `t1/training-spec` and `m4/m4b-plan` are merged or superseded and deleted. Start each story's branch from `origin/develop`. Read heads with `git rev-parse`; never retype one.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
@@ -160,10 +160,17 @@
 ## Resume steps
 0. M6 is done. `main` still has no release (M10).
 1. **M7, strategy wave 2** (core design §M6–M9: "Strategy waves 1–4, each with its guides"). It has no spec yet: start with brainstorming, then the spec reviewed to zero, then the plan built by extraction as M6's was (copy the tools from `.superpowers/sdd/2026-09-30-m6-wave1/`, the newest copy). The M3 spec's table puts **bars before the backtest's start** (a price look-back) in M7; M6 built only the dividend look-back.
-2. **#160 recover Yahoo's unreported price factor: PLAN APPROVED (reviewed to zero on pass 8, 2026-10-02).** Plan `docs/superpowers/plans/2026-10-01-price-factor-recovery.md` on `docs/160-plan`, with BBRI's whole recording (`tests/fixtures/yahoo/BBRI.JK_2014-01-06_2026-10-01.json`, SHA-256 `edb94824…`). Spec `docs/superpowers/specs/2026-10-01-price-factor-recovery-design.md`.
-   - **Scope decisions 1-21** in the plan. Shyden chose decision 19 ("close the edge": CTRA's 2014-2016 noise run becomes refused). Decision 21 records that the spec's "days with an unwhole price" counts are evidence days (flat rows with no volume left out). #161 and #162 are on the board as Todo.
-   - **Verified chain** (git-ignored `.superpowers/sdd/2026-10-01-160-plan/`, `stories.txt`): S1 `6e04a09`, S2 `fc092ab`, S3 `1493a52` on `develop` `136765f` + the fixture. Gate green on each (1625, 1650, 1659 at 100% branch coverage), 40 mutations all caught, replay of the plan byte-identical. The plan tools there (`pass_checks.sh`, `amend_chain.py`, `cite_check.py`, `files_check.py`, `blocks_same.py`, `comments_of.py`) are the newest copies: copy them for the next plan.
-   - **Resume:** (a) Task 0 is half done: PR **#165** (`docs/160-plan` into `develop`) is open, CI running on the commit that carries this handover; stories **#166** (S1), **#167** (S2), **#168** (S3) are filed with their criteria and read back on board project 1 as Todo. Next: read `gh pr view 165 --json headRefOid` into a file, confirm the run for that SHA completed with every job `success` by name (`~/.claude/scripts/wait-run.sh <repo> <run> <sha-file>`), merge with `--squash --delete-branch --match-head-commit`, then read `publish-dev` on the develop run by the merge SHA. (b) Then execute Task 1, 2, 3 in order (superpowers:executing-plans or subagent-driven-development), each its own branch and PR. (c) #160's title and criteria still describe crediting a refused day's dividend; rewriting them is Shyden's, so Task 3 leaves #160 open for him.
+2. **#160 recover Yahoo's unreported price factor: DONE 2026-10-03** (plan `docs/superpowers/plans/2026-10-01-price-factor-recovery.md`, spec `docs/superpowers/specs/2026-10-01-price-factor-recovery-design.md`, both merged in PR #165 `833005a`). Every story was applied from the plan by `apply_task.py`, is byte-identical to the verified chain commit, matched the plan's red count and failure kinds, was green at 100% branch coverage, had all its mutations caught on the real commit, and was deployed with `publish-dev` green:
+
+   | Story | Issue | PR | Merge | Red | Gate | Mutations |
+   |---|---|---|---|---|---|---|
+   | S1 price-factor proof | #166 | #169 | 1e99356 | 30 / 1625 | 1625 | M373-M385 13/13 |
+   | S2 source and cache | #167 | #170 | e19f163 | 137 + 7 errors / 1650 | 1650 | M386-M402 17/17 |
+   | S3 notes and lesson | #168 | #171 | 6d29798 | 15 / 1659 | 1659 | M403-M412 10/10 |
+
+   - BBRI's 146 refused days in the golden windows are restored (factor 1.100019, proven by 7,380 prices); #170's body tables every golden figure that moved, with its cause. Each golden run now carries a `data.prices.restored` warning.
+   - **#160 stays open for Shyden:** its title and criteria still describe crediting a refused day's dividend; rewriting them to the spec is his. #161 and #162 are on the board as Todo.
+   - The plan tools in git-ignored `.superpowers/sdd/2026-10-01-160-plan/` (`apply_task.py`, `mutations.py`, `pass_checks.sh`, `amend_chain.py`, `cite_check.py`, `files_check.py`, `blocks_same.py`, `comments_of.py`, `close_story.sh`) are the newest copies: copy them for M7's plan. `mutations.py` takes `<repo> <worktree> <stories file> [ids]`; to run it on real commits, point it at this repo, a `git worktree add --detach` tree, and a stories file of the real story SHAs.
 3. **Session naming:** `.claude/settings.local.json` has a SessionStart hook returning `sessionTitle: "Steadyhand"` (Shyden 2026-10-01). `/color` has no documented automatic route; Shyden types it.
 
 ## Research technique
