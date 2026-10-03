@@ -212,8 +212,10 @@ def test_a_loss_at_the_limit_halts_ordering_for_the_rest_of_the_run() -> None:
         [(9_000, 9_000), (9_000, 9_100), (9_100, 7_900)],
         [(4_000, 4_000), (4_000, 4_050), (4_050, 3_450)],
     )
+    # Asked on the halt day, this strategy would sell both holdings, so an order that leaked
+    # through the halt would show in the queue (#193: buy-and-hold had nothing to buy here).
     state, report = run_day(
-        state, DayInputs(D3, crash, members=MEMBERS), BuyAndHold(), rules(), half()
+        state, DayInputs(D3, crash, members=MEMBERS), _Fixed({}), rules(), half()
     )
     assert report.halt is not None
     assert report.halt.day == D3
