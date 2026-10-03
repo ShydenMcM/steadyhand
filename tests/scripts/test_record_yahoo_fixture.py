@@ -34,7 +34,9 @@ def test_a_recording_reads_back_as_the_history_it_was_given(tmp_path: Path) -> N
     assert history_from_json(path) == history
     text = path.read_text(encoding="utf-8")
     assert '"source": "yfinance ' in text
-    assert any(f'"recorded": "{day.isoformat()}"' in text for day in {before, after})
+    assert any(  # runtime population: the dates the clock read around the recording
+        f'"recorded": "{day.isoformat()}"' in text for day in {before, after}
+    )
 
 
 def test_usage_is_printed_for_the_wrong_arguments(capsys: pytest.CaptureFixture[str]) -> None:

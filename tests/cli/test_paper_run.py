@@ -213,7 +213,7 @@ def test_thirty_one_days_to_run_proceed_with_catch_up(tmp_path: Path) -> None:
 def test_a_paper_account_run_day_by_day_ends_where_the_backtest_does(tmp_path: Path) -> None:
     cli = paper(tmp_path)
     days = trading_days()[:12]
-    for day in days:
+    for day in days:  # runtime population: one journey, each day on the state the last left
         assert run_on(cli, day).code == 0
     expected = golden_backtest(cli, days[-1]).run
     with opened(cli) as store:
@@ -251,7 +251,9 @@ def test_the_public_fetch_gives_each_trading_day_its_inputs_oldest_first(tmp_pat
         ):
             day_inputs(market, START, date(2021, 1, 31))
     assert [found.day for found in inputs] == list(trading_days()[:5])
-    assert all(found.members == universe.members_on(found.day) for found in inputs)
+    assert all(  # runtime population: the inputs the fetch returned
+        found.members == universe.members_on(found.day) for found in inputs
+    )
 
 
 # Refusals (M5 spec §6.5, §8.1).
