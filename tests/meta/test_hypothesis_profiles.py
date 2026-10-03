@@ -10,10 +10,15 @@ from pathlib import Path
 
 import pytest
 from hypothesis import settings
+from population import searched, tracked
 
 TESTS = Path(__file__).resolve().parents[1]
 CONFTEST = TESTS / "conftest.py"
 PROFILES = ("dev", "ci")
+
+# Measured on 2026-10-03 (#178): 94 Python files under tests/ besides conftest.py. Lower it only by
+# a deliberate edit when the suite shrinks.
+FILES_FLOOR = 93
 
 
 def deadline_keywords(source: str) -> list[int]:
@@ -30,6 +35,17 @@ def test_every_profile_has_no_deadline(name: str) -> None:
     assert settings.get_profile(name).deadline is None, f"profile {name!r} keeps a deadline"
 
 
+def test_the_detector_finds_a_deadline_in_a_decorator_and_in_a_function() -> None:
+    source = (
+        "@settings(deadline=500)\n"
+        "def test_x(): ...\n"
+        "def helper():\n"
+        "    return settings(max_examples=5, deadline=None)\n"
+        "settings(max_examples=5)\n"
+    )
+    assert deadline_keywords(source) == [1, 4]
+
+
 def test_the_detector_finds_the_profiles_in_conftest() -> None:
     # Known positive: without it, a detector that matched nothing would pass the next test.
     assert len(deadline_keywords(CONFTEST.read_text())) == len(PROFILES)
@@ -37,10 +53,14 @@ def test_the_detector_finds_the_profiles_in_conftest() -> None:
 
 def test_no_test_sets_its_own_deadline() -> None:
     files = [p for p in sorted(TESTS.rglob("*.py")) if p != CONFTEST]
-    assert len(files) >= 10, f"only {len(files)} test files found under {TESTS}"
+    # Independent of the walk: the test files as git lists them.
+    assert files == [p for p in tracked(TESTS, ".py") if p != CONFTEST]
+    assert len(files) >= FILES_FLOOR, f"read {len(files)} files under {TESTS}"
     offenders = {
         str(p.relative_to(TESTS)): lines
         for p in files
         if (lines := deadline_keywords(p.read_text()))
     }
-    assert offenders == {}, f"set the deadline in conftest.py profiles only: {offenders}"
+    assert searched(offenders, of=len(files), what="test files") == {}, (
+        f"set the deadline in conftest.py profiles only: {offenders}"
+    )

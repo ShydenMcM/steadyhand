@@ -17,6 +17,7 @@ from lesson_rules import (
     unexplained,
     unknown,
 )
+from population import searched, tracked
 
 from steadyhand import DISCLAIMER, STRATEGIES
 from steadyhand.training import Catalogue, Level, explain
@@ -26,6 +27,13 @@ ROOT = Path(__file__).resolve().parents[2]
 FOLDERS = (ENGINE / "training/lessons/en", IDX / "training/lessons/en")
 NOT_NEUTRAL = ("Rp", "IDX", "Indonesia", "steadyhand-idx")
 
+# Measured on 2026-10-03 (#178): 44 lesson files, 24 of them the engine's; 87 keys, each explained
+# once; 61 sources. Lower each only by a deliberate edit when the course shrinks.
+LESSONS_FLOOR = 43
+ENGINE_LESSONS_FLOOR = 23
+KEYS_FLOOR = 86
+SOURCES_FLOOR = 60
+
 
 @pytest.fixture(scope="module")
 def real() -> Catalogue:
@@ -34,7 +42,9 @@ def real() -> Catalogue:
 
 def test_every_lesson_file_is_loaded(real: Catalogue) -> None:
     files = sorted(path for folder in FOLDERS for path in folder.rglob("*.md"))
-    assert len(files) >= 30
+    # Independent of the walk: the lesson files as git lists them.
+    assert files == sorted(path for folder in FOLDERS for path in tracked(folder, ".md"))
+    assert len(files) >= LESSONS_FLOOR
     assert len(real.lessons()) == len(files)
     assert all(  # runtime population: the files the walk found
         any(  # runtime population: a disjunction over the folders, not cases
@@ -46,18 +56,19 @@ def test_every_lesson_file_is_loaded(real: Catalogue) -> None:
 
 def test_every_key_has_a_lesson(real: Catalogue) -> None:
     keys = all_keys()
-    assert len(keys) >= 40
+    assert len(keys) >= KEYS_FLOOR
     assert unexplained(real, keys) == []
 
 
 def test_no_lesson_explains_a_key_that_does_not_exist(real: Catalogue) -> None:
-    assert sum(len(lesson.explains) for lesson in real.lessons()) >= 40
+    assert sum(len(lesson.explains) for lesson in real.lessons()) >= KEYS_FLOOR
     assert unknown(real, all_keys()) == []
 
 
 def test_every_source_is_a_repo_file(real: Catalogue) -> None:
-    assert sum(len(lesson.sources) for lesson in real.lessons()) >= 20
-    assert missing_sources(real, ROOT) == []
+    sources = sum(len(lesson.sources) for lesson in real.lessons())
+    assert sources >= SOURCES_FLOOR
+    assert searched(missing_sources(real, ROOT), of=sources, what="sources") == []
 
 
 def test_the_course_opens_with_the_disclaimer(real: Catalogue) -> None:
@@ -65,19 +76,22 @@ def test_the_course_opens_with_the_disclaimer(real: Catalogue) -> None:
 
 
 def test_no_lesson_carries_advice_phrasing(real: Catalogue) -> None:
-    assert advice_findings(real) == []
+    lessons = real.lessons()
+    assert len(lessons) >= LESSONS_FLOOR
+    # Each lesson's title, summary and body are read.
+    assert searched(advice_findings(real), of=3 * len(lessons), what="lesson texts") == []
 
 
 def test_the_engine_lessons_are_market_neutral(real: Catalogue) -> None:
     engine = [lesson for lesson in real.lessons() if Path(lesson.origin).is_relative_to(FOLDERS[0])]
-    assert len(engine) >= 10
+    assert len(engine) >= ENGINE_LESSONS_FLOOR
     found = [
         f"{lesson.id}: {word}"
         for lesson in engine
         for word in NOT_NEUTRAL
         if word in f"{lesson.title} {lesson.summary} {lesson.body}"
     ]
-    assert found == []
+    assert searched(found, of=len(engine), what="engine lessons") == []
 
 
 def test_every_module_has_lessons(real: Catalogue) -> None:

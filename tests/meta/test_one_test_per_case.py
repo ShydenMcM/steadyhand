@@ -12,14 +12,15 @@ from pathlib import Path
 
 import pytest
 from looped_cases import ALLOW, LoopedCase, UnreadableTestFileError, read_file, read_tests
+from population import searched, tracked
 
 ROOT = Path(__file__).resolve().parents[2]
 TESTS = ROOT / "tests"
 RAW_TEST = re.compile(r"^[ \t]*(?:async[ \t]+)?def[ \t]+test", re.MULTILINE)
 
-# Measured on 2026-10-03 after #177: 1,113 tests read in 86 files. Lower it only by a deliberate
+# Measured on 2026-10-03 after #178: 1,123 tests read in 87 files. Lower it only by a deliberate
 # edit when the suite shrinks.
-TESTS_READ_FLOOR = 1_112
+TESTS_READ_FLOOR = 1_122
 
 PLANTED = {
     "for over a constant": (
@@ -68,6 +69,18 @@ PLANTED = {
     "a method of a Test class": (
         "class TestX:\n    def test_y(self):\n        for c in (1, 2):\n            assert c\n",
         LoopedCase("TestX::test_y", 3, "for"),
+    ),
+    "for inside a with": (
+        "def test_x(tmp):\n    with tmp:\n        for c in (1, 2):\n            assert c\n",
+        LoopedCase("test_x", 3, "for"),
+    ),
+    "for inside an if": (
+        "def test_x(flag):\n    if flag:\n        for c in (1, 2):\n            assert c\n",
+        LoopedCase("test_x", 3, "for"),
+    ),
+    "all inside a with": (
+        "def test_x(tmp):\n    with tmp:\n        assert all(c for c in (1, 2))\n",
+        LoopedCase("test_x", 3, "all"),
     ),
     "an async test": (
         "async def test_x():\n    for c in (1, 2):\n        assert c\n",
@@ -155,6 +168,8 @@ def rel(path: Path) -> str:
 def test_every_test_in_the_suite_is_read() -> None:
     names = {rel(path) for path in FILES}
     assert {"tests/meta/test_one_test_per_case.py", "tests/engine/test_backtest.py"} <= names
+    # Independent of the walk: the test modules as git lists them (#178).
+    assert names == {rel(path) for path in tracked(TESTS, ".py") if path.name.startswith("test_")}
     total = sum(len(read_file(path).tests) for path in FILES)
     assert total >= TESTS_READ_FLOOR, f"read {total} tests in {len(FILES)} files"
 
@@ -169,5 +184,8 @@ def test_the_file_is_read_as_every_test_its_text_defines(path: Path) -> None:
 
 @pytest.mark.parametrize("path", FILES, ids=rel)
 def test_the_file_loops_no_case(path: Path) -> None:
-    found = Counter(case.test for case in read_file(path).looped)
-    assert found == {}, "a fixed population is parametrized, not looped (#173)"
+    reading = read_file(path)
+    found = Counter(case.test for case in reading.looped)
+    assert searched(found, of=len(reading.tests), what="tests") == {}, (
+        "a fixed population is parametrized, not looped (#173)"
+    )

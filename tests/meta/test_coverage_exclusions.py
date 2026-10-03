@@ -8,13 +8,24 @@ the 100%, so this guard fails on it. It reads comments on purpose: the pragma is
 import tomllib
 from pathlib import Path
 
+from population import tracked
+
 ROOT = Path(__file__).resolve().parents[2]
 PRAGMA = "pragma: no cover"
+
+# Measured on 2026-10-03 (#178): 57 Python files under packages/. Lower it only by a deliberate edit
+# when the packages shrink.
+FILES_FLOOR = 56
+
+
+def python_files(root: Path) -> list[Path]:
+    """Every Python file under *root*, found on disk."""
+    return sorted(root.rglob("*.py"))
 
 
 def pragma_lines(root: Path) -> list[str]:
     found: list[str] = []
-    for path in sorted(root.rglob("*.py")):
+    for path in python_files(root):
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             if PRAGMA in line:
                 found.append(f"{path.relative_to(root).as_posix()}:{number}: {line.strip()}")
@@ -27,6 +38,10 @@ def test_the_detector_sees_a_pragma(tmp_path: Path) -> None:
 
 
 def test_only_the_yahoo_download_is_excluded() -> None:
+    files = python_files(ROOT / "packages")
+    # Independent of the walk: the packages' Python files as git lists them.
+    assert files == tracked(ROOT / "packages", ".py")
+    assert len(files) >= FILES_FLOOR, f"read {len(files)} files"
     found = pragma_lines(ROOT / "packages")
     assert len(found) == 1, found
     assert found[0].startswith("steadyhand-idx/src/steadyhand_idx/yahoo.py:")

@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 
 import pytest
+from population import searched, tracked
 
 from steadyhand.strategies import STRATEGIES, Setting, Strategy
 
@@ -138,7 +139,10 @@ def test_every_registered_strategy_has_a_complete_guide() -> None:
 def test_every_guide_is_for_a_registered_strategy() -> None:
     guides = sorted(path.stem for path in GUIDES.glob("*.md"))
     assert "buy-and-hold" in guides
-    assert [name for name in guides if name not in STRATEGIES] == []
+    # Independent of the walk: the guides as git lists them.
+    assert guides == [path.stem for path in tracked(GUIDES, ".md")]
+    stray = [name for name in guides if name not in STRATEGIES]
+    assert searched(stray, of=len(guides), what="guides") == []
 
 
 @pytest.mark.parametrize("name", STRATEGIES)
