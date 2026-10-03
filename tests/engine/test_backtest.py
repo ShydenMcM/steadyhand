@@ -40,6 +40,7 @@ from steadyhand.strategies import BuyAndHold, Decision, Memory, Strategy
 from steadyhand.types import Bar, CashDividend, CorporateAction, Instrument
 from steadyhand.view import MarketView, PastDividend, PortfolioView
 from steadyhand_idx import UNIVERSE_SURVIVORSHIP_GAP, IdxMarketRules
+from steadyhand_idx.notes import DATA_PRICES_RESTORED
 
 BBCA = Instrument("BBCA", "IDX", IDR)
 BBRI = Instrument("BBRI", "IDX", IDR)
@@ -59,6 +60,7 @@ DAYS = (
 )
 START, END = DAYS[0], DAYS[-1]
 GAP = Note(UNIVERSE_SURVIVORSHIP_GAP, "a gap")
+RESTORED = Note(DATA_PRICES_RESTORED, "restored")
 
 
 @cache
@@ -98,12 +100,15 @@ class _Source:
         actions: Sequence[CorporateAction] = (),
         refused: Mapping[Instrument, Sequence[date]] | None = None,
         broken: frozenset[Instrument] = frozenset(),
+        notes: Sequence[Note] = (),
     ) -> None:
         self._bars = bars
         self._actions = actions
         self._refused = {} if refused is None else refused
         self._broken = broken
+        self._notes = notes
         self.requests: list[tuple[str, str, date, date]] = []
+        self.noted: list[tuple[tuple[str, ...], date, date]] = []
 
     def bars(self, instrument: Instrument, start: date, end: date) -> Sequence[Bar]:
         self._check("bars", instrument, start, end)
@@ -116,6 +121,12 @@ class _Source:
         return [
             a for a in self._actions if a.instrument == instrument and start <= a.ex_date <= end
         ]
+
+    def data_notes(
+        self, instruments: Sequence[Instrument], start: date, end: date
+    ) -> Sequence[Note]:
+        self.noted.append((tuple(i.symbol for i in instruments), start, end))
+        return self._notes
 
     def _check(self, kind: str, instrument: Instrument, start: date, end: date) -> None:
         self.requests.append((kind, instrument.symbol, start, end))
@@ -796,6 +807,24 @@ def test_a_source_that_refuses_the_actions_too_leaves_that_history_incomplete(
     assert reader.seen[START][1:] == (False, True)
     assert reader.seen[END][0][-1] == PastDividend(date(2025, 7, 2), Decimal(25))
     assert [warning.key for warning in result.warnings] == [DATA_BAR_REFUSED]
+
+
+def test_the_source_s_data_notes_cover_the_window_and_follow_the_universe_s() -> None:
+    source = _Source(calm(), notes=[RESTORED])
+    result = run(source, _Universe([(START, frozenset({BBCA, BBRI}))], warnings=[GAP]))
+    assert source.noted == [(("BBCA", "BBRI"), START, END)]
+    assert result.warnings == (GAP, RESTORED)
+
+
+def test_the_source_s_data_notes_reach_back_over_the_look_back() -> None:
+    source = _Source(calm(), LOOKED_BACK, notes=[RESTORED])
+    result = run(source, chosen=looking_back())
+    assert source.noted == [(("BBCA", "BBRI"), SINCE, END)]
+    assert result.warnings == (RESTORED,)
+    compared = _Source(calm(), LOOKED_BACK, notes=[RESTORED])
+    comparison = compare([_Reader()], market(compared), START, END, looking_back(1))
+    assert compared.noted == [(("BBCA", "BBRI"), date(2024, 1, 1), END)]
+    assert comparison.warnings == (RESTORED,)
 
 
 def test_compare_fetches_the_look_back_once_for_every_strategy() -> None:

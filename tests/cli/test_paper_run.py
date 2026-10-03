@@ -38,6 +38,7 @@ from steadyhand import (
     Instrument,
     Market,
     Money,
+    Note,
     day_inputs,
 )
 from steadyhand_idx.cli import SourceFactory
@@ -318,6 +319,11 @@ class Edited:
     ) -> Sequence[CorporateAction]:
         return self.inner.corporate_actions(instrument, start, end)
 
+    def data_notes(
+        self, instruments: Sequence[Instrument], start: date, end: date
+    ) -> Sequence[Note]:
+        return ()
+
 
 def edited(edit: Callable[[Bar], Bar | None]) -> SourceFactory:
     @contextmanager
@@ -528,6 +534,11 @@ class Interrupted:
         self, instrument: Instrument, start: date, end: date
     ) -> Sequence[CorporateAction]:
         return self.inner.corporate_actions(instrument, start, end)
+
+    def data_notes(
+        self, instruments: Sequence[Instrument], start: date, end: date
+    ) -> Sequence[Note]:
+        return ()
 
 
 def test_days_another_run_saves_meanwhile_are_left_to_it(tmp_path: Path) -> None:

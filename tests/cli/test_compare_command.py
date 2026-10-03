@@ -6,7 +6,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from cli_world import GROWTH_CONFIG, Cli, market_cli
+from cli_world import GROWTH_CONFIG, RESTORED, Cli, market_cli
 from record_golden import GOLDEN, run
 
 from steadyhand import DISCLAIMER
@@ -83,7 +83,8 @@ def test_the_table_is_a_row_per_strategy_then_the_warnings(market: Cli) -> None:
     assert result.out.startswith(
         "Comparison, 2021-02-01 to 2022-01-31, 248 trading days\n\nStrategy"
     )
-    assert "Warnings:" not in result.out  # BBRI's prices are restored (#160): none is refused
+    # BBRI's prices are restored (#160): that is the one warning, and none is refused.
+    assert f"\n\nWarnings:\n- {RESTORED}\n\n" in result.out
     assert "\n\nWhat this means\n• Prices, and what your portfolio is worth: " in result.out
     assert result.out.endswith(f"\n\n{DISCLAIMER}\n")
 

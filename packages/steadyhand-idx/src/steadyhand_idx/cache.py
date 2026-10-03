@@ -39,6 +39,7 @@ from steadyhand import (
     DataSource,
     Instrument,
     Money,
+    Note,
     OtherAction,
     Split,
     UnsupportedDateError,
@@ -468,6 +469,18 @@ class CachedDataSource:
         """The restorations stored with the ranges read so far that overlap *start* to *end*:
         a cache read, never a fetch (#160 spec §6)."""
         return self._cache.restorations(instrument, start, end)
+
+    def data_notes(
+        self, instruments: Sequence[Instrument], start: date, end: date
+    ) -> tuple[Note, ...]:
+        """One note per restoration stored for *instruments* overlapping the range, and per run
+        the upstream inferred for today's bar, which is never stored; each note once."""
+        stored = (
+            restoration.note
+            for instrument in instruments
+            for restoration in self._cache.restorations(instrument, start, end)
+        )
+        return tuple(dict.fromkeys((*stored, *self._upstream.data_notes(instruments, start, end))))
 
     def missing(self, instrument: Instrument, start: date, end: date) -> list[tuple[date, date]]:
         """The parts of *start* to *end* not yet stored, trimmed to trading days.

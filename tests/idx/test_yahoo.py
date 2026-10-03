@@ -419,6 +419,18 @@ def test_restorations_are_the_proven_runs_overlapping_the_range() -> None:
     assert source.restorations(BBRI, date(2021, 9, 8), date(2021, 9, 30)) == ()
 
 
+def test_data_notes_name_the_runs_already_read_and_never_ask_yahoo() -> None:
+    source, replay = restoring()
+    september = (date(2021, 9, 1), date(2021, 9, 30))
+    assert source.data_notes([BBRI, BBCA], *september) == ()
+    source.bars(BBRI, *september)
+    calls = list(replay.calls)
+    run = Restoration(BBRI, date(2017, 1, 31), date(2021, 9, 7), Decimal("1.100019"), 4_412)
+    assert source.data_notes([BBCA, BBRI], *september) == (run.note,)
+    assert source.data_notes([BBRI], date(2021, 9, 8), date(2021, 9, 30)) == ()
+    assert replay.calls == calls
+
+
 def unwhole(day: date, price: str, *, volume: int = 100, dividend: str = "0") -> YahooRow:
     return YahooRow(day, *(Decimal(price),) * 4, volume=volume, dividend=Decimal(dividend))
 

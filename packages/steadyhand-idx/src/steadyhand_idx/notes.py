@@ -11,6 +11,10 @@ from __future__ import annotations
 UNIVERSE_SURVIVORSHIP_GAP = "universe.survivorship.gap"
 """The LQ45 record has no list between two dates more than one review apart."""
 
+DATA_PRICES_RESTORED = "data.prices.restored"
+"""Yahoo's prices over a span carry an adjustment it does not report, or a rounding error, and
+the source restored them to the IDX tick grid (#160 spec §7)."""
+
 PAPER_ACCOUNT_OPENED = "paper.account.opened"
 """The first ``paper run`` opened the paper account with the starting cash and a strategy."""
 

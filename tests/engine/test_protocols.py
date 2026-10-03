@@ -71,6 +71,11 @@ class _MinimalSource:
     ) -> Sequence[CorporateAction]:
         return ()
 
+    def data_notes(
+        self, instruments: Sequence[Instrument], start: date, end: date
+    ) -> Sequence[Note]:
+        return ()
+
 
 class _MinimalBroker:
     def submit(self, orders: Sequence[Order], on: date) -> Sequence[OrderAck]:
@@ -112,6 +117,11 @@ def test_a_minimal_class_satisfies_data_source() -> None:
     source: DataSource = _MinimalSource()
     assert isinstance(source, DataSource)
     assert not isinstance(_MinimalBroker(), DataSource)
+
+
+def test_data_notes_is_required_of_a_data_source() -> None:
+    members = {name: value for name, value in vars(_MinimalSource).items() if name != "data_notes"}
+    assert not isinstance(type("Partial", (), members)(), DataSource)
 
 
 def test_a_minimal_class_satisfies_broker() -> None:

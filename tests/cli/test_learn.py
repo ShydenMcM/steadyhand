@@ -3,6 +3,7 @@
 from cli_world import Cli
 
 from steadyhand import DISCLAIMER
+from steadyhand_idx.notes import DATA_PRICES_RESTORED
 from steadyhand_idx.training import catalogue
 
 
@@ -26,6 +27,19 @@ def test_learn_prints_one_lesson(cli: Cli) -> None:
     assert result.code == 0, result.err
     assert result.out.startswith(f"{run_rate.title}\n\n{run_rate.body.strip()}\n\nSee also: ")
     assert result.out.endswith(f"\n\n{DISCLAIMER}\n")
+
+
+def test_the_restored_prices_lesson_explains_its_note_and_prints(cli: Cli) -> None:
+    lesson = catalogue().for_key(DATA_PRICES_RESTORED)
+    assert (lesson.id, lesson.module, lesson.position) == (
+        "idx.restored_prices",
+        "how-idx-works",
+        8,
+    )
+    assert lesson.see_also == ("backtest.data_gaps", "idx.ticks")
+    result = cli("learn", lesson.id)
+    assert result.code == 0, result.err
+    assert result.out.startswith(f"{lesson.title}\n\n{lesson.body.strip()}\n\nSee also: ")
 
 
 def test_an_unknown_lesson_exits_2_naming_the_closest(cli: Cli) -> None:

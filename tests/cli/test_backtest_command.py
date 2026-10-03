@@ -12,6 +12,7 @@ from cli_world import (
     GOLDEN_CONFIG,
     GROWTH_CONFIG,
     PLACEHOLDERS,
+    RESTORED,
     Cli,
     golden_backtest,
     market_cli,
@@ -29,6 +30,7 @@ from steadyhand import (
     backtest,
 )
 from steadyhand_idx import BarCache, CachedDataSource, IdxMarketRules
+from steadyhand_idx.notes import DATA_PRICES_RESTORED
 from steadyhand_idx.training import catalogue
 
 WINDOW = ("--from", "2021-02-01", "--to", "2022-01-31")
@@ -114,12 +116,16 @@ def test_the_summary_then_the_warnings_the_files_and_the_explanations(market: Cl
     assert result.out.startswith(
         "Backtest: buy-and-hold, 2021-02-01 to 2022-01-31, 248 trading days\n\n"
     )
-    # BBRI's prices up to 2021-09-07 are restored (#160), so nothing in the window is refused.
-    assert "Warnings:" not in result.out
+    # BBRI's prices up to 2021-09-07 are restored (#160): the one warning says so, and nothing
+    # in the window is refused.
+    assert f"\n\nWarnings:\n- {RESTORED}\n\n" in result.out
     assert f"\n\nWrote {reports / f'{STEM}.md'}\nWrote {reports / f'{STEM}.csv'}\n\n" in result.out
     assert "\n\nWhat this means\n• Prices, and what your portfolio is worth: " in result.out
     refused = catalogue().for_key(DATA_BAR_REFUSED).id
     assert f"More: steadyhand-idx learn {refused}\n" not in result.out
+    restored = catalogue().for_key(DATA_PRICES_RESTORED).id
+    assert restored == "idx.restored_prices"
+    assert f"More: steadyhand-idx learn {restored}\n" in result.out
     assert result.out.endswith(f"\n\n{DISCLAIMER}\n")
 
 
@@ -136,7 +142,7 @@ def test_the_markdown_file_holds_the_summary_and_the_disclaimer(market: Cli) -> 
         "|---|---:|",
     ]
     assert lines[6] == "| Final value | IDR 96,825,198 |"
-    assert "## Warnings" not in text
+    assert f"\n## Warnings\n\n- {RESTORED}\n" in text
     assert "## Day warnings" not in text
     assert text.endswith(f"\n\n---\n\n{DISCLAIMER}\n")
 

@@ -18,8 +18,9 @@ from datetime import date
 from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Context, Decimal
 from functools import cache
 
-from steadyhand import IDR, Instrument, Money
+from steadyhand import IDR, Instrument, Money, Note
 from steadyhand_idx._datafile import Dated, load_shipped
+from steadyhand_idx.notes import DATA_PRICES_RESTORED
 from steadyhand_idx.ticks import TICKS_FILE, TickRow, TickTier, parse_ticks
 
 GRID_START = date(2014, 1, 6)
@@ -103,6 +104,29 @@ class Restoration:
     last: date
     factor: Decimal
     prices: int
+
+    @property
+    def noise(self) -> bool:
+        """Whether the factor rounds to 1.000000: a split reversal's rounding error (§4.5)."""
+        return is_noise(self.factor)
+
+    @property
+    def note(self) -> Note:
+        """What a backtest's warnings say about this run (spec §7)."""
+        span = f"{self.instrument.symbol}: Yahoo's prices from {self.first} to {self.last}"
+        if self.noise:
+            return Note(
+                DATA_PRICES_RESTORED,
+                f"{span} miss whole rupiah by a rounding error after its reported splits are "
+                "reversed, so steadyhand put each one on the IDX tick grid, proven by "
+                f"{self.prices:,} prices that fit it with no other factor.",
+            )
+        return Note(
+            DATA_PRICES_RESTORED,
+            f"{span} carry an adjustment Yahoo does not report, so steadyhand restored them: "
+            f"every price and dividend in that span is multiplied by {self.factor}, proven by "
+            f"{self.prices:,} prices that fit the IDX tick grid at that factor and at no other.",
+        )
 
 
 class Grid:
