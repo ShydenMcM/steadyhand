@@ -93,7 +93,9 @@ def test_every_snapshot_in_a_tree_of_bookings_keeps_its_own_ledger(
 ) -> None:
     snapshots = [Portfolio.empty(IDR)]
     expected: list[tuple[CashMovement, ...]] = [()]
-    for number, (kind, pick, amount) in enumerate(steps):
+    for number, (kind, pick, amount) in enumerate(  # runtime population: a drawn journey
+        steps
+    ):
         index = pick % len(snapshots)
         parent = snapshots[index]
         if kind == "read":
@@ -109,7 +111,9 @@ def test_every_snapshot_in_a_tree_of_bookings_keeps_its_own_ledger(
             movement = CashMovement(on, MovementKind.TAX, rp(-amount), on)
         snapshots.append(child)
         expected.append((*expected[index], movement))
-    for snapshot, ledger in zip(snapshots, expected, strict=True):
+    for snapshot, ledger in zip(  # runtime population: the snapshots the journey made
+        snapshots, expected, strict=True
+    ):
         assert snapshot.ledger == ledger
         assert snapshot.last_day == (ledger[-1].day if ledger else None)
         assert snapshot.cash_balance() == sum((m.amount for m in ledger), start=rp(0))

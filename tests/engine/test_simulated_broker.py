@@ -281,10 +281,12 @@ def test_the_defaults_are_the_specs() -> None:
     assert FillSettings() == FillSettings(Decimal("0.001"), Decimal("0.10"))
 
 
-@given(
-    cash=st.integers(0, 30_000_000),
-    held=st.integers(0, 40),
-    orders=st.lists(
+# A cash balance, a number of lots of each stock held, the orders placed, and each stock's open
+# and volume: one draw serves both tests below.
+DRAW = {
+    "cash": st.integers(0, 30_000_000),
+    "held": st.integers(0, 40),
+    "orders": st.lists(
         st.tuples(
             st.sampled_from([Side.BUY, Side.SELL]),
             st.sampled_from([BBCA, BBRI]),
@@ -292,16 +294,19 @@ def test_the_defaults_are_the_specs() -> None:
         ),
         max_size=6,
     ),
-    opens=st.tuples(st.integers(7_700, 10_700), st.integers(3_450, 4_950)),
-    volumes=st.tuples(st.integers(0, 50_000), st.integers(0, 50_000)),
-)
-def test_fills_keep_cash_whole_lots_ticks_and_bands(
+    "opens": st.tuples(st.integers(7_700, 10_700), st.integers(3_450, 4_950)),
+    "volumes": st.tuples(st.integers(0, 50_000), st.integers(0, 50_000)),
+}
+
+
+def drawn(
     cash: int,
     held: int,
     orders: list[tuple[Side, Instrument, int]],
     opens: tuple[int, int],
     volumes: tuple[int, int],
-) -> None:
+) -> tuple[Portfolio, list[Order], FillResult]:
+    """The book, the orders a sizer could place from *orders*, and the broker's fill of them."""
     book = portfolio(cash, {BBCA: held * 100, BBRI: held * 100} if held else {})
     selling = dict.fromkeys((BBCA, BBRI), 0)
     placed = []
@@ -312,9 +317,32 @@ def test_fills_keep_cash_whole_lots_ticks_and_bands(
             selling[stock] += lots
         placed.append(Order(stock, side, lots * 100, YESTERDAY))
     bars = [bar(BBCA, opens[0], volumes[0]), bar(BBRI, opens[1], volumes[1])]
-    result = run(book, *placed, bars=bars)
-    for probe in (TODAY, date(2025, 6, 4), SETTLES):
-        assert result.portfolio.settled_cash(probe).amount >= 0
+    return book, placed, run(book, *placed, bars=bars)
+
+
+@pytest.mark.parametrize("probe", [TODAY, date(2025, 6, 4), SETTLES], ids=str)
+@given(**DRAW)
+def test_the_settled_cash_is_never_negative_from_the_trade_to_its_settlement(
+    probe: date,
+    cash: int,
+    held: int,
+    orders: list[tuple[Side, Instrument, int]],
+    opens: tuple[int, int],
+    volumes: tuple[int, int],
+) -> None:
+    _, _, result = drawn(cash, held, orders, opens, volumes)
+    assert result.portfolio.settled_cash(probe).amount >= 0
+
+
+@given(**DRAW)
+def test_fills_keep_cash_whole_lots_ticks_and_bands(
+    cash: int,
+    held: int,
+    orders: list[tuple[Side, Instrument, int]],
+    opens: tuple[int, int],
+    volumes: tuple[int, int],
+) -> None:
+    book, placed, result = drawn(cash, held, orders, opens, volumes)
     movements = result.portfolio.ledger[len(book.ledger) :]
     expected = [
         -(f.gross + f.costs.total) if f.order.side is Side.BUY else f.gross - f.costs.total
@@ -326,7 +354,7 @@ def test_fills_keep_cash_whole_lots_ticks_and_bands(
         expected.append(-daily)
     assert [m.amount for m in movements] == expected
     assert result.daily_cost == daily
-    for f in result.fills:
+    for f in result.fills:  # runtime population: the fills of the drawn orders
         assert f.quantity % 100 == 0
         assert rules().round_to_tick(f.order.instrument, f.price, f.order.side, TODAY) == f.price
         low, high = rules().price_band(f.order.instrument, REFERENCES[f.order.instrument], TODAY)

@@ -17,63 +17,14 @@ ROOT = Path(__file__).resolve().parents[2]
 TESTS = ROOT / "tests"
 RAW_TEST = re.compile(r"^[ \t]*(?:async[ \t]+)?def[ \t]+test", re.MULTILINE)
 
-# Measured on 2026-10-03: 1,083 tests read in 85 files. Lower it only by a deliberate edit
-# when the suite shrinks.
-TESTS_READ_FLOOR = 1_082
+# Measured on 2026-10-03 after #175: 1,101 tests read in 86 files. Lower it only by a deliberate
+# edit when the suite shrinks.
+TESTS_READ_FLOOR = 1_100
 
 # The looped cases found on 2026-10-03 (88 in 66 tests), by file and test: each conversion
 # removes its entries, and an entry that no longer loops fails until it is removed, so this list
 # can only shrink.
 BURN_DOWN: dict[str, dict[str, int]] = {
-    "tests/engine/test_backtest.py": {
-        "test_a_dividend_on_a_refused_day_reaches_the_history_when_read_without_prices": 1,
-        "test_a_halt_lasts_to_the_end_of_the_run_and_is_recorded": 2,
-        "test_both_runs_share_the_settings": 1,
-        "test_compare_gives_every_run_its_income_report_when_there_is_a_goal": 1,
-        "test_day_inputs_give_every_day_the_look_back": 1,
-        "test_each_run_carries_its_metrics": 1,
-        "test_every_stock_the_universe_holds_on_any_day_is_fetched_for_the_whole_window": 1,
-        "test_exclusions_and_corporate_actions_reach_their_days": 1,
-        "test_refused_days_are_fetched_around_and_the_stock_sits_them_out": 3,
-    },
-    "tests/engine/test_buy_and_hold.py": {
-        "test_it_never_sells_and_buys_only_its_set": 1,
-    },
-    "tests/engine/test_dividend_growth.py": {
-        "test_it_reviews_on_no_day_but_the_first_and_each_new_years_first": 1,
-    },
-    "tests/engine/test_engine.py": {
-        "test_every_day_keeps_cash_whole_and_the_value_adding_up": 2,
-    },
-    "tests/engine/test_income_projection.py": {
-        "test_a_larger_contribution_never_takes_longer": 1,
-        "test_nothing_to_project_from_cannot_be_projected": 1,
-    },
-    "tests/engine/test_ledger_booking.py": {
-        "test_every_snapshot_in_a_tree_of_bookings_keeps_its_own_ledger": 2,
-    },
-    "tests/engine/test_monthly_savings.py": {
-        "test_the_reserve_for_the_instalments_still_due_is_never_spent_before_its_month": 3,
-    },
-    "tests/engine/test_portfolio_properties.py": {
-        "test_cash_and_share_invariants": 2,
-        "test_the_kept_totals_agree_with_the_whole_ledger_on_every_day": 2,
-    },
-    "tests/engine/test_registry.py": {
-        "test_every_registered_strategy_has_a_summary_and_a_turnover": 1,
-    },
-    "tests/engine/test_simulated_broker.py": {
-        "test_fills_keep_cash_whole_lots_ticks_and_bands": 2,
-    },
-    "tests/engine/test_sizing.py": {
-        "test_orders_are_whole_lots_that_never_overshoot_the_target": 1,
-    },
-    "tests/engine/test_snapshot.py": {
-        "test_a_restored_portfolio_behaves_as_the_one_it_was_saved_from": 1,
-    },
-    "tests/engine/test_view.py": {
-        "test_nothing_after_today_is_returned_and_each_dividend_is_restated_by_its_own_splits": 3,
-    },
     "tests/golden/test_golden_backtest.py": {
         "test_the_income_report_agrees_with_what_the_engine_paid": 1,
         "test_the_recordings_reach_five_years_before_the_run_ends": 1,

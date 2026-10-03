@@ -57,7 +57,9 @@ def test_cash_and_share_invariants(steps: list[Step]) -> None:
     today = D0
     expected_cash = 0
     expected_shares = dict.fromkeys(STOCKS, 0)
-    for kind, forward, stock_index, shares, price, fee in steps:
+    for kind, forward, stock_index, shares, price, fee in (  # runtime population: a drawn journey
+        steps
+    ):
         today += timedelta(days=forward)
         stock = STOCKS[stock_index]
         with suppress(InsufficientCashError, InsufficientSharesError, NegativeProceedsError):
@@ -76,7 +78,11 @@ def test_cash_and_share_invariants(steps: list[Step]) -> None:
                 expected_cash += shares * price - fee
                 expected_shares[stock] -= shares
         assert portfolio.cash_balance() == rp(expected_cash)
-        for probe in (today, today + timedelta(days=1), today + timedelta(days=2)):
+        for probe in (  # runtime population: the day the journey reached, and the two after
+            today,
+            today + timedelta(days=1),
+            today + timedelta(days=2),
+        ):
             assert portfolio.settled_cash(probe).amount >= 0
         balance = portfolio.settled_cash(today) + portfolio.unsettled_cash(today)
         assert balance == portfolio.cash_balance()
@@ -134,7 +140,9 @@ LATER_STEP = st.tuples(
 def test_the_kept_totals_agree_with_the_whole_ledger_on_every_day(steps: list[Step]) -> None:
     portfolio = Portfolio.empty(IDR)
     today = D0
-    for kind, forward, stock_index, shares, price, fee in steps:
+    for kind, forward, stock_index, shares, price, fee in (  # runtime population: a drawn journey
+        steps
+    ):
         today += timedelta(days=forward)
         stock = STOCKS[stock_index]
         with suppress(InsufficientCashError, InsufficientSharesError, NegativeProceedsError):
@@ -152,7 +160,7 @@ def test_the_kept_totals_agree_with_the_whole_ledger_on_every_day(steps: list[St
                 fill = make_fill(side, stock, shares, price, fee, today)
                 portfolio = portfolio.apply_fill(fill, today + timedelta(days=2))
         assert portfolio.cash_balance() == sum((m.amount for m in portfolio.ledger), start=rp(0))
-        for offset in range(-4, 4):
+        for offset in range(-4, 4):  # runtime population: the days around the day reached
             probe = today + timedelta(days=offset)
             assert portfolio.settled_cash(probe) == _settled(portfolio, probe)
             assert portfolio.spendable_cash(probe) == _spendable(portfolio, probe)

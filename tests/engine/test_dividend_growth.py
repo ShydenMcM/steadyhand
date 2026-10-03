@@ -420,7 +420,7 @@ def test_it_reviews_on_no_day_but_the_first_and_each_new_years_first(days: list[
     held = portfolio(0, {ASII: 500, TLKM: 500})
     memory: dict[str, str] = {}
     last_year = None
-    for day in days:
+    for day in days:  # runtime population: one journey, each day on the memory the last left
         decision = strategy.decide(view(day, {ASII, TLKM}, actions), held, memory)
         reviewed = TLKM not in decision.weights
         assert reviewed is (day.year != last_year)

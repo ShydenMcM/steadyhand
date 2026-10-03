@@ -149,16 +149,20 @@ def test_the_reserve_for_the_instalments_still_due_is_never_spent_before_its_mon
     # Counted here, not read from the strategy's memory: a month buys once, on its first day
     # with something to buy, so the instalments still due are the ones no month has bought yet.
     bought: set[int] = set()
-    for number, (arrived, buyable, days) in enumerate(months):
+    for number, (arrived, buyable, days) in enumerate(  # runtime population: a drawn journey
+        months
+    ):
         if buyable:
             bought.add(number)
-        for day in range(1, days + 1):
+        for day in range(1, days + 1):  # runtime population: the drawn days of this month
             held = portfolio(cash, {BBCA: invested} if invested else {})
             when = date(2025 + number // 12, number % 12 + 1, day)
             decision = strategy.decide(view(when, set(STOCKS[:buyable])), held, memory)
             memory = dict(decision.memory)
             added = sum(decision.weights.values()) - held.weight(BBCA)
-            assert all(decision.weights[stock] >= held.weight(stock) for stock in held.holdings)
+            assert all(  # runtime population: the stocks held that day
+                decision.weights[stock] >= held.weight(stock) for stock in held.holdings
+            )
             spent = int(added * held.value.amount)
             cash, invested = cash - spent, invested + spent
             due = max(instalments - len(bought), 0)

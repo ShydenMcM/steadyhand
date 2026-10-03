@@ -358,7 +358,7 @@ def test_a_restored_portfolio_behaves_as_the_one_it_was_saved_from(
         portfolio.last_day,
         portfolio.cash_balance(),
     )
-    for offset in range(-4, 5):
+    for offset in range(-4, 5):  # runtime population: the days around the journey's last day
         on = today + timedelta(days=offset)
         assert restored.settled_cash(on) == portfolio.settled_cash(on)
         assert restored.spendable_cash(on) == portfolio.spendable_cash(on)
