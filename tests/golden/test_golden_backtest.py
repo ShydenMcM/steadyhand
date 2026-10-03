@@ -39,7 +39,6 @@ from record_golden import (
 
 from steadyhand import (
     CLAIMS_LABEL,
-    DATA_BAR_REFUSED,
     DATA_DIVIDENDS_HISTORY_REFUSED,
     EXEMPTION_CLAIM_BROKEN,
     EXEMPTION_DEADLINE_MISSED,
@@ -89,23 +88,25 @@ def test_the_switch_on_run_holds_a_claim_of_each_kind_as_worked_by_hand() -> Non
     until = "2023-12-31"  # a 2021 purchase is protected through its third tax year
     assert stored["claims"] == [
         # Reinvested by the deadline: ASII's buy on 2 July 2021 (1,900 x 5,050 = 9,595,000)
-        # covers the four claims paid before it, oldest first: 86,400 (200 BBCA shares x Rp432,
-        # before the split), 139,200 (1,600 ASII x 87) and 140,000 (1,400 UNVR x 100) stay whole.
+        # covers the five claims paid before it, oldest first: 217,592 (2,200 BBRI x Rp98.9057,
+        # its restored dividend, rounded down), 86,400 (200 BBCA shares x Rp432, before the
+        # split), 139,200 (1,600 ASII x 87) and 140,000 (1,400 UNVR x 100) stay whole.
+        ["BBRI", "2021-04-06", "2021-04-26", 217_592, "2022-03-31", 0, [[217_592, until]]],
         ["BBCA", "2021-04-08", "2021-04-28", 86_400, "2022-03-31", 0, [[86_400, until]]],
         ["ASII", "2021-05-03", "2021-05-27", 139_200, "2022-03-31", 0, [[139_200, until]]],
         ["UNVR", "2021-06-08", "2021-06-28", 140_000, "2022-03-31", 0, [[140_000, until]]],
-        # Broken after reinvestment: selling 2,400 of the 2,500 BBCA shares on 2 November
-        # releases 16,128,478 x 2,400 / 2,500 = 15,483,338.88, rounded up to 15,483,339, so
-        # 645,139 stays invested against 869,630 protected. The 224,491 short at the close of
-        # 4 November, the sale's settlement date, breaks from the newest claim, TLKM's
-        # (3,000 x 168.01 = 504,030): 504,030 - 224,491 = 279,539 stays protected.
-        ["TLKM", "2021-06-09", "2021-06-29", 504_030, "2022-03-31", 0, [[279_539, until]]],
+        # Broken after reinvestment: selling 2,400 of the 2,500 BBCA shares on 2 November, and
+        # every other share, releases 16,128,478 x 2,400 / 2,500 = 15,483,338.88, rounded up to
+        # 15,483,339, so 645,139 stays invested against 1,087,222 protected. The 442,083 short at
+        # the close of 4 November, the sale's settlement date, breaks from the newest claim,
+        # TLKM's (3,000 x 168.01 = 504,030): 504,030 - 442,083 = 61,947 stays protected.
+        ["TLKM", "2021-06-09", "2021-06-29", 504_030, "2022-03-31", 0, [[61_947, until]]],
         # Still open at the end: 100 BBCA x 120, with a year to be reinvested.
         ["BBCA", "2022-03-28", "2022-04-18", 12_000, "2023-03-31", 12_000, []],
     ]
-    # 10% of 224,491 is 22,449.1, rounded up. Taxed at the deadline: ASII's 3,500 x 45 = 157,500
+    # 10% of 442,083 is 44,208.3, rounded up. Taxed at the deadline: ASII's 3,500 x 45 = 157,500
     # and BBCA's 100 x 25 = 2,500 were never reinvested, so 15,750 + 250 on 1 April 2022.
-    assert stored["taxes"] == [["2021-11-04", 22_450], ["2022-04-01", 16_000]]
+    assert stored["taxes"] == [["2021-11-04", 44_209], ["2022-04-01", 16_000]]
     assert [note[:2] for note in stored["notes"]] == [
         ["2021-11-04", EXEMPTION_CLAIM_BROKEN],
         ["2022-04-01", EXEMPTION_DEADLINE_MISSED],
@@ -114,7 +115,7 @@ def test_the_switch_on_run_holds_a_claim_of_each_kind_as_worked_by_hand() -> Non
     assert stored["income"]["claims"] == [CLAIMS_LABEL, stored["claims"]]
     # Tax shows in the month it was booked, not the month its dividend was paid (M4 spec §6.5).
     taxed = {month[0]: month[2] for month in stored["income"]["received"]["by_month"] if month[2]}
-    assert taxed == {"2021-11-01": 22_450, "2022-04-01": 16_000}
+    assert taxed == {"2021-11-01": 44_209, "2022-04-01": 16_000}
 
 
 def test_the_dividend_growth_run_reproduces_its_stored_results_exactly(tmp_path: Path) -> None:
@@ -131,17 +132,20 @@ def test_the_dividend_growth_run_reviews_as_worked_by_hand() -> None:
     stored = json.loads(GROWTH_GOLDEN.read_text(encoding="utf-8"))
     # 1 February 2021 tests the dividends of 2018 to 2020, a share in today's shares. BBCA's
     # 260, 355, 553 grew. UNVR's 183, 241, 194 are its dividends of before its 1-for-5 split of
-    # January 2020 restated, so 194 >= 183 passes (unrestated, 915 would not). BBRI passes but
-    # its prices are refused that day, so it cannot be bought; ASII's 184 < 190 fails, and
-    # TLKM's look-back was refused. Two picks at half each, the risk limit's 25% bought on the
-    # 2nd: 700 x 34,875 and 3,500 x 7,125, just under Rp25,000,000 each.
+    # January 2020 restated, so 194 >= 183 passes (unrestated, 915 would not). BBRI's restored
+    # 106.7, 132.2, 168.2 grew; ASII's 184 < 190 fails, and TLKM's look-back was refused. Three
+    # pass for two places, so the picks spread their pay months: none is crowded yet, so the
+    # higher trailing yield goes first, BBRI's 168.2 a share on a close of 4,400, then UNVR's
+    # above BBCA's. Half each, the risk limit's 25%, sized at the 1st's close and bought at the
+    # 2nd's open: 25,000,000 / 4,400 and / 7,025, in lots of 100.
     assert [fill[:5] for fill in stored["fills"] if fill[0] == "2021-02-02"] == [
-        ["2021-02-02", "BBCA", "buy", 700, 34_875],
+        ["2021-02-02", "BBRI", "buy", 5_600, 4_500],
         ["2021-02-02", "UNVR", "buy", 3_500, 7_125],
     ]
     # 3 January 2022 tests 2019 to 2021. BBCA's 71, 110.6, 111.4 (restated by its October 2021
-    # split) pass; UNVR's 166 < 241 fails, and so do BBRI's 89.9 < 120.2 and ASII; TLKM's
-    # history is still incomplete. One pick under min_stocks 2: the note, and UNVR is sold.
+    # split) pass; UNVR's 166 < 241 fails, and so do BBRI's 98.9 < 132.2 and ASII; TLKM's
+    # history is still incomplete. One pick under min_stocks 2: the note, BBRI and UNVR are
+    # sold, and BBCA is bought.
     assert stored["notes"] == [
         [
             "2022-01-03",
@@ -150,14 +154,12 @@ def test_the_dividend_growth_run_reviews_as_worked_by_hand() -> None:
         ]
     ]
     assert [fill[:3] for fill in stored["fills"] if fill[2] == "sell"] == [
-        ["2022-01-04", "UNVR", "sell"]
+        ["2022-01-04", "BBRI", "sell"],
+        ["2022-01-04", "UNVR", "sell"],
     ]
-    assert stored["positions"] == {"BBCA": 3_500}
-    assert [warning[0] for warning in stored["warnings"]] == [
-        DATA_BAR_REFUSED,
-        DATA_DIVIDENDS_HISTORY_REFUSED,
-    ]
-    assert stored["warnings"][1][1].startswith(
+    assert stored["positions"] == {"BBCA": 2_900}
+    assert [warning[0] for warning in stored["warnings"]] == [DATA_DIVIDENDS_HISTORY_REFUSED]
+    assert stored["warnings"][0][1].startswith(
         "TLKM: the data source refused its corporate actions from 2018-01-01 to 2021-01-31, "
         "before the run"
     )
@@ -169,7 +171,8 @@ def test_the_recorder_takes_no_arguments(capsys: pytest.CaptureFixture[str]) -> 
 
 
 def test_the_window_holds_the_events_it_was_chosen_for(tmp_path: Path) -> None:
-    """The golden file is only worth pinning if the run meets a split, dividends and refusals."""
+    """The golden file is only worth pinning if the run meets a split, dividends, and prices
+    restored from an adjustment Yahoo does not report (#160)."""
     result = run(tmp_path)
     held = {p.instrument.symbol: p.quantity for p in result.run.final.holdings.portfolio.positions}
     # BBCA's 1-for-5 split on 13 October 2021: every share bought became five.
@@ -182,12 +185,16 @@ def test_the_window_holds_the_events_it_was_chosen_for(tmp_path: Path) -> None:
     assert bought > 0
     assert held["BBCA"] == 5 * bought
     paid = {e.instrument.symbol for report in result.run.reports for e in report.paid}
-    assert paid == {"ASII", "BBCA", "TLKM", "UNVR"}
-    assert "BBRI" not in held
-    assert result.warnings[0].key == DATA_BAR_REFUSED
-    assert result.warnings[0].text.startswith(
-        "BBRI: the data source refused 146 day(s) (2021-02-01 to 2021-09-07),"
-    )
+    assert paid == {"ASII", "BBCA", "BBRI", "TLKM", "UNVR"}
+    # BBRI's prices up to 2021-09-07 are restored (f = 1.100019), so it is ordered on the first
+    # day and bought at the next open, and its 2021 dividend is credited at the restored Rp98.9057
+    # a share.
+    (bbri,) = [
+        e for report in result.run.reports for e in report.paid if e.instrument.symbol == "BBRI"
+    ]
+    assert (bbri.ex_date, bbri.gross) == (date(2021, 4, 6), Money(445_075, IDR))  # 4,500 shares
+    assert held["BBRI"] == 4_600
+    assert result.warnings == ()
 
 
 def test_a_fetch_outside_the_recording_is_refused(tmp_path: Path) -> None:
@@ -216,12 +223,12 @@ def test_the_income_report_agrees_with_what_the_engine_paid(tmp_path: Path) -> N
     }
     expected = [dividend for held in income.run_rate.holdings for dividend in held.dividends]
     # Every dividend of the trailing year was paid in the run, on the pay date the calendar uses.
-    assert len(expected) == len(paid) == 7
+    assert len(expected) == len(paid) == 8
     assert all(e.pay_date == paid[(e.instrument.symbol, e.ex_date)].pay_date for e in expected)
-    # BBCA's 2021-04-08 dividend: Rp432 a share on the 700 shares held before the 1-for-5 split,
-    # and Rp86.4 a share, restated, on the 3,500 held after it. Rp302,400 either way.
+    # BBCA's 2021-04-08 dividend: Rp432 a share on the 500 shares held before the 1-for-5 split,
+    # and Rp86.4 a share, restated, on the 2,500 held after it. Rp216,000 either way.
     bbca = paid[("BBCA", date(2021, 4, 8))]
-    assert bbca.gross == Money(302_400, IDR)
+    assert bbca.gross == Money(216_000, IDR)
     assert bbca in expected
 
 

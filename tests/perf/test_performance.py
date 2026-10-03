@@ -4,7 +4,7 @@ a year of ``dividend-growth`` over them in under 3 (M6 spec §9.4).
 The market is ``synthetic``'s, which also shows the engine running a market other than IDX.
 The strategy rebalances to equal weights every day, so the strategy's run and the baseline's
 both trade, value and size every day. The ``dividend-growth`` year took 0.37 to 0.40 s at a
-load of 10 on four cores (0.67 to 0.74 s at 30); its budget leaves about eight times that for a
+load of 10 on six cores (0.67 to 0.74 s at 30); its budget leaves about eight times that for a
 slower CI runner.
 """
 

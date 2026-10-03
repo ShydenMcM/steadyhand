@@ -33,8 +33,8 @@ from steadyhand import (
     DATA_BAR_REFUSED,
     DISCLAIMER,
     FIGURES,
-    FILL_CASH_CUT,
     IDR,
+    LIMIT_WEIGHT_CUT,
     LIMIT_WEIGHT_FULL,
     PROJECTION_LABEL,
     RISK_HALT_DRAWDOWN,
@@ -64,6 +64,11 @@ JUMPY = GOLDEN_CONFIG.replace(
     '[risk]\nmax_weight = "0.25"\n', '[risk]\nmax_weight = "0.25"\ndaily_loss_limit = "0.001"\n'
 )
 """A daily-loss limit the golden run's second day breaches (as ``paper run``'s halt test)."""
+
+TIGHT = GOLDEN_CONFIG.replace('[risk]\nmax_weight = "0.25"\n', '[risk]\nmax_weight = "0.19"\n')
+"""A 19% limit per stock, under buy-and-hold's 20% of each of the five: its first orders are cut to
+the limit and its later top-ups skipped. With BBRI's prices restored (#160), the golden settings
+spread the money five ways and never block an order."""
 
 DEEP = GOLDEN_CONFIG.replace(
     '[risk]\nmax_weight = "0.25"\n', '[risk]\nmax_weight = "0.25"\nmax_drawdown = "0.05"\n'
@@ -137,10 +142,11 @@ def test_status_on_the_opening_day_shows_the_cash_and_the_orders_queued(tmp_path
         "Holdings: none\n"
         "\n"
         "Queued for the next open:\n"
-        "- buy 4100 ASII\n"
-        "- buy 700 BBCA\n"
-        "- buy 7700 TLKM\n"
-        "- buy 3500 UNVR\n"
+        "- buy 3300 ASII\n"
+        "- buy 500 BBCA\n"
+        "- buy 4500 BBRI\n"
+        "- buy 6100 TLKM\n"
+        "- buy 2800 UNVR\n"
         "\n"
         "Dividend entitlements: none\n"
         "\n"
@@ -155,18 +161,20 @@ def test_status_shows_each_holding_with_its_last_close_value_and_weight(tmp_path
     result = cli("paper", "status")
     assert result.code == 0
     assert (
-        "Cash: IDR 1,406,106 settled, IDR 0 unsettled\n"
-        "Holdings value: IDR 83,415,500\n"
-        "Total value: IDR 84,821,606\n"
+        "Cash: IDR 1,587,638 settled, IDR 0 unsettled\n"
+        "Holdings value: IDR 84,138,500\n"
+        "Total value: IDR 85,726,138\n"
         "\n"
         "Holdings:\n"
         "Stock  Quantity  Last close           Value  Weight\n"
-        "ASII       4200   IDR 4,940  IDR 20,748,000  24.46%\n"
-        "BBCA        700  IDR 30,125  IDR 21,087,500  24.86%\n"
-        "TLKM       7700   IDR 3,150  IDR 24,255,000  28.60%\n"
-        "UNVR       3500   IDR 4,950  IDR 17,325,000  20.43%\n"
+        "ASII       3300   IDR 4,940  IDR 16,302,000  19.02%\n"
+        "BBCA        500  IDR 30,125  IDR 15,062,500  17.57%\n"
+        "BBRI       4600   IDR 3,940  IDR 18,124,000  21.14%\n"
+        "TLKM       6600   IDR 3,150  IDR 20,790,000  24.25%\n"
+        "UNVR       2800   IDR 4,950  IDR 13,860,000  16.17%\n"
         "\n"
-        "Queued for the next open: none\n"
+        "Queued for the next open:\n"
+        "- buy 100 TLKM\n"
     ) in result.out
 
 
@@ -175,7 +183,8 @@ def test_status_shows_a_dividend_entitlement_until_it_is_paid(tmp_path: Path) ->
     result = cli("paper", "status")
     assert (
         "Dividend entitlements:\n"
-        "- BBCA: IDR 302,400 before tax, ex-date 2021-04-08, paid on 2021-04-28\n"
+        "- BBRI: IDR 445,075 before tax, ex-date 2021-04-06, paid on 2021-04-26\n"
+        "- BBCA: IDR 216,000 before tax, ex-date 2021-04-08, paid on 2021-04-28\n"
     ) in result.out
 
 
@@ -185,7 +194,9 @@ def test_status_shows_open_claims_under_their_label(tmp_path: Path) -> None:
     assert "Dividend entitlements: none\n" in result.out
     assert (
         f"Reinvestment-exemption claims ({CLAIMS_LABEL}):\n"
-        "- BBCA: IDR 302,400 paid on 2021-04-28, IDR 302,400 still to reinvest by 2022-03-31\n"
+        "- BBRI: IDR 445,075 paid on 2021-04-26, IDR 120,075 still to reinvest by 2022-03-31, "
+        "IDR 325,000 protected until 2023-12-31\n"
+        "- BBCA: IDR 216,000 paid on 2021-04-28, IDR 216,000 still to reinvest by 2022-03-31\n"
     ) in result.out
 
 
@@ -195,10 +206,10 @@ def test_a_claims_reinvested_parts_are_shown_with_how_long_each_is_protected(
     cli = ran_to(tmp_path, date(2021, 6, 30), quiet(GOLDEN_CONFIG + EXEMPT))
     result = cli("paper", "status")
     assert (
-        "- BBCA: IDR 302,400 paid on 2021-04-28, IDR 0 still to reinvest by 2022-03-31, "
-        "IDR 302,400 protected until 2023-12-31\n"
-        "- ASII: IDR 356,700 paid on 2021-05-27, IDR 0 still to reinvest by 2022-03-31, "
-        "IDR 181,600 protected until 2023-12-31, IDR 175,100 protected until 2023-12-31\n"
+        "- BBRI: IDR 445,075 paid on 2021-04-26, IDR 0 still to reinvest by 2022-03-31, "
+        "IDR 325,000 protected until 2023-12-31, IDR 120,075 protected until 2023-12-31\n"
+        "- BBCA: IDR 216,000 paid on 2021-04-28, IDR 0 still to reinvest by 2022-03-31, "
+        "IDR 195,925 protected until 2023-12-31, IDR 20,075 protected until 2023-12-31\n"
     ) in result.out
     with opened(cli) as store:
         account = store.account()
@@ -216,7 +227,7 @@ def test_a_halted_account_shows_its_halt_and_the_resume_command_and_exits_0(
     assert (result.code, result.err) == (0, "")
     assert result.out.startswith(
         "Paper account opened on 2021-02-01, running buy-and-hold; last day run 2021-02-02.\n"
-        "Halted on 2021-02-02: daily loss limit: the unit value fell 2.38%, the limit is 0.10%. "
+        "Halted on 2021-02-02: daily loss limit: the unit value fell 2.53%, the limit is 0.10%. "
         "No orders are placed until you resume it with: steadyhand-idx resume buy-and-hold\n"
         "\n"
     )
@@ -277,6 +288,7 @@ def test_the_status_page_names_every_figure_it_shows(tmp_path: Path) -> None:
         FIGURES["Holdings.last_closes"],
         FIGURES["DividendClaim.gross"],
         FIGURES["DividendClaim.uncovered"],
+        FIGURES["Protection.amount"],
     ]
 
 
@@ -302,31 +314,35 @@ def test_report_shows_the_latest_day_by_default_with_its_holdings(tmp_path: Path
     assert (
         "Holdings:\n"
         "Stock  Quantity  Last close           Value  Weight\n"
-        "ASII       4200   IDR 4,940  IDR 20,748,000  24.46%\n"
+        "ASII       3300   IDR 4,940  IDR 16,302,000  19.02%\n"
     ) in result.out
 
 
-def test_a_days_report_shows_its_fills_its_cuts_and_its_cash(tmp_path: Path) -> None:
-    cli = ran_to(tmp_path, date(2021, 2, 3), quiet())
+def test_a_days_report_shows_its_fills_its_blocked_orders_and_its_cash(tmp_path: Path) -> None:
+    cli = ran_to(tmp_path, date(2021, 2, 3), quiet(TIGHT))
     result = cli("report", "--day", "2021-02-02")
     assert (result.code, result.err) == (0, "")
     assert result.out == page(
         "Day report for 2021-02-02\n"
         "\n"
         "Fills:\n"
-        "- buy 4100 ASII at IDR 6,175: IDR 25,317,500\n"
-        "- buy 700 BBCA at IDR 34,875: IDR 24,412,500\n"
-        "- buy 7700 TLKM at IDR 3,310: IDR 25,487,000\n"
-        "- buy 3400 UNVR at IDR 7,125: IDR 24,225,000\n"
+        "- buy 3100 ASII at IDR 6,175: IDR 19,142,500\n"
+        "- buy 500 BBCA at IDR 34,875: IDR 17,437,500\n"
+        "- buy 4300 BBRI at IDR 4,500: IDR 19,350,000\n"
+        "- buy 5800 TLKM at IDR 3,310: IDR 19,198,000\n"
+        "- buy 2700 UNVR at IDR 7,125: IDR 19,237,500\n"
         "\n"
         "Queued for the next open: none\n"
         "\n"
         "Blocked orders:\n"
-        "- cut: buy UNVR from 3500 to 3400 shares: cut to the IDR 24,626,548 that can be spent\n"
+        "- skipped: buy 100 ASII: already at the 19.00% limit per stock\n"
+        "- skipped: buy 200 BBRI: already at the 19.00% limit per stock\n"
+        "- skipped: buy 300 TLKM: already at the 19.00% limit per stock\n"
+        "- skipped: buy 100 UNVR: already at the 19.00% limit per stock\n"
         "\n"
-        "Cash: IDR 341,160 settled, IDR 0 unsettled\n"
-        "Holdings value: IDR 97,276,500\n"
-        "Total value: IDR 97,617,660\n"
+        "Cash: IDR 5,428,219 settled, IDR 0 unsettled\n"
+        "Holdings value: IDR 92,136,500\n"
+        "Total value: IDR 97,564,719\n"
         "Daily charges: IDR 10,000\n"
         "Deposit: IDR 0\n"
         "\n"
@@ -341,37 +357,38 @@ def test_a_days_report_shows_its_fills_its_cuts_and_its_cash(tmp_path: Path) -> 
 def test_a_blocked_order_is_shown_with_its_reason_and_the_dividends_of_the_day(
     tmp_path: Path,
 ) -> None:
-    cli = ran_to(tmp_path, date(2021, 6, 30), quiet())
+    cli = ran_to(tmp_path, date(2021, 6, 30), quiet(TIGHT))
     result = cli("report", "--day", "2021-06-29")
     assert result.code == 0
     assert (
         "Queued for the next open:\n"
-        "- buy 100 ASII\n"
         "- buy 100 UNVR\n"
         "\n"
         "Blocked orders:\n"
-        "- skipped: buy 100 TLKM: already at the 25.00% limit per stock\n"
+        "- skipped: buy 100 ASII: already at the 19.00% limit per stock\n"
+        "- skipped: buy 100 BBRI: already at the 19.00% limit per stock\n"
+        "- skipped: buy 100 TLKM: already at the 19.00% limit per stock\n"
     ) in result.out
-    assert "Dividends paid:\n- TLKM: IDR 1,293,677 before tax\n" in result.out
+    assert "Dividends paid:\n- TLKM: IDR 991,259 before tax\n" in result.out
 
 
 def test_the_skipped_order_is_in_the_audit_log_under_its_key(tmp_path: Path) -> None:
-    cli = ran_to(tmp_path, date(2021, 6, 29))
+    cli = ran_to(tmp_path, date(2021, 6, 29), TIGHT)
     with opened(cli) as store:
         first = next(line for line in store.audit() if line.note.key == PAPER_ORDER_SKIPPED)
     assert (first.day, first.note.text) == (
-        date(2021, 6, 29),
-        "skipped: buy 100 TLKM: already at the 25.00% limit per stock",
+        date(2021, 2, 2),
+        "skipped: buy 100 ASII: already at the 19.00% limit per stock",
     )
 
 
 def test_a_report_names_the_key_of_each_blocked_orders_reason(tmp_path: Path) -> None:
-    cli = ran_to(tmp_path, date(2021, 6, 30))
+    cli = ran_to(tmp_path, date(2021, 6, 30), TIGHT)
     with opened(cli) as store:
-        cut, skipped = store.report(trading_days()[1]), store.report(date(2021, 6, 29))
+        cut, skipped = store.report(START), store.report(date(2021, 6, 29))
     assert cut is not None
     assert skipped is not None
-    assert FILL_CASH_CUT in day_report_page(cut, None).keys
+    assert LIMIT_WEIGHT_CUT in day_report_page(cut, None).keys
     assert LIMIT_WEIGHT_FULL in day_report_page(skipped, None).keys
 
 
@@ -398,14 +415,14 @@ def test_the_income_report_is_the_backtests_over_the_same_days(tmp_path: Path) -
     # The golden record's income figures (tests/fixtures/golden), as the page writes them.
     assert (
         "Goal: IDR 1,000,000 a month\n"
-        "Received: IDR 210,020 a month, 21.00% of the goal\n"
-        "Run-rate: IDR 212,668 a month, 21.27% of the goal\n"
+        "Received: IDR 202,442 a month, 20.24% of the goal\n"
+        "Run-rate: IDR 206,964 a month, 20.70% of the goal\n"
         "\n"
         f"{PROJECTION_LABEL}:\n"
         "Reaching IDR 1,000,000 a month, adding IDR 0 a month\n"
-        "- pessimistic: from IDR 2,268,461 a year, growing 0.00% a year: not within 50 years\n"
-        "- base: from IDR 2,835,577 a year, growing 5.00% a year: the goal in 17.7 years\n"
-        "- optimistic: from IDR 2,835,577 a year, growing 6.69% a year: the goal in 15.0 years\n"
+        "- pessimistic: from IDR 2,207,626 a year, growing 0.00% a year: not within 50 years\n"
+        "- base: from IDR 2,759,533 a year, growing 5.00% a year: the goal in 18.0 years\n"
+        "- optimistic: from IDR 2,759,533 a year, growing 6.09% a year: the goal in 16.0 years\n"
     ) in result.out
 
 
@@ -413,7 +430,7 @@ def test_the_day_a_limit_halts_the_account_shows_the_halt(tmp_path: Path) -> Non
     result = halted(tmp_path)("report")
     assert result.code == 0
     assert (
-        "\n\nHalted on 2021-02-02: daily loss limit: the unit value fell 2.38%, the limit is "
+        "\n\nHalted on 2021-02-02: daily loss limit: the unit value fell 2.53%, the limit is "
         "0.10%\n"
     ) in result.out
 
@@ -473,7 +490,7 @@ def test_a_typed_resume_clears_the_halt_and_the_next_day_orders_again(tmp_path: 
     result = cli("resume", "buy-and-hold", stdin="resume\n")
     assert (result.code, result.err) == (0, "")
     assert result.out == page(
-        "The paper account halted on 2021-02-02: daily loss limit: the unit value fell 2.38%, "
+        "The paper account halted on 2021-02-02: daily loss limit: the unit value fell 2.53%, "
         "the limit is 0.10%.\n"
         "Type resume to resume ordering: "
         "Resumed. From the next day run, the strategy's orders are placed again."
@@ -488,7 +505,7 @@ def test_a_typed_resume_clears_the_halt_and_the_next_day_orders_again(tmp_path: 
         PAPER_RESUMED,
         (
             "resumed ordering after the halt of 2021-02-02 (daily loss limit: the unit value "
-            "fell 2.38%, the limit is 0.10%), by tester"
+            "fell 2.53%, the limit is 0.10%), by tester"
         ),
     )
     later = run_on(cli, trading_days()[2])
@@ -530,7 +547,7 @@ def test_resume_is_refused_while_the_drawdown_is_still_past_its_limit(tmp_path: 
     result = cli("resume", "buy-and-hold", stdin="resume\n")
     assert (result.code, result.out) == (3, "")
     assert result.err == (
-        "steadyhand-idx: the unit value is still 9.37% below its high-water mark, at or past "
+        "steadyhand-idx: the unit value is still 9.12% below its high-water mark, at or past "
         "the 5.00% drawdown limit; the halt stays until it recovers or you raise "
         "risk.max_drawdown\n"
     )
@@ -648,7 +665,7 @@ def test_switch_is_refused_while_the_account_is_halted(tmp_path: Path) -> None:
     assert (result.code, result.out) == (3, "")
     assert result.err == (
         "steadyhand-idx: the paper account halted on 2021-02-02: daily loss limit: the unit "
-        "value fell 2.38%, the limit is 0.10%; no orders are placed until you resume it with: "
+        "value fell 2.53%, the limit is 0.10%; no orders are placed until you resume it with: "
         "steadyhand-idx resume retired\n"
     )
     assert tables(cli) == before

@@ -19,10 +19,10 @@ from multiprocessing.synchronize import Event
 from pathlib import Path
 from typing import NamedTuple
 
-from record_golden import END, RECORDED, START, STOCKS, recorded
+from record_golden import END, RECORDED, START, STOCKS, recorded, replay
 
 from steadyhand import STRATEGIES, BacktestResult, DataSource, Market, backtest
-from steadyhand_idx import BarCache, CachedDataSource, YahooDataSource
+from steadyhand_idx import BarCache, CachedDataSource
 from steadyhand_idx.cli import SourceFactory, World, main
 from steadyhand_idx.config import load
 from steadyhand_idx.paper import days_to_run
@@ -131,17 +131,12 @@ def recorded_or_empty(ticker: str, start: date, end: date) -> YahooHistory:
     return YahooHistory(ticker, (), ())
 
 
-def _no_wait(seconds: float) -> None:
-    del seconds
-
-
 @contextmanager
 def recorded_source(folder: Path) -> Iterator[DataSource]:
     """The recorded answers through the real ``YahooDataSource`` and the bar cache in *folder*,
     on the day they were recorded, as the golden test reads them."""
-    yahoo = YahooDataSource(download=recorded_or_empty, sleep=_no_wait)
     with BarCache(folder / "cache.sqlite") as cache:
-        yield CachedDataSource(yahoo, cache, today=lambda: RECORDED)
+        yield CachedDataSource(replay(recorded_or_empty), cache, today=lambda: RECORDED)
 
 
 def write_universe(home: Path) -> None:

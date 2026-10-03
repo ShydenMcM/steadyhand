@@ -26,10 +26,13 @@ FIXTURES = sorted((Path(__file__).resolve().parents[1] / "fixtures" / "yahoo").g
 
 
 def outcome(history: YahooHistory) -> object:
-    first, last = history.rows[0].day, history.rows[-1].day
+    """What the recording gives from the first year the holiday calendar covers: a recording of
+    BBRI's whole history starts in 2014 (#160)."""
+    calendar = IdxCalendar.shipped()
+    first, last = max(history.rows[0].day, calendar.first_day), history.rows[-1].day
     instrument = Instrument(history.ticker.removesuffix(SUFFIX), "IDX", IDR)
     try:
-        return unadjust(history, instrument, IdxCalendar.shipped(), first, last)
+        return unadjust(history, instrument, calendar, (first, last))
     except UnrecoverablePricesError as error:
         return error.days
 
