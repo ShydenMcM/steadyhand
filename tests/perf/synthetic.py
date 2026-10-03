@@ -137,6 +137,11 @@ class Synthetic:
     ) -> Sequence[CorporateAction]:
         return [a for a in self._actions[instrument] if start <= a.ex_date <= end]
 
+    def data_notes(
+        self, instruments: Sequence[Instrument], start: date, end: date
+    ) -> Sequence[Note]:
+        return ()
+
 
 class All:
     """Every synthetic stock, every day, with nothing excluded and no gaps."""

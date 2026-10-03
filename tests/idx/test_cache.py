@@ -437,3 +437,25 @@ def test_the_cached_source_stores_the_upstreams_restorations_with_each_range(
         (date(2019, 1, 2), date(2019, 12, 30)),
         (date(2021, 10, 1), date(2021, 10, 29)),
     ]
+
+
+FIVE_YEARS = "BBRI.JK_2017-01-31_2022-01-31.json"
+
+
+def test_the_cached_source_s_notes_come_from_its_stored_restorations(cache: BarCache) -> None:
+    source, _ = source_for(cache, FIVE_YEARS, date(2026, 9, 25))
+    source.bars(BBRI, *SEP)
+    assert source.data_notes([BBRI, BBCA], *SEP) == (RESTORED.note,)  # stored and upstream: once
+    fresh, counting = source_for(cache, FIVE_YEARS, date(2026, 9, 25))
+    assert fresh.data_notes([BBRI], *SEP) == (RESTORED.note,)
+    assert fresh.data_notes([BBRI], *OCT) == ()
+    assert counting.asked == []
+
+
+def test_a_run_read_only_in_today_s_bar_still_has_its_note(cache: BarCache) -> None:
+    today = date(2021, 9, 7)
+    source, counting = source_for(cache, FIVE_YEARS, today)
+    source.bars(BBRI, today, today)  # today's bar is never stored, nor its restoration
+    assert cache.restorations(BBRI, today, today) == []
+    assert source.data_notes([BBRI], today, today) == (RESTORED.note,)
+    assert counting.asked == [(today, today), (date(2014, 1, 6), today)]

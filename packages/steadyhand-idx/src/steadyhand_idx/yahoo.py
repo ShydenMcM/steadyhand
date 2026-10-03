@@ -45,6 +45,7 @@ from steadyhand import (
     Instrument,
     InvalidBarError,
     Money,
+    Note,
     Split,
     UnavailableDaysError,
 )
@@ -419,10 +420,19 @@ class YahooDataSource:
         """The proven runs overlapping the range, oldest first. A range with no price that is
         not whole reads no runs, and restores nothing, so it has none."""
         history = self._history(instrument, start, end)
+        return _proven(instrument, self._runs_for(history, start, end), start, end)
+
+    def data_notes(
+        self, instruments: Sequence[Instrument], start: date, end: date
+    ) -> tuple[Note, ...]:
+        """One note per proven run overlapping the range among the runs already inferred: never
+        a request, since every range a backtest reads has been read by then (#160 spec §7)."""
         return tuple(
-            Restoration(instrument, run.first, run.last, run.factor, run.prices)
-            for run in self._runs_for(history, start, end)
-            if run.factor is not None and run.first <= end and run.last >= start
+            restoration.note
+            for instrument in instruments
+            for restoration in _proven(
+                instrument, self._runs.get(ticker_for(instrument), ()), start, end
+            )
         )
 
     def _history(self, instrument: Instrument, start: date, end: date) -> YahooHistory:
@@ -473,6 +483,17 @@ class YahooDataSource:
             f"after {self._policy.attempts} attempts: {failure}"
         )
         raise DataUnavailableError(msg) from failure
+
+
+def _proven(
+    instrument: Instrument, runs: Sequence[Run], start: date, end: date
+) -> tuple[Restoration, ...]:
+    """The proven *runs* overlapping *start* to *end*, oldest first, as restorations."""
+    return tuple(
+        Restoration(instrument, run.first, run.last, run.factor, run.prices)
+        for run in runs
+        if run.factor is not None and run.first <= end and run.last >= start
+    )
 
 
 def download_history(ticker: str, start: date, end: date) -> YahooHistory:  # pragma: no cover

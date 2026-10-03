@@ -123,6 +123,14 @@ GROWTH_CONFIG = GOLDEN_CONFIG.replace(
 """The golden settings running ``dividend-growth`` with the golden run's values
 (``record_golden.VALUES``): a two-year test, whose look-back fits in the recordings."""
 
+RESTORED = (
+    "BBRI: Yahoo's prices from 2014-01-06 to 2021-09-07 carry an adjustment Yahoo does not "
+    "report, so steadyhand restored them: every price and dividend in that span is multiplied "
+    "by 1.100019, proven by 7,380 prices that fit the IDX tick grid at that factor and at no "
+    "other."
+)
+"""The golden window's one warning: BBRI's restoration in its whole recording (#160)."""
+
 
 def recorded_or_empty(ticker: str, start: date, end: date) -> YahooHistory:
     """Yahoo's recorded answer for the five golden stocks, and no rows for a placeholder."""

@@ -2171,7 +2171,12 @@
    16000
   ]
  ],
- "warnings": [],
+ "warnings": [
+  [
+   "data.prices.restored",
+   "BBRI: Yahoo's prices from 2014-01-06 to 2021-09-07 carry an adjustment Yahoo does not report, so steadyhand restored them: every price and dividend in that span is multiplied by 1.100019, proven by 7,380 prices that fit the IDX tick grid at that factor and at no other."
+  ]
+ ],
  "window": [
   "2021-02-01",
   "2022-04-29"

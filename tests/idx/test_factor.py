@@ -8,7 +8,8 @@ import pytest
 from hypothesis import example, given
 from hypothesis import strategies as st
 
-from steadyhand import IDR, Money
+from steadyhand import IDR, Instrument, Money
+from steadyhand.notes import Note
 from steadyhand_idx._datafile import Dated, Where, load_shipped
 from steadyhand_idx.factor import (
     FIT_TOLERANCE,
@@ -16,6 +17,7 @@ from steadyhand_idx.factor import (
     MIN_PRICES,
     Grid,
     PriceRow,
+    Restoration,
     Run,
     candidates,
     find_runs,
@@ -23,6 +25,7 @@ from steadyhand_idx.factor import (
     restore_dividend,
     restore_price,
 )
+from steadyhand_idx.notes import DATA_PRICES_RESTORED
 from steadyhand_idx.ticks import TickRow, TickTier, parse_ticks
 
 
@@ -350,3 +353,29 @@ def test_a_noise_factor_is_one_that_rounds_to_one(factor: Decimal, *, noise: boo
 def test_noise_is_judged_at_six_decimal_places() -> None:
     assert is_noise(Decimal("1.0000005"))
     assert not is_noise(Decimal("1.0000015"))
+
+
+BBRI = Instrument("BBRI", "IDX", IDR)
+
+
+def test_a_restoration_s_note_names_its_span_factor_and_proof() -> None:
+    run = Restoration(BBRI, date(2017, 1, 31), date(2021, 9, 7), Decimal("1.100019"), 4_412)
+    assert not run.noise
+    assert run.note == Note(
+        DATA_PRICES_RESTORED,
+        "BBRI: Yahoo's prices from 2017-01-31 to 2021-09-07 carry an adjustment Yahoo does not "
+        "report, so steadyhand restored them: every price and dividend in that span is "
+        "multiplied by 1.100019, proven by 4,412 prices that fit the IDX tick grid at that "
+        "factor and at no other.",
+    )
+
+
+def test_a_noise_restoration_s_note_says_it_is_a_rounding_error() -> None:
+    run = Restoration(BBRI, date(2019, 1, 2), date(2019, 3, 29), Decimal("0.9999999"), 240)
+    assert run.noise
+    assert run.note == Note(
+        DATA_PRICES_RESTORED,
+        "BBRI: Yahoo's prices from 2019-01-02 to 2019-03-29 miss whole rupiah by a rounding "
+        "error after its reported splits are reversed, so steadyhand put each one on the IDX "
+        "tick grid, proven by 240 prices that fit it with no other factor.",
+    )

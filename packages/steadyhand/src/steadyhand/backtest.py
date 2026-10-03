@@ -289,11 +289,20 @@ def _complete(run: RunResult, market: Market, settings: BacktestSettings) -> Run
 
 
 def _data_warnings(market: Market, window: _Window, start: date, end: date) -> tuple[Note, ...]:
+    """The universe's warnings, the source's notes on everything fetched, look-back included,
+    then the refusals (#160 spec §7)."""
+    since = start if window.lookback is None else window.lookback[0]
     return (
         *market.universe.survivorship_warnings(start, end),
+        *market.source.data_notes(_stocks(window.members), since, end),
         *_refused_warnings(window),
         *_history_warnings(window),
     )
+
+
+def _stocks(members: Mapping[date, frozenset[Instrument]]) -> list[Instrument]:
+    """Every stock the universe holds on any day, in a fixed order: the stocks fetched."""
+    return sorted(frozenset().union(*members.values()), key=lambda i: (i.market, i.symbol))
 
 
 def _calendar_days(start: date, end: date) -> Iterator[date]:
@@ -319,7 +328,7 @@ def _fetch(market: Market, days: tuple[date, ...], lookback_years: int) -> _Wind
     excluded = {day: market.universe.excluded_on(day) for day in days}
     source = market.source
     start, end = days[0], days[-1]
-    stocks = sorted(frozenset().union(*members.values()), key=lambda i: (i.market, i.symbol))
+    stocks = _stocks(members)
     bars: list[Bar] = []
     actions: list[CorporateAction] = []
     refused: dict[Instrument, tuple[date, ...]] = {}

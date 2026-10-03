@@ -47,9 +47,11 @@ from steadyhand import (
     STRATEGIES,
     STRATEGY_TOO_FEW_QUALIFIED,
     Money,
+    Note,
     years_before,
 )
 from steadyhand_idx import IdxMarketRules
+from steadyhand_idx.notes import DATA_PRICES_RESTORED
 
 
 @cache
@@ -158,8 +160,11 @@ def test_the_dividend_growth_run_reviews_as_worked_by_hand() -> None:
         ["2022-01-04", "UNVR", "sell"],
     ]
     assert stored["positions"] == {"BBCA": 2_900}
-    assert [warning[0] for warning in stored["warnings"]] == [DATA_DIVIDENDS_HISTORY_REFUSED]
-    assert stored["warnings"][0][1].startswith(
+    assert [warning[0] for warning in stored["warnings"]] == [
+        DATA_PRICES_RESTORED,
+        DATA_DIVIDENDS_HISTORY_REFUSED,
+    ]
+    assert stored["warnings"][1][1].startswith(
         "TLKM: the data source refused its corporate actions from 2018-01-01 to 2021-01-31, "
         "before the run"
     )
@@ -194,7 +199,16 @@ def test_the_window_holds_the_events_it_was_chosen_for(tmp_path: Path) -> None:
     ]
     assert (bbri.ex_date, bbri.gross) == (date(2021, 4, 6), Money(445_075, IDR))  # 4,500 shares
     assert held["BBRI"] == 4_600
-    assert result.warnings == ()
+    # The restoration is the run's one warning: BBRI's whole recording from GRID_START.
+    assert result.warnings == (
+        Note(
+            DATA_PRICES_RESTORED,
+            "BBRI: Yahoo's prices from 2014-01-06 to 2021-09-07 carry an adjustment Yahoo does "
+            "not report, so steadyhand restored them: every price and dividend in that span is "
+            "multiplied by 1.100019, proven by 7,380 prices that fit the IDX tick grid at that "
+            "factor and at no other.",
+        ),
+    )
 
 
 def test_a_fetch_outside_the_recording_is_refused(tmp_path: Path) -> None:
