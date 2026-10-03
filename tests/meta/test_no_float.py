@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from population import searched, tracked
+from source_tree import UnreadableSourceError, parse
 
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE = ROOT / "packages/steadyhand/src/steadyhand"
@@ -32,8 +33,9 @@ def _annotations(tree: ast.AST) -> Iterator[ast.expr]:
             yield node.returns
 
 
-def float_uses(source: str) -> list[str]:
-    tree = ast.parse(source)
+def float_uses(source: str, name: str) -> list[str]:
+    """Every float in *source*; *name* names the file in errors."""
+    tree = parse(source, name)
     found: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Name) and node.id == "float":
@@ -46,7 +48,7 @@ def float_uses(source: str) -> list[str]:
             if (
                 isinstance(node, ast.Constant)
                 and isinstance(node.value, str)
-                and float_uses(node.value)
+                and float_uses(node.value, f"{name} line {node.lineno}")
             ):
                 found.append(f"line {node.lineno}: float in string annotation")
     return found
@@ -64,12 +66,22 @@ def float_uses(source: str) -> list[str]:
     ],
 )
 def test_detector_finds_float(source: str, finding: str) -> None:
-    assert finding in float_uses(source)
+    assert finding in float_uses(source, "sample.py")
 
 
 def test_detector_ignores_comments_and_plain_strings() -> None:
     source = '# x: float = 1.5\nlabel = "float 1.5"\ncount: int = 2\n'
-    assert float_uses(source) == []
+    assert float_uses(source, "sample.py") == []
+
+
+def test_detector_names_the_file_it_cannot_parse() -> None:
+    with pytest.raises(UnreadableSourceError, match=r"^broken\.py: "):
+        float_uses("def (:\n", "broken.py")
+
+
+def test_detector_names_the_file_of_a_string_annotation_it_cannot_parse() -> None:
+    with pytest.raises(UnreadableSourceError, match=r"^broken\.py line 1: "):
+        float_uses('x: "list[" = 1\n', "broken.py")
 
 
 def test_guarded_engine_modules_contain_no_float() -> None:
@@ -80,6 +92,6 @@ def test_guarded_engine_modules_contain_no_float() -> None:
     findings = {
         path.relative_to(ENGINE).as_posix(): uses
         for path in files
-        if (uses := float_uses(path.read_text(encoding="utf-8")))
+        if (uses := float_uses(path.read_text(encoding="utf-8"), path.relative_to(ROOT).as_posix()))
     }
     assert searched(findings, of=len(files), what="engine modules") == {}

@@ -11,8 +11,9 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
-from looped_cases import ALLOW, LoopedCase, UnreadableTestFileError, read_file, read_tests
+from looped_cases import ALLOW, LoopedCase, read_file, read_tests
 from population import searched, tracked
+from source_tree import UnreadableSourceError
 
 ROOT = Path(__file__).resolve().parents[2]
 TESTS = ROOT / "tests"
@@ -143,7 +144,7 @@ def test_the_tests_read_are_the_ones_pytest_collects() -> None:
 
 
 def test_a_file_that_does_not_parse_is_refused_by_name() -> None:
-    with pytest.raises(UnreadableTestFileError, match=r"^broken\.py: "):
+    with pytest.raises(UnreadableSourceError, match=r"^broken\.py: "):
         read_tests("def test_x(:\n", "broken.py")
 
 

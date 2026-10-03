@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from hypothesis import settings
 from population import searched, tracked
+from source_tree import UnreadableSourceError, parse
 
 TESTS = Path(__file__).resolve().parents[1]
 CONFTEST = TESTS / "conftest.py"
@@ -21,11 +22,12 @@ PROFILES = ("dev", "ci")
 FILES_FLOOR = 93
 
 
-def deadline_keywords(source: str) -> list[int]:
-    """Line numbers of every call in *source* that passes a ``deadline=`` keyword."""
+def deadline_keywords(source: str, name: str) -> list[int]:
+    """Line numbers of every call in *source* that passes a ``deadline=`` keyword. *name* names
+    the file in errors."""
     return [
         node.lineno
-        for node in ast.walk(ast.parse(source))
+        for node in ast.walk(parse(source, name))
         if isinstance(node, ast.Call) and any(kw.arg == "deadline" for kw in node.keywords)
     ]
 
@@ -43,12 +45,17 @@ def test_the_detector_finds_a_deadline_in_a_decorator_and_in_a_function() -> Non
         "    return settings(max_examples=5, deadline=None)\n"
         "settings(max_examples=5)\n"
     )
-    assert deadline_keywords(source) == [1, 4]
+    assert deadline_keywords(source, "sample.py") == [1, 4]
+
+
+def test_the_detector_names_the_file_it_cannot_parse() -> None:
+    with pytest.raises(UnreadableSourceError, match=r"^broken\.py: "):
+        deadline_keywords("def (:\n", "broken.py")
 
 
 def test_the_detector_finds_the_profiles_in_conftest() -> None:
     # Known positive: without it, a detector that matched nothing would pass the next test.
-    assert len(deadline_keywords(CONFTEST.read_text())) == len(PROFILES)
+    assert len(deadline_keywords(CONFTEST.read_text(), CONFTEST.name)) == len(PROFILES)
 
 
 def test_no_test_sets_its_own_deadline() -> None:
@@ -59,7 +66,7 @@ def test_no_test_sets_its_own_deadline() -> None:
     offenders = {
         str(p.relative_to(TESTS)): lines
         for p in files
-        if (lines := deadline_keywords(p.read_text()))
+        if (lines := deadline_keywords(p.read_text(), str(p.relative_to(TESTS))))
     }
     assert searched(offenders, of=len(files), what="test files") == {}, (
         f"set the deadline in conftest.py profiles only: {offenders}"
