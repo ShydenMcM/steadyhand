@@ -44,7 +44,6 @@ from steadyhand_idx.cli import SourceFactory
 from steadyhand_idx.config import load
 from steadyhand_idx.notes import (
     PAPER_ACCOUNT_OPENED,
-    PAPER_ORDER_CUT,
     PAPER_ORDER_QUEUED,
     PAPER_RUN_STOPPED,
     PAPER_SETTING_CHANGED,
@@ -104,7 +103,7 @@ def test_the_first_run_opens_the_account_on_the_target_day_and_runs_it(tmp_path:
     result = run_on(cli, START)
     assert result.code == 0, result.err
     assert result.out.startswith(
-        "2021-02-01: 0 fill(s), 4 order(s) queued, value IDR 100,000,000\n\n"
+        "2021-02-01: 0 fill(s), 5 order(s) queued, value IDR 100,000,000\n\n"
         "Ran 1 day(s): 2021-02-01. Read a day's report with: steadyhand-idx report\n"
     )
     with opened(cli) as store:
@@ -127,7 +126,7 @@ def test_the_first_run_opens_the_account_on_the_target_day_and_runs_it(tmp_path:
         )
         assert lines[1:] == [
             (START, PAPER_ORDER_QUEUED, f"queued: buy {order} at the next open")
-            for order in ("4100 ASII", "700 BBCA", "7700 TLKM", "3500 UNVR")
+            for order in ("3300 ASII", "500 BBCA", "4500 BBRI", "6100 TLKM", "2800 UNVR")
         ]
         assert [(run.outcome, run.target, run.days) for run in store.runs()] == [
             (Outcome.RAN, START, (START,))
@@ -155,15 +154,20 @@ def test_missed_days_are_caught_up_in_order_each_saved(tmp_path: Path) -> None:
     result = run_on(cli, trading_days()[2])
     assert result.code == 0, result.err
     assert result.out.startswith(
-        "2021-02-02: 4 fill(s), 0 order(s) queued, value IDR 97,617,660\n"
-        "2021-02-03: 0 fill(s), 0 order(s) queued, value IDR 98,786,660\n"
+        "2021-02-02: 5 fill(s), 0 order(s) queued, value IDR 97,464,230\n"
+        "2021-02-03: 0 fill(s), 0 order(s) queued, value IDR 98,501,230\n"
     )
     with opened(cli) as store:
         assert store.days() == trading_days()[:3]
-        cut = [line.note for line in store.audit() if line.note.key == PAPER_ORDER_CUT]
-        assert [(line.text) for line in cut] == [
-            "cut: buy UNVR from 3500 to 3400 shares: cut to the IDR 24,626,548 that can be spent"
-        ]
+        caught_up = store.report(trading_days()[1])
+    assert caught_up is not None
+    assert [fill.order.instrument.symbol for fill in caught_up.fills] == [
+        "ASII",
+        "BBCA",
+        "BBRI",
+        "TLKM",
+        "UNVR",
+    ]
 
 
 # The catch-up cap (M5 spec §6.1, §9.2).
@@ -393,10 +397,10 @@ def test_a_halt_is_saved_with_its_day_and_every_later_run_exits_3(tmp_path: Path
     assert run_on(cli, START).code == 0
     halted = run_on(cli, trading_days()[1])
     assert halted.code == 3
-    assert halted.out.startswith("2021-02-02: 4 fill(s), 0 order(s) queued")
+    assert halted.out.startswith("2021-02-02: 5 fill(s), 0 order(s) queued")
     assert halted.err == (
         "steadyhand-idx: the paper account halted on 2021-02-02: daily loss limit: the unit "
-        "value fell 2.38%, the limit is 0.10%; no orders are placed until you resume it with: "
+        "value fell 2.53%, the limit is 0.10%; no orders are placed until you resume it with: "
         "steadyhand-idx resume buy-and-hold\n"
     )
     with opened(cli) as store:
@@ -661,8 +665,8 @@ def test_a_strategy_switched_to_records_its_settings_the_first_day_it_runs(
         (trading_days()[1], "strategy.instalments is 4, recorded for the first time")
     ]
     assert account is not None
-    # buy-and-hold had spent all but Rp 341,160 of the starting cash: monthly-savings sizes its
+    # buy-and-hold had spent all but Rp 1,579,730 of the starting cash: monthly-savings sizes its
     # instalment from that cash, not from the portfolio's value (M6 spec §5).
     cash = account.state.holdings.portfolio.spendable_cash(trading_days()[1])
-    assert cash == Money(341_160, IDR)
-    assert account.state.memory == {"instalment": "85290", "due": "3", "month": "2021-02"}
+    assert cash == Money(1_579_730, IDR)
+    assert account.state.memory == {"instalment": "394932", "due": "3", "month": "2021-02"}

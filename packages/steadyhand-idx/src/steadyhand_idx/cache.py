@@ -13,6 +13,10 @@ after the day is over.
 Corporate actions can also be fetched alone (M6 spec §4.3): a strategy's look-back reads the
 years before a run, whose prices it never needs. Such a range is recorded as fetched for
 actions only, so its bars still count as missing.
+
+Each fetched range also stores the upstream's restorations overlapping it (#160 spec §6): the
+runs of a stock's history whose prices and dividends were restored, so a report can say so
+from a cache read alone.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from types import TracebackType
+from typing import Protocol
 from zoneinfo import ZoneInfo
 
 from steadyhand import (
@@ -39,6 +44,7 @@ from steadyhand import (
     UnsupportedDateError,
 )
 from steadyhand_idx.calendar import IdxCalendar
+from steadyhand_idx.factor import Restoration
 
 JAKARTA = ZoneInfo("Asia/Jakarta")
 _ONE_DAY = timedelta(days=1)
@@ -83,6 +89,23 @@ MIGRATIONS: tuple[str, ...] = (
         PRIMARY KEY (symbol, start, end)
     ) STRICT;
     """,
+    # #160 spec §6: every proven run is recorded, and every range is read again under the new
+    # rules. That corrects a cached dividend Yahoo scaled by an unreported factor (BBRI's 2021
+    # dividend was cached as 89.91268, not 98.9057). Bars from refused days were never stored,
+    # so no stored bar is wrong; clearing ``fetched`` fetches the days that can now be restored.
+    """
+    CREATE TABLE restorations (
+        symbol TEXT NOT NULL,
+        first TEXT NOT NULL,
+        last TEXT NOT NULL,
+        factor TEXT NOT NULL,
+        prices INTEGER NOT NULL,
+        PRIMARY KEY (symbol, first)
+    ) STRICT;
+    DELETE FROM actions;
+    DELETE FROM fetched_actions;
+    DELETE FROM fetched;
+    """,
 )
 
 
@@ -92,6 +115,14 @@ class CacheConflictError(RuntimeError):
 
 class CacheSchemaError(RuntimeError):
     """The cache file was written by a newer steadyhand-idx than this one."""
+
+
+class RestoringSource(DataSource, Protocol):
+    """A data source that also says which runs of a stock's history it restored."""
+
+    def restorations(
+        self, instrument: Instrument, start: date, end: date
+    ) -> Sequence[Restoration]: ...
 
 
 type _BarRow = tuple[int, int, int, int, int]
@@ -169,6 +200,7 @@ class BarCache:
         span: tuple[date, date],
         bars: Sequence[Bar],
         actions: Sequence[CorporateAction],
+        restorations: Sequence[Restoration] = (),
     ) -> None:
         """Store one fetched range, all of it or none of it, and mark the range as fetched."""
         start, end = span
@@ -177,7 +209,9 @@ class BarCache:
             (a.instrument, a.ex_date) for a in actions
         ]
         self._require_within(instrument, span, located)
+        self._require_overlapping(instrument, span, restorations)
         with self._write():
+            self._insert_restorations(symbol, restorations)
             for bar in bars:
                 row: _BarRow = (
                     bar.open.amount,
@@ -196,14 +230,20 @@ class BarCache:
             )
 
     def store_actions(
-        self, instrument: Instrument, span: tuple[date, date], actions: Sequence[CorporateAction]
+        self,
+        instrument: Instrument,
+        span: tuple[date, date],
+        actions: Sequence[CorporateAction],
+        restorations: Sequence[Restoration] = (),
     ) -> None:
         """Store one range's actions, fetched without its bars, all of them or none, and mark the
         range as fetched for actions only (M6 spec §4.3)."""
         start, end = span
         symbol = self._symbol(instrument)
         self._require_within(instrument, span, [(a.instrument, a.ex_date) for a in actions])
+        self._require_overlapping(instrument, span, restorations)
         with self._write():
+            self._insert_restorations(symbol, restorations)
             for action in actions:
                 kind, values = _action_row(action)
                 self._insert_action(symbol, action.ex_date, kind, values)
@@ -224,6 +264,37 @@ class BarCache:
                 symbol = instrument.symbol
                 msg = f"{owner.symbol} {day.isoformat()} is not {symbol} in {start} to {end}"
                 raise ValueError(msg)
+
+    def _require_overlapping(
+        self, instrument: Instrument, span: tuple[date, date], restorations: Sequence[Restoration]
+    ) -> None:
+        start, end = span
+        for run in restorations:
+            if run.instrument != instrument or run.first > end or run.last < start:
+                msg = (
+                    f"{run.instrument.symbol}'s restoration {run.first} to {run.last} does not "
+                    f"overlap {instrument.symbol} in {start} to {end}"
+                )
+                raise ValueError(msg)
+
+    def _insert_restorations(self, symbol: str, restorations: Sequence[Restoration]) -> None:
+        for run in restorations:
+            values = (run.last.isoformat(), str(run.factor), run.prices)
+            found = self._db.execute(
+                "SELECT last, factor, prices FROM restorations WHERE symbol = ? AND first = ?",
+                (symbol, run.first.isoformat()),
+            ).fetchone()
+            if found is None:
+                self._db.execute(
+                    "INSERT INTO restorations VALUES (?, ?, ?, ?, ?)",
+                    (symbol, run.first.isoformat(), *values),
+                )
+            elif tuple(found) != values:
+                msg = (
+                    f"{symbol} {run.first.isoformat()}: cached restoration {tuple(found)} "
+                    f"differs from fetched {values}"
+                )
+                raise CacheConflictError(msg)
 
     def _insert_bar(self, symbol: str, day: date, row: _BarRow) -> None:
         found = self._db.execute(
@@ -296,6 +367,20 @@ class BarCache:
                 found.append(OtherAction(instrument, ex_date, description))
         return found
 
+    def restorations(self, instrument: Instrument, start: date, end: date) -> list[Restoration]:
+        """The stored restorations overlapping *start* to *end*, oldest first."""
+        rows = self._db.execute(
+            "SELECT first, last, factor, prices FROM restorations "
+            "WHERE symbol = ? AND first <= ? AND last >= ? ORDER BY first",
+            (self._symbol(instrument), end.isoformat(), start.isoformat()),
+        ).fetchall()
+        return [
+            Restoration(
+                instrument, date.fromisoformat(first), date.fromisoformat(last), Decimal(f), prices
+            )
+            for first, last, f, prices in rows
+        ]
+
     def fetched(self, instrument: Instrument) -> list[tuple[date, date]]:
         """Every range stored for *instrument*, merged where they touch or overlap."""
         rows = self._db.execute(
@@ -344,7 +429,7 @@ class CachedDataSource:
 
     def __init__(
         self,
-        upstream: DataSource,
+        upstream: RestoringSource,
         cache: BarCache,
         calendar: IdxCalendar | None = None,
         *,
@@ -372,11 +457,17 @@ class CachedDataSource:
         if start <= complete:
             for first, last in self.missing_actions(instrument, start, complete):
                 actions = self._upstream.corporate_actions(instrument, first, last)
-                self._cache.store_actions(instrument, (first, last), actions)
+                restored = self._upstream.restorations(instrument, first, last)
+                self._cache.store_actions(instrument, (first, last), actions, restored)
         cached = self._cache.actions(instrument, start, complete)
         if end < today:
             return cached
         return [*cached, *self._upstream.corporate_actions(instrument, today, today)]
+
+    def restorations(self, instrument: Instrument, start: date, end: date) -> list[Restoration]:
+        """The restorations stored with the ranges read so far that overlap *start* to *end*:
+        a cache read, never a fetch (#160 spec §6)."""
+        return self._cache.restorations(instrument, start, end)
 
     def missing(self, instrument: Instrument, start: date, end: date) -> list[tuple[date, date]]:
         """The parts of *start* to *end* not yet stored, trimmed to trading days.
@@ -433,7 +524,8 @@ class CachedDataSource:
             for first, last in self.missing(instrument, start, complete):
                 bars = self._upstream.bars(instrument, first, last)
                 actions = self._upstream.corporate_actions(instrument, first, last)
-                self._cache.store(instrument, (first, last), bars, actions)
+                restored = self._upstream.restorations(instrument, first, last)
+                self._cache.store(instrument, (first, last), bars, actions, restored)
         return today
 
 

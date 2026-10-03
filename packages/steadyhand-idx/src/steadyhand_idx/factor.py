@@ -18,7 +18,7 @@ from datetime import date
 from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Context, Decimal
 from functools import cache
 
-from steadyhand import IDR, Money
+from steadyhand import IDR, Instrument, Money
 from steadyhand_idx._datafile import Dated, load_shipped
 from steadyhand_idx.ticks import TICKS_FILE, TickRow, TickTier, parse_ticks
 
@@ -92,6 +92,17 @@ class Run:
 def is_noise(factor: Decimal) -> bool:
     """Whether a proven *factor* rounds to 1.000000: a rounding error, not an adjustment."""
     return factor.quantize(NOISE_QUANTUM) == 1
+
+
+@dataclass(frozen=True, slots=True)
+class Restoration:
+    """A proven run of one stock's history, as a data source restored it (spec §5)."""
+
+    instrument: Instrument
+    first: date
+    last: date
+    factor: Decimal
+    prices: int
 
 
 class Grid:

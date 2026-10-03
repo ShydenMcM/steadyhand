@@ -59,6 +59,7 @@ from steadyhand import (
 )
 from steadyhand_idx import IdxMarketRules
 from steadyhand_idx.cache import BarCache, CachedDataSource
+from steadyhand_idx.factor import GRID_START
 from steadyhand_idx.universe import Lq45Membership, Lq45Record, Lq45Universe
 from steadyhand_idx.yahoo import YahooDataSource, YahooHistory, history_from_json
 
@@ -81,6 +82,11 @@ REFUSED_HISTORY = "TLKM.JK"
 """The stock whose look-back the ``dividend-growth`` golden run is refused."""
 RECORDED = date(2026, 9, 27)
 """The day the fixtures were recorded; the cache treats it as today."""
+WHOLE_RECORDED = date(2026, 10, 1)
+"""The day BBRI's whole history was recorded (#160 spec §9.2). The replay's sources take it as
+today, so a whole-history request, from ``GRID_START`` to today, is the recording's own range."""
+WHOLE_HISTORIES = ("BBRI.JK",)
+"""The stocks with a whole-history recording: those with a price that is not whole rupiah."""
 
 
 def settings(*, income: bool = True, exemption: bool = False) -> BacktestSettings:
@@ -93,8 +99,10 @@ def settings(*, income: bool = True, exemption: bool = False) -> BacktestSetting
 
 
 def recorded(ticker: str, start: date, end: date, *, last: date = END) -> YahooHistory:
-    """Yahoo's recorded answer from the recordings ending on *last*. A range outside the
-    recording is refused, never invented."""
+    """Yahoo's recorded answer from the recordings ending on *last*, or from a whole-history
+    recording for exactly its range. A range outside the recordings is refused, never invented."""
+    if ticker in WHOLE_HISTORIES and (start, end) == (GRID_START, WHOLE_RECORDED):
+        return history_from_json(FIXTURES / f"{ticker}_{start.isoformat()}_{end.isoformat()}.json")
     if start < HISTORY_START or end > last:
         msg = f"{ticker}: the fixture covers {HISTORY_START} to {last}, not {start} to {end}"
         raise ValueError(msg)
@@ -197,11 +205,16 @@ def _backtest(
 ) -> BacktestResult:
     """Back-test *strategy* from ``START`` to *end* through the real source, cache and rules."""
     folder.mkdir(parents=True, exist_ok=True)
-    yahoo = YahooDataSource(download=download, sleep=_no_wait)
     with BarCache(folder / "bars.sqlite") as store:
-        source = CachedDataSource(yahoo, store, today=lambda: RECORDED)
+        source = CachedDataSource(replay(download), store, today=lambda: RECORDED)
         market = Market(universe(), source, IdxMarketRules())
         return backtest(strategy, market, START, end, backtest_settings)
+
+
+def replay(download: Callable[[str, date, date], YahooHistory] = recorded) -> YahooDataSource:
+    """The real ``YahooDataSource`` on *download*, waiting for nothing, on the day the whole
+    histories were recorded."""
+    return YahooDataSource(download=download, sleep=_no_wait, today=lambda: WHOLE_RECORDED)
 
 
 def _no_wait(seconds: float) -> None:

@@ -78,12 +78,12 @@ def test_the_table_is_a_row_per_strategy_then_the_warnings(market: Cli) -> None:
     assert header.split("  ")[0] == "Strategy"
     assert header.endswith("Run-rate, of the goal")
     assert row.startswith("buy-and-hold")
-    assert "IDR 97,889,490" in row
-    assert row.endswith("21.27%")
+    assert "IDR 96,825,198" in row
+    assert row.endswith("20.70%")
     assert result.out.startswith(
         "Comparison, 2021-02-01 to 2022-01-31, 248 trading days\n\nStrategy"
     )
-    assert "\n\nWarnings:\n- BBRI: the data source refused 146 day(s)" in result.out
+    assert "Warnings:" not in result.out  # BBRI's prices are restored (#160): none is refused
     assert "\n\nWhat this means\n• Prices, and what your portfolio is worth: " in result.out
     assert result.out.endswith(f"\n\n{DISCLAIMER}\n")
 
@@ -94,7 +94,7 @@ def test_the_markdown_file_is_the_same_table(market: Cli) -> None:
     assert lines[:4] == ["# Comparison, 2021-02-01 to 2022-01-31", "", "248 trading days.", ""]
     assert lines[4].startswith("| Strategy | Final value | Deposited | ")
     assert lines[5] == "|---|" + "---:|" * 14
-    assert lines[6].startswith("| buy-and-hold | IDR 97,889,490 | IDR 100,000,000 | -2.11% | ")
+    assert lines[6].startswith("| buy-and-hold | IDR 96,825,198 | IDR 100,000,000 | -3.17% | ")
     assert lines[-1] == DISCLAIMER
 
 

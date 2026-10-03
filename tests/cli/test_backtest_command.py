@@ -16,7 +16,7 @@ from cli_world import (
     golden_backtest,
     market_cli,
 )
-from record_golden import END, GOLDEN, RECORDED, START, recorded, run, settings, universe
+from record_golden import END, GOLDEN, RECORDED, START, replay, run, settings, universe
 
 from steadyhand import (
     DATA_BAR_REFUSED,
@@ -28,7 +28,7 @@ from steadyhand import (
     Money,
     backtest,
 )
-from steadyhand_idx import BarCache, CachedDataSource, IdxMarketRules, YahooDataSource
+from steadyhand_idx import BarCache, CachedDataSource, IdxMarketRules
 from steadyhand_idx.training import catalogue
 
 WINDOW = ("--from", "2021-02-01", "--to", "2022-01-31")
@@ -77,34 +77,34 @@ def test_the_daily_csv_is_the_golden_run_day_by_day(market: Cli, golden: Backtes
     ]
     assert rows[1:] == expected
     assert len(expected) == 248
-    assert sum(int(row[5]) for row in rows[1:]) == 2_800_277
+    assert sum(int(row[5]) for row in rows[1:]) == 2_699_239
 
 
 def test_the_summary_shows_the_golden_figures(market: Cli) -> None:
     result = market("backtest", *WINDOW)
     stored = json.loads(GOLDEN.read_text(encoding="utf-8"))["metrics"]
-    assert stored["final_value"] == 97_889_490
-    assert stored["dividends"] == {"gross": 2_800_277, "tax": 280_028}
+    assert stored["final_value"] == 96_825_198
+    assert stored["dividends"] == {"gross": 2_699_239, "tax": 269_925}
     table = result.out.split("\n\n")[1].splitlines()
     assert table == [
         "                          buy-and-hold",
-        "Final value             IDR 97,889,490",
+        "Final value             IDR 96,825,198",
         "Deposited              IDR 100,000,000",
-        "Total return                    -2.11%",
-        "Annual return                   -2.11%",
-        "Largest drawdown                18.16%",
-        "Trading costs              IDR 239,759",
-        "Turnover a year                 54.42%",
-        "Dividends before tax     IDR 2,800,277",
-        "Dividend tax               IDR 280,028",
+        "Total return                    -3.17%",
+        "Annual return                   -3.17%",
+        "Largest drawdown                17.65%",
+        "Trading costs              IDR 279,116",
+        "Turnover a year                 54.14%",
+        "Dividends before tax     IDR 2,699,239",
+        "Dividend tax               IDR 269,925",
         "Income goal a month      IDR 1,000,000",
-        "Received a month           IDR 210,020",
-        "Received, of the goal           21.00%",
-        "Run-rate a month           IDR 212,668",
-        "Run-rate, of the goal           21.27%",
+        "Received a month           IDR 202,442",
+        "Received, of the goal           20.24%",
+        "Run-rate a month           IDR 206,964",
+        "Run-rate, of the goal           20.70%",
     ]
     costs = stored["costs"]
-    assert costs["fee"] + costs["levy"] + costs["sale_tax"] + costs["daily"] == 239_759
+    assert costs["fee"] + costs["levy"] + costs["sale_tax"] + costs["daily"] == 279_116
 
 
 def test_the_summary_then_the_warnings_the_files_and_the_explanations(market: Cli) -> None:
@@ -114,14 +114,12 @@ def test_the_summary_then_the_warnings_the_files_and_the_explanations(market: Cl
     assert result.out.startswith(
         "Backtest: buy-and-hold, 2021-02-01 to 2022-01-31, 248 trading days\n\n"
     )
-    assert (
-        "\n\nWarnings:\n- BBRI: the data source refused 146 day(s) (2021-02-01 to 2021-09-07)"
-        in result.out
-    )
+    # BBRI's prices up to 2021-09-07 are restored (#160), so nothing in the window is refused.
+    assert "Warnings:" not in result.out
     assert f"\n\nWrote {reports / f'{STEM}.md'}\nWrote {reports / f'{STEM}.csv'}\n\n" in result.out
     assert "\n\nWhat this means\n• Prices, and what your portfolio is worth: " in result.out
     refused = catalogue().for_key(DATA_BAR_REFUSED).id
-    assert f"More: steadyhand-idx learn {refused}\n" in result.out
+    assert f"More: steadyhand-idx learn {refused}\n" not in result.out
     assert result.out.endswith(f"\n\n{DISCLAIMER}\n")
 
 
@@ -137,8 +135,8 @@ def test_the_markdown_file_holds_the_summary_and_the_disclaimer(market: Cli) -> 
         "|  | buy-and-hold |",
         "|---|---:|",
     ]
-    assert lines[6] == "| Final value | IDR 97,889,490 |"
-    assert "\n## Warnings\n\n- BBRI: the data source refused 146 day(s)" in text
+    assert lines[6] == "| Final value | IDR 96,825,198 |"
+    assert "## Warnings" not in text
     assert "## Day warnings" not in text
     assert text.endswith(f"\n\n---\n\n{DISCLAIMER}\n")
 
@@ -247,17 +245,18 @@ def test_backtest_needs_the_configuration(cli: Cli) -> None:
 def test_a_holding_whose_old_prices_cannot_be_recovered_keeps_its_dividend_history(
     market: Cli,
 ) -> None:
-    # The income report reads five years before the last day. Yahoo's BBRI prices before
-    # 2021-09-07 carry an event it does not report, so they cannot be recovered, but a dividend
-    # needs no price: the report is built, with BBRI's 6 April 2021 dividend in its run-rate
-    # (M6 spec §4.3). Before M6 the whole run stopped with exit 3.
+    # The income report reads five years before the last day. Yahoo's BBRI rows before
+    # 2017-11-10 have volumes that are not whole shares once its split is reversed, so those days
+    # cannot be recovered (#162), but a dividend needs no price: the report is built, with BBRI's
+    # 6 April 2021 dividend in its run-rate (M6 spec §4.3), at its restored Rp98.9057 a share on
+    # 4,900 shares (#160). Before M6 the whole run stopped with exit 3.
     result = market("backtest", "--from", "2022-01-25", "--to", "2022-01-31")
     assert (result.code, result.err) == (0, "")
-    assert "Run-rate a month           IDR 208,538\n" in result.out
+    assert "Run-rate a month           IDR 211,843\n" in result.out
     found = golden_backtest(market, date(2022, 1, 31), goal=True, start=date(2022, 1, 25))
     assert found.run.income is not None
     held = {h.instrument.symbol: h.dividends for h in found.run.income.run_rate.holdings}
-    assert [(d.ex_date, d.gross) for d in held["BBRI"]] == [(date(2021, 4, 6), Money(440_572, IDR))]
+    assert [(d.ex_date, d.gross) for d in held["BBRI"]] == [(date(2021, 4, 6), Money(484_637, IDR))]
 
 
 def test_the_starting_cash_and_goal_come_from_the_configuration(tmp_path: Path) -> None:
@@ -276,17 +275,12 @@ def test_the_broker_fee_preset_comes_from_the_configuration(
     assert market("backtest", *WINDOW).code == 0
     with (market.home / "reports" / f"{STEM}.csv").open(encoding="utf-8", newline="") as file:
         last = list(csv.reader(file))[-1]
-    yahoo = YahooDataSource(download=recorded, sleep=no_wait)
     with BarCache(tmp_path / "bars.sqlite") as cache:
-        source = CachedDataSource(yahoo, cache, today=lambda: RECORDED)
+        source = CachedDataSource(replay(), cache, today=lambda: RECORDED)
         rules = IdxMarketRules(broker_fees="ajaib")
         expected = backtest(BuyAndHold(), Market(universe(), source, rules), START, END, settings())
     assert int(last[1]) == expected.run.reports[-1].value.amount
     assert int(last[1]) != golden.run.reports[-1].value.amount
-
-
-def no_wait(seconds: float) -> None:
-    del seconds
 
 
 def test_dividend_growth_reads_its_look_back_and_ends_as_the_library_run(tmp_path: Path) -> None:
@@ -317,7 +311,7 @@ def test_monthly_savings_spreads_the_starting_cash_over_its_instalments(tmp_path
     )
     assert result.out.split("\n\n")[1].splitlines()[:2] == [
         "                       monthly-savings     buy-and-hold",
-        "Final value            IDR 100,655,756   IDR 97,889,490",
+        "Final value             IDR 98,752,838   IDR 96,825,198",
     ]
     daily = market.home / "reports" / "backtest-monthly-savings-2021-02-01-2022-01-31.csv"
     cash: dict[str, list[int]] = {}

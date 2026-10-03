@@ -7,9 +7,10 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from record_golden import END, RECORDED, START, recorded, settings, universe
+from record_golden import END, RECORDED, START, replay, settings, universe
 
 from steadyhand import (
+    DATA_BAR_REFUSED,
     IDR,
     RISK_HALT_DAILY_LOSS,
     BacktestResult,
@@ -20,12 +21,13 @@ from steadyhand import (
     MarketView,
     Memory,
     Money,
+    Note,
     PortfolioView,
     RiskLimits,
     backtest,
     compare,
 )
-from steadyhand_idx import BarCache, CachedDataSource, IdxMarketRules, YahooDataSource
+from steadyhand_idx import BarCache, CachedDataSource, IdxMarketRules
 from steadyhand_idx.reports import (
     GOAL_FIGURES,
     RUN_FIGURES,
@@ -51,15 +53,10 @@ class Cash:
         return Decision({})
 
 
-def no_wait(seconds: float) -> None:
-    del seconds
-
-
 @pytest.fixture(scope="module")
 def market(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Market]:
-    yahoo = YahooDataSource(download=recorded, sleep=no_wait)
     with BarCache(tmp_path_factory.mktemp("bars") / "bars.sqlite") as cache:
-        source = CachedDataSource(yahoo, cache, today=lambda: RECORDED)
+        source = CachedDataSource(replay(), cache, today=lambda: RECORDED)
         yield Market(universe(), source, IdxMarketRules())
 
 
@@ -73,7 +70,7 @@ def test_a_strategy_is_shown_beside_the_baseline(beside: BacktestResult) -> None
     assert lines[0] == "Backtest: cash, 2021-02-01 to 2022-01-31, 248 trading days"
     assert lines[2].split() == ["cash", "buy-and-hold"]
     assert lines[3].split("  ")[0] == "Final value"
-    assert lines[3].endswith("IDR 100,000,000   IDR 97,889,490")
+    assert lines[3].endswith("IDR 100,000,000   IDR 96,825,198")
 
 
 def test_each_figure_row_carries_its_term_key(beside: BacktestResult) -> None:
@@ -130,10 +127,15 @@ def test_a_run_with_no_goal_shows_no_income_figures(market: Market, tmp_path: Pa
     assert set(values(result.run)) == {figure.name for figure, _ in RUN_FIGURES}
     assert not any("goal" in line for line in backtest_page(result, ()).lines)
     quiet = replace(result, warnings=())
-    assert "Warnings:" in backtest_page(result, ()).lines
+    warned = replace(result, warnings=(Note(DATA_BAR_REFUSED, "BBRI: the source refused a day"),))
+    assert "Warnings:" in backtest_page(warned, ()).lines
     assert "Warnings:" not in backtest_page(quiet, ()).lines
     summary, _ = backtest_files(quiet, tmp_path)
     assert "## Warnings" not in summary.read_text(encoding="utf-8")
+    summary, _ = backtest_files(warned, tmp_path / "warned")
+    assert "\n## Warnings\n\n- BBRI: the source refused a day\n" in summary.read_text(
+        encoding="utf-8"
+    )
 
 
 @pytest.mark.parametrize(

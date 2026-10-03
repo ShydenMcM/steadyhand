@@ -40,7 +40,7 @@ def test_the_final_state_of_both_golden_runs_reads_back_equal(
     golden: tuple[BacktestResult, BacktestResult],
 ) -> None:
     off, on = golden
-    assert len(on.run.final.holdings.claims) == 5
+    assert len(on.run.final.holdings.claims) == 6
     for result in (off, on):
         final = result.run.final
         assert decode_state(from_json(to_json(encode_state(final)))) == final

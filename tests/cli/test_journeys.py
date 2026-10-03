@@ -120,7 +120,7 @@ def test_a_paper_traders_journey(tmp_path: Path) -> None:
 
     first = cli("paper", "run")
     assert first.code == 0, first.err
-    assert first.out.startswith("2021-02-01: 0 fill(s), 4 order(s) queued, value IDR 100,000,000")
+    assert first.out.startswith("2021-02-01: 0 fill(s), 5 order(s) queued, value IDR 100,000,000")
     again = cli("paper", "run")
     assert again.code == 0
     assert again.out.startswith("already up to date for 2021-02-01\n")
