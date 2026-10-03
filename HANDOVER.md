@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-10-03 16:45 WIB (2026-10-03 09:45 UTC) (**the standing test clean-ups come before M7**: #173, #179 and #174-#177 are merged and deployed, and the one-test-per-case guard is strict; next #178, then #184, then M7. See Resume steps 1.)
+**Updated:** 2026-10-03 19:41 WIB (2026-10-03 12:41 UTC) (**the standing test clean-ups come before M7**: #173-#179 are merged and deployed, the one-test-per-case guard is strict, and every guard proves its population (#178); next #184, then #190, then M7. See Resume steps 1.)
 **Local:** `~/Developer/Repos/steadyhand`. `develop` holds the T1 spec and plan, and `main` has no release yet. `t1/training-spec` and `m4/m4b-plan` are merged or superseded and deleted. Start each story's branch from `origin/develop`. Read heads with `git rev-parse`; never retype one.
 **GitHub:** https://github.com/ShydenMcM/steadyhand. `develop` is the default branch.
 
@@ -168,8 +168,9 @@ Shyden's global CLAUDE.md requires three clean-ups in every repo before other te
 | #175 | convert `tests/engine` (35 sites) | Done (PR #185, `f62a388`) |
 | #176 | convert `tests/idx` + `tests/golden` (25 sites) | Done (PR #187, `b65b8f1`) |
 | #177 | convert `tests/meta` + `tests/perf` (16 sites) | Done (PR #188, `4fecd70`; retired `BURN_DOWN`) |
-| #178 | guard-liveness audit of every guard (15 test files + 3 reader modules) | Todo |
+| #178 | guard-liveness audit: 24 guards derived, 14 flags proven green and fixed red, `tests/meta/population.py` (`searched`, `tracked`) | Done (PR #191, `0bf4e63`) |
 | #184 | engine tests asserting an absence over a run that never produces the thing (found in #175: the refused-day order checks) | Todo |
+| #190 | nine `ast.parse` readers raise a bare `SyntaxError` naming `<unknown>`; `public_definitions` reads only five statement kinds (#178 control d) | Todo |
 
 - **How a conversion ticket runs** (as #174 did):
   1. Classify each site in the ticket before changing anything: known before the run → `@pytest.mark.parametrize`; runtime population or one sequential journey → `# runtime population: <why>` on the loop's first line. For an `all(`/`any(` call, open it on its own line so the comment sits on the call's line.
@@ -178,7 +179,7 @@ Shyden's global CLAUDE.md requires three clean-ups in every repo before other te
   4. Make one production mutation per converted test that breaks a single case. A mutation in the constant the test reads is tautological; break the code that uses it. A state that carries forward (monthly savings) leaks into the next case, so pick the case whose successor tolerates it.
   5. Record `--durations` before and after on an idle machine, and say when load explains a difference.
 - **Live check of #179:** the daily `yahoo-shape` schedule ran against Yahoo on `8a071fc`, the one-attempt client, and passed (run 37104917431).
-- **Already flagged for #178:** `test_no_float.py` asserts `findings == {}` with only a file-name subset as liveness, which is files opened, not judged units.
+- **#178 controls, for every new guard:** check its walk against `population.tracked(dir, suffix)` (git's list, independent of `rglob`), put its population in the verdict with `searched(findings, of=, what=)`, set its floor to measured - 1 with the figure named in a comment (copy the figure from a measure script's output, never type it), and plant every form its detector hunts. `empty_parameter_set_mark = "fail_at_collect"` makes a parametrize over an empty derived population fail. Tools: `derive_guards.py` (re-derive the guard list), `measure178.py`, `mutate178.py <tree> before|after`, `audit178.md` (the evidence).
 - **Tools** (git-ignored, `.superpowers/sdd/2026-10-03-test-audit/`): `judging.py` (an independent scan of judging loops), `burn_down.py` (prints the totals and the `BURN_DOWN` literal from the guard's reader), `file_ticket.sh <title> <body>` (asserts the board title, files the issue, sets Todo, reads it back), `mutate173.py`, `mutate179.py` (whole suite per mutation), `mutate174.py` and `mutate175.py` (one file per mutation, the exact failing set), `probe175.py` (what the refused-days run queues and fills each day), `classify174.md`, `classify175.md`, `classify174.md`, `pr*.md`, and the worktree `wt-mut`. Run the mutation scripts with `python -u` so their logs stream.
 - **Lessons recorded in memory this session:** build a mutation's prediction from the guard's own findings, never from a looser scan or a list cut with `tail`, and reconcile its sum against the printed total. The reply header opens the turn's final text block.
 - **#175 lessons:** a check whose run never produces the thing cannot be mutated red; trying to mutate each converted test is how #175 found the refused-day order checks blind (#184). Durations compare only back to back under the same load: run `develop` in the worktree straight after the branch. Never start a second `uv run --python X` in a tree whose gate is running: it rebuilds the shared `.venv` under the gate (a 3.13 run failed on missing yfinance metadata).
@@ -186,7 +187,7 @@ Shyden's global CLAUDE.md requires three clean-ups in every repo before other te
 
 ## Resume steps
 0. M6 is done. `main` still has no release (M10).
-1. **First, the standing test clean-ups** (section above): #178 (the guard-liveness audit: list every guard from the code, record the unit it judges against the unit its liveness counts, prove each flag with a blinding mutation, fix with controls (a)-(d), file the rest), then #184 (absence checks that cannot fail), one branch and PR each, merged into `develop` when CI is green. Start by re-reading the ticket. **Then M7, strategy wave 2** (core design §M6–M9: "Strategy waves 1–4, each with its guides"). It has no spec yet: start with brainstorming, then the spec reviewed to zero, then the plan built by extraction as M6's was (copy the tools from `.superpowers/sdd/2026-09-30-m6-wave1/`, the newest copy). The M3 spec's table puts **bars before the backtest's start** (a price look-back) in M7; M6 built only the dividend look-back.
+1. **First, the standing test clean-ups** (section above): #184 (absence checks that cannot fail), then #190 (readers name the file they cannot parse), one branch and PR each, merged into `develop` when CI is green. Start by re-reading the ticket. **Then M7, strategy wave 2** (core design §M6–M9: "Strategy waves 1–4, each with its guides"). It has no spec yet: start with brainstorming, then the spec reviewed to zero, then the plan built by extraction as M6's was (copy the tools from `.superpowers/sdd/2026-09-30-m6-wave1/`, the newest copy). The M3 spec's table puts **bars before the backtest's start** (a price look-back) in M7; M6 built only the dividend look-back.
 2. **#160 recover Yahoo's unreported price factor: DONE 2026-10-03** (plan `docs/superpowers/plans/2026-10-01-price-factor-recovery.md`, spec `docs/superpowers/specs/2026-10-01-price-factor-recovery-design.md`, both merged in PR #165 `833005a`). Every story was applied from the plan by `apply_task.py`, is byte-identical to the verified chain commit, matched the plan's red count and failure kinds, was green at 100% branch coverage, had all its mutations caught on the real commit, and was deployed with `publish-dev` green:
 
    | Story | Issue | PR | Merge | Red | Gate | Mutations |
