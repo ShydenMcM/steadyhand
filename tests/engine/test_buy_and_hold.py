@@ -126,7 +126,7 @@ def test_it_never_sells_and_buys_only_its_set(
     portfolio = PortfolioView(rp(value), rp(spendable), {i: rp(v) for i, v in held.items()})
     memory = {"set": " ".join(sorted(f"IDX:{i.symbol}" for i in chosen))}
     decision = BuyAndHold().decide(view(buyable), portfolio, memory)
-    for instrument in held:
+    for instrument in held:  # runtime population: the drawn holdings
         assert decision.weights[instrument] >= portfolio.weight(instrument)
     bought = {i for i, weight in decision.weights.items() if weight > portfolio.weight(i)}
     assert bought <= chosen & buyable

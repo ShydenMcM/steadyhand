@@ -518,14 +518,16 @@ def test_every_day_keeps_cash_whole_and_the_value_adding_up(
         ]
     )
     state = EngineState.opening(rp(capital), D1)
-    for day in days:
+    for day in days:  # runtime population: one journey, each day on the state the last left
         state, report = run_day(
             state, DayInputs(day, history, members=MEMBERS), BuyAndHold(), rules(), half()
         )
         portfolio = state.holdings.portfolio
         assert report.settled.amount >= 0
         assert report.value == portfolio.cash_balance() + report.holdings_value
-        assert all(p.quantity % 100 == 0 for p in portfolio.positions)
+        assert all(  # runtime population: the positions held that day
+            p.quantity % 100 == 0 for p in portfolio.positions
+        )
         charges = [
             m for m in portfolio.ledger if m.kind is MovementKind.DAILY_COST and m.day == day
         ]

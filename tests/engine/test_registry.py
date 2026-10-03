@@ -23,12 +23,16 @@ from steadyhand import (
 )
 
 
-def test_every_registered_strategy_has_a_summary_and_a_turnover() -> None:
+def test_the_registry_holds_a_strategy() -> None:
     assert len(STRATEGIES) >= 1
-    for entry in STRATEGIES.values():
-        assert entry.summary.strip()
-        assert "\n" not in entry.summary
-        assert entry.turnover in Turnover
+
+
+@pytest.mark.parametrize("name", STRATEGIES)
+def test_every_registered_strategy_has_a_summary_and_a_turnover(name: str) -> None:
+    entry = STRATEGIES[name]
+    assert entry.summary.strip()
+    assert "\n" not in entry.summary
+    assert entry.turnover in Turnover
 
 
 def test_the_baselines_entry() -> None:

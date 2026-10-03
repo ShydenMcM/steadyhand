@@ -253,14 +253,19 @@ def test_the_last_month_is_the_six_hundredth() -> None:
     )
 
 
-def test_nothing_to_project_from_cannot_be_projected() -> None:
-    silent = project(rate(0), measured("0"), rp(1_200_000), goal(1), rules())
-    # With no holdings' value, even a goal the income already meets cannot be projected.
-    unvalued = project(rate(120_000), measured("0"), rp(0), goal(1), rules())
-    for projection in (silent, unvalued):
-        assert [(s.outcome, s.years) for s in projection.scenarios] == [
-            (ProjectionOutcome.CANNOT, None)
-        ] * 3
+@pytest.mark.parametrize(
+    ("gross", "value"),
+    [
+        pytest.param(0, 1_200_000, id="silent"),
+        # With no holdings' value, even a goal the income already meets cannot be projected.
+        pytest.param(120_000, 0, id="unvalued"),
+    ],
+)
+def test_nothing_to_project_from_cannot_be_projected(gross: int, value: int) -> None:
+    projection = project(rate(gross), measured("0"), rp(value), goal(1), rules())
+    assert [(s.outcome, s.years) for s in projection.scenarios] == [
+        (ProjectionOutcome.CANNOT, None)
+    ] * 3
 
 
 @pytest.mark.parametrize(
@@ -341,7 +346,9 @@ def test_a_larger_contribution_never_takes_longer(
         goal(target, smaller + extra or None),
         rules(),
     )
-    for fewer, larger in zip(less.scenarios, more.scenarios, strict=True):
+    for fewer, larger in zip(  # runtime population: the scenarios of two drawn projections
+        less.scenarios, more.scenarios, strict=True
+    ):
         assert rank(larger) <= rank(fewer)
 
 

@@ -100,7 +100,7 @@ def test_orders_are_whole_lots_that_never_overshoot_the_target(
     worth = sum(PRICES[s].amount * n for s, n in shares.items())
     portfolio = view(worth + value, shares)
     orders = sizer().size(decimals, portfolio, shares, PRICES, DAY)
-    for order in orders:
+    for order in orders:  # runtime population: the orders the sizer returned
         stock = order.instrument
         assert order.quantity % 100 == 0
         target = portfolio.value.times(decimals[stock], rounding=Rounding.DOWN).amount

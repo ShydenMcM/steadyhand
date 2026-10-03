@@ -226,25 +226,35 @@ def test_the_strategy_and_the_baseline_each_run_every_trading_day() -> None:
     assert {order.instrument for order in result.baseline.reports[0].queued} == {BBCA, BBRI}
 
 
-def test_each_run_carries_its_metrics() -> None:
-    result = run(_Source(calm()), chosen=settings(contribution=5_000_000))
-    assert result.baseline is not None
-    for outcome in (result.run, result.baseline):
-        assert outcome.metrics == measure(outcome.reports, outcome.final)
-        assert outcome.metrics.deposited == rp(105_000_000)
-        assert outcome.metrics.final_value == outcome.reports[-1].value
-    assert result.run.metrics != result.baseline.metrics
+@pytest.fixture(scope="module")
+def contributed() -> BacktestResult:
+    """A run and its baseline, with a monthly contribution."""
+    return run(_Source(calm()), chosen=settings(contribution=5_000_000))
 
 
-def test_both_runs_share_the_settings() -> None:
-    result = run(_Source(calm()), chosen=settings(contribution=5_000_000))
-    assert result.baseline is not None
-    for outcome in (result.run, result.baseline):
-        deposits = {report.day: report.deposit for report in outcome.reports}
-        assert deposits[date(2025, 7, 1)] == rp(5_000_000)
-        assert sum(amount.amount for amount in deposits.values()) == 5_000_000
-        # At the default 10% cap these day-one buys would be cut; at 50% they are not.
-        assert outcome.reports[0].cuts == ()
+@pytest.mark.parametrize("which", ["run", "baseline"])
+def test_each_run_carries_its_metrics(contributed: BacktestResult, which: str) -> None:
+    outcome = getattr(contributed, which)
+    assert outcome is not None
+    assert outcome.metrics == measure(outcome.reports, outcome.final)
+    assert outcome.metrics.deposited == rp(105_000_000)
+    assert outcome.metrics.final_value == outcome.reports[-1].value
+
+
+def test_the_run_and_its_baseline_measure_differently(contributed: BacktestResult) -> None:
+    assert contributed.baseline is not None
+    assert contributed.run.metrics != contributed.baseline.metrics
+
+
+@pytest.mark.parametrize("which", ["run", "baseline"])
+def test_both_runs_share_the_settings(contributed: BacktestResult, which: str) -> None:
+    outcome = getattr(contributed, which)
+    assert outcome is not None
+    deposits = {report.day: report.deposit for report in outcome.reports}
+    assert deposits[date(2025, 7, 1)] == rp(5_000_000)
+    assert sum(amount.amount for amount in deposits.values()) == 5_000_000
+    # At the default 10% cap these day-one buys would be cut; at 50% they are not.
+    assert outcome.reports[0].cuts == ()
 
 
 def test_a_buy_and_hold_backtest_is_its_own_baseline() -> None:
@@ -348,23 +358,55 @@ def test_every_stock_the_universe_holds_on_any_day_is_fetched_for_the_whole_wind
     ]
     queued = [{order.instrument for order in report.queued} for report in result.run.reports]
     assert queued[5:] == [{TLKM}, set(), set(), set(), set()]
-    assert all(not found for found in queued[:5])
+    assert all(  # runtime population: the orders queued on the days before TLKM joined
+        not found for found in queued[:5]
+    )
     assert [rejected.reason for rejected in result.run.reports[0].rejected] == [
         Note(TRADE_NOT_IN_UNIVERSE, "not in the universe on 2025-06-30")
     ]
 
 
-def test_refused_days_are_fetched_around_and_the_stock_sits_them_out() -> None:
-    refused = (date(2025, 7, 3), date(2025, 7, 4), date(2025, 7, 7), date(2025, 7, 10))
-    clean = [day for day in DAYS if day not in refused]
+REFUSED = (date(2025, 7, 3), date(2025, 7, 4), date(2025, 7, 7), date(2025, 7, 10))
+
+
+@pytest.fixture(scope="module")
+def refused_run() -> tuple[_Source, _Universe, BacktestResult]:
+    """A buy-and-hold run in which the source refuses BBRI on the four ``REFUSED`` days."""
+    clean = [day for day in DAYS if day not in REFUSED]
     # BBRI reopens on 8 July at 5,200, outside the band around its last clean close of 4,000:
     # after refused days that close says nothing, so the band check must skip it.
     bbri = [bar(BBRI, day, 4_000) for day in clean if day < date(2025, 7, 8)] + [
         bar(BBRI, day, 5_200) for day in clean if day >= date(2025, 7, 8)
     ]
-    source = _Source(flat(BBCA, 9_000) + bbri, refused={BBRI: refused})
+    source = _Source(flat(BBCA, 9_000) + bbri, refused={BBRI: REFUSED})
     universe = _Universe([(START, frozenset({BBCA, BBRI}))], warnings=[GAP])
-    result = run(source, universe, strategy=BuyAndHold())
+    return source, universe, run(source, universe, strategy=BuyAndHold())
+
+
+@pytest.mark.parametrize("day", REFUSED, ids=str)
+def test_the_stock_sits_out_each_refused_day(
+    refused_run: tuple[_Source, _Universe, BacktestResult], day: date
+) -> None:
+    _, _, result = refused_run
+    reports = {report.day: report for report in result.run.reports}
+    report = reports[day]
+    held = {fill.order.instrument: fill.quantity for fill in reports[date(2025, 7, 1)].fills}
+    # Valued at its last clean close: 4,000 before it reopens on 8 July, 5,200 after. Buy-and-hold
+    # queues nothing after its first day, so this is what each refused day can be seen to get wrong.
+    close = 4_000 if day < date(2025, 7, 8) else 5_200
+    assert report.holdings_value == rp(9_000 * held[BBCA] + close * held[BBRI])
+    assert all(  # runtime population: the orders this day's report queued
+        order.instrument != BBRI for order in report.queued
+    )
+    assert all(  # runtime population: the fills this day's report holds
+        fill.order.instrument != BBRI for fill in report.fills
+    )
+
+
+def test_refused_days_are_fetched_around_and_the_stock_sits_them_out(
+    refused_run: tuple[_Source, _Universe, BacktestResult],
+) -> None:
+    source, universe, result = refused_run
     assert source.requests == [
         ("bars", "BBCA", START, END),
         ("actions", "BBCA", START, END),
@@ -390,9 +432,6 @@ def test_refused_days_are_fetched_around_and_the_stock_sits_them_out() -> None:
     )
     reports = {report.day: report for report in result.run.reports}
     held = {p.instrument: p.quantity for p in result.run.final.holdings.portfolio.positions}
-    for day in refused:
-        assert all(order.instrument != BBRI for order in reports[day].queued)
-        assert all(fill.order.instrument != BBRI for fill in reports[day].fills)
     bbca = next(
         fill.quantity for fill in reports[date(2025, 7, 1)].fills if fill.order.instrument == BBCA
     )
@@ -467,8 +506,12 @@ def test_a_halt_lasts_to_the_end_of_the_run_and_is_recorded() -> None:
     )
     reports = {report.day: report for report in result.run.reports}
     assert reports[date(2025, 7, 7)].halt == result.run.halt
-    assert all(report.queued == () for day, report in reports.items() if day >= date(2025, 7, 7))
-    assert all(report.halt is None for day, report in reports.items() if day != date(2025, 7, 7))
+    assert all(  # runtime population: the run's reports
+        report.queued == () for day, report in reports.items() if day >= date(2025, 7, 7)
+    )
+    assert all(  # runtime population: the run's reports
+        report.halt is None for day, report in reports.items() if day != date(2025, 7, 7)
+    )
 
 
 def test_exclusions_and_corporate_actions_reach_their_days() -> None:
@@ -482,7 +525,9 @@ def test_exclusions_and_corporate_actions_reach_their_days() -> None:
         fill.quantity for fill in result.run.reports[1].fills if fill.order.instrument == BBCA
     )
     assert [(e.instrument, e.gross) for e in entitled[date(2025, 7, 8)]] == [(BBCA, rp(50 * held))]
-    assert all(not found for day, found in entitled.items() if day != date(2025, 7, 8))
+    assert all(  # runtime population: the run's reports
+        not found for day, found in entitled.items() if day != date(2025, 7, 8)
+    )
 
 
 def test_a_run_gathers_every_days_warnings_in_order() -> None:
@@ -622,7 +667,10 @@ def test_compare_gives_every_run_its_income_report_when_there_is_a_goal() -> Non
     chosen = replace(settings(), goal=IncomeGoal(rp(1_000_000)))
     fixed = _Fixed({BBCA: Decimal("0.5")})
     result = compare([fixed], market(_Source(calm())), START, END, chosen)
-    assert all(each.income is not None for each in result.runs)
+    assert len(result.runs) == 2  # the strategy and the baseline
+    assert all(  # runtime population: the runs compare returned
+        each.income is not None for each in result.runs
+    )
     assert compare([fixed], market(_Source(calm())), START, END, settings()).runs[0].income is None
 
 
@@ -777,7 +825,9 @@ def test_a_dividend_on_a_refused_day_reaches_the_history_when_read_without_price
     assert on[0][-1] == PastDividend(date(2025, 7, 3), Decimal(40))
     assert on[1:] == (True, True)
     # ... while the engine still credits nothing on a refused day, as its warning says.
-    assert all(e.ex_date != REFUSED_DIVIDEND.ex_date for r in result.run.reports for e in r.paid)
+    assert all(  # runtime population: the dividends the run's reports paid
+        e.ex_date != REFUSED_DIVIDEND.ex_date for r in result.run.reports for e in r.paid
+    )
     assert [warning.key for warning in result.warnings] == [DATA_BAR_REFUSED]
 
 
@@ -841,7 +891,9 @@ def test_compare_fetches_the_look_back_once_for_every_strategy() -> None:
 def test_day_inputs_give_every_day_the_look_back() -> None:
     source = _Source(calm(), LOOKED_BACK, refused={BBRI: [date(2024, 5, 6)]})
     inputs = day_inputs(market(source), START, END, 2)
-    assert all(day.past_actions is inputs[0].past_actions for day in inputs)
+    assert all(  # runtime population: the inputs day_inputs returned
+        day.past_actions is inputs[0].past_actions for day in inputs
+    )
     history = inputs[0].past_actions
     assert history.dividends(BBCA, START) == (PastDividend(date(2023, 3, 1), Decimal(100)),)
     assert history.incomplete == frozenset({BBRI})

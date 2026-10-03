@@ -330,33 +330,37 @@ _SPLIT = st.builds(
 )
 
 
+@pytest.mark.parametrize("stock", [BBCA, BBRI], ids=lambda stock: stock.symbol)
 @given(st.lists(st.one_of(_DIVIDEND, _SPLIT), max_size=12), _DAYS)
 def test_nothing_after_today_is_returned_and_each_dividend_is_restated_by_its_own_splits(
-    actions: list[CorporateAction], today: date
+    stock: Instrument, actions: list[CorporateAction], today: date
 ) -> None:
     history = ActionHistory(actions)
-    for stock in (BBCA, BBRI):
-        paid = sorted(
-            (
-                action
-                for action in actions
-                if isinstance(action, CashDividend)
-                and action.instrument == stock
-                and action.ex_date <= today
-            ),
-            key=lambda action: action.ex_date,
-        )
-        found = history.dividends(stock, today)
-        assert all(dividend.ex_date <= today for dividend in found)
-        assert [dividend.ex_date for dividend in found] == [dividend.ex_date for dividend in paid]
-        for dividend, source in zip(found, paid, strict=True):
-            splits = [
-                action
-                for action in actions
-                if isinstance(action, Split)
-                and action.instrument == stock
-                and source.ex_date <= action.ex_date <= today
-            ]
-            old = prod(split.old_shares for split in splits)
-            new = prod(split.new_shares for split in splits)
-            assert dividend.per_share == source.per_share * old / new
+    paid = sorted(
+        (
+            action
+            for action in actions
+            if isinstance(action, CashDividend)
+            and action.instrument == stock
+            and action.ex_date <= today
+        ),
+        key=lambda action: action.ex_date,
+    )
+    found = history.dividends(stock, today)
+    assert all(  # runtime population: the dividends the history returned for the draw
+        dividend.ex_date <= today for dividend in found
+    )
+    assert [dividend.ex_date for dividend in found] == [dividend.ex_date for dividend in paid]
+    for dividend, source in zip(  # runtime population: each dividend returned, with its source
+        found, paid, strict=True
+    ):
+        splits = [
+            action
+            for action in actions
+            if isinstance(action, Split)
+            and action.instrument == stock
+            and source.ex_date <= action.ex_date <= today
+        ]
+        old = prod(split.old_shares for split in splits)
+        new = prod(split.new_shares for split in splits)
+        assert dividend.per_share == source.per_share * old / new
