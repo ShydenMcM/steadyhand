@@ -17,6 +17,7 @@ from synthetic import END, START, All, EqualWeight, PlainRules, Synthetic
 from steadyhand import (
     IDR,
     STRATEGIES,
+    BacktestResult,
     BacktestSettings,
     EngineSettings,
     IncomeGoal,
@@ -29,8 +30,9 @@ BUDGET_SECONDS = 30
 GROWTH_BUDGET_SECONDS = 3
 
 
-@pytest.mark.perf
-def test_ten_years_of_45_stocks_run_inside_the_budget() -> None:
+@pytest.fixture(scope="module")
+def timed() -> tuple[BacktestResult, float]:
+    """Ten years of 45 stocks with a goal, and the seconds the backtest took."""
     source = Synthetic()
     settings = BacktestSettings(
         Money(1_000_000_000, IDR),
@@ -40,22 +42,33 @@ def test_ten_years_of_45_stocks_run_inside_the_budget() -> None:
     market = Market(All(source.stocks), source, PlainRules())
     began = time.perf_counter()
     result = backtest(EqualWeight(), market, START, END, settings)
-    seconds = time.perf_counter() - began
-    assert result.baseline is not None
-    runs = (result.run, result.baseline)
-    # The run did the work it is timed on: every weekday, trades and dividends in both runs.
-    weekdays = sum((START + timedelta(days=n)).weekday() < 5 for n in range((END - START).days + 1))
-    assert [len(run.reports) for run in runs] == [weekdays, weekdays]
-    assert all(run.halt is None for run in runs)
-    assert all(sum(len(r.fills) for r in run.reports) > 45 for run in runs)
-    assert all(run.metrics.dividends.gross.amount > 0 for run in runs)
-    # Each run's income report, from five years of history, is inside the same budget, and its
-    # projection had a run-rate to simulate.
-    assert all(
-        run.income is not None and run.income.run_rate.annual_gross.amount > 0 for run in runs
-    )
+    return result, time.perf_counter() - began
+
+
+@pytest.mark.perf
+def test_ten_years_of_45_stocks_run_inside_the_budget(timed: tuple[BacktestResult, float]) -> None:
+    result, seconds = timed
     assert result.income_impact is not None
     assert seconds < BUDGET_SECONDS, f"took {seconds:.1f} s, over the {BUDGET_SECONDS} s budget"
+
+
+@pytest.mark.perf
+@pytest.mark.parametrize("which", ["run", "baseline"])
+def test_each_timed_run_did_the_work_it_is_timed_on(
+    timed: tuple[BacktestResult, float], which: str
+) -> None:
+    run = getattr(timed[0], which)
+    assert run is not None
+    # Every weekday, trades and dividends.
+    weekdays = sum((START + timedelta(days=n)).weekday() < 5 for n in range((END - START).days + 1))
+    assert len(run.reports) == weekdays
+    assert run.halt is None
+    assert sum(len(r.fills) for r in run.reports) > 45
+    assert run.metrics.dividends.gross.amount > 0
+    # Its income report, from five years of history, is inside the same budget, and its
+    # projection had a run-rate to simulate.
+    assert run.income is not None
+    assert run.income.run_rate.annual_gross.amount > 0
 
 
 @pytest.mark.perf

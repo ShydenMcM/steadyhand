@@ -132,12 +132,11 @@ def test_relative_imports_are_resolved() -> None:
     assert statements(
         "from . import catalogue\n", "steadyhand.training.render", is_package=False
     ) == [("steadyhand.training", ("catalogue",))]
-    assert all(
-        imports_training(s)
-        for s in statements(
-            "from . import training\nfrom .training import e\n", "steadyhand", is_package=True
-        )
+    both = statements(
+        "from . import training\nfrom .training import e\n", "steadyhand", is_package=True
     )
+    assert len(both) == 2
+    assert all(imports_training(s) for s in both)  # runtime population: the statements parsed
 
 
 @pytest.mark.parametrize(

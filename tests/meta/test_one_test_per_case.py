@@ -2,8 +2,8 @@
 
 Shyden's rule (2026-10-02, every repo): a loop inside one test stops at its first failing case
 and hides the rest, and its title names no case, so a fixed population is parametrized instead.
-``looped_cases`` finds the loops; this file holds the suite to them, with a burn-down list of the
-sites found on 2026-10-03 that the conversion tickets (#174-#177) shrink to nothing.
+``looped_cases`` finds the loops; this file holds the suite to them. The 88 sites found on
+2026-10-03 were converted or marked by #174-#177, so none is allowed now.
 """
 
 import re
@@ -17,45 +17,9 @@ ROOT = Path(__file__).resolve().parents[2]
 TESTS = ROOT / "tests"
 RAW_TEST = re.compile(r"^[ \t]*(?:async[ \t]+)?def[ \t]+test", re.MULTILINE)
 
-# Measured on 2026-10-03 after #176: 1,111 tests read in 86 files. Lower it only by a deliberate
+# Measured on 2026-10-03 after #177: 1,113 tests read in 86 files. Lower it only by a deliberate
 # edit when the suite shrinks.
-TESTS_READ_FLOOR = 1_110
-
-# The looped cases found on 2026-10-03 (88 in 66 tests), by file and test: each conversion
-# removes its entries, and an entry that no longer loops fails until it is removed, so this list
-# can only shrink.
-BURN_DOWN: dict[str, dict[str, int]] = {
-    "tests/meta/test_hypothesis_profiles.py": {
-        "test_every_profile_has_no_deadline": 1,
-    },
-    "tests/meta/test_legal_line.py": {
-        "test_relative_imports_are_resolved": 1,
-    },
-    "tests/meta/test_lessons.py": {
-        "test_every_lesson_file_is_loaded": 2,
-        "test_module_8_has_a_lesson_for_each_strategy_citing_its_guide": 1,
-    },
-    "tests/meta/test_note_keys.py": {
-        "test_every_key_is_a_dotted_lowercase_identifier_named_after_itself": 1,
-        "test_every_note_is_built_from_a_note_key_and_every_note_key_is_used": 1,
-        "test_no_key_is_defined_twice": 1,
-    },
-    "tests/meta/test_packaging.py": {
-        "test_each_package_ships_the_root_licence": 1,
-    },
-    "tests/meta/test_public_api.py": {
-        "test_training_is_left_out_of_the_engine_and_exports_its_own_names": 1,
-    },
-    "tests/meta/test_strategy_guides.py": {
-        "test_each_registered_name_is_the_strategys_own": 1,
-    },
-    "tests/perf/test_cli_startup.py": {
-        "test_a_command_that_reads_no_market_data_starts_within_budget": 1,
-    },
-    "tests/perf/test_performance.py": {
-        "test_ten_years_of_45_stocks_run_inside_the_budget": 4,
-    },
-}
+TESTS_READ_FLOOR = 1_112
 
 PLANTED = {
     "for over a constant": (
@@ -204,15 +168,6 @@ def test_the_file_is_read_as_every_test_its_text_defines(path: Path) -> None:
 
 
 @pytest.mark.parametrize("path", FILES, ids=rel)
-def test_the_file_loops_no_case_beyond_the_burn_down_list(path: Path) -> None:
+def test_the_file_loops_no_case(path: Path) -> None:
     found = Counter(case.test for case in read_file(path).looped)
-    listed = BURN_DOWN.get(rel(path), {})
-    new = {test: n for test, n in found.items() if n > listed.get(test, 0)}
-    stale = {test: n for test, n in listed.items() if found.get(test, 0) < n}
-    assert new == {}, "a fixed population is parametrized, not looped (#173)"
-    assert stale == {}, "these no longer loop: take them off BURN_DOWN"
-
-
-def test_every_burn_down_entry_names_a_test_file_on_disk() -> None:
-    names = {rel(path) for path in FILES}
-    assert set(BURN_DOWN) <= names
+    assert found == {}, "a fixed population is parametrized, not looped (#173)"

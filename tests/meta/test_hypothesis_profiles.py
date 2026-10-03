@@ -8,6 +8,7 @@ property test.
 import ast
 from pathlib import Path
 
+import pytest
 from hypothesis import settings
 
 TESTS = Path(__file__).resolve().parents[1]
@@ -24,9 +25,9 @@ def deadline_keywords(source: str) -> list[int]:
     ]
 
 
-def test_every_profile_has_no_deadline() -> None:
-    for name in PROFILES:
-        assert settings.get_profile(name).deadline is None, f"profile {name!r} keeps a deadline"
+@pytest.mark.parametrize("name", PROFILES)
+def test_every_profile_has_no_deadline(name: str) -> None:
+    assert settings.get_profile(name).deadline is None, f"profile {name!r} keeps a deadline"
 
 
 def test_the_detector_finds_the_profiles_in_conftest() -> None:
