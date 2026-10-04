@@ -1,6 +1,6 @@
 # steadyhand: Rights issues from an operator file (#203)
 
-**Status:** written 2026-10-04, design approved by Shyden through AskUserQuestion the same day; the written spec awaits his approval (#203 AC1).
+**Status:** approved by Shyden 2026-10-04 through AskUserQuestion ("Approve the spec"), after its design (decision 5) and three review passes (#203 AC1).
 **Ticket:** #203 (13 points). **Related:** #200 (its AC7 closes with this ticket's real-data run), #207 (bonus shares, split off by decision 1).
 
 ## 1. What this delivers
