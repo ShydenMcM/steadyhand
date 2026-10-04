@@ -652,15 +652,15 @@ CLEAN_DIVIDEND = CashDividend(BBCA, date(2025, 7, 8), Decimal(30))
 
 
 @pytest.mark.parametrize(
-    ("kinds", "complete", "known"),
+    ("kinds", "seen"),
     [
-        (frozenset({"bars"}), True, [date(2025, 7, 2), date(2025, 7, 8)]),
-        (frozenset({"bars", "actions"}), False, [date(2025, 7, 8)]),
+        (frozenset({"bars"}), (True, [date(2025, 7, 2), date(2025, 7, 8)])),
+        (frozenset({"bars", "actions"}), (False, [date(2025, 7, 8)])),
     ],
     ids=["actions read without prices", "actions refused with prices"],
 )
 def test_a_day_refused_in_turn_keeps_the_history_as_a_first_refusal_does(
-    kinds: frozenset[str], complete: bool, known: list[date]
+    kinds: frozenset[str], seen: tuple[bool, list[date]]
 ) -> None:
     actions = [CashDividend(BBCA, date(2025, 7, 2), Decimal(25)), CLEAN_DIVIDEND]
     source = _ByRange(calm(), BBCA_RE_REFUSED, actions, kinds, stock=BBCA)
@@ -670,6 +670,7 @@ def test_a_day_refused_in_turn_keeps_the_history_as_a_first_refusal_does(
     result = run(source, strategy=reader, chosen=next_day)
     # The whole run's actions answer for the day refused in turn when the source reads them
     # without prices; when it refuses them too, the history is incomplete and holds clean days'.
+    complete, known = seen
     assert reader.seen[START][1] is complete
     assert [dividend.ex_date for dividend in reader.seen[END][0]] == known
     # The engine credits only the clean day's dividend: the one refused in turn is never entitled.
