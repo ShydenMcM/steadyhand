@@ -17,6 +17,10 @@ actions only, so its bars still count as missing.
 Each fetched range also stores the upstream's restorations overlapping it (#160 spec §6): the
 runs of a stock's history whose prices and dividends were restored, so a report can say so
 from a cache read alone.
+
+A read asks every missing range once, even after the upstream refuses days in one of them, and
+then raises one ``RefusedGapsError`` naming every refused day (#202): the days a read names do
+not depend on what the cache already holds.
 """
 
 from __future__ import annotations
@@ -42,6 +46,7 @@ from steadyhand import (
     Note,
     OtherAction,
     Split,
+    UnavailableDaysError,
     UnsupportedDateError,
 )
 from steadyhand_idx.calendar import IdxCalendar
@@ -116,6 +121,20 @@ class CacheConflictError(RuntimeError):
 
 class CacheSchemaError(RuntimeError):
     """The cache file was written by a newer steadyhand-idx than this one."""
+
+
+class RefusedGapsError(UnavailableDaysError):
+    """The upstream refused days in one or more of the gaps a read had to fetch (#202).
+
+    Every missing gap is asked once, whatever the gaps before it answered, so ``days`` names every
+    refused day of the read, as it would on an empty cache. ``refusals`` keeps each gap's own
+    error in date order, so its class and reason survive; the message is theirs, joined.
+    """
+
+    def __init__(self, refusals: Sequence[UnavailableDaysError]) -> None:
+        self.refusals = tuple(refusals)
+        days = sorted({day for refusal in self.refusals for day in refusal.days})
+        super().__init__("; ".join(str(refusal) for refusal in self.refusals), days)
 
 
 class RestoringSource(DataSource, Protocol):
@@ -456,10 +475,13 @@ class CachedDataSource:
         today = self._today_for(start, end)
         complete = min(end, today - _ONE_DAY)
         if start <= complete:
-            for first, last in self.missing_actions(instrument, start, complete):
+
+            def fetch(first: date, last: date) -> None:
                 actions = self._upstream.corporate_actions(instrument, first, last)
                 restored = self._upstream.restorations(instrument, first, last)
                 self._cache.store_actions(instrument, (first, last), actions, restored)
+
+            _ask_every_gap(self.missing_actions(instrument, start, complete), fetch)
         cached = self._cache.actions(instrument, start, complete)
         if end < today:
             return cached
@@ -534,12 +556,36 @@ class CachedDataSource:
         today = self._today_for(start, end)
         complete = min(end, today - _ONE_DAY)
         if start <= complete:
-            for first, last in self.missing(instrument, start, complete):
+
+            def fetch(first: date, last: date) -> None:
                 bars = self._upstream.bars(instrument, first, last)
                 actions = self._upstream.corporate_actions(instrument, first, last)
                 restored = self._upstream.restorations(instrument, first, last)
                 self._cache.store(instrument, (first, last), bars, actions, restored)
+
+            _ask_every_gap(self.missing(instrument, start, complete), fetch)
         return today
+
+
+def _ask_every_gap(gaps: Sequence[tuple[date, date]], fetch: Callable[[date, date], None]) -> None:
+    """Fetch and store each of *gaps* in turn, once each, and raise one ``RefusedGapsError``
+    naming every day the upstream refused in them (#202).
+
+    A gap the upstream refuses stores nothing, and the gaps after it are still asked, so the
+    error names the same days however much of the range was already stored. Any other failure
+    stops at once, and so does a refusal naming no day of its own gap, which the upstream should
+    never give: nothing is retried, and nothing more is asked of a source that has failed.
+    """
+    refusals: list[UnavailableDaysError] = []
+    for first, last in gaps:
+        try:
+            fetch(first, last)
+        except UnavailableDaysError as refusal:
+            if not any(first <= day <= last for day in refusal.days):
+                raise
+            refusals.append(refusal)
+    if refusals:
+        raise RefusedGapsError(refusals)
 
 
 def _gaps(covered: Sequence[tuple[date, date]], start: date, end: date) -> list[tuple[date, date]]:

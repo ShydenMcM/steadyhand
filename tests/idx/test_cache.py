@@ -2,7 +2,7 @@
 
 import functools
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import closing
 from dataclasses import replace
 from datetime import date
@@ -20,21 +20,28 @@ from steadyhand import (
     DataUnavailableError,
     Instrument,
     Money,
+    Note,
     OtherAction,
     Split,
     StockUnavailableError,
+    UnavailableDaysError,
 )
+from steadyhand.backtest import Market, day_inputs
 from steadyhand_idx.cache import (
     MIGRATIONS,
     BarCache,
     CacheConflictError,
     CachedDataSource,
     CacheSchemaError,
+    RefusedGapsError,
     jakarta_today,
 )
 from steadyhand_idx.calendar import IdxCalendar
 from steadyhand_idx.factor import Restoration
+from steadyhand_idx.rules import IdxMarketRules
 from steadyhand_idx.yahoo import (
+    UnprovenDividendsError,
+    UnrecoverablePricesError,
     YahooDataSource,
     YahooHistory,
     YahooRow,
@@ -468,3 +475,204 @@ def test_a_run_read_only_in_today_s_bar_still_has_its_note(cache: BarCache) -> N
     assert cache.restorations(BBRI, today, today) == []
     assert source.data_notes([BBRI], today, today) == (RESTORED.note,)
     assert counting.asked == [(today, today), (date(2014, 1, 6), today)]
+
+
+SEP_7, OCT_5, OCT_6 = date(2021, 9, 7), date(2021, 10, 5), date(2021, 10, 6)
+TWO_MONTHS = (date(2021, 9, 1), date(2021, 10, 29))
+STORED = ((date(2021, 9, 13), date(2021, 9, 17)), (date(2021, 9, 27), date(2021, 10, 1)))
+"""Two clean ranges already stored, leaving three gaps in ``TWO_MONTHS`` (#202)."""
+GAPS = (
+    (date(2021, 9, 1), date(2021, 9, 10)),
+    (date(2021, 9, 20), date(2021, 9, 24)),
+    (date(2021, 10, 4), date(2021, 10, 29)),
+)
+
+
+class _Refusing:
+    """An upstream answering from BBCA's recording that records every request and refuses as
+    Yahoo's volume refusals do (#162), whatever the range: a request holding any of *prices* is
+    refused naming every one it holds, and likewise *dividends* for its actions. A request for a
+    range in *failing* raises that range's error instead."""
+
+    ticker = "BBCA.JK"
+
+    def __init__(
+        self,
+        prices: Sequence[date] = (),
+        dividends: Sequence[date] = (),
+        failing: Mapping[tuple[date, date], DataUnavailableError] | None = None,
+    ) -> None:
+        self._prices = prices
+        self._dividends = dividends
+        self._failing = {} if failing is None else failing
+        self.requests: list[tuple[str, date, date]] = []
+
+    def bars(self, instrument: Instrument, start: date, end: date) -> list[Bar]:
+        self._ask("bars", start, end)
+        if named := [day for day in self._prices if start <= day <= end]:
+            raise UnrecoverablePricesError(self.ticker, named)
+        return bbca(start, end)[0]
+
+    def corporate_actions(
+        self, instrument: Instrument, start: date, end: date
+    ) -> list[CorporateAction]:
+        self._ask("actions", start, end)
+        if named := [day for day in self._dividends if start <= day <= end]:
+            raise UnprovenDividendsError(self.ticker, named)
+        return bbca(start, end)[1]
+
+    def restorations(self, instrument: Instrument, start: date, end: date) -> list[Restoration]:
+        self._ask("restorations", start, end)
+        return []
+
+    def data_notes(self, instruments: Sequence[Instrument], start: date, end: date) -> list[Note]:
+        return []
+
+    def _ask(self, kind: str, start: date, end: date) -> None:
+        self.requests.append((kind, start, end))
+        if (start, end) in self._failing:
+            raise self._failing[start, end]
+
+
+def refusing(
+    cache: BarCache,
+    stored: Sequence[tuple[date, date]] = STORED,
+    *,
+    prices: Sequence[date] = (),
+    dividends: Sequence[date] = (),
+    failing: Mapping[tuple[date, date], DataUnavailableError] | None = None,
+) -> tuple[CachedDataSource, _Refusing]:
+    """A cached source over a ``_Refusing`` upstream, with *stored* already in the cache."""
+    for span in stored:
+        cache.store(BBCA, span, *bbca(*span))
+    upstream = _Refusing(prices, dividends, failing)
+    return CachedDataSource(upstream, cache, calendar(), today=lambda: date(2026, 9, 25)), upstream
+
+
+def refused_days(source: CachedDataSource, read: str) -> tuple[date, ...]:
+    with pytest.raises(UnavailableDaysError) as raised:
+        getattr(source, read)(BBCA, *TWO_MONTHS)
+    return raised.value.days
+
+
+def test_a_refused_read_names_the_refused_days_of_every_gap(cache: BarCache) -> None:
+    source, _ = refusing(cache, prices=(SEP_7, OCT_5, OCT_6))
+    assert refused_days(source, "bars") == (SEP_7, OCT_5, OCT_6)
+
+
+def test_a_refused_read_stores_every_gap_answered(cache: BarCache) -> None:
+    source, _ = refusing(cache, prices=(SEP_7, OCT_5, OCT_6))
+    refused_days(source, "bars")
+    assert cache.fetched(BBCA) == [*STORED[:1], GAPS[1], *STORED[1:]]
+
+
+def test_a_refused_read_asks_each_gap_once_in_date_order(cache: BarCache) -> None:
+    source, upstream = refusing(cache, prices=(SEP_7, OCT_5, OCT_6))
+    refused_days(source, "bars")
+    assert upstream.requests == [
+        ("bars", *GAPS[0]),
+        ("bars", *GAPS[1]),
+        ("actions", *GAPS[1]),
+        ("restorations", *GAPS[1]),
+        ("bars", *GAPS[2]),
+    ]
+
+
+def test_a_refused_actions_read_names_the_refused_days_of_every_gap(cache: BarCache) -> None:
+    source, _ = refusing(cache, dividends=(SEP_7, OCT_5))
+    assert refused_days(source, "corporate_actions") == (SEP_7, OCT_5)
+
+
+def test_a_refused_actions_read_asks_each_gap_once_and_stores_the_answered(
+    cache: BarCache,
+) -> None:
+    source, upstream = refusing(cache, dividends=(SEP_7, OCT_5))
+    refused_days(source, "corporate_actions")
+    assert upstream.requests == [
+        ("actions", *GAPS[0]),
+        ("actions", *GAPS[1]),
+        ("restorations", *GAPS[1]),
+        ("actions", *GAPS[2]),
+    ]
+    assert cache.fetched_actions(BBCA) == [*STORED[:1], GAPS[1], *STORED[1:]]
+    assert cache.fetched(BBCA) == list(STORED)
+
+
+def test_gaps_refused_for_different_reasons_keep_each_reason(cache: BarCache) -> None:
+    source, _ = refusing(cache, prices=(SEP_7,), dividends=(OCT_5,))
+    with pytest.raises(RefusedGapsError) as raised:
+        source.bars(BBCA, *TWO_MONTHS)
+    prices, dividends = raised.value.refusals
+    assert (type(prices), prices.days) == (UnrecoverablePricesError, (SEP_7,))
+    assert (type(dividends), dividends.days) == (UnprovenDividendsError, (OCT_5,))
+    assert raised.value.days == (SEP_7, OCT_5)
+    assert str(raised.value) == f"{prices}; {dividends}"
+    # The last gap's bars were answered, but its actions were not, so none of it is stored.
+    assert cache.fetched(BBCA) == [*STORED[:1], GAPS[1], *STORED[1:]]
+
+
+def test_one_refused_gap_keeps_its_own_message(cache: BarCache) -> None:
+    source, _ = refusing(cache, stored=(), prices=(SEP_7,))
+    with pytest.raises(RefusedGapsError) as raised:
+        source.bars(BBCA, *TWO_MONTHS)
+    (refusal,) = raised.value.refusals
+    assert str(raised.value) == str(refusal)
+    assert str(refusal).startswith("BBCA.JK: Yahoo's prices for 1 day(s) from 2021-09-07 to ")
+
+
+FAILURES = {
+    "fails": DataUnavailableError("BBCA: no data"),
+    "unservable": StockUnavailableError("BBCA: Yahoo does not know BBCA.JK"),
+    "names another gap's day": UnavailableDaysError("BBCA: refused", [SEP_7]),
+}
+
+
+@pytest.mark.parametrize("failure", FAILURES.values(), ids=FAILURES.keys())
+def test_a_gap_failing_without_naming_its_days_stops_the_read_at_once(
+    cache: BarCache, failure: DataUnavailableError
+) -> None:
+    source, upstream = refusing(cache, prices=(SEP_7, OCT_5), failing={GAPS[1]: failure})
+    with pytest.raises(DataUnavailableError) as raised:
+        source.bars(BBCA, *TWO_MONTHS)
+    assert raised.value is failure
+    assert upstream.requests == [("bars", *GAPS[0]), ("bars", *GAPS[1])]  # the last never asked
+    assert cache.fetched(BBCA) == list(STORED)
+
+
+@pytest.mark.parametrize("read", ["bars", "corporate_actions"])
+def test_a_refused_read_names_the_same_days_warm_or_fresh(tmp_path: Path, read: str) -> None:
+    days = (SEP_7, OCT_5, OCT_6)
+    with BarCache(tmp_path / "warm.sqlite") as warm, BarCache(tmp_path / "fresh.sqlite") as fresh:
+        from_warm = refused_days(refusing(warm, prices=days, dividends=days)[0], read)
+        from_fresh = refused_days(refusing(fresh, (), prices=days, dividends=days)[0], read)
+    assert from_warm == from_fresh == (SEP_7, OCT_5, OCT_6)
+
+
+class _OnlyBbca:
+    """A universe of BBCA alone, from the first day of ``TWO_MONTHS``."""
+
+    def members_on(self, day: date) -> frozenset[Instrument]:
+        return frozenset({BBCA})
+
+    def excluded_on(self, day: date) -> Mapping[Instrument, str]:
+        return {}
+
+    def first_day(self) -> date:
+        return TWO_MONTHS[0]
+
+    def survivorship_warnings(self, start: date, end: date) -> Sequence[Note]:
+        return ()
+
+
+def test_a_backtest_s_second_run_asks_only_for_the_refused_days(cache: BarCache) -> None:
+    source, upstream = refusing(cache, stored=(), prices=(SEP_7, OCT_5, OCT_6))
+    market = Market(_OnlyBbca(), source, IdxMarketRules())
+    first = day_inputs(market, *TWO_MONTHS)
+    fresh = list(upstream.requests)
+    upstream.requests.clear()
+    second = day_inputs(market, *TWO_MONTHS)
+    assert [d.day for d in first if BBCA in d.refused] == [SEP_7, OCT_5, OCT_6]
+    assert [d.day for d in second if BBCA in d.refused] == [SEP_7, OCT_5, OCT_6]
+    # Over the cache the first run filled, each refused gap is asked once, and nothing else.
+    assert upstream.requests == [("bars", SEP_7, SEP_7), ("bars", OCT_5, OCT_6)]
+    assert len(fresh) > len(upstream.requests)

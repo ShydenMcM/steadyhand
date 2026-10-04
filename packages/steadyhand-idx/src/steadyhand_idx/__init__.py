@@ -3,7 +3,13 @@
 from importlib.metadata import version
 
 from steadyhand_idx._datafile import DataFileError
-from steadyhand_idx.cache import BarCache, CacheConflictError, CachedDataSource, CacheSchemaError
+from steadyhand_idx.cache import (
+    BarCache,
+    CacheConflictError,
+    CachedDataSource,
+    CacheSchemaError,
+    RefusedGapsError,
+)
 from steadyhand_idx.calendar import IdxCalendar
 from steadyhand_idx.fees import BrokerPreset, FeeSchedule
 from steadyhand_idx.notes import UNIVERSE_SURVIVORSHIP_GAP
@@ -33,6 +39,7 @@ __all__ = [
     "Lq45Membership",
     "Lq45Universe",
     "MembershipUnknownError",
+    "RefusedGapsError",
     "RuleTables",
     "UnrecoverablePricesError",
     "YahooDataSource",
