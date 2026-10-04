@@ -315,10 +315,11 @@ def _calendar_days(start: date, end: date) -> Iterator[date]:
 def _fetch(market: Market, days: tuple[date, ...], lookback_years: int) -> _Window:
     """Fetch every stock the universe holds on any of *days*, over all of them (M3 spec §7.1).
 
-    A stock whose source refuses some days is fetched again over the clean ranges around them;
-    for its history, its actions over the whole run are read in a call of their own, which a
-    source that reads them without prices answers for the refused days too. If the source
-    refuses that call, those days' actions are unknown and the stock's history is incomplete.
+    A stock whose source refuses some days is fetched again over the clean ranges around them,
+    and around any day a clean range is refused in turn (``_around``); for its history, its
+    actions over the whole run are read in a call of their own, which a source that reads them
+    without prices answers for the refused days too. If the source refuses that call, those
+    days' actions are unknown and the stock's history is incomplete.
     With a look-back, each stock's corporate actions from 1 January, *lookback_years* years
     before the first day, to the day before it are fetched in a call of their own: a refusal
     there is history the run can do without, so it marks the stock's history incomplete and the
@@ -341,12 +342,9 @@ def _fetch(market: Market, days: tuple[date, ...], lookback_years: int) -> _Wind
             named = tuple(day for day in error.days if start <= day <= end)
             if not named:
                 raise
-            refused[stock] = named
             whole = _unpriced_actions(source, stock, start, end)
-            clean: list[CorporateAction] = []
-            for low, high in _clean_ranges(days, frozenset(named)):
-                bars += source.bars(stock, low, high)
-                clean += source.corporate_actions(stock, low, high)
+            priced, clean, refused[stock] = _around(source, stock, days, named)
+            bars += priced
             actions += clean
             if whole is None:
                 unknown.add(stock)
@@ -379,6 +377,39 @@ def _fetch(market: Market, days: tuple[date, ...], lookback_years: int) -> _Wind
         lookback,
         history_refused,
     )
+
+
+def _around(
+    source: DataSource, stock: Instrument, days: Sequence[date], named: Sequence[date]
+) -> tuple[list[Bar], list[CorporateAction], tuple[date, ...]]:
+    """*stock*'s bars and actions over the clean ranges of *days* around its refused days *named*,
+    and every day refused, in date order.
+
+    The source's answer depends on the range asked (#160's price-factor proof), so a clean range
+    can be refused in turn: its refused days join the rest and only the ranges left inside it are
+    asked, until every range is answered (#199). A refusal must name a trading day of the range it
+    answers, and the source is wrong if it does not, so the refused days strictly grow and no range
+    is ever asked twice: nothing is retried.
+    """
+    refused = set(named)
+    bars: list[Bar] = []
+    actions: list[CorporateAction] = []
+    pending = list(_clean_ranges(days, frozenset(refused)))
+    while pending:
+        low, high = pending.pop(0)
+        try:
+            found = (source.bars(stock, low, high), source.corporate_actions(stock, low, high))
+        except UnavailableDaysError as error:
+            inside = [day for day in days if low <= day <= high]
+            more = frozenset(error.days).intersection(inside)
+            if not more:
+                raise
+            refused |= more
+            pending[:0] = _clean_ranges(inside, more)
+            continue
+        bars += found[0]
+        actions += found[1]
+    return bars, actions, tuple(sorted(refused))
 
 
 def _unpriced_actions(

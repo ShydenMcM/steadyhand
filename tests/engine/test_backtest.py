@@ -542,6 +542,143 @@ def test_refusals_on_the_first_and_last_days_leave_one_range_between() -> None:
     assert result.run.final.memory == {"set": "IDX:BBCA"}
 
 
+class _ByRange(_Source):
+    """A source whose refusals depend on the range asked, as Yahoo's price-factor proof does
+    (#160): a request for *stock* over exactly one of the listed ranges refuses that range's days,
+    and every other request is answered. *kinds* says which requests the refusals apply to."""
+
+    def __init__(
+        self,
+        bars: Sequence[Bar],
+        refusals: Mapping[tuple[date, date], Sequence[date]],
+        actions: Sequence[CorporateAction] = (),
+        kinds: frozenset[str] = frozenset({"bars", "actions"}),
+        stock: Instrument = BBRI,
+    ) -> None:
+        super().__init__(bars, actions)
+        self._refusals = refusals
+        self._kinds = kinds
+        self._stock = stock
+
+    def _check(self, kind: str, instrument: Instrument, start: date, end: date) -> None:
+        self.requests.append((kind, instrument.symbol, start, end))
+        days = self._refusals.get((start, end), ())
+        if instrument == self._stock and kind in self._kinds and days:
+            msg = f"{instrument.symbol}: refused"
+            raise UnavailableDaysError(msg, days)
+
+
+# BBRI's whole run refuses 3 July; the clean range after it, 4 to 11 July, refuses 8 July in turn.
+RE_REFUSED = {(START, END): [date(2025, 7, 3)], (date(2025, 7, 4), END): [date(2025, 7, 8)]}
+
+
+def test_a_clean_range_refused_in_turn_is_fetched_around_and_the_run_completes() -> None:
+    source = _ByRange(calm(), RE_REFUSED)
+    result = run(source, strategy=_Fixed({BBCA: Decimal("0.5"), BBRI: Decimal("0.5")}))
+    assert [r for r in source.requests if r[1] == "BBRI"] == [
+        ("bars", "BBRI", START, END),
+        ("actions", "BBRI", START, END),
+        ("bars", "BBRI", START, date(2025, 7, 2)),
+        ("actions", "BBRI", START, date(2025, 7, 2)),
+        ("bars", "BBRI", date(2025, 7, 4), END),
+        # Refused in turn: only the ranges around 8 July are asked, never one asked before.
+        ("bars", "BBRI", date(2025, 7, 4), date(2025, 7, 7)),
+        ("actions", "BBRI", date(2025, 7, 4), date(2025, 7, 7)),
+        ("bars", "BBRI", date(2025, 7, 9), END),
+        ("actions", "BBRI", date(2025, 7, 9), END),
+    ]
+    assert [report.day for report in result.run.reports] == list(DAYS)
+    assert result.warnings == (
+        Note(
+            DATA_BAR_REFUSED,
+            "BBRI: the data source refused 2 day(s) (2025-07-03, 2025-07-08), so it was not traded "
+            "on them, and a holding was valued at its last clean close. A dividend whose ex-date "
+            "falls on a refused day is unknown and was not credited.",
+        ),
+    )
+
+
+def test_a_day_refused_in_turn_is_refused_like_any_other() -> None:
+    inputs = day_inputs(market(_ByRange(calm(), RE_REFUSED)), START, END)
+    assert [d.day for d in inputs if BBRI in d.refused] == [date(2025, 7, 3), date(2025, 7, 8)]
+    # Clean again the next day, each time with no usable previous close (M3 spec §7.3).
+    assert [d.day for d in inputs if BBRI in d.resumed] == [date(2025, 7, 4), date(2025, 7, 9)]
+    priced = [b.day for b in inputs[-1].history.between(BBRI, None, END)]
+    assert priced == [day for day in DAYS if day not in (date(2025, 7, 3), date(2025, 7, 8))]
+
+
+class _Shrinking(_Source):
+    """A source that refuses BBRI's first day in every range it is asked for, so each answer
+    names a day no answer named before."""
+
+    def _check(self, kind: str, instrument: Instrument, start: date, end: date) -> None:
+        self.requests.append((kind, instrument.symbol, start, end))
+        if instrument == BBRI:
+            msg = "BBRI: refused"
+            raise UnavailableDaysError(msg, [start])
+
+
+def test_a_source_refusing_a_new_day_every_time_ends_with_every_day_refused() -> None:
+    source = _Shrinking(calm())
+    result = run(source)
+    asked = [r for r in source.requests if r[1] == "BBRI"]
+    assert asked == [
+        ("bars", "BBRI", START, END),
+        ("actions", "BBRI", START, END),
+        *[("bars", "BBRI", day, END) for day in DAYS[1:]],
+    ]
+    # Not a retry: no request is ever repeated.
+    assert len(set(asked)) == len(asked)
+    assert result.warnings[0].text.startswith(
+        "BBRI: the data source refused 10 day(s) (2025-06-30 to 2025-07-11),"
+    )
+
+
+@pytest.mark.parametrize(
+    "named",
+    [date(2025, 7, 14), date(2025, 7, 5)],
+    ids=["after the range", "a weekend inside it"],
+)
+def test_a_clean_range_refusal_naming_none_of_its_trading_days_stops_the_run(named: date) -> None:
+    refusals = {(START, END): [date(2025, 7, 3)], (date(2025, 7, 4), END): [named]}
+    with pytest.raises(UnavailableDaysError, match=r"^BBRI: refused$"):
+        run(_ByRange(calm(), refusals))
+
+
+# BBCA's whole run refuses 3 July and the clean range before it refuses 2 July, the ex-date of a
+# dividend; 8 July's dividend falls in a range that is answered.
+BBCA_RE_REFUSED = {(START, END): [date(2025, 7, 3)], (START, date(2025, 7, 2)): [date(2025, 7, 2)]}
+CLEAN_DIVIDEND = CashDividend(BBCA, date(2025, 7, 8), Decimal(30))
+
+
+@pytest.mark.parametrize(
+    ("kinds", "seen"),
+    [
+        (frozenset({"bars"}), (True, [date(2025, 7, 2), date(2025, 7, 8)])),
+        (frozenset({"bars", "actions"}), (False, [date(2025, 7, 8)])),
+    ],
+    ids=["actions read without prices", "actions refused with prices"],
+)
+def test_a_day_refused_in_turn_keeps_the_history_as_a_first_refusal_does(
+    kinds: frozenset[str], seen: tuple[bool, list[date]]
+) -> None:
+    actions = [CashDividend(BBCA, date(2025, 7, 2), Decimal(25)), CLEAN_DIVIDEND]
+    source = _ByRange(calm(), BBCA_RE_REFUSED, actions, kinds, stock=BBCA)
+    reader = _Reader({BBCA: Decimal("0.5")})
+    chosen = settings()
+    next_day = replace(chosen, engine=replace(chosen.engine, pay_lag_trading_days=1))
+    result = run(source, strategy=reader, chosen=next_day)
+    # The whole run's actions answer for the day refused in turn when the source reads them
+    # without prices; when it refuses them too, the history is incomplete and holds clean days'.
+    complete, known = seen
+    assert reader.seen[START][1] is complete
+    assert [dividend.ex_date for dividend in reader.seen[END][0]] == known
+    # The engine credits only the clean day's dividend: the one refused in turn is never entitled.
+    assert [(r.day, e.ex_date) for r in result.run.reports for e in r.entitled] == [
+        (date(2025, 7, 8), date(2025, 7, 8))
+    ]
+
+
 def test_any_other_unavailable_data_stops_the_run() -> None:
     with pytest.raises(DataUnavailableError, match=r"^BBRI: no data$"):
         run(_Source(calm(), broken=frozenset({BBRI})))
