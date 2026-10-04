@@ -25,7 +25,12 @@ from steadyhand.corporate import (
     Payout,
     apply_actions,
 )
-from steadyhand.data import DataSource, DataUnavailableError, UnavailableDaysError
+from steadyhand.data import (
+    DataSource,
+    DataUnavailableError,
+    StockUnavailableError,
+    UnavailableDaysError,
+)
 from steadyhand.disclaimer import DISCLAIMER
 from steadyhand.engine import (
     DataValidationError,
@@ -103,6 +108,7 @@ from steadyhand.notes import (
     DATA_BAR_MISSING,
     DATA_BAR_REFUSED,
     DATA_DIVIDENDS_HISTORY_REFUSED,
+    DATA_STOCK_UNAVAILABLE,
     EXEMPTION_CLAIM_BROKEN,
     EXEMPTION_DEADLINE_MISSED,
     FILL_CASH_CUT,
@@ -258,6 +264,7 @@ __all__ = [
     "DATA_BAR_MISSING",
     "DATA_BAR_REFUSED",
     "DATA_DIVIDENDS_HISTORY_REFUSED",
+    "DATA_STOCK_UNAVAILABLE",
     "DISCLAIMER",
     "EXEMPTION_CLAIM_BROKEN",
     "EXEMPTION_DEADLINE_MISSED",
@@ -448,6 +455,7 @@ __all__ = [
     "SnapshotUpgrade",
     "SnapshotVersionError",
     "Split",
+    "StockUnavailableError",
     "Strategy",
     "Tradable",
     "Turnover",

@@ -16,7 +16,12 @@ from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 
 from steadyhand._validate import require_date, require_int, require_type
-from steadyhand.data import DataSource, DataUnavailableError, UnavailableDaysError
+from steadyhand.data import (
+    DataSource,
+    DataUnavailableError,
+    StockUnavailableError,
+    UnavailableDaysError,
+)
 from steadyhand.engine import DayInputs, DayReport, EngineSettings, EngineState, run_day
 from steadyhand.income import (
     HISTORY_YEARS,
@@ -29,7 +34,12 @@ from steadyhand.income import (
 from steadyhand.market import MarketRules
 from steadyhand.metrics import Metrics, measure
 from steadyhand.money import CurrencyMismatchError, Money
-from steadyhand.notes import DATA_BAR_REFUSED, DATA_DIVIDENDS_HISTORY_REFUSED, Note
+from steadyhand.notes import (
+    DATA_BAR_REFUSED,
+    DATA_DIVIDENDS_HISTORY_REFUSED,
+    DATA_STOCK_UNAVAILABLE,
+    Note,
+)
 from steadyhand.risk import Halt
 from steadyhand.strategies.buy_and_hold import BuyAndHold
 from steadyhand.strategies.protocol import Strategy
@@ -166,8 +176,8 @@ class _Window:
     """Everything both runs read: the trading days, the universe on each, and the fetched data.
 
     ``past`` holds every corporate action fetched, the look-back's and a refused stock's refused
-    days' included; ``lookback`` is the look-back's first and last day, and ``history_refused``
-    why the source refused a stock's.
+    days' included; ``lookback`` is the look-back's first and last day, ``history_refused``
+    why the source refused a stock's, and ``unavailable`` why it cannot serve a stock at all.
     """
 
     days: tuple[date, ...]
@@ -179,6 +189,7 @@ class _Window:
     past: ActionHistory
     lookback: tuple[date, date] | None
     history_refused: Mapping[Instrument, str]
+    unavailable: Mapping[Instrument, str]
 
 
 def backtest(
@@ -295,6 +306,7 @@ def _data_warnings(market: Market, window: _Window, start: date, end: date) -> t
     return (
         *market.universe.survivorship_warnings(start, end),
         *market.source.data_notes(_stocks(window.members), since, end),
+        *_unavailable_warnings(window),
         *_refused_warnings(window),
         *_history_warnings(window),
     )
@@ -302,7 +314,7 @@ def _data_warnings(market: Market, window: _Window, start: date, end: date) -> t
 
 def _stocks(members: Mapping[date, frozenset[Instrument]]) -> list[Instrument]:
     """Every stock the universe holds on any day, in a fixed order: the stocks fetched."""
-    return sorted(frozenset().union(*members.values()), key=lambda i: (i.market, i.symbol))
+    return sorted(frozenset().union(*members.values()), key=_order)
 
 
 def _calendar_days(start: date, end: date) -> Iterator[date]:
@@ -315,11 +327,10 @@ def _calendar_days(start: date, end: date) -> Iterator[date]:
 def _fetch(market: Market, days: tuple[date, ...], lookback_years: int) -> _Window:
     """Fetch every stock the universe holds on any of *days*, over all of them (M3 spec §7.1).
 
-    A stock whose source refuses some days is fetched again over the clean ranges around them,
-    and around any day a clean range is refused in turn (``_around``); for its history, its
-    actions over the whole run are read in a call of their own, which a source that reads them
-    without prices answers for the refused days too. If the source refuses that call, those
-    days' actions are unknown and the stock's history is incomplete.
+    A stock whose source refuses some days is fetched again over the clean ranges around them
+    (``_stock``). A stock the source cannot serve at all is refused on every day it is a member,
+    and nothing it served is used: its history is incomplete and its look-back is not asked for
+    (#200). Any other ``DataUnavailableError`` stops the run.
     With a look-back, each stock's corporate actions from 1 January, *lookback_years* years
     before the first day, to the day before it are fetched in a call of their own: a refusal
     there is history the run can do without, so it marks the stock's history incomplete and the
@@ -328,31 +339,28 @@ def _fetch(market: Market, days: tuple[date, ...], lookback_years: int) -> _Wind
     members = {day: market.universe.members_on(day) for day in days}
     excluded = {day: market.universe.excluded_on(day) for day in days}
     source = market.source
-    start, end = days[0], days[-1]
+    start = days[0]
     stocks = _stocks(members)
     bars: list[Bar] = []
     actions: list[CorporateAction] = []
     refused: dict[Instrument, tuple[date, ...]] = {}
     past: list[CorporateAction] = []
     unknown: set[Instrument] = set()
+    unavailable: dict[Instrument, str] = {}
     for stock in stocks:
         try:
-            found = (source.bars(stock, start, end), source.corporate_actions(stock, start, end))
-        except UnavailableDaysError as error:
-            named = tuple(day for day in error.days if start <= day <= end)
-            if not named:
-                raise
-            whole = _unpriced_actions(source, stock, start, end)
-            priced, clean, refused[stock] = _around(source, stock, days, named)
-            bars += priced
-            actions += clean
-            if whole is None:
-                unknown.add(stock)
-            past += clean if whole is None else whole
+            found = _stock(source, stock, days)
+        except StockUnavailableError as error:
+            unavailable[stock] = str(error)
+            refused[stock] = tuple(day for day in days if stock in members[day])
             continue
-        bars += found[0]
-        actions += found[1]
-        past += found[1]
+        bars += found.bars
+        actions += found.actions
+        past += found.history
+        if found.refused:
+            refused[stock] = found.refused
+        if not found.complete:
+            unknown.add(stock)
     by_day: dict[date, list[CorporateAction]] = {}
     for action in actions:
         by_day.setdefault(action.ex_date, []).append(action)
@@ -362,6 +370,8 @@ def _fetch(market: Market, days: tuple[date, ...], lookback_years: int) -> _Wind
     if lookback_years:
         lookback = (date(start.year - lookback_years, 1, 1), start - timedelta(days=1))
         for stock in stocks:
+            if stock in unavailable:
+                continue
             try:
                 past += source.corporate_actions(stock, *lookback)
             except DataUnavailableError as error:
@@ -373,10 +383,47 @@ def _fetch(market: Market, days: tuple[date, ...], lookback_years: int) -> _Wind
         PriceHistory(bars),
         grouped,
         refused,
-        ActionHistory(past, {*history_refused, *unknown}),
+        ActionHistory(past, {*history_refused, *unknown, *unavailable}),
         lookback,
         history_refused,
+        unavailable,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class _Fetched:
+    """One stock's data over a run: its bars and actions, the actions its history holds, the days
+    the source refused, and whether its history is complete."""
+
+    bars: Sequence[Bar]
+    actions: Sequence[CorporateAction]
+    history: Sequence[CorporateAction]
+    refused: tuple[date, ...]
+    complete: bool
+
+
+def _stock(source: DataSource, stock: Instrument, days: tuple[date, ...]) -> _Fetched:
+    """*stock*'s data over *days*.
+
+    If the source refuses some days, the clean ranges around them are fetched, and around any day
+    a clean range is refused in turn (``_around``); for its history, its actions over the whole
+    run are read in a call of their own, which a source that reads them without prices answers
+    for the refused days too. If the source refuses that call, those days' actions are unknown
+    and the stock's history is incomplete. Raises ``StockUnavailableError`` if any call does.
+    """
+    start, end = days[0], days[-1]
+    try:
+        bars = source.bars(stock, start, end)
+        actions = source.corporate_actions(stock, start, end)
+    except UnavailableDaysError as error:
+        named = tuple(day for day in error.days if start <= day <= end)
+        if not named:
+            raise
+        whole = _unpriced_actions(source, stock, start, end)
+        priced, clean, refused = _around(source, stock, days, named)
+        history = clean if whole is None else whole
+        return _Fetched(priced, clean, history, refused, complete=whole is not None)
+    return _Fetched(bars, actions, actions, (), complete=True)
 
 
 def _around(
@@ -416,9 +463,12 @@ def _unpriced_actions(
     source: DataSource, stock: Instrument, start: date, end: date
 ) -> Sequence[CorporateAction] | None:
     """A refused stock's actions from *start* to *end*, refused days included, or ``None`` when
-    the source refuses them as well (M6 plan scope decision 14)."""
+    the source refuses them as well (M6 plan scope decision 14). A source that cannot serve the
+    stock at all says so for the whole stock (#200)."""
     try:
         return source.corporate_actions(stock, start, end)
+    except StockUnavailableError:
+        raise
     except DataUnavailableError:
         return None
 
@@ -508,9 +558,12 @@ def _impact(run: RunResult, baseline: RunResult | None) -> IncomeImpact | None:
 
 
 def _resumed(window: _Window, day: date) -> frozenset[Instrument]:
-    """Stocks with a refused day between their last bar and *day*: no usable previous close."""
+    """Stocks with a refused day between their last bar and *day*: no usable previous close. A
+    stock the source cannot serve has no data to resume with."""
     resumed: set[Instrument] = set()
     for stock, refused in window.refused.items():
+        if stock in window.unavailable:
+            continue
         previous = window.history.before(stock, day)
         after = bisect_left(refused, previous.day) if previous is not None else 0
         if after < len(refused) and refused[after] < day:
@@ -519,9 +572,10 @@ def _resumed(window: _Window, day: date) -> frozenset[Instrument]:
 
 
 def _refused_warnings(window: _Window) -> list[Note]:
-    """One warning per stock, naming each span of consecutive refused trading days."""
+    """One warning per stock, naming each span of consecutive refused trading days, unless the
+    source cannot serve the stock at all (``_unavailable_warnings``)."""
     warnings: list[Note] = []
-    for stock in sorted(window.refused, key=lambda i: (i.market, i.symbol)):
+    for stock in sorted(window.refused.keys() - window.unavailable.keys(), key=_order):
         refused = window.refused[stock]
         spans: list[list[date]] = []
         for day in refused:
@@ -561,5 +615,23 @@ def _history_warnings(window: _Window) -> list[Note]:
             f"{until}, before the run ({window.history_refused[stock]}), so its dividend "
             "history is incomplete for any strategy that reads it.",
         )
-        for stock in sorted(window.history_refused, key=lambda i: (i.market, i.symbol))
+        for stock in sorted(window.history_refused, key=_order)
     ]
+
+
+def _unavailable_warnings(window: _Window) -> list[Note]:
+    """One warning per stock the source cannot serve at all, naming why (#200)."""
+    return [
+        Note(
+            DATA_STOCK_UNAVAILABLE,
+            f"{stock.symbol}: the data source cannot serve this stock at all "
+            f"({window.unavailable[stock]}), so it was refused on every day it was a member and "
+            "never traded. Its dividends are unknown and were not credited.",
+        )
+        for stock in sorted(window.unavailable, key=_order)
+    ]
+
+
+def _order(stock: Instrument) -> tuple[str, str]:
+    """The fixed order warnings name stocks in: by market, then symbol."""
+    return stock.market, stock.symbol

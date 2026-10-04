@@ -18,7 +18,8 @@ class UnavailableDaysError(DataUnavailableError):
     """A data source refuses particular days for one stock, and ``days`` names every one.
 
     A backtest leaves the stock untraded on those days and fetches the clean days around them
-    (M3 spec §7.3). Any other ``DataUnavailableError`` stops the run.
+    (M3 spec §7.3). Any other ``DataUnavailableError``, apart from ``StockUnavailableError``,
+    stops the run.
     """
 
     def __init__(self, message: str, days: Sequence[date]) -> None:
@@ -31,6 +32,16 @@ class UnavailableDaysError(DataUnavailableError):
             raise ValueError(msg)
         self.days = found
         super().__init__(message)
+
+
+class StockUnavailableError(DataUnavailableError):
+    """The data source has answered that it cannot serve one stock at all.
+
+    Raised only on the source's own answer about that stock, never for a failed request: the
+    IDX source raises it when Yahoo does not know the ticker (HTTP 404) or gives a split ratio it
+    cannot read. A backtest refuses the stock on every day it is a member and the run goes on
+    (M3 spec §7.3, #200).
+    """
 
 
 @runtime_checkable

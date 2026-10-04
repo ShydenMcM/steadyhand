@@ -3,14 +3,17 @@
 Marked ``live``: it talks to Yahoo, so it never runs on a pull request. The daily yahoo-shape
 workflow runs it and opens an issue when it fails. The comparison is on the UNADJUSTED result,
 so a split Yahoo applies after the recording does not break it; a changed format, changed
-prices or a new unreported adjustment does.
+prices or a new unreported adjustment does. And a ticker Yahoo does not know is still answered
+as a stock it cannot serve (#200), so a run goes on without it rather than stopping.
 """
 
+import re
+from datetime import date
 from pathlib import Path
 
 import pytest
 
-from steadyhand import IDR, Instrument
+from steadyhand import IDR, Instrument, StockUnavailableError
 from steadyhand_idx.calendar import IdxCalendar
 from steadyhand_idx.yahoo import (
     SUFFIX,
@@ -51,3 +54,11 @@ def test_yahoo_still_gives_what_was_recorded(fixture: Path) -> None:
     recorded = history_from_json(fixture)
     live = download_history(recorded.ticker, recorded.rows[0].day, recorded.rows[-1].day)
     assert outcome(live) == outcome(recorded)
+
+
+@pytest.mark.parametrize("ticker", ["SRIL.JK", "WSKT.JK"])
+def test_a_ticker_yahoo_does_not_know_is_a_stock_it_cannot_serve(ticker: str) -> None:
+    # Measured on 2026-10-04 (#200): Yahoo answers both with HTTP 404 for 2021-2025.
+    failed = rf"^{re.escape(ticker)}: the request to Yahoo failed: HTTP Error 404"
+    with pytest.raises(StockUnavailableError, match=failed):
+        download_history(ticker, date(2021, 1, 4), date(2025, 12, 30))

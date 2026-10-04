@@ -29,6 +29,10 @@ DATA_DIVIDENDS_HISTORY_REFUSED = "data.dividends.history_refused"
 """The data source refused a stock's corporate actions before the run, so its dividend history
 is incomplete (M6 spec §4.3)."""
 
+DATA_STOCK_UNAVAILABLE = "data.stock.unavailable"
+"""The data source cannot serve a stock at all, so a backtest refused it on every day it was a
+member (#200)."""
+
 EXEMPTION_CLAIM_BROKEN = "exemption.claim_broken"
 """Protected dividend money left the portfolio past the settlement grace, so its tax is booked."""
 
