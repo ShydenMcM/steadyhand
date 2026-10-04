@@ -676,3 +676,32 @@ def test_a_backtest_s_second_run_asks_only_for_the_refused_days(cache: BarCache)
     # Over the cache the first run filled, each refused gap is asked once, and nothing else.
     assert upstream.requests == [("bars", SEP_7, SEP_7), ("bars", OCT_5, OCT_6)]
     assert len(fresh) > len(upstream.requests)
+
+
+def refused_and_priced(source: CachedDataSource) -> tuple[list[date], list[date]]:
+    """The days a backtest's fetch step over ``TWO_MONTHS`` refuses BBCA, and the days it prices."""
+    inputs = day_inputs(Market(_OnlyBbca(), source, IdxMarketRules()), *TWO_MONTHS)
+    priced = [bar.day for bar in inputs[-1].history.between(BBCA, None, TWO_MONTHS[1])]
+    return [d.day for d in inputs if BBCA in d.refused], priced
+
+
+def test_a_backtest_over_a_cache_holding_narrower_ranges_never_asks_twice(tmp_path: Path) -> None:
+    refused = (SEP_7, OCT_5, OCT_6)
+    with BarCache(tmp_path / "warm.sqlite") as warm, BarCache(tmp_path / "fresh.sqlite") as fresh:
+        source, upstream = refusing(warm, prices=refused)
+        from_warm = refused_and_priced(source)
+        from_fresh = refused_and_priced(refusing(fresh, (), prices=refused)[0])
+    assert from_warm == from_fresh
+    assert from_warm[0] == list(refused)
+    # The stored ranges split the run into more, smaller requests than an empty cache needs (12
+    # calls over 4 ranges): each missing range is asked once, the clean ranges around a refused
+    # day once more, and no stored day again. Asking the stored ranges again to save requests
+    # could refuse days they hold clean, since the upstream's answer depends on the range (#160).
+    assert len(upstream.requests) == 21
+    assert len(set(upstream.requests)) == len(upstream.requests)
+    asked_stored = [
+        (kind, first, last)
+        for kind, first, last in upstream.requests
+        if any(first <= high and low <= last for low, high in STORED)
+    ]
+    assert asked_stored == []
