@@ -194,12 +194,12 @@ Shyden's global CLAUDE.md requires three clean-ups in every repo before other te
 - **Survivorship check (Shyden: "we need to be very careful"):** the first figures came from 20 surviving stocks, so every figure was re-measured on the point-in-time LQ45 (76 members): `timeline.json` (7 IDX booklets from the Internet Archive, 9 press lists checked against IDX controls and the articles' stated ins/outs, 2 fast entries: BUKA 2021-09-29, GOTO 2022-06-08). Results in `measure-full.out`; all decisions held. Scripts: `parse_booklets.py`, `check_press.py`, `build_timeline.py`, `measure_full.py`, `probe_engine_refusal.py` (`Y=2021 M=1 D=4 uv run --python 3.12 python -u <it> <cache> CODES…`).
 - **Lessons:** the press agent's WebFetch output is a model's rendering (it dropped BMRI from four Kontan lists; IDX controls caught it); Yahoo refuses a range lying wholly before a listing; asking further back can refuse a stock that is clean from 2021 (ARTO, MDKA), so M7's look-back must judge per window.
 
-## Progress estimate (2026-10-04, 04:46 UTC)
-- **About 74% complete by stories; release-ready (core §13 M10) around 2026-10-13 to 2026-10-16, low-to-medium confidence.** Unchanged: #199 closed, #202 filed.
-- **Measured:** the board has 85 Done, 0 In Progress and 5 Todo (#160 needs Shyden's rewrite, #161, #162, #200, #202). 46 issues closed since 2026-09-27 (about 6 a day). M6 took about 2 days from spec to deploy.
-- **Assumed:** M7 is 7 items (spec, plan, 5 stories, designed but not filed); M8 and M9 about 7 each (no design yet); M10 about 4. With the 5 Todo, about 30 items left against 85 done.
+## Progress estimate (2026-10-04, 04:52 UTC)
+- **By tickets: 74% complete (85 of about 115 stories). ETA to release-ready 2026-10-13 to 2026-10-16, low-to-medium confidence.** Measured: 85 Done and 5 Todo (#160 needs Shyden's rewrite, #161, #162, #200, #202), 46 closed since 2026-09-27 (about 6 a day). Assumed: M7 7 items, M8 and M9 about 7 each, M10 about 4.
+- **By effort: 75% complete (381 of about 510 points). ETA to release-ready 2026-10-11 to 2026-10-17, low confidence.** Measured: every one of the 90 board items carries an `Estimate` (Fibonacci points, set 2026-10-04 from each ticket's ACs and its PRs' size, reasons in git-ignored `.superpowers/sdd/estimates/scores.tsv`); 381 closed, 26 open; 132 points closed in the last 7 days (18.9 a day). Assumed (explicit guesses, not on the board): M7 30 points (spec + plan 8, five stories 22, from `decisions.md`), M8 30, M9 30, M10 13. Remaining 129 at 18.9 a day is about 7 days, widened for the outside waits.
 - **Outside waits that do not move with the pace:** Shyden's approval to merge to `main`, the PyPI release itself, and his rewrite of #160's criteria.
-- **What would tighten it:** filing M7–M9's stories once each wave's spec is approved.
+- **What would tighten it:** filing M7–M9's stories, each with its Estimate, once each wave's spec is approved; the effort line then measures them instead of guessing.
+- **Estimates are part of a ticket** (Shyden's global rule, 2026-10-04): board field `Estimate`, id `PVTF_lAHOCQ_jzM4BkhEbzhkUeyc`, Number; 1, 2, 3, 5, 8 or 13 (larger is an epic to split). `.superpowers/sdd/2026-10-03-test-audit/file_ticket.sh <title> <body> <points>` now refuses to file without one and reads it back. `.superpowers/sdd/estimates/apply.py` sets every item from `scores.tsv` and reads the sums back (`--dry-run` first).
 
 ## Resume steps
 0. M6 is done. `main` still has no release (M10).
