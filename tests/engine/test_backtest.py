@@ -21,7 +21,7 @@ from steadyhand.backtest import (
     day_inputs,
 )
 from steadyhand.corporate import Entitlement
-from steadyhand.data import DataUnavailableError, UnavailableDaysError
+from steadyhand.data import DataUnavailableError, StockUnavailableError, UnavailableDaysError
 from steadyhand.engine import DataValidationError, EngineSettings
 from steadyhand.income import IncomeGoal
 from steadyhand.market import UnsupportedDateError
@@ -31,6 +31,7 @@ from steadyhand.notes import (
     DATA_BAR_MISSING,
     DATA_BAR_REFUSED,
     DATA_DIVIDENDS_HISTORY_REFUSED,
+    DATA_STOCK_UNAVAILABLE,
     FILL_NO_BAR,
     RISK_HALT_DAILY_LOSS,
     TRADE_NOT_IN_UNIVERSE,
@@ -94,7 +95,8 @@ def flat(stock: Instrument, close: int, days: Sequence[date] = DAYS) -> list[Bar
 
 
 class _Source:
-    """An in-memory data source that records every request and can refuse days, as Yahoo does."""
+    """An in-memory data source that records every request and can refuse days, or a stock
+    altogether (``unavailable``), as Yahoo does."""
 
     def __init__(
         self,
@@ -103,12 +105,14 @@ class _Source:
         refused: Mapping[Instrument, Sequence[date]] | None = None,
         broken: frozenset[Instrument] = frozenset(),
         notes: Sequence[Note] = (),
+        unavailable: frozenset[Instrument] = frozenset(),
     ) -> None:
         self._bars = bars
         self._actions = actions
         self._refused = {} if refused is None else refused
         self._broken = broken
         self._notes = notes
+        self._unavailable = unavailable
         self.requests: list[tuple[str, str, date, date]] = []
         self.noted: list[tuple[tuple[str, ...], date, date]] = []
 
@@ -135,6 +139,9 @@ class _Source:
         if instrument in self._broken:
             msg = f"{instrument.symbol}: no data"
             raise DataUnavailableError(msg)
+        if instrument in self._unavailable:
+            msg = f"{instrument.symbol}: cannot be served"
+            raise StockUnavailableError(msg)
         days = [day for day in self._refused.get(instrument, ()) if start <= day <= end]
         if days:
             msg = f"{instrument.symbol}: refused"
@@ -992,6 +999,205 @@ def test_a_refusal_in_the_runs_own_days_keeps_its_rules_beside_a_look_back() -> 
     result = run(source, chosen=looking_back())
     assert [warning.key for warning in result.warnings] == [DATA_BAR_REFUSED]
     assert ("actions", "BBRI", SINCE, UNTIL) in source.requests
+
+
+# A stock the source cannot serve at all (#200): refused on every day it is a member.
+
+
+def unserved_note(symbol: str) -> Note:
+    return Note(
+        DATA_STOCK_UNAVAILABLE,
+        f"{symbol}: the data source cannot serve this stock at all ({symbol}: cannot be served), "
+        "so it was refused on every day it was a member and never traded. Its dividends are "
+        "unknown and were not credited.",
+    )
+
+
+def unserved() -> _Source:
+    """BBCA and BBRI, from a source that cannot serve BBRI at all, as Yahoo cannot SRIL."""
+    return _Source(calm(), unavailable=frozenset({BBRI}))
+
+
+class _Seer:
+    """A strategy that buys BBCA and records, each day, why BBRI is not tradable: it weights only
+    what it can buy, as every shipped strategy does (an unpriced weight cannot be sized)."""
+
+    def __init__(self) -> None:
+        self.seen: dict[date, Note | None] = {}
+
+    @property
+    def name(self) -> str:
+        return "seer"
+
+    def decide(self, view: MarketView, portfolio: PortfolioView, memory: Memory) -> Decision:
+        self.seen[view.today] = view.tradable.reasons.get(BBRI)
+        return Decision({BBCA: Decimal("0.5")})
+
+
+@pytest.fixture(scope="module")
+def unserved_run() -> tuple[_Seer, BacktestResult]:
+    """A run, and what its strategy saw, from a source that cannot serve BBRI at all."""
+    seer = _Seer()
+    return seer, run(unserved(), strategy=seer)
+
+
+def test_a_stock_the_source_cannot_serve_lets_the_run_complete(
+    unserved_run: tuple[_Seer, BacktestResult],
+) -> None:
+    _, result = unserved_run
+    assert [report.day for report in result.run.reports] == list(DAYS)
+    assert result.baseline is not None
+    assert [report.day for report in result.baseline.reports] == list(DAYS)
+    assert result.warnings == (unserved_note("BBRI"),)
+
+
+@pytest.mark.parametrize("which", ["run", "baseline"])
+def test_a_stock_the_source_cannot_serve_is_never_held(
+    unserved_run: tuple[_Seer, BacktestResult], which: str
+) -> None:
+    outcome = getattr(unserved_run[1], which)
+    assert outcome is not None
+    held = {position.instrument for position in outcome.final.holdings.portfolio.positions}
+    assert held == {BBCA}
+
+
+@pytest.mark.parametrize("day", DAYS, ids=str)
+def test_a_stock_the_source_cannot_serve_is_refused_on_every_day(
+    unserved_run: tuple[_Seer, BacktestResult], day: date
+) -> None:
+    # Refused by the source, not merely without a bar that day.
+    seer, _ = unserved_run
+    assert seer.seen[day] == Note(TRADE_REFUSED, f"the data source refused {day.isoformat()}")
+
+
+@pytest.mark.parametrize(
+    ("lists", "members"),
+    [
+        pytest.param(
+            [(START, frozenset({BBCA})), (date(2025, 7, 7), frozenset({BBCA, BBRI}))],
+            DAYS[5:],
+            id="joins on 7 July",
+        ),
+        pytest.param(
+            [(START, frozenset({BBCA, BBRI})), (date(2025, 7, 7), frozenset({BBCA}))],
+            DAYS[:5],
+            id="leaves on 7 July, as SRIL left the LQ45",
+        ),
+    ],
+)
+def test_a_stock_the_source_cannot_serve_is_refused_only_on_the_days_it_is_a_member(
+    lists: list[tuple[date, frozenset[Instrument]]], members: tuple[date, ...]
+) -> None:
+    inputs = day_inputs(market(unserved(), _Universe(lists)), START, END)
+    assert [found.day for found in inputs if BBRI in found.refused] == list(members)
+    # It never has data to resume with, so no day treats it as clean again.
+    assert [found.resumed for found in inputs] == [frozenset()] * len(DAYS)
+
+
+class _UnservedInTurn(_Source):
+    """A source that refuses BBRI's 3 July, serves the range before it, and then answers that it
+    cannot serve BBRI at all: what it served first is not used either."""
+
+    def _check(self, kind: str, instrument: Instrument, start: date, end: date) -> None:
+        super()._check(kind, instrument, start, end)
+        if instrument == BBRI and start > date(2025, 7, 3):
+            msg = "BBRI: cannot be served"
+            raise StockUnavailableError(msg)
+
+
+def test_a_stock_the_source_cannot_serve_after_refusing_days_is_refused_on_every_day() -> None:
+    source = _UnservedInTurn(calm(), refused={BBRI: [date(2025, 7, 3)]})
+    inputs = day_inputs(market(source), START, END)
+    assert [found.day for found in inputs if BBRI in found.refused] == list(DAYS)
+    # The range before 3 July was served, and its bars are not used.
+    assert ("bars", "BBRI", START, date(2025, 7, 2)) in source.requests
+    assert inputs[0].history.on(BBRI, START) is None
+    assert run(_UnservedInTurn(calm(), refused={BBRI: [date(2025, 7, 3)]})).warnings == (
+        unserved_note("BBRI"),
+    )
+
+
+class _UnservedActions(_Source):
+    """A source that refuses BBRI's 3 July and, asked for BBRI's actions over the whole run for
+    its history, answers that it cannot serve BBRI at all."""
+
+    def corporate_actions(
+        self, instrument: Instrument, start: date, end: date
+    ) -> Sequence[CorporateAction]:
+        if instrument == BBRI and (start, end) == (START, END):
+            self.requests.append(("actions", instrument.symbol, start, end))
+            msg = "BBRI: cannot be served"
+            raise StockUnavailableError(msg)
+        return super().corporate_actions(instrument, start, end)
+
+
+def test_a_stock_whose_history_the_source_cannot_serve_is_refused_on_every_day() -> None:
+    source = _UnservedActions(calm(), refused={BBRI: [date(2025, 7, 3)]})
+    inputs = day_inputs(market(source), START, END)
+    assert [found.day for found in inputs if BBRI in found.refused] == list(DAYS)
+    # No range around the refused day is asked for once the source has said so.
+    assert source.requests == [
+        ("bars", "BBCA", START, END),
+        ("actions", "BBCA", START, END),
+        ("bars", "BBRI", START, END),
+        ("actions", "BBRI", START, END),
+    ]
+    source = _UnservedActions(calm(), refused={BBRI: [date(2025, 7, 3)]})
+    assert run(source).warnings == (unserved_note("BBRI"),)
+
+
+def test_a_stock_the_source_cannot_serve_has_an_incomplete_history() -> None:
+    reader = _Reader()
+    run(unserved(), strategy=reader)
+    assert reader.seen[START][1:] == (True, False)
+    assert reader.seen[END][1:] == (True, False)
+
+
+def test_a_stock_the_source_cannot_serve_is_not_asked_for_its_look_back() -> None:
+    source = _Source(calm(), LOOKED_BACK, unavailable=frozenset({BBRI}))
+    reader = _Reader()
+    result = run(source, strategy=reader, chosen=looking_back())
+    assert source.requests == [
+        ("bars", "BBCA", START, END),
+        ("actions", "BBCA", START, END),
+        ("bars", "BBRI", START, END),
+        ("actions", "BBCA", SINCE, UNTIL),
+    ]
+    # One warning for the stock: its history is incomplete without a look-back refusal too.
+    assert result.warnings == (unserved_note("BBRI"),)
+    assert reader.seen[END][1:] == (True, False)
+
+
+def test_each_stock_the_source_cannot_serve_is_warned_about_once_in_symbol_order() -> None:
+    universe = _Universe([(START, frozenset({BBCA, BBRI, TLKM}))])
+    source = _Source(calm() + flat(TLKM, 3_000), unavailable=frozenset({TLKM, BBRI}))
+    assert run(source, universe).warnings == (unserved_note("BBRI"), unserved_note("TLKM"))
+
+
+def test_the_warning_follows_the_sources_notes_and_precedes_the_refused_days() -> None:
+    universe = _Universe([(START, frozenset({BBCA, BBRI, TLKM}))], warnings=[GAP])
+    source = _Source(
+        calm() + flat(TLKM, 3_000),
+        refused={TLKM: [date(2025, 7, 3)]},
+        notes=[RESTORED],
+        unavailable=frozenset({BBRI}),
+    )
+    assert [warning.key for warning in run(source, universe).warnings] == [
+        GAP.key,
+        RESTORED.key,
+        DATA_STOCK_UNAVAILABLE,
+        DATA_BAR_REFUSED,
+    ]
+
+
+def test_compare_completes_past_a_stock_the_source_cannot_serve() -> None:
+    fixed = _Fixed({BBCA: Decimal("0.5")})
+    result = compare([fixed], market(unserved()), START, END, settings())
+    assert [(found.strategy, len(found.reports)) for found in result.runs] == [
+        ("fixed", len(DAYS)),
+        ("buy-and-hold", len(DAYS)),
+    ]
+    assert result.warnings == (unserved_note("BBRI"),)
 
 
 class _Unpriced(_Source):

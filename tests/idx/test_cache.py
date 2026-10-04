@@ -22,6 +22,7 @@ from steadyhand import (
     Money,
     OtherAction,
     Split,
+    StockUnavailableError,
 )
 from steadyhand_idx.cache import (
     MIGRATIONS,
@@ -359,10 +360,10 @@ def test_a_refused_look_back_is_not_stored(cache: BarCache) -> None:
     source, counting = source_for(cache, "BBCA.JK_2021-09-01_2021-11-30.json", date(2026, 9, 25))
     counting.history = YahooHistory("X.JK", (), ((date(2021, 10, 13), Decimal("0.3333")),))
     refused = r"^BBCA: Yahoo's split ratio 0\.3333 on"
-    with pytest.raises(DataUnavailableError, match=refused):
+    with pytest.raises(StockUnavailableError, match=refused):
         source.corporate_actions(BBCA, *OCT)
     # Asked again, it is refused again: the first refusal stored nothing to answer from.
-    with pytest.raises(DataUnavailableError, match=refused):
+    with pytest.raises(StockUnavailableError, match=refused):
         source.corporate_actions(BBCA, *OCT)
     # One download, which the Yahoo source keeps for its next call; nothing reaches the cache.
     assert counting.asked == [OCT]

@@ -47,6 +47,7 @@ from steadyhand import (
     Money,
     Note,
     Split,
+    StockUnavailableError,
     UnavailableDaysError,
 )
 from steadyhand_idx.cache import jakarta_today
@@ -73,6 +74,7 @@ YAHOO_TIMEZONE = "Asia/Jakarta"
 # 7 Sep 2021 reads 3,554.484130859375 in Yahoo's recorded response).
 WHOLE_RUPIAH_TOLERANCE = Decimal("0.0001")
 _SPLIT_DENOMINATOR_LIMIT = 1000
+_NOT_FOUND = 404  # the HTTP status Yahoo answers for a ticker it does not know
 
 
 class UnrecoverablePricesError(UnavailableDaysError):
@@ -225,7 +227,7 @@ def _split(instrument: Instrument, day: date, ratio: Decimal) -> Split:
     fraction = Fraction(ratio).limit_denominator(_SPLIT_DENOMINATOR_LIMIT)
     if fraction <= 0 or Decimal(fraction.numerator) / fraction.denominator != ratio:
         msg = f"{instrument.symbol}: Yahoo's split ratio {ratio} on {day.isoformat()} is not usable"
-        raise DataUnavailableError(msg)
+        raise StockUnavailableError(msg)  # the stock's data cannot be read at all (#200)
     return Split(instrument, day, fraction.denominator, fraction.numerator)
 
 
@@ -466,7 +468,8 @@ class YahooDataSource:
 
     def _request(self, ticker: str, start: date, end: date) -> YahooHistory:
         """Ask Yahoo once, after the policy's pause if a request came before. A failure is raised
-        at once, naming the ticker and the range: a retry would hide it (#179)."""
+        at once, naming the ticker and the range: a retry would hide it (#179). A stock Yahoo
+        cannot serve stays one (#200)."""
         if self._requests:
             self._sleep(self._policy.pause_seconds)
         self._requests += 1
@@ -475,6 +478,8 @@ class YahooDataSource:
         except DataUnavailableError as error:
             span = f"{start.isoformat()} to {end.isoformat()}"
             msg = f"{ticker}: no data from Yahoo for {span}: {error}"
+            if isinstance(error, StockUnavailableError):
+                raise StockUnavailableError(msg) from error
             raise DataUnavailableError(msg) from error
 
 
@@ -487,6 +492,22 @@ def _proven(
         for run in runs
         if run.factor is not None and run.first <= end and run.last >= start
     )
+
+
+def failure_of(ticker: str, error: Exception) -> DataUnavailableError:
+    """The error to raise for a request to Yahoo for *ticker* that failed with *error*.
+
+    Yahoo answers HTTP 404 for a ticker it does not know, such as a delisted one (SRIL and WSKT,
+    measured with yfinance 1.7.0 on 2026-10-04): a stock it cannot serve at all, which a backtest
+    refuses and runs on without (#200). The status is read from the response the network library
+    attaches to its error, never from the message. Any other failure, an unreachable network or a
+    rate limit among them, stops the run.
+    """
+    msg = f"{ticker}: the request to Yahoo failed: {error}"
+    response = getattr(error, "response", None)
+    if getattr(response, "status_code", None) == _NOT_FOUND:
+        return StockUnavailableError(msg)
+    return DataUnavailableError(msg)
 
 
 def download_history(ticker: str, start: date, end: date) -> YahooHistory:  # pragma: no cover
@@ -509,6 +530,5 @@ def download_history(ticker: str, start: date, end: date) -> YahooHistory:  # pr
         )
         splits = handle.splits
     except Exception as error:  # a network library's failures are not ours to enumerate
-        msg = f"{ticker}: the request to Yahoo failed: {error}"
-        raise DataUnavailableError(msg) from error
+        raise failure_of(ticker, error) from error
     return history_from_frames(ticker, frame, splits)

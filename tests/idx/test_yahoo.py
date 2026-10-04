@@ -19,6 +19,7 @@ from steadyhand import (
     Money,
     Side,
     Split,
+    StockUnavailableError,
     UnavailableDaysError,
     UnsupportedDateError,
 )
@@ -34,6 +35,7 @@ from steadyhand_idx.yahoo import (
     YahooRow,
     actions_in,
     evidence,
+    failure_of,
     history_from_frames,
     history_from_json,
     history_to_json,
@@ -199,7 +201,7 @@ def test_split_ratios_become_whole_share_counts(ratio: str, old: int, new: int) 
 @pytest.mark.parametrize("ratio", ["0.3333", "0", "-2"])
 def test_an_unusable_split_ratio_is_refused(ratio: str) -> None:
     history = YahooHistory("X.JK", (), ((date(2023, 5, 22), Decimal(ratio)),))
-    with pytest.raises(DataUnavailableError, match=rf"^UNVR: Yahoo's split ratio {ratio} on"):
+    with pytest.raises(StockUnavailableError, match=rf"^UNVR: Yahoo's split ratio {ratio} on"):
         unadjust(history, UNVR, calendar(), (date(2023, 5, 15), date(2023, 6, 9)))
 
 
@@ -318,9 +320,78 @@ def test_a_failure_is_raised_at_once_naming_the_range() -> None:
         ),
     ) as caught:
         source.bars(BBCA, date(2021, 10, 1), date(2021, 10, 1))
+    assert type(caught.value) is DataUnavailableError  # a timeout stops the run (#200)
     assert isinstance(caught.value.__cause__, DataUnavailableError)
     assert replay.calls == [("BBCA.JK", date(2021, 10, 1), date(2021, 10, 1))]
     assert slept == []
+
+
+# A failed request: a stock Yahoo cannot serve, or a failure that stops the run (#200).
+
+
+class _Response:
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
+
+
+class _HttpError(Exception):
+    """A network library's failure carrying Yahoo's response, as curl_cffi's do: measured with
+    yfinance 1.7.0, SRIL.JK raises one whose response is a 404, and an unreachable network one
+    whose response status is 0."""
+
+    def __init__(self, message: str, response: _Response | None) -> None:
+        super().__init__(message)
+        self.response = response
+
+
+def test_a_ticker_yahoo_does_not_know_is_a_stock_it_cannot_serve() -> None:
+    found = failure_of("SRIL.JK", _HttpError("HTTP Error 404: ", _Response(404)))
+    assert type(found) is StockUnavailableError
+    assert str(found) == "SRIL.JK: the request to Yahoo failed: HTTP Error 404: "
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        _HttpError("Failed to perform, curl: (7) Failed to connect", _Response(0)),
+        _HttpError("HTTP Error 429: Too Many Requests", _Response(429)),
+        _HttpError("HTTP Error 500: ", _Response(500)),
+        _HttpError("no response at all", None),
+        TimeoutError("timed out"),
+    ],
+    ids=["no connection", "rate limited", "server error", "no response", "no response attribute"],
+)
+def test_any_other_failed_request_stops_the_run(error: Exception) -> None:
+    found = failure_of("BBRI.JK", error)
+    assert type(found) is DataUnavailableError
+    assert str(found) == f"BBRI.JK: the request to Yahoo failed: {error}"
+
+
+class _NotFound:
+    """Answers every download as Yahoo answers SRIL.JK: a stock it cannot serve."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, date, date]] = []
+
+    def __call__(self, ticker: str, start: date, end: date) -> YahooHistory:
+        self.calls.append((ticker, start, end))
+        msg = f"{ticker}: the request to Yahoo failed: HTTP Error 404: "
+        raise StockUnavailableError(msg)
+
+
+def test_a_stock_yahoo_cannot_serve_stays_one_through_the_source() -> None:
+    download = _NotFound()
+    source = YahooDataSource(calendar(), download=download, sleep=list[float]().append)
+    with pytest.raises(
+        StockUnavailableError,
+        match=(
+            r"^BBRI\.JK: no data from Yahoo for 2021-10-01 to 2021-10-01: "
+            r"BBRI\.JK: the request to Yahoo failed: HTTP Error 404: $"
+        ),
+    ) as caught:
+        source.bars(BBRI, date(2021, 10, 1), date(2021, 10, 1))
+    assert isinstance(caught.value.__cause__, StockUnavailableError)
+    assert download.calls == [("BBRI.JK", date(2021, 10, 1), date(2021, 10, 1))]  # asked once
 
 
 def test_a_request_after_a_failed_one_still_pauses_first() -> None:

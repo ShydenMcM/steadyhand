@@ -39,6 +39,7 @@ from steadyhand import (
     Market,
     Money,
     Note,
+    StockUnavailableError,
     day_inputs,
 )
 from steadyhand_idx.cli import SourceFactory
@@ -390,6 +391,55 @@ def test_a_day_the_source_has_not_published_stops_the_run(tmp_path: Path) -> Non
         assert store.days() == trading_days()[:2]
         assert store.runs()[-1].days == trading_days()[1:2]
     assert run_on(cli, late).code == 0
+
+
+@dataclass(frozen=True)
+class Unserved:
+    """The recorded data, with the source answering that it cannot serve one stock at all, as
+    Yahoo answers for SRIL (#200)."""
+
+    inner: DataSource
+    symbol: str
+
+    def bars(self, instrument: Instrument, start: date, end: date) -> Sequence[Bar]:
+        self._check(instrument)
+        return self.inner.bars(instrument, start, end)
+
+    def corporate_actions(
+        self, instrument: Instrument, start: date, end: date
+    ) -> Sequence[CorporateAction]:
+        self._check(instrument)
+        return self.inner.corporate_actions(instrument, start, end)
+
+    def data_notes(
+        self, instruments: Sequence[Instrument], start: date, end: date
+    ) -> Sequence[Note]:
+        return ()
+
+    def _check(self, instrument: Instrument) -> None:
+        if instrument.symbol == self.symbol:
+            msg = f"{instrument.symbol}.JK: the request to Yahoo failed: HTTP Error 404: "
+            raise StockUnavailableError(msg)
+
+
+def unserved(symbol: str) -> SourceFactory:
+    @contextmanager
+    def source(folder: Path) -> Iterator[DataSource]:
+        with recorded_source(folder) as recorded:
+            yield Unserved(recorded, symbol)
+
+    return source
+
+
+def test_a_stock_the_source_cannot_serve_is_refused_and_the_run_completes(tmp_path: Path) -> None:
+    cli = replace(paper(tmp_path), source=unserved("UNVR"))
+    assert run_on(cli, START).code == 0
+    with opened(cli) as store:
+        assert store.days() == (START,)
+        report = store.report(START)
+    assert report is not None
+    # Buy-and-hold buys every stock it can on its first day: all of them but UNVR.
+    assert {order.instrument.symbol for order in report.queued} == {"ASII", "BBCA", "BBRI", "TLKM"}
 
 
 # Halts (M5 spec §6.5).
