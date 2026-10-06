@@ -32,7 +32,7 @@ Future market distributions (`steadyhand-asx`, `steadyhand-us`, …) follow the 
 - **Not a hosted service.** Nobody but the person running it ever touches their money, keys or data. A hosted service would move the project into OJK-licensed investment-advisory activity (§3.3).
 - **Not a signal seller**, leaderboard or strategy marketplace. Any of these would need its own legal review before it could be designed.
 - **Not "robot trading".** That phrase is associated in Indonesia with Bappebti-regulated futures/forex Ponzi schemes (§3.1). It is never used in names, docs or marketing.
-- **No unofficial broker access.** The project never reverse-engineers or UI-automates a broker's app. The operator decided this on 2026-09-24 (§3.4).
+- **No unofficial broker access.** The project never automates a broker's app or web page, and never calls its private interfaces; it may read the page the user has open. The operator decided the boundary on 2026-09-24 (§3.4) and amended it on 2026-10-06 (broker-view spec, SD1).
 
 ## 2. The roadmap, and where this spec sits
 
@@ -191,8 +191,8 @@ class Broker(Protocol):
 | Cash only | always on | No shorting, no margin; a buy with insufficient settled cash is cut or dropped |
 | Max weight per stock | 10% of portfolio value | Buy is cut back to the cap |
 | Min position size | 1 lot | Anything smaller is dropped |
-| Daily loss limit | 5% portfolio drop in one day | Strategy **halts**: no new orders until `steadyhand-idx resume` |
-| Max drawdown kill switch | 25% below the high-water mark | Strategy **halts** until `resume` |
+| Daily loss limit | 5% portfolio drop in one day | Strategy **halts**: no new orders until `steadyhand-idx resume` (in the extension: resumed in the side panel, broker-view spec SD2) |
+| Max drawdown kill switch | 25% below the high-water mark | Strategy **halts** until `resume` (in the extension: resumed in the side panel, broker-view spec SD2) |
 | Special Monitoring Board / exclusions | excluded | Never bought; held ones are frozen and flagged |
 | Idempotency | always on | A second run for the same trading date is a no-op that reports it already ran |
 
@@ -205,6 +205,8 @@ A halt is recorded in state and survives a restart. `resume` requires the operat
 - **Reinvestment:** dividend cash is spent on the next day's targets. Its deadline tag means income reports can show how much dividend cash still needs reinvesting for the tax exemption. With the exemption switch on, each dividend also carries an exemption claim: the amount reinvested by the deadline, and a protection end date (31 December of the third tax year counted from the year of the qualifying purchase, the stricter reading). If share holdings at cost fall below the amount still protected, the claim breaks, and 10% of the shortfall is booked as tax dated to the original pay date (`docs/research/t-tax.md` §7). The deadline's tax year is the year of the **ex date** unless `dividend_pay_dates.csv` gives the real pay date: a modelled pay date can push a December payment into January and make the deadline a year late, while the ex date's year is never later than the real one (`docs/research/t-pay.md` §4). The M4 plan replaces `dividend_tax`'s `reinvested_by_deadline: bool` with a read of that claim. The yearly reports and any self-payment are the investor's own paperwork, so exemption figures are labelled as estimates.
 
 ## 7. Income goal (the primary objective)
+
+**Amended 2026-10-06 (broker-view spec, SD3):** the extension's first release carries goal progress and the payment calendar only; income received, the projection and the exemption claims are later stories.
 
 `income.py` owns the dividend ledger and everything reported about income. Metrics:
 
@@ -223,6 +225,8 @@ A halt is recorded in state and survives a restart. `resume` requires the operat
 - **Strategy income impact:** every backtest report compares the strategy's final trailing 12-month dividend income against the buy-and-hold baseline over the same period, so the operator can see whether trading added to future income or took away from it.
 
 ## 8. Strategy library
+
+**Amended 2026-10-06 (broker-view spec, SD4):** the extension's first release carries strategies 1-6. Strategies 7-11 are scored stories labelled `post-launch`, outside it, each specified and approved before it is built (#214, decision 22).
 
 Every strategy ships with `docs/strategies/<name>.md` in **plain English**. Each guide has the same sections: *What it does* (no jargon, or jargon explained where it first appears), *Why people use it*, *When it tends to do badly*, *Risks* (always including "you can lose money", fee drag, and anything specific to the strategy), *How often it trades*, and *Settings you can change*. `steadyhand-idx explain <name>` prints the guide. A test fails if any registered strategy is missing a guide or any of its sections (§10.1).
 
@@ -262,6 +266,8 @@ When a rule changes, the change is a data-file edit with a new effective date. B
 **Only primary-verified rows ship** (Shyden, 2026-09-25). A backtest refuses a start date earlier than the latest first date of any table in the rule and fee files (`tick_sizes.toml`, `auto_reject.toml`, `fees.toml`, `holidays.toml`), and the error names the table that sets it. The date is derived from the files, never hard-coded. With the rows researched so far it is **2021-01-01**, set by stamp duty, since whether a trade confirmation was dutiable before 2021 is unverified (`docs/research/t-verify.md` §5).
 
 ### 9.2 Yahoo data source
+
+**Amended 2026-10-06 (broker-view spec, SD5):** §9.2-§9.6 describe the Python packages, which stay in the repository; the extension uses none of them.
 
 - `yfinance` is pinned to an exact version, and Dependabot proposes upgrades.
 - It fetches OHLCV plus dividends and splits. Yahoo's prices are split-adjusted even with `auto_adjust=False` (`t-hist.md` §6), so the source reverses every reported split using the stock's whole split history. An adjustment Yahoo does not report, such as a rights issue, leaves prices that are not whole rupiah after reversal. When exactly one factor from 1 to below 2 puts a whole run of those prices back on the IDX tick grid, the source restores the run's prices and dividends by that factor, and a backtest's warnings say so with the key `data.prices.restored` (#160 spec §4–§7). The days the proof cannot settle are refused with `UnrecoverablePricesError`, naming them (measured on 2026-09-25, before #160: BBRI to 2021-09-07, SMGR to 2022-12-12, MDKA to 2022-04-13, five INCO days in June 2024). A zero-volume bar on a trading day is kept as "did not trade"; a flat empty bar on a holiday is dropped; trading on a holiday is refused.
@@ -423,6 +429,8 @@ TDD throughout: a test is written, and shown failing, before any production code
 
 ## 13. Implementation milestones (one plan each)
 
+**Amended 2026-10-06 (broker-view spec, SD4):** M7-M10 (item 6's waves 2-4 and item 7) are replaced by the broker-view spec's stories (§16 there).
+
 1. **M1 Foundations:** repo, CI, meta-guards, supply chain, `money`, `types`, `portfolio`, `MarketRules`/`DataSource`/`Broker` protocols, and TestPyPI dev publishing from `develop` (§11).
 2. **M2 IDX rules and data:** `rules.py` and data files (after T-RULES), calendar, Yahoo source, cache, fixtures, and `universe.py`.
 3. **M3 Engine and backtester:** `run_day`, SimulatedBroker, RiskManager, CompoundingSizer, corporate actions, metrics, golden tests, performance test.
@@ -487,3 +495,4 @@ TDD throughout: a test is written, and shown failing, before any production code
 - **Pass 14 (2026-09-25, the M2 plan):** §3.6, §4.1, §4.3, §5.1, §9.1, §9.2, §9.4 and §13 were brought into line with the M2 plan's scope decisions (`docs/superpowers/plans/2026-09-25-m2-idx-rules-and-data.md`). Findings, all fixed: (1) T+2 had no primary source, and POJK 21/POJK.04/2018 Pasal 2(2) is now cited, with the row starting 26 Nov 2018; (2) §4.3 had no way to charge a per-day amount or to state the first verified day, so `MarketRules` gains `daily_costs`, `verified_from` and `require_supported`; (3) §5.1 left stamp duty's charging to the plan, and it is now per trading day through `daily_costs`, as the law imposed it; (4) §9.1 shipped `stockbit` and `ipot` presets whose `includes` would be a guess; (5) §9.1's `sessions.toml` has no reader before M5; (6) §9.2 called Yahoo's prices unadjusted, and they are split-adjusted, with rights issues unrecoverable; (7) §4.1 and §9.4 shipped `exclusions.csv` in the package; (8) §13 did not name `universe.py`. A grep for `stockbit`, `ipot`, `exclusions.csv`, `Settlement is T+2` and `plan decision` finds no contradicting wording left, and neither does one for `VAT rate`.
 - **Pass 15 (2026-09-30, the M6 spec):** §8 and §9.5 were brought into line with the M6 spec's scope decisions (`docs/superpowers/specs/2026-09-30-m6-strategy-wave-1-design.md`). (1) `dividend-growth`'s rule was "has not fallen in any of the last 5 calendar years", which 4 of 45 LQ45 stocks passed for a January 2021 review and 1 of 45 in 2025 (M6 spec §3); it is now "paid in each of the last 6 years, and the latest year's total is at least the total five years before", which 19 and 20 passed (SD1); (2) "weighted towards spreading pay months" became "chosen to spread pay months", with equal weights (SD2); (3) §9.5's `[strategy]` table names its flat, optional keys (SD3). A grep for `has not fallen` and `weighted towards` finds no contradicting wording left.
 - **Pass 16 (2026-10-01, the #160 spec):** §4.3 and §9.2 were brought into line with the #160 spec (`docs/superpowers/specs/2026-10-01-price-factor-recovery-design.md`). (1) `DataSource` gains `data_notes`, which a backtest's data warnings include (its §7, decision 5); (2) a run of prices that are not whole rupiah after the reported splits are reversed is restored when the tick grid proves one factor for it, and only the days the proof cannot settle are refused (its §4 and §5).
+- **Pass 17 (2026-10-06, the broker-view spec):** §1.3, §6.1, §7, §8, §9.2 and §13 were brought into line with the broker-view spec's scope decisions SD1-SD5 (`docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`), approved by Shyden on 2026-10-06 (#214, decision 20).

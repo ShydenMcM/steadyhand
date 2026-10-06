@@ -1,6 +1,6 @@
 # steadyhand: advice from what the user's broker shows (#214)
 
-**Status:** draft for Shyden's review. Written from decisions 1-19 and the design approved on 2026-10-06 (sections 1-4, #214 issuecomment-6008393878, cited here as "design §n"), all on #214. The review loop is logged at the end.
+**Status:** approved by Shyden on 2026-10-06 through AskUserQuestion ("Approve the spec", decision 20), after nine review passes; he confirmed all five defaults (decision 21) and how strategies 7-11 are filed (decision 22). Written from decisions 1-19 and the design approved on 2026-10-06 (sections 1-4, #214 issuecomment-6008393878, cited here as "design §n"), all on #214. The review loop is logged at the end.
 **Ticket:** #214 (epic). **Replaces:** the M7-M10 plan of the core spec (§13: item 6's strategy waves 2-4 and item 7, the first release) and the backtest-data tickets #160, #161, #162, #200, #203 and #207 (§15).
 **Parent spec:** `2026-09-24-steadyhand-core-design.md` (the "core spec"). This spec amends it in the places the scope decisions at the end list.
 
@@ -44,6 +44,9 @@ All are Shyden's, through AskUserQuestion, each with its reasoning shown; the fu
 | 17 | ma-trend and momentum-rotation keep total return: the broker's chart series adjusted by the dividends read (§6.5). |
 | 18 | Deposits and withdrawals come from the broker's cash-movement page, else the user types them; a halt that cannot be judged stops buy advice (§8). |
 | 19 | Income goal: progress and the payment calendar only (§9). |
+| 20 | This spec is approved. |
+| 21 | The five defaults are confirmed as written. |
+| 22 | Strategies 7-11 are filed as scored stories labelled `post-launch`, outside the first release (SD4). |
 
 ## 3. Structure
 
@@ -179,7 +182,7 @@ M7 was decided on 2026-10-04 (decisions in git-ignored `.superpowers/sdd/m7-lq45
 - **The limits stay core §6.1's:** cash only, 10% per stock, one lot minimum, the 5% daily loss limit and the 25% drawdown kill switch, measured on the fund-style unit value (`risk.UnitValue`), so a deposit buys units and never looks like a gain.
 - **Deposits and withdrawals** come from the broker's cash-movement page where the reader supports one; otherwise the user types each one into the panel (date and amount). A typed entry is shown as typed.
 - **The unit value is taken only from after-close reads** (§6.2), so intraday swings never trigger a halt.
-- **Daily loss:** judged against the previous trading day's unit value when it was read. When the previous trading day has no read, the fall since the latest earlier read is judged against the same 5% limit and the note gives the span. That is stricter than one day, never looser. (A default for Shyden to confirm, listed at the end.)
+- **Daily loss:** judged against the previous trading day's unit value when it was read. When the previous trading day has no read, the fall since the latest earlier read is judged against the same 5% limit and the note gives the span. That is stricter than one day, never looser. (A default, confirmed: decision 21.)
 - **The first after-close read opens the unit value**, as a run's first day does in Python; no halt is judged before it.
 - **A halt that cannot be judged stops buy advice:** until the cash-movement record covers the time since the last read, the panel lists `missing.deposits` and gives sell orders only. The record covers it when the broker's cash-movement page has been read for that span, or, on the typed route, when the user has entered every deposit and withdrawal since that read or answered "none" to the panel's question naming the span.
 - **A halt** stops all buy advice until the user resumes it in the panel by typing the strategy's name, as `resume` requires in Python; the resume and its time are recorded. Resume is refused while a fact the halt needs is missing (such as `missing.deposits`), as core §6.1 refuses to resume over stale data.
@@ -232,7 +235,7 @@ The scan reads the built JavaScript through a tokenizer, not a regex, so a forbi
 - The `ci.yml` jobs gain `extension`: install, lint, `tsc --noEmit`, Vitest with coverage, the meta-guards, the build, the security scan, Playwright with the built extension, the parity harness (§14.4).
 - **Develop's deploy** becomes: build the extension zip and attest its build provenance (GitHub's `actions/attest-build-provenance`). The Python TestPyPI `publish-dev` job is retired (design §4).
 - **The docs-only fast path** (Shyden's global rule): steadyhand's CI has none. Its own ticket measures the current CI first (jobs per PR, minutes per run) and adds it before other CI work in this epic.
-- The scheduled `yahoo-shape.yml` checks a data source the extension no longer uses: it is disabled with the retirement of `publish-dev`. (A default for Shyden to confirm.)
+- The scheduled `yahoo-shape.yml` checks a data source the extension no longer uses: it is disabled with the retirement of `publish-dev`. (A default, confirmed: decision 21.)
 
 ### 12.2 Release
 - **Reproducible:** the same source builds a byte-identical zip; CI builds twice and compares.
@@ -303,7 +306,7 @@ Each is filed with full acceptance criteria and an Estimate scored against close
 | 17 | Lessons | §13 | 3 |
 | 18 | Release: verified upload, release environment, provenance, reproducible build, pinned zip | §12.2 | 5 |
 
-Later stories, filed now without a release date: Indonesian; screenshots; income received; the projection; the exemption claims; each further broker.
+Later stories, filed now without a release date: Indonesian; screenshots; income received; the projection; the exemption claims; each further broker. Strategies 7-11 are filed too, scored and labelled `post-launch` (decision 22).
 
 ## 17. Risks
 
@@ -315,9 +318,9 @@ Later stories, filed now without a release date: Indonesian; screenshots; income
 - **A limit at the close can be rejected** on a day whose reference is not the previous close, such as a rights issue's ex-date (#203's finding). The broker refuses the order and nothing fills; steadyhand does not know rights ex-dates (#203 is closed with this spec), so the "limit prices" lesson says so (§13).
 - **Pace:** every closed story so far was Python; the TypeScript stack's pace is unmeasured until the first stories close.
 
-## Defaults for Shyden to confirm
+## Defaults (confirmed by Shyden on 2026-10-06, decision 21)
 
-These were not asked in the brainstorm. Each points to the section that gives its reason, and each is one line to change.
+These were not asked in the brainstorm; Shyden accepted all five as written. Each points to the section that gives its reason.
 1. **The limit price is the advice day's close** (§4.4).
 2. **Daily loss across a gap in reads** is judged on the whole gap against the 5% limit (§8).
 3. **`yahoo-shape.yml` is disabled** with `publish-dev` (§12.1).
@@ -329,10 +332,10 @@ These were not asked in the brainstorm. Each points to the section that gives it
 - **SD1, core §1.3 "No unofficial broker access":** the extension reads the page the user has open, read-only, as decisions 4 and 11 chose. It never automates, clicks, submits or calls a broker's private interfaces, which keeps the boundary's purpose. The line becomes "never automates a broker's app or web page, and never calls its private interfaces; it may read the page the user has open".
 - **SD2, core §6.1:** "until `steadyhand-idx resume`" becomes "until resumed in the side panel" (§8).
 - **SD3, core §7:** the first release carries goal progress and the payment calendar only (decision 19).
-- **SD4, core §8 and §13:** the first release's strategy library is the six of §7 (decision 14); M7-M10 are replaced by this spec's stories. Core §8's waves 3 and 4 (strategies 7-11: dual-momentum, low-volatility, breakout, rsi-reversion, dividend-capture) are outside the first release; whether they come back as later stories is Shyden's call, asked with this spec.
+- **SD4, core §8 and §13:** the first release's strategy library is the six of §7 (decision 14); M7-M10 are replaced by this spec's stories. Core §8's waves 3 and 4 (strategies 7-11: dual-momentum, low-volatility, breakout, rsi-reversion, dividend-capture) are outside the first release: they are filed as scored stories labelled `post-launch`, each carrying core §8's rule and an acceptance criterion that its exact rule is specified and approved before it is built (decision 22).
 - **SD5, core §9.2-§9.6:** Yahoo, the cache, `steadyhand.toml` and the CLI are not used by the extension; the Python packages keep them.
 
-When this spec is approved, the core spec is edited to match, with a line in its review log.
+On approval the core spec was edited to match (its review log, pass 17).
 
 ## Spec review log
 
@@ -345,3 +348,4 @@ When this spec is approved, the core spec is edited to match, with a line in its
 - **Pass 7 (2026-10-06):** mechanical (as pass 6) and a full read. 1 finding, fixed: momentum-rotation's "too few" note was unnamed; it is `strategy.too_few_qualified`, as M7 decision 7's "cash + note" and high-yield's.
 - **Pass 8 (2026-10-06):** mechanical (as pass 6) and a full read. 1 finding, fixed: the defaults' preamble called every default "the most cautious reading", which is untrue of disabling `yahoo-shape.yml` and of the M7 gaps filled from `dividend-growth`.
 - **Pass 9 (2026-10-06):** mechanical (as pass 6: no dangling reference, no placeholder, 18 stories totalling 105, all Fibonacci) and a full read. **0 findings. Loop closed.**
+- **Approval (2026-10-06):** Shyden approved the spec (decision 20), confirmed the five defaults (decision 21) and chose scored `post-launch` stories for strategies 7-11 (decision 22); the status, the defaults, SD4 and §16 were updated to match, and the core spec was amended (its pass 17).
