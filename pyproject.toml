@@ -59,6 +59,7 @@ addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-r
 markers = [
     "live: talks to Yahoo; run by the daily yahoo-shape workflow with -m live, never on a PR",
     "perf: times the engine, paper runs and start-up; CI runs it with -m perf, without coverage",
+    "last: judges what every other test did, so tests/conftest.py runs it at the end (#218)",
 ]
 filterwarnings = ["error"]
 xfail_strict = true
