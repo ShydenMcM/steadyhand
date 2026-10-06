@@ -40,7 +40,7 @@ DEPLOYS = sorted(name for name, job in JOBS.items() if "environment" in job)
 def test_the_gated_and_deploy_jobs_are_the_ones_expected() -> None:
     assert "lint" in GATED
     assert "extension" in GATED
-    assert "publish-dev" in DEPLOYS
+    assert DEPLOYS == ["deploy-dev"]
     assert len(GATED) >= GATED_FLOOR
 
 

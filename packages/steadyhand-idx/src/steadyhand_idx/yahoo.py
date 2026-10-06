@@ -511,7 +511,7 @@ def failure_of(ticker: str, error: Exception) -> DataUnavailableError:
 
 
 def download_history(ticker: str, start: date, end: date) -> YahooHistory:  # pragma: no cover
-    """Ask Yahoo for one ticker's history (network; run daily by the yahoo-shape workflow).
+    """Ask Yahoo for one ticker's history (network; run by hand by the yahoo-shape workflow).
 
     This is the only function that talks to Yahoo, and the only code excluded from coverage:
     ``tests/meta/test_coverage_exclusions.py`` holds it to that. Everything it returns goes

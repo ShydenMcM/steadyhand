@@ -1,13 +1,14 @@
 name: yahoo-shape
 
-# Spec §9.2: once a day, ask Yahoo for the recorded fixture ranges and check that the answer still
-# converts to the same unadjusted prices. A changed format, changed prices or a new unreported
-# adjustment opens an issue, so it is noticed before it breaks a user's run. It is not a PR gate:
-# Yahoo being down must not block a merge.
+# Spec §9.2: ask Yahoo for the recorded fixture ranges and check that the answer still converts to
+# the same unadjusted prices. A changed format, changed prices or a new unreported adjustment opens
+# an issue. It is not a PR gate: Yahoo being down must not block a merge.
+#
+# It runs only by hand since #220: the extension reads the user's broker, never Yahoo, so its daily
+# schedule was retired with publish-dev (broker-view spec §12.1, decision 21). The Python packages
+# keep their Yahoo layer, and this check still serves them when someone works on it.
 
 on:
-  schedule:
-    - cron: "30 1 * * *" # 08:30 WIB, before the market opens
   workflow_dispatch:
 
 permissions:
