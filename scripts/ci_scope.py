@@ -123,7 +123,8 @@ def verdict_for(found: list[Change]) -> Verdict:
         if change.removed:
             reason = f"{change.path} goes away, and a test may check that it exists"
             return Verdict(docs_only=False, reason=reason)
-    return Verdict(docs_only=True, reason=f"docs-only: {len(found)} paths, all on the fast path")
+    paths = "1 path" if len(found) == 1 else f"{len(found)} paths"
+    return Verdict(docs_only=True, reason=f"docs-only: {paths}, all on the fast path")
 
 
 def _decide(event: str, repo: Path) -> Verdict:

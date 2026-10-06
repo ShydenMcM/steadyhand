@@ -212,9 +212,19 @@ def test_a_fast_path_file_that_goes_away_runs_everything_and_says_why() -> None:
     )
 
 
-def test_a_docs_only_verdict_counts_its_paths() -> None:
-    verdict = verdict_for(edits("HANDOVER.md", "docs/superpowers/specs/s.md"))
-    assert verdict == Verdict(True, "docs-only: 2 paths, all on the fast path")
+@pytest.mark.parametrize(
+    ("paths", "reason"),
+    [
+        pytest.param(("HANDOVER.md",), "docs-only: 1 path, all on the fast path", id="one"),
+        pytest.param(
+            ("HANDOVER.md", "docs/superpowers/specs/s.md"),
+            "docs-only: 2 paths, all on the fast path",
+            id="two",
+        ),
+    ],
+)
+def test_a_docs_only_verdict_counts_its_paths(paths: tuple[str, ...], reason: str) -> None:
+    assert verdict_for(edits(*paths)) == Verdict(True, reason)
 
 
 def test_an_empty_diff_runs_everything_and_says_why() -> None:
