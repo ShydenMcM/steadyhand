@@ -26,3 +26,19 @@ updates:
         patterns: ["actions/cache*"]
       actions-patch:
         update-types: ["patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/extension"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # vitest and @vitest/coverage-v8 each pin the other's exact version, so a PR moving one
+      # alone cannot install. This group moves them together; it stays above the catch-all,
+      # because the first matching group wins.
+      vitest:
+        patterns: ["vitest", "@vitest/*"]
+      npm-minor-and-patch:
+        update-types: ["minor", "patch"]

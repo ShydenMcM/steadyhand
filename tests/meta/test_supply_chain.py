@@ -5,6 +5,8 @@ YAML is parsed, so a comment can never satisfy a rule. The one rule that is abou
 parsed values so that no ``uses`` can hide from it.
 """
 
+import fnmatch
+import json
 import re
 import shlex
 from collections.abc import Iterator
@@ -12,6 +14,7 @@ from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 from population import searched, tracked
 
@@ -51,13 +54,31 @@ def dependabot() -> dict[str, Any]:
     return loaded
 
 
+def npm_locks() -> list[Path]:
+    """Every npm lock file git lists, outside node_modules (#220)."""
+    return [path for path in tracked(ROOT, "package-lock.json") if "node_modules" not in path.parts]
+
+
 def ecosystems_present() -> set[str]:
     present: set[str] = set()
     if (ROOT / "uv.lock").is_file():
         present.add("uv")
     if workflow_files():
         present.add("github-actions")
+    if npm_locks():
+        present.add("npm")
     return present
+
+
+def update_for(ecosystem: str, directory: str) -> dict[str, Any]:
+    found = [
+        update
+        for update in dependabot()["updates"]
+        if update["package-ecosystem"] == ecosystem and update["directory"] == directory
+    ]
+    assert len(found) == 1, (ecosystem, directory, found)
+    update: dict[str, Any] = found[0]
+    return update
 
 
 def test_the_workflows_read_are_the_ones_git_lists() -> None:
@@ -101,14 +122,76 @@ def test_every_pin_carries_its_release_version_as_a_comment() -> None:
 
 def test_dependabot_covers_every_ecosystem_in_the_repo() -> None:
     present = ecosystems_present()
-    assert present == {"uv", "github-actions"}
+    assert present == {"uv", "github-actions", "npm"}
     configured = {update["package-ecosystem"] for update in dependabot()["updates"]}
     assert present <= configured
 
 
+def test_the_npm_locks_are_the_extension_workspace_alone() -> None:
+    assert [path.relative_to(ROOT).as_posix() for path in npm_locks()] == [
+        "extension/package-lock.json"
+    ]
+
+
+@pytest.mark.parametrize("lock", npm_locks(), ids=lambda path: path.relative_to(ROOT).as_posix())
+def test_every_npm_lock_has_its_own_dependabot_update(lock: Path) -> None:
+    update = update_for("npm", f"/{lock.parent.relative_to(ROOT).as_posix()}")
+    assert update["target-branch"] == "develop"
+
+
+def exact_peers(lock: Path) -> list[tuple[str, str]]:
+    """Each pair of direct dependencies where one's peer range is the other's exact version, as
+    the lock records it: a Dependabot PR moving one alone cannot install (#220)."""
+    packages: dict[str, dict[str, Any]] = json.loads(lock.read_text(encoding="utf-8"))["packages"]
+    direct = {
+        name
+        for path, entry in packages.items()
+        if not path.startswith("node_modules/")
+        for field in ("dependencies", "devDependencies")
+        for name in entry.get(field, {})
+        if not name.startswith("@steadyhand/")
+    }
+    return sorted(
+        (name, peer)
+        for name in direct
+        for peer, spec in packages[f"node_modules/{name}"].get("peerDependencies", {}).items()
+        if peer in direct and re.fullmatch(r"\d+\.\d+\.\d+", spec)
+    )
+
+
+def group_of(name: str, groups: dict[str, dict[str, Any]]) -> str | None:
+    """The first group whose patterns match *name*, as Dependabot assigns it."""
+    for group, spec in groups.items():
+        if any(fnmatch.fnmatchcase(name, pattern) for pattern in spec.get("patterns", [])):
+            return group
+    return None
+
+
+NPM_LOCK = ROOT / "extension/package-lock.json"
+
+
+def test_the_exact_peer_pairs_are_the_ones_measured() -> None:
+    # Measured on 2026-10-06 (#220): vitest and @vitest/coverage-v8 each pin the other.
+    assert exact_peers(NPM_LOCK) == [
+        ("@vitest/coverage-v8", "vitest"),
+        ("vitest", "@vitest/coverage-v8"),
+    ]
+
+
+@pytest.mark.parametrize(("name", "peer"), exact_peers(NPM_LOCK))
+def test_packages_pinned_to_each_other_move_in_one_group(name: str, peer: str) -> None:
+    groups: dict[str, dict[str, Any]] = update_for("npm", "/extension")["groups"]
+    group = group_of(name, groups)
+    assert group is not None, f"{name} is in no group, so it moves without {peer}"
+    assert group_of(peer, groups) == group
+    # The catch-all comes after: Dependabot puts an update in the first group that matches.
+    catch_all = next(found for found, spec in groups.items() if "update-types" in spec)
+    assert list(groups).index(group) < list(groups).index(catch_all)
+
+
 def test_every_dependabot_update_targets_develop_weekly() -> None:
     updates = dependabot()["updates"]
-    assert len(updates) >= 2
+    assert len(updates) >= 3
     wrong = [
         (u["package-ecosystem"], u.get("target-branch"), u.get("schedule", {}).get("interval"))
         for u in updates
