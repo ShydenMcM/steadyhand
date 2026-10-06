@@ -212,3 +212,66 @@ def test_sub_path_actions_are_grouped_above_the_patch_group() -> None:
     assert patch, "no patch group"
     # Dependabot puts an update in the first group that matches, so order matters.
     assert names.index(sub_path[0]) < names.index(patch[0])
+
+
+SETUP_NODE = "actions/setup-node@"
+PACKAGE_JSON = ROOT / "extension/package.json"
+MAJOR = re.compile(r"(?P<major>\d+)(?:\.[\dx]+)*")
+
+
+def major_of(version: object, *, where: str) -> int:
+    """The major version in *version*; ``lts/*``, a range or none is refused by name."""
+    found = MAJOR.fullmatch(version) if isinstance(version, str) else None
+    if found is None:
+        msg = f"{where}: cannot read a major version from {version!r}"
+        raise AssertionError(msg)
+    return int(found["major"])
+
+
+def setup_node_versions() -> list[tuple[str, object]]:
+    """``(where, node-version)`` for each ``actions/setup-node`` step of each job (#270)."""
+    versions: list[tuple[str, object]] = []
+    for path in workflow_files():
+        jobs = yaml.safe_load(path.read_text(encoding="utf-8")).get("jobs", {})
+        for job_name, job in jobs.items():
+            for step in job.get("steps", []):
+                if str(step.get("uses", "")).startswith(SETUP_NODE):
+                    where = f"{path.name} job {job_name}"
+                    versions.append((where, step.get("with", {}).get("node-version")))
+    return versions
+
+
+def test_every_setup_node_step_names_its_node_version() -> None:
+    # Counted another way: every `uses` anywhere in the workflows, so a step the job walk missed
+    # (a reusable workflow, a new nesting) makes the two counts differ.
+    uses = [
+        value
+        for path in workflow_files()
+        for value in uses_values(yaml.safe_load(path.read_text(encoding="utf-8")))
+        if value.startswith(SETUP_NODE)
+    ]
+    versions = setup_node_versions()
+    assert len(versions) == len(uses), (versions, uses)
+    unnamed = [where for where, version in versions if version is None]
+    assert searched(unnamed, of=len(versions), what="setup-node steps") == []
+
+
+def test_types_node_follows_the_node_that_ci_runs() -> None:
+    # Types for a newer Node than CI runs let tsc accept an API that then fails on CI (#268).
+    pinned = json.loads(PACKAGE_JSON.read_text(encoding="utf-8"))["devDependencies"]["@types/node"]
+    types_major = major_of(pinned, where="@types/node")
+    versions = setup_node_versions()
+    other = [
+        (where, version)
+        for where, version in versions
+        if major_of(version, where=where) != types_major
+    ]
+    assert searched(other, of=len(versions), what="setup-node steps") == []
+
+
+def test_dependabot_never_moves_types_node_past_the_runtime() -> None:
+    ignored = update_for("npm", "/extension").get("ignore", [])
+    rule = [entry for entry in ignored if entry.get("dependency-name") == "@types/node"]
+    assert rule == [
+        {"dependency-name": "@types/node", "update-types": ["version-update:semver-major"]}
+    ]
