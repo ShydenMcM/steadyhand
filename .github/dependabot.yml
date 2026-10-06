@@ -34,6 +34,11 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "chore(deps)"
+    # @types/node describes the Node that CI runs (setup-node's node-version), so a new major
+    # would let tsc accept an API CI's Node lacks (#270). It moves with the runtime, by hand.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       # vitest and @vitest/coverage-v8 each pin the other's exact version, so a PR moving one
       # alone cannot install. This group moves them together; it stays above the catch-all,
