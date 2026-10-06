@@ -20,7 +20,9 @@ steadyhand-idx = { workspace = true }
 target-version = "py312"
 line-length = 100
 # Specs and plans hold hand-aligned sketches for reading, not shipped code; READMEs stay checked.
-extend-exclude = ["docs/superpowers"]
+# Both are on CI's docs-only fast path (#218), where nothing runs ruff: ruff formats Markdown, and
+# the fast-path lock found `ruff format --check` reading HANDOVER.md (#264).
+extend-exclude = ["docs/superpowers", "HANDOVER.md"]
 
 [tool.ruff.lint]
 select = [
@@ -33,7 +35,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["steadyhand", "steadyhand_idx", "set_dev_version", "ci_scope"]
+known-first-party = ["steadyhand", "steadyhand_idx", "set_dev_version", "ci_scope", "lock_fast_path"]
 
 [tool.ruff.lint.per-file-ignores]
 # Tests assert, use literal values, pass bools on purpose, and implement interfaces minimally.
@@ -68,7 +70,7 @@ empty_parameter_set_mark = "fail_at_collect"
 
 [tool.coverage.run]
 branch = true
-source_pkgs = ["steadyhand", "steadyhand_idx", "ci_scope"]
+source_pkgs = ["steadyhand", "steadyhand_idx", "ci_scope", "lock_fast_path"]
 
 [tool.coverage.report]
 fail_under = 100
