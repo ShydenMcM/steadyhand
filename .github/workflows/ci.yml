@@ -26,15 +26,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
+      - name: "Scope: may this docs-only change skip the rest?"
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: python3 scripts/ci_scope.py "$EVENT_NAME"
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        if: steps.scope.outputs.docs_only != 'true'
         with:
           version: ${{ env.UV_VERSION }}
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked
+        if: steps.scope.outputs.docs_only != 'true'
       - run: uv run --locked ruff check
+        if: steps.scope.outputs.docs_only != 'true'
       - run: uv run --locked ruff format --check
+        if: steps.scope.outputs.docs_only != 'true'
       - run: uv run --locked mypy
+        if: steps.scope.outputs.docs_only != 'true'
 
   test:
     name: test (py${{ matrix.python }})
@@ -48,16 +59,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
+      - name: "Scope: may this docs-only change skip the rest?"
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: python3 scripts/ci_scope.py "$EVENT_NAME"
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        if: steps.scope.outputs.docs_only != 'true'
         with:
           version: ${{ env.UV_VERSION }}
           python-version: ${{ matrix.python }}
           enable-cache: true
       - run: uv sync --locked
+        if: steps.scope.outputs.docs_only != 'true'
       - run: uv run --locked pytest -W error --cov --cov-report=term-missing
+        if: steps.scope.outputs.docs_only != 'true'
       # The ten-year backtest is timed on its own: under coverage's tracing it would time the
       # tracer, which roughly triples the run.
       - name: Performance, a ten-year backtest in under 30 seconds
+        if: steps.scope.outputs.docs_only != 'true'
         run: uv run --locked pytest -W error -m perf -p no:cacheprovider
 
   audit:
@@ -68,13 +89,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
+      - name: "Scope: may this docs-only change skip the rest?"
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: python3 scripts/ci_scope.py "$EVENT_NAME"
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        if: steps.scope.outputs.docs_only != 'true'
         with:
           version: ${{ env.UV_VERSION }}
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked
+        if: steps.scope.outputs.docs_only != 'true'
       - name: Audit every locked dependency, dev tools included
+        if: steps.scope.outputs.docs_only != 'true'
         run: |
           uv export --locked --format requirements-txt --no-emit-workspace \
             --output-file "${RUNNER_TEMP}/requirements-audit.txt"
@@ -88,28 +118,40 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
+      - name: "Scope: may this docs-only change skip the rest?"
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: python3 scripts/ci_scope.py "$EVENT_NAME"
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        if: steps.scope.outputs.docs_only != 'true'
         with:
           version: ${{ env.UV_VERSION }}
           python-version: "3.12"
       - run: uv build --all-packages --out-dir dist
+        if: steps.scope.outputs.docs_only != 'true'
       - name: Both packages built a wheel and an sdist
+        if: steps.scope.outputs.docs_only != 'true'
         run: |
           ls dist
-          test "$(ls dist/*.whl | wc -l)" -eq 2
-          test "$(ls dist/*.tar.gz | wc -l)" -eq 2
+          test "$(find dist -maxdepth 1 -name '*.whl' | wc -l)" -eq 2
+          test "$(find dist -maxdepth 1 -name '*.tar.gz' | wc -l)" -eq 2
       - name: The IDX wheel carries its rule data
+        if: steps.scope.outputs.docs_only != 'true'
         run: |
           unzip -l dist/steadyhand_idx-*.whl > "${RUNNER_TEMP}/idx-wheel.txt"
           for table in tick_sizes auto_reject fees holidays; do
             grep -q "steadyhand_idx/data/${table}.toml" "${RUNNER_TEMP}/idx-wheel.txt"
           done
       - name: The engine wheel installs and imports with nothing else
+        if: steps.scope.outputs.docs_only != 'true'
         run: |
           uv venv "${RUNNER_TEMP}/engine-only"
           uv pip install --python "${RUNNER_TEMP}/engine-only" dist/steadyhand-*.whl
           "${RUNNER_TEMP}/engine-only/bin/python" -c "import steadyhand; print(steadyhand.__version__)"
       - name: Both wheels ship every lesson, and the catalogue loads from them
+        if: steps.scope.outputs.docs_only != 'true'
         run: |
           expected="$(find packages/*/src/*/training/lessons -name '*.md' | wc -l)"
           test "${expected}" -gt 0
@@ -126,6 +168,7 @@ jobs:
           print(len(lessons), "lessons load from the installed wheels")
           PY
       - name: The engine wheel ships every strategy guide, and the installed command prints one
+        if: steps.scope.outputs.docs_only != 'true'
         run: |
           expected="$(find packages/steadyhand/src/steadyhand/strategies/guides -name '*.md' | wc -l)"
           test "${expected}" -gt 0

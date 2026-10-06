@@ -33,7 +33,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["steadyhand", "steadyhand_idx", "set_dev_version"]
+known-first-party = ["steadyhand", "steadyhand_idx", "set_dev_version", "ci_scope"]
 
 [tool.ruff.lint.per-file-ignores]
 # Tests assert, use literal values, pass bools on purpose, and implement interfaces minimally.
@@ -59,6 +59,7 @@ addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-r
 markers = [
     "live: talks to Yahoo; run by the daily yahoo-shape workflow with -m live, never on a PR",
     "perf: times the engine, paper runs and start-up; CI runs it with -m perf, without coverage",
+    "last: judges what every other test did, so tests/conftest.py runs it at the end (#218)",
 ]
 filterwarnings = ["error"]
 xfail_strict = true
@@ -67,7 +68,7 @@ empty_parameter_set_mark = "fail_at_collect"
 
 [tool.coverage.run]
 branch = true
-source_pkgs = ["steadyhand", "steadyhand_idx"]
+source_pkgs = ["steadyhand", "steadyhand_idx", "ci_scope"]
 
 [tool.coverage.report]
 fail_under = 100
