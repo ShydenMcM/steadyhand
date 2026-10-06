@@ -1,0 +1,11 @@
+{
+  "name": "@steadyhand/shell",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "dependencies": {
+    "@steadyhand/history": "0.1.0",
+    "@steadyhand/readers": "0.1.0"
+  }
+}

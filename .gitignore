@@ -6,6 +6,10 @@ build/
 dist/
 *.egg-info/
 
+# Node (extension/)
+node_modules/
+coverage/
+
 # Tool caches
 .coverage
 .coverage.*

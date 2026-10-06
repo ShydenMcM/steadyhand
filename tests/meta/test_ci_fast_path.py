@@ -25,10 +25,10 @@ LOCK = {
     "if": SKIP,
     "run": "python3 scripts/lock_fast_path.py",
 }
-# Measured on 2026-10-06 (#218, #264): 4 gated jobs whose later steps number 23, the lock included.
+# Measured on 2026-10-06 (#220): 5 gated jobs whose later steps number 31, the lock included.
 # Lower each only by a deliberate edit when the workflow shrinks.
-GATED_FLOOR = 3
-SKIPPED_STEPS_FLOOR = 22
+GATED_FLOOR = 4
+SKIPPED_STEPS_FLOOR = 30
 
 # PyYAML reads the bare key `on` as the boolean True, so a key may be a bool.
 WORKFLOW: dict[str | bool, Any] = yaml.safe_load(CI.read_text(encoding="utf-8"))
@@ -39,6 +39,7 @@ DEPLOYS = sorted(name for name, job in JOBS.items() if "environment" in job)
 
 def test_the_gated_and_deploy_jobs_are_the_ones_expected() -> None:
     assert "lint" in GATED
+    assert "extension" in GATED
     assert "publish-dev" in DEPLOYS
     assert len(GATED) >= GATED_FLOOR
 
