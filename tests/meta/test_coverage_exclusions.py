@@ -1,7 +1,7 @@
 """Coverage may skip exactly one piece of shipped code: the one function that talks to Yahoo.
 
 Spec §10.5 asks for 100% branch coverage. The network call cannot run on a pull request, so it is
-excluded and run instead by the daily yahoo-shape workflow. Any second exclusion is a hole in
+excluded and run instead by the yahoo-shape workflow, by hand. Any second exclusion is a hole in
 the 100%, so this guard fails on it. It reads comments on purpose: the pragma is a comment.
 """
 

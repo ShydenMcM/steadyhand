@@ -1,10 +1,10 @@
 """Yahoo still answers the way the recorded fixtures say it did (spec §9.2).
 
-Marked ``live``: it talks to Yahoo, so it never runs on a pull request. The daily yahoo-shape
-workflow runs it and opens an issue when it fails. The comparison is on the UNADJUSTED result,
-so a split Yahoo applies after the recording does not break it; a changed format, changed
-prices or a new unreported adjustment does. And a ticker Yahoo does not know is still answered
-as a stock it cannot serve (#200), so a run goes on without it rather than stopping.
+Marked ``live``: it talks to Yahoo, so it never runs on a pull request. The yahoo-shape workflow,
+started by hand since #220, runs it and opens an issue when it fails. The comparison is on the
+UNADJUSTED result, so a split Yahoo applies after the recording does not break it; a changed format,
+changed prices or a new unreported adjustment does. And a ticker Yahoo does not know is still
+answered as a stock it cannot serve (#200), so a run goes on without it rather than stopping.
 """
 
 import re
