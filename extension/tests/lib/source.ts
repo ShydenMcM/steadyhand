@@ -117,6 +117,33 @@ export const preScannedImports = (text: string): string[] =>
   ts.preProcessFile(text, true, true).importedFiles.map((imported) => imported.fileName);
 
 /**
+ * Each library file a program parsed (anything under `node_modules`, which nothing changes during a
+ * run), kept for every later program in this worker, by file and parse options. A program's own
+ * files are read afresh every time. Measured on 2026-10-07 (#276): a program parses 182 files,
+ * almost all of them the ES2024 and DOM libraries and `@types/node`; built cold it costs about
+ * 450 ms here and 3.7 s on a CI runner, reusing them 13-17 ms. No `oldProgram` is passed, so the
+ * compiler never asks for a fresh copy of a file it has.
+ */
+const LIBRARY = new Map<string, ts.SourceFile | undefined>();
+
+/** A compiler host for `options` that reads library files once per worker (see `LIBRARY`). */
+const libraryCachingHost = (options: ts.CompilerOptions): ts.CompilerHost => {
+  const host = ts.createCompilerHost(options);
+  const read = host.getSourceFile.bind(host);
+  host.getSourceFile = (fileName, version, onError) => {
+    if (!fileName.split("/").includes("node_modules")) {
+      return read(fileName, version, onError);
+    }
+    const key = `${JSON.stringify(version)} ${fileName}`;
+    if (!LIBRARY.has(key)) {
+      LIBRARY.set(key, read(fileName, version, onError));
+    }
+    return LIBRARY.get(key);
+  };
+  return host;
+};
+
+/**
  * The type checker over `paths` (relative to `extension/`, or absolute), compiled with the
  * workspace's own `tsconfig.json`. A config that cannot be read, a path the program did not
  * compile and a file with any compiler error are refused by name: types inferred around an error
@@ -125,7 +152,7 @@ export const preScannedImports = (text: string): string[] =>
 export const typeChecked = (
   paths: readonly string[],
   configPath: string = join(EXTENSION, "tsconfig.json"),
-): { checker: ts.TypeChecker; files: ts.SourceFile[] } => {
+): { checker: ts.TypeChecker; files: ts.SourceFile[]; program: ts.Program } => {
   let unreadable = `${configPath}: not read`;
   const config = ts.getParsedCommandLineOfConfigFile(configPath, undefined, {
     ...ts.sys,
@@ -140,7 +167,7 @@ export const typeChecked = (
     throw new UnreadableSourceError(ts.formatDiagnostics(config.errors, FORMAT).trim());
   }
   const roots = paths.map((path) => resolve(EXTENSION, path));
-  const program = ts.createProgram(roots, config.options);
+  const program = ts.createProgram(roots, config.options, libraryCachingHost(config.options));
   const files = roots.map((root) => {
     const file = program.getSourceFile(root);
     if (file === undefined) {
@@ -155,5 +182,5 @@ export const typeChecked = (
     }
     return file;
   });
-  return { checker: program.getTypeChecker(), files };
+  return { checker: program.getTypeChecker(), files, program };
 };
