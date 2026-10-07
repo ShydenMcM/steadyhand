@@ -1,5 +1,8 @@
 {
-  "compiler-home.uses": 23,
-  "source.files": 24,
+  "compiler-home.imports": 73,
+  "compiler-home.uses": 41,
+  "import-direction.files": 9,
+  "import-direction.imports": 12,
+  "source.files": 26,
   "workspace.locked-packages": 198
 }

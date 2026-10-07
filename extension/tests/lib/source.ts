@@ -110,6 +110,13 @@ export const codeText = (file: ts.SourceFile): string =>
     .join(" ");
 
 /**
+ * The modules the compiler's own import pre-scanner finds in `text`, without building a tree: an
+ * independent count of a file's imports, to cross-check a reader that walks the tree.
+ */
+export const preScannedImports = (text: string): string[] =>
+  ts.preProcessFile(text, true, true).importedFiles.map((imported) => imported.fileName);
+
+/**
  * The type checker over `paths` (relative to `extension/`, or absolute), compiled with the
  * workspace's own `tsconfig.json`. A config that cannot be read, a path the program did not
  * compile and a file with any compiler error are refused by name: types inferred around an error
