@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, test } from "vitest";
+import { beforeAll, expect, test } from "vitest";
 import { floorBreach } from "./lib/floors.ts";
 import { searched } from "./lib/population.ts";
 import {
@@ -112,6 +112,53 @@ const inScratch = <T>(
     rmSync(scratch, { recursive: true, force: true });
   }
 };
+
+/** The ES5 library file `program` compiled against, the first of the libraries every program loads. */
+const libraryOf = (program: ts.Program): ts.SourceFile | undefined =>
+  program.getSourceFiles().find(({ fileName }) => fileName.endsWith("/lib.es5.d.ts"));
+
+// The compiler's libraries (ES2024, DOM, @types/node: 182 files) are parsed once per worker, here,
+// within the hook's 10 s budget, so each test's own budget holds only its own program (#276:
+// built cold every time, this file's first type-checking test took 5.2 s in CI). A program needs a
+// root file to load them: `typeChecked([])` loads none (measured), so the hook compiles one.
+let warmed: ts.SourceFile | undefined;
+beforeAll(() => {
+  warmed = inScratch({ "warm.ts": "export {};\n" }, (paths) =>
+    libraryOf(typeChecked(paths).program),
+  );
+});
+
+test("every later program reuses the library files the hook parsed", () => {
+  expect(warmed).toBeDefined();
+  inScratch({ "a.ts": "export const a = 1n;\n" }, (paths) => {
+    expect(libraryOf(typeChecked(paths).program)).toBe(warmed);
+  });
+});
+
+test("a program under another target parses its own library files", () => {
+  const config = '{ "compilerOptions": { "target": "ES2015", "lib": ["ES2024"], "types": [] } }\n';
+  inScratch({ "tsconfig.json": config, "c.ts": 'export const c = "c";\n' }, (paths, scratch) => {
+    const other = libraryOf(typeChecked(paths.slice(1), join(scratch, "tsconfig.json")).program);
+    expect(other).toBeDefined();
+    expect(other).not.toBe(warmed);
+  });
+});
+
+test("a program's own files are read afresh every time", () => {
+  inScratch({ "v.ts": "export const v = 1n;\n" }, (paths, scratch) => {
+    const typeOfV = (): string[] => {
+      const { checker, files } = typeChecked(paths);
+      return files.flatMap((file) =>
+        nodes(file)
+          .filter(ts.isVariableDeclaration)
+          .map(({ name }) => checker.typeToString(checker.getTypeAtLocation(name))),
+      );
+    };
+    expect(typeOfV()).toEqual(["1n"]);
+    writeFileSync(join(scratch, "v.ts"), 'export const v = "x";\n');
+    expect(typeOfV()).toEqual(['"x"']);
+  });
+});
 
 test("a file with no error is compiled, and its checker reads its types", () => {
   inScratch({ "fine.ts": 'export const name = "x";\n' }, (paths) => {
