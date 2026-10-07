@@ -19,7 +19,8 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage",
-    "build": "node build.ts"
+    "build": "node build.ts",
+    "floors:record": "node tests/record-floors.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

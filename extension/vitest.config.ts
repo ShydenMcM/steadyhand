@@ -8,7 +8,7 @@ export default defineConfig({
     include: ["packages/*/test/**/*.test.ts", "tests/**/*.test.ts"],
     coverage: {
       provider: "v8",
-      include: COVERED.map((name) => `packages/${name}/src/**/*.ts`),
+      include: [...COVERED.map((name) => `packages/${name}/src/**/*.ts`), "tests/lib/**/*.ts"],
       reporter: ["text"],
       thresholds: { branches: 100, functions: 100, lines: 100, statements: 100 },
     },
