@@ -1,8 +1,12 @@
 {
-  "compiler-home.imports": 73,
-  "compiler-home.uses": 41,
+  "browser-globals.identifiers": 1,
+  "compiler-home.imports": 83,
+  "compiler-home.uses": 123,
+  "core.files": 1,
   "import-direction.files": 9,
   "import-direction.imports": 12,
-  "source.files": 26,
+  "number-types.values": 1,
+  "number-words.nodes": 7,
+  "source.files": 28,
   "workspace.locked-packages": 198
 }
