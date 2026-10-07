@@ -3,6 +3,7 @@ import { join } from "node:path";
 import tseslint from "typescript-eslint";
 import { expect, test } from "vitest";
 import eslint from "../eslint.config.js";
+import { floorBreach } from "./lib/floors.ts";
 import vitest from "../vitest.config.ts";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -67,9 +68,7 @@ test("every locked package comes from the npm registry with a sha512 integrity",
   const fetched = Object.entries(lock.packages).filter(
     ([path, entry]) => path.startsWith("node_modules/") && !entry.link,
   );
-  // Measured on 2026-10-06 (#220): 198 packages fetched, every platform's binaries included.
-  // Lower it only by a deliberate edit when the dependencies shrink.
-  expect(fetched.length).toBeGreaterThanOrEqual(197);
+  expect(floorBreach("workspace.locked-packages", fetched.length)).toBeUndefined();
   const loose = fetched.filter(
     ([, entry]) =>
       !entry.resolved?.startsWith("https://registry.npmjs.org/") ||
