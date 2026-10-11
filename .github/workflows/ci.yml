@@ -53,7 +53,7 @@ jobs:
   test:
     name: test (py${{ matrix.python }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -79,6 +79,15 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
         if: steps.scope.outputs.docs_only != 'true'
+      - name: "Measure (#282, throwaway): per-test wall and CPU, coverage off, three runs"
+        if: steps.scope.outputs.docs_only != 'true'
+        run: |
+          nproc; grep -m1 'model name' /proc/cpuinfo; uptime
+          for i in 1 2 3; do
+            PROBE_OUT="$RUNNER_TEMP/probe-$i.jsonl" PYTHONPATH="$PWD/.measure-282" uv run --locked pytest -W error -p probe -p no:cacheprovider -q > "$RUNNER_TEMP/run-$i.txt" 2>&1 || true
+            tail -n 2 "$RUNNER_TEMP/run-$i.txt"
+            sed "s/^/PROBE$i /" "$RUNNER_TEMP/probe-$i.jsonl"
+          done
       - run: uv run --locked pytest -W error --cov --cov-report=term-missing
         if: steps.scope.outputs.docs_only != 'true'
       # The ten-year backtest is timed on its own: under coverage's tracing it would time the
@@ -229,6 +238,16 @@ jobs:
       - run: npm ci --ignore-scripts
         if: steps.scope.outputs.docs_only != 'true'
         working-directory: extension
+      - name: "Measure (#282, throwaway): per-test wall and CPU, coverage off, three runs"
+        if: steps.scope.outputs.docs_only != 'true'
+        working-directory: extension
+        run: |
+          nproc; grep -m1 'model name' /proc/cpuinfo; uptime
+          for i in 1 2 3; do
+            PROBE_OUT="$RUNNER_TEMP/probe-$i.jsonl" npx vitest run --config vitest.measure-282.config.ts > "$RUNNER_TEMP/run-$i.txt" 2>&1 || true
+            grep -E 'Tests  |Test Files' "$RUNNER_TEMP/run-$i.txt" || true
+            sed "s/^/PROBE$i /" "$RUNNER_TEMP/probe-$i.jsonl"
+          done
       - run: npm run lint
         if: steps.scope.outputs.docs_only != 'true'
         working-directory: extension
