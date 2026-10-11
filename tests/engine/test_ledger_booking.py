@@ -144,12 +144,22 @@ def test_a_portfolio_cannot_be_changed_in_place() -> None:
         portfolio.currency = IDR  # type: ignore[misc]
 
 
+def copied_or_none(portfolio: Portfolio) -> Portfolio | None:
+    """The deep copy, or None when it recursed too deep. Caught here and returned, so a failure
+    carries no RecursionError: pytest spends minutes drawing one this deep (#282, profiled)."""
+    try:
+        return copy.deepcopy(portfolio)
+    except RecursionError:
+        return None
+
+
 def test_a_long_ledger_survives_deepcopy() -> None:
     # Three times the recursion limit is deep enough: copied (or pickled) link by link, a
     # chain that deep would exceed the limit, so it travels as the ledger tuple (#282: the
     # depth is what is tested, and 100,000 links cost 3 s of CPU to prove the same).
     deep = 3 * sys.getrecursionlimit()
     portfolio = Portfolio(IDR, (), deposits(deep)).deposit(rp(1), D0)
-    restored = copy.deepcopy(portfolio)
+    restored = copied_or_none(portfolio)
+    assert restored is not None, "copied link by link, the chain recursed too deep"
     assert restored == portfolio
     assert restored.cash_balance() == rp(deep + 1)
