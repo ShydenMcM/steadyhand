@@ -6,6 +6,7 @@ pin the cost of a booking, that snapshots sharing a chain still keep their own l
 """
 
 import copy
+import sys
 import tracemalloc
 from dataclasses import FrozenInstanceError
 from datetime import date, timedelta
@@ -144,9 +145,11 @@ def test_a_portfolio_cannot_be_changed_in_place() -> None:
 
 
 def test_a_long_ledger_survives_deepcopy() -> None:
-    portfolio = Portfolio(IDR, (), deposits(LONG)).deposit(rp(1), D0)
-    # The chain is LONG links deep; copied (or pickled) link by link it would exceed the
-    # recursion limit, so it travels as the ledger tuple.
+    # Three times the recursion limit is deep enough: copied (or pickled) link by link, a
+    # chain that deep would exceed the limit, so it travels as the ledger tuple (#282: the
+    # depth is what is tested, and 100,000 links cost 3 s of CPU to prove the same).
+    deep = 3 * sys.getrecursionlimit()
+    portfolio = Portfolio(IDR, (), deposits(deep)).deposit(rp(1), D0)
     restored = copy.deepcopy(portfolio)
     assert restored == portfolio
-    assert restored.cash_balance() == rp(LONG + 1)
+    assert restored.cash_balance() == rp(deep + 1)
