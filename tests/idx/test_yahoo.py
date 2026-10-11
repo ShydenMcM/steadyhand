@@ -518,14 +518,16 @@ def unwhole(day: date, price: str, *, volume: int = 100, dividend: str = "0") ->
     return YahooRow(day, *(Decimal(price),) * 4, volume=volume, dividend=Decimal(dividend))
 
 
-def unproven() -> YahooDataSource:
+def unproven(slept: list[float]) -> YahooDataSource:
     """Two days off the grid are 8 prices, too few for a proof, and the second pays a dividend."""
     rows = (
         unwhole(date(2021, 3, 1), "1000.5"),
         unwhole(date(2021, 3, 2), "1001.5", dividend="20.5"),
     )
     history = YahooHistory("BBCA.JK", rows, ())
-    return YahooDataSource(calendar(), download=lambda *_: history, today=lambda: TODAY)
+    return YahooDataSource(
+        calendar(), download=lambda *_: history, sleep=slept.append, today=lambda: TODAY
+    )
 
 
 @pytest.mark.parametrize(
@@ -533,6 +535,7 @@ def unproven() -> YahooDataSource:
 )
 def test_a_dividend_in_an_unproven_run_is_refused_naming_its_ex_date(start: date) -> None:
     # Its dividend is known to be wrong, in a look-back as in a backtest's own days (#160 spec §5).
+    slept = list[float]()
     with pytest.raises(
         UnprovenDividendsError,
         match=(
@@ -540,17 +543,20 @@ def test_a_dividend_in_an_unproven_run_is_refused_naming_its_ex_date(start: date
             r"carry an adjustment Yahoo does not report and steadyhand could not prove"
         ),
     ) as caught:
-        unproven().corporate_actions(BBCA, start, date(2021, 3, 31))
+        unproven(slept).corporate_actions(BBCA, start, date(2021, 3, 31))
     assert isinstance(caught.value, UnavailableDaysError)
     assert caught.value.days == (date(2021, 3, 2),)
+    assert slept == [1.0]  # a pause before every request after the first
 
 
 def test_the_prices_of_an_unproven_run_are_refused() -> None:
-    source = unproven()
+    slept = list[float]()
+    source = unproven(slept)
     with pytest.raises(UnrecoverablePricesError) as refused:
         source.bars(BBCA, date(2021, 3, 1), date(2021, 3, 2))
     assert refused.value.days == (date(2021, 3, 1), date(2021, 3, 2))
     assert source.restorations(BBCA, date(2021, 3, 1), date(2021, 3, 2)) == ()
+    assert slept == [1.0]  # a pause before every request after the first
 
 
 def test_the_proof_reads_every_row_with_a_price_off_whole_rupiah_and_nothing_else() -> None:
@@ -608,14 +614,17 @@ def test_restorations_leave_out_a_proven_run_outside_the_range() -> None:
             for day, p in zip(newer, TRUE, strict=True)
         ),
     ]
-    history = YahooHistory("BBCA.JK", tuple(rows), ())
-    source = YahooDataSource(calendar(), download=lambda *_: history, today=lambda: TODAY)
+    history, slept = YahooHistory("BBCA.JK", tuple(rows), ()), list[float]()
+    source = YahooDataSource(
+        calendar(), download=lambda *_: history, sleep=slept.append, today=lambda: TODAY
+    )
     assert [
         (r.first, r.last, r.factor) for r in source.restorations(BBCA, newer[0], newer[-1])
     ] == [(newer[0], newer[-1], Decimal("1.100000"))]
     assert [
         (r.first, r.last, r.factor) for r in source.restorations(BBCA, older[0], older[-1])
     ] == [(older[0], older[4], Decimal("1.300000"))]  # 3,640 / 1.3 is whole: no evidence
+    assert slept == [1.0, 1.0]  # a pause before every request after the first
 
 
 def test_a_row_whose_volume_is_not_whole_stays_refused_though_its_prices_count() -> None:
