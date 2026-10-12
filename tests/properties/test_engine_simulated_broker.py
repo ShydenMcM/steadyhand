@@ -5,7 +5,7 @@ from datetime import date
 
 import pytest
 import test_simulated_broker as unit
-from hypothesis import given
+from hypothesis import example, given
 from hypothesis import strategies as st
 
 from steadyhand import Instrument, Side
@@ -30,6 +30,10 @@ DRAW = {
 
 @pytest.mark.parametrize("probe", [unit.TODAY, date(2025, 6, 4), unit.SETTLES], ids=str)
 @given(**DRAW)
+# Cash drawn evenly up to Rp30 million almost never lands where it pays a lot's price but not its
+# costs: on CI 500 draws missed a buy that ignored its costs (#290, M27). Its stand-in's draw runs
+# every time.
+@example(**dict(zip(DRAW, unit.EXACT, strict=True)))
 def test_the_settled_cash_is_never_negative_from_the_trade_to_its_settlement(
     probe: date,
     cash: int,
