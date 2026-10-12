@@ -26,6 +26,9 @@ def test_the_guards_job_runs_the_guards_suite_with_one_limit_and_no_coverage() -
     assert [run for run in runs("guards") if "pytest" in run] == [GUARDS_RUN]
     limited = [step for step in job("guards")["steps"] if "timeout-minutes" in step]
     assert [step["run"] for step in limited] == [GUARDS_RUN]
+    # Measured on CI on 2026-10-12 (run 38273371897): 6 s on each Python. A step limit is whole
+    # minutes, so the least it can be is 1, about ten times the measured run.
+    assert limited[0]["timeout-minutes"] == 1
 
 
 LIMITS_RUN = "uv run --locked pytest -W error -p no:cacheprovider"

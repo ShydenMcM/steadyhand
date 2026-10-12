@@ -186,3 +186,6 @@ def test_the_guards_job_installs_then_runs_the_guards_alone_with_one_limit() -> 
     assert [step.get("working-directory") for step in steps] == ["extension", "extension"]
     limited = [step for step in guards_job()["steps"] if "timeout-minutes" in step]
     assert limited == [steps[-1]]
+    # Measured on CI on 2026-10-12 (run 38273371897): 5 s. A step limit is whole minutes, so the
+    # least it can be is 1.
+    assert limited[0]["timeout-minutes"] == 1
