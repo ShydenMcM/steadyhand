@@ -1,53 +1,48 @@
 # Handover: steadyhand
 
-**Updated:** 2026-10-12 09:37 WIB (02:37 UTC). Current state only. The long history (M3 to M7, T1, research notes) is at `git show 932167c:HANDOVER.md`.
+**Updated:** 2026-10-12 10:49 WIB (03:49 UTC). Current state only. The long history (M3 to M7, T1, research notes) is at `git show 932167c:HANDOVER.md`.
 
 **Direction (#214):** steadyhand becomes a Chrome extension in TypeScript that reads the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. EXT stories #222-#245 follow the clean-up queue below.
 
 ## Branches and heads
 - `develop`: green; read its head with `git rev-parse origin/develop`. Default branch. Merge green PRs into `develop` without asking; never `main`.
-- **`282-unit-tests-under-1s`**: pushed, no PR yet. Head `5edf543` (check it with `git rev-parse origin/282-unit-tests-under-1s`); develop is merged in. Five cuts so far, each green and mutation-verified (`.superpowers/sdd/282/evidence.md`):
-  1. the yahoo waits (`61d35f6`);
-  2. two deepcopy cuts (`655ff5a`, `bb5e507`);
-  3. **the warm-cache seed** (`1b91387`): `scripts/record_cli_seed.py` writes `tests/fixtures/cache/cli-seed.sql`, `recorded_source` copies it into a folder with no cache, and `tests/cli/test_cli_seed.py` checks each of the 45 codes against a fresh fill;
-  4. **the long-ledger cut** (`5edf543`): 0.50 s to 0.02 s.
+- **`296-faster-restoring`**: **PR #299**, head `1658039` (check `git rev-parse origin/296-faster-restoring`). Local gate green on that head: 2,427 passed, 100% branch, ruff, format, mypy. Its CI was running at handover.
+- **`296-measure-throwaway`**: draft **PR #298**, never merge. It probes the whole unit suite on CI, three runs on the new code and three on the old (`c855a1f`'s `factor.py`, `yahoo.py`, `types.py` swapped in), alternated in one job. Close it unmerged once read; delete its branch then.
+- **`282-unit-tests-under-1s`**: pushed, no PR, head `5edf543`.
 
-## Decided by Shyden (2026-10-12): speed up the restoring step, then move (#296)
-- **The first question was wrong.** It said "speed up BBRI's proof about 2.5x". Then the slowest test's own profile was measured: `unadjust` (the whole restoring step) is about 75% of it and `find_runs` (the proof) about 14%, so even a free proof cannot reach 0.07 s on CI (it needs about 3.3x overall). Asked again, Shyden answered *"Speed up, then move"* (the correction is on #282).
-- **#296** (Estimate 5, rescoped and read back):
-  1. pin every recording's runs as literals from `5edf543`;
-  2. speed up `unadjust` (the proof, `restore_price`, building the bars) with no caching and no narrowing;
-  3. post before and after figures per test;
-  4. list every test still over 0.07 s on #292, which moves its real run to `integration` with a unit stand-in.
-- The tests concerned: four in `test_yahoo`, two in `test_cache`, and `test_cli_seed[BBRI]`.
-
-## Clean-up queue (Shyden: "Cleanup first, every project"), all before #222
-Order: #296 (it unblocks #282's last cuts), then #285, #286, #290, #292, and #282's limit last. #282's cuts go on in parallel. #287 and #288 can go at any point.
-- **#282** In Progress, 13 points. AC 5 was reworded today: the seed is kept in git, not built per session (built in the session it costs 0.12 s of CPU, charged to the first test). Evidence is posted on #282. Left to do:
-  - the yahoo and cache cuts, through #296;
-  - `test_journeys` (it starts a process, so it goes with #286);
-  - then the 1 s limit, the CPU check and the guard, all in ONE push, after #285, #286, #290 and #292. The CPU constant also goes into `CPU_LIMITS` in `~/.claude/hooks/unit-limit-never-raised.py`.
-- **#292** (8 points): 52 long real runs move to `integration`. **Since the seed, no CLI test runs a whole command through a real first download** (noted on #292). Its moved tests need a cold source (`seeded=False`, or a cold factory) and a check that the fill really ran. It is worth landing soon after #286.
-- The rest of the queue: **#285** (8) guards suite and load limit; **#286** (5) no process or socket, and it creates `integration`; **#290** (5) properties suite at 500; **#287** (3) Node 26; **#288** (3) mutations in CI; **#272** (5) Python floors.
-
-## Measured this session
-- Probe after the seed, laptop, no coverage, every test recorded (`.superpowers/sdd/282/probe-after.jsonl`):
-  - tests over 0.07 s fell from 139 to **91**, and CLI tests from 77 to **32**;
-  - total test CPU fell from 67.3 s to 55.0 s;
-  - 70 CLI tests were cut. AC 7 holds for all 70: W2 (65 tests) and W5 to W9 (5 tests) are red before and after.
-- Covered gate on `1b91387`: 2,429 passed, 100% branch coverage, mypy clean.
-- One prediction was wrong (W1): the look-back's actions fetch also stores BBRI's restoration, so no CLI test caught a `_fill` that drops it, even before the cut.
+## #296 (In Progress, 5): done, waiting on CI
+Session files: `.superpowers/sdd/296/` (git-ignored); evidence in `evidence.md`.
+- AC 1: `tests/idx/test_yahoo_answers.py` pins all 14 Yahoo recordings (runs, refusals, bars, actions) from `c855a1f`. The pins restore a year at a time on cut histories (Shyden: speed the pins up first).
+- AC 3: `DayGrid` is looked up once per row; `candidates` tries only tick multiples (checked against a rupiah-by-rupiah search); `restore_prices`; rows are judged whole in one call; `Bar` builds no error text when valid. No caching.
+- AC 4: #160's 15 `factor.py` mutants were PREDICTED on both trees, with nothing caught before lost after. 13 new mutants: 11 PREDICTED; N3 red in 6; N9 survived, so a tolerance test was added and now catches it.
+- AC 2 so far (alternated, min..max ms of own CPU):
+  - targets-only CI: BBRI whole pin 99..108 → 51..68; golden years 76..107 → 49..68;
+  - laptop: BBRI whole pin 110..150 → 47..55; golden years 87..138 → 44..61.
+  - Every target test is under 70 ms in its worst run on both. The rule judges the whole-suite context, which roughly doubled these tests before, hence PR #298.
 
 ## Resume steps
-1. Run `ListAgents` (no subagents were started this session).
-2. The before-tree worktree `.superpowers/sdd/282/before` (at `1641188`) can be removed: `git worktree remove .superpowers/sdd/282/before`.
-3. **Start #296**: move it to In Progress and branch from `origin/develop`. First pin every recording's runs as literals from `5edf543` (AC 1). Then profile `unadjust` with `.superpowers/sdd/282/prof_test.py <test id>` (pytest in-process, second run), cut, measure, and list what is still slow on #292.
+1. Run `ListAgents`. The waiter `wait-run.sh` on run 38201143974 (#299), then on 38201171089 (#298), died with the session; re-run them:
+   `~/.claude/scripts/wait-run.sh $PWD <run-id> .superpowers/sdd/296/pr.sha` (for #298, `throwaway.sha`).
+2. #298: `gh run view <id> --log | grep PROBE > .superpowers/sdd/296/ci-298c-probe.log`. Then point `ci_summary.py`'s input at that file and run it.
+   - Any target test over 0.07 s in its worst run: list it on #292 with its figures (AC 2).
+   - Post the before/after table on #296.
+   - Close #298 unmerged.
+3. #299: merge when CI is green on its head (steps by name, SHA = `headRefOid`), then verify the develop deploy. Close #296 by hand once verified, reading its state first.
+4. `test_cli_seed[BBRI]` (on #282's branch only) is still unmeasured: measure it after #282 merges develop.
+5. Then the queue: #285, #286, #290, #292, and #282's limit last.
 
-## Progress (2026-10-12 02:25 UTC, `.superpowers/sdd/estimates/progress.py`; nothing closed since 00:47; #296 filed)
-- **Measured:** EXT first release 4 of 28 stories, 21 of 184 points. Whole board open: 34 tickets, 218 points (#296 added) (epic #214 unscored). Closed in the last 7 days: 8 tickets, 30 points.
+## Clean-up queue (Shyden: "Cleanup first, every project"), all before #222
+- **#282** In Progress, 13: left to do are `test_journeys` (with #286), then the 1 s limit, the CPU check and the guard in ONE push, after #285, #286, #290 and #292; add the CPU constant to `CPU_LIMITS` in `~/.claude/hooks/unit-limit-never-raised.py`.
+- **#292** (8): 52 long real runs move to `integration`, plus whatever #296 lists.
+- **#285** (8) guards suite and load limit; **#286** (5) no process or socket, creates `integration`; **#290** (5) properties suite at 500; **#287** (3) Node 26; **#288** (3) mutations in CI; **#272** (5) Python floors.
+
+## Raised with Shyden, not filed (outside this repo or his call)
+- `hooks/test-isolation.py` cannot see a test run inside a script. The #296 timing scripts now take the lock themselves, and the Python runners refuse to start without `TEST_LOCK_HELD`.
+- `hooks/push-onto-running-ci.py` fails closed when pushing from a worktree under `.superpowers/` (its `gh run list` exits 1 there). Pushing from the main checkout works.
+- One-off CPU spikes (21 → 72 ms) look like garbage-collection pauses. A suite-wide `gc.freeze()` could be its own story: his call.
+
+## Progress (2026-10-12 03:48 UTC, `uv run python .superpowers/sdd/estimates/progress.py`)
+- **Measured:** EXT first release 4 of 28 stories, 21 of 184 points. Whole board open: 34 tickets, 218 points (epic #214 unscored). Closed in the last 7 days: 8 tickets, 30 points.
 - **By tickets: 14% (4 of 28). ETA 2026-11-10, low confidence:** 33 open tickets at 1.14 a day is 29 days.
 - **By effort: 11% (21 of 184). ETA 2026-12-02, low confidence:** 218 open points at 4.3 a day is 51 days.
 - **Assumed:** the last 7 days' pace (test work) holds for feature stories. **Outside waits:** a broker account (#242), Chrome Web Store review.
-
-## Standing notes
-- claude-mem cannot save memories (provider allowance exhausted, since 2026-10-12 00:47 UTC).
