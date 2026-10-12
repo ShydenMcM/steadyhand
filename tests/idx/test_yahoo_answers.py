@@ -16,6 +16,7 @@ from steadyhand_idx.factor import Run, find_runs
 from steadyhand_idx.yahoo import (
     UnrecoverablePricesError,
     YahooHistory,
+    YahooRow,
     actions_in,
     evidence,
     history_from_json,
@@ -65,24 +66,45 @@ def _action_line(action: CorporateAction) -> str:
     return f"dividend,{action.ex_date.isoformat()},{action.per_share}"
 
 
-def _bars_around(
-    history: YahooHistory,
-    instrument: Instrument,
-    span: tuple[date, date],
-    runs: Sequence[Run],
-    refused: Sequence[date],
+def _restored(
+    history: YahooHistory, instrument: Instrument, rows: Sequence[YahooRow], runs: Sequence[Run]
 ) -> list[Bar]:
-    """The bars of every stretch of trading days between the refused ones."""
+    """``unadjust`` over *rows* alone. Each bar depends only on its row, the splits and the
+    runs, so a history cut to *rows* (its splits kept whole) restores them exactly as the whole
+    one would, without walking every other row (#296)."""
+    part = YahooHistory(history.ticker, tuple(rows), history.splits)
+    return unadjust(part, instrument, calendar(), (rows[0].day, rows[-1].day), runs)[0]
+
+
+def _bars(
+    history: YahooHistory, instrument: Instrument, span: tuple[date, date], runs: Sequence[Run]
+) -> tuple[list[Bar], list[date]]:
+    """The bars of every day in *span* that can be restored, and the days that cannot.
+
+    One calendar year at a time: a year with days refused is restored again, one stretch of rows
+    between refused days at a time.
+    """
+    years: dict[int, list[YahooRow]] = {}
+    for row in history.rows:
+        if span[0] <= row.day <= span[1]:
+            years.setdefault(row.day.year, []).append(row)
     bars: list[Bar] = []
-    stretch: list[date] = []
-    for day in [*calendar().trading_days(*span), None]:
-        if day is not None and day not in refused:
-            stretch.append(day)
-            continue
-        if stretch:
-            bars += unadjust(history, instrument, calendar(), (stretch[0], stretch[-1]), runs)[0]
-        stretch = []
-    return bars
+    refused: list[date] = []
+    for rows in years.values():
+        try:
+            bars += _restored(history, instrument, rows, runs)
+        except UnrecoverablePricesError as error:
+            refused += error.days
+            skipped = set(error.days)
+            stretch: list[YahooRow] = []
+            for kept in [*rows, None]:
+                if kept is not None and kept.day not in skipped:
+                    stretch.append(kept)
+                    continue
+                if stretch:
+                    bars += _restored(history, instrument, stretch, runs)
+                stretch = []
+    return bars, refused
 
 
 def answers(path: Path) -> Answers:
@@ -95,12 +117,7 @@ def answers(path: Path) -> Answers:
     )
     history = history_from_json(path)
     runs = find_runs(evidence(history))
-    try:
-        bars = unadjust(history, instrument, calendar(), span, runs)[0]
-        refused: tuple[date, ...] = ()
-    except UnrecoverablePricesError as error:
-        refused = error.days
-        bars = _bars_around(history, instrument, span, runs, refused)
+    bars, refused = _bars(history, instrument, span, runs)
     actions = actions_in(history, instrument, *span, runs)
     return Answers(
         runs=tuple(
