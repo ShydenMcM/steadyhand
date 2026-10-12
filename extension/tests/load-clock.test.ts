@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import {
   LOAD_BURN_DOWN,
   LOAD_CPU_LIMIT_MICROSECONDS,
+  loadOf,
   loadRefusal,
   report,
 } from "./lib/load-clock.ts";
@@ -64,7 +65,7 @@ test("files that load alike are listed by name", () => {
 });
 
 test("this file's own load was recorded on its meta", ({ task }) => {
-  const recorded = task.file.meta.load;
+  const recorded = loadOf(task.file.meta);
   expect(recorded?.path).toBe("tests/load-clock.test.ts");
   expect(recorded?.cpuMicroseconds).toBeGreaterThan(0);
   expect(recorded?.wallMicroseconds).toBeGreaterThan(0);

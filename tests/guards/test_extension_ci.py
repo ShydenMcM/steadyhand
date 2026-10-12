@@ -32,6 +32,7 @@ COMMANDS = [
     "npm run format:check",
     "npm run typecheck",
     "npm test",
+    "npm run test:limits",
     "npm run build",
 ]
 TOOLS = {
@@ -39,6 +40,7 @@ TOOLS = {
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --project unit --coverage",
+    "test:limits": "vitest run --project unit --mode limits",
     "test:guards": "vitest run --project guards --mode guards --coverage",
     "build": "node build.ts",
 }

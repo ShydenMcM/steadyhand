@@ -4,6 +4,7 @@ The clock is judged with planted loads; the last tests check that this very run 
 files, so a clock that stopped timing would be seen.
 """
 
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,6 +18,7 @@ from load_clock import (
     judged,
     over_limit,
     report,
+    under_coverage,
 )
 from population import searched
 
@@ -61,6 +63,37 @@ def test_a_unit_run_refuses_a_load_over_the_limit_by_name() -> None:
     ]
 
 
+TRACED = [Load(HEAVY.path, 100_001, 100_001, traced=True), Load(LISTED, 1, 1, traced=True)]
+
+
+def test_a_load_timed_under_coverage_is_not_judged_it_timed_the_tracer() -> None:
+    assert judged("unit", TRACED) == []
+
+
+def test_a_run_timed_under_coverage_fails_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(load_clock, "LOADS", TRACED)
+    session = SimpleNamespace(
+        config=SimpleNamespace(getoption=lambda name: {"suite": "unit"}[name]),
+        exitstatus=pytest.ExitCode.OK,
+    )
+    load_clock.pytest_sessionfinish(session)  # type: ignore[arg-type]
+    assert session.exitstatus == pytest.ExitCode.OK
+
+
+def test_no_coverage_module_means_no_coverage(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delitem(sys.modules, "coverage", raising=False)
+    assert under_coverage() is False
+
+
+@pytest.mark.parametrize(("current", "covered"), [(None, False), (object(), True)])
+def test_coverage_is_on_while_a_coverage_run_is_current(
+    monkeypatch: pytest.MonkeyPatch, current: object, *, covered: bool
+) -> None:
+    fake = SimpleNamespace(Coverage=SimpleNamespace(current=lambda: current))
+    monkeypatch.setitem(sys.modules, "coverage", fake)
+    assert under_coverage() is covered
+
+
 def test_a_guards_run_judges_no_load_its_step_limit_bounds_it() -> None:
     assert judged("guards", [HEAVY, Load(LISTED, 1, 1)]) == []
 
@@ -100,6 +133,7 @@ def test_this_run_timed_loading_this_file() -> None:
     assert len(mine) == 1
     assert mine[0].cpu_microseconds > 0
     assert mine[0].wall_microseconds > 0
+    assert mine[0].traced is under_coverage()
 
 
 def test_each_timed_file_is_named_by_its_repo_path() -> None:

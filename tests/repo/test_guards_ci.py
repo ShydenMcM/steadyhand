@@ -28,7 +28,20 @@ def test_the_guards_job_runs_the_guards_suite_with_one_limit_and_no_coverage() -
     assert [step["run"] for step in limited] == [GUARDS_RUN]
 
 
+LIMITS_RUN = "uv run --locked pytest -W error -p no:cacheprovider"
+
+
 def test_the_unit_job_runs_the_default_suite_never_the_guards() -> None:
     tests = [run for run in runs("test") if "pytest" in run]
-    assert len(tests) == 2
+    assert len(tests) == 3
     assert [run for run in tests if "--suite" in run] == []
+
+
+def test_the_unit_limits_are_judged_in_a_run_without_coverage() -> None:
+    """A load timed under coverage times its tracer too, so that run judges none (#285)."""
+    limits = [
+        step
+        for step in job("test")["steps"]
+        if step.get("name") == "Unit limits, judged without coverage"
+    ]
+    assert [step["run"] for step in limits] == [LIMITS_RUN]

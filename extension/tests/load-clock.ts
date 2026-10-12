@@ -1,12 +1,13 @@
 /**
  * The unit project's LAST setup file (#285): it runs just before each test file is imported, so
  * the time from here to the file's first hook is that file's load. It records the load on the
- * file's meta for `tests/load-report.ts`, and fails the file when the load is over the limit.
+ * file's meta for `tests/load-report.ts`, and in a limits run (`npm run test:limits`, no coverage)
+ * fails the file when the load is over the limit.
  * Own CPU is the test THREAD's (`process.threadCpuUsage`), never the process's.
  */
 import { relative } from "node:path";
 import { beforeAll } from "vitest";
-import { loadRefusal } from "./lib/load-clock.ts";
+import { JUDGE_ENV, loadRefusal, recordLoad } from "./lib/load-clock.ts";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const thread = (): number => {
@@ -24,7 +25,7 @@ beforeAll(({}, suite) => {
     cpuMicroseconds: thread() - cpu,
     wallMicroseconds: Math.round((performance.now() - wall) * 1000),
   };
-  suite.meta.load = load;
+  recordLoad(suite.meta, load);
   const refusal = loadRefusal(load);
-  if (refusal !== undefined) throw new Error(refusal);
+  if (process.env[JUDGE_ENV] === "1" && refusal !== undefined) throw new Error(refusal);
 });

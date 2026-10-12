@@ -48,3 +48,13 @@ test("every helper in tests/lib is held to coverage by exactly one suite", () =>
   );
   expect(listed.filter((entry) => entry.startsWith("tests/lib/")).sort()).toEqual(helpers.sort());
 });
+
+test.each([
+  ["limits", "1"],
+  ["test", ""],
+  ["guards", ""],
+])("a %s run sets the load judge to %j", (mode, judge) => {
+  const config = vitestConfig({ command: "serve", mode });
+  const unitProject = config.test?.projects?.[0] as { test?: { env?: Record<string, string> } };
+  expect(unitProject.test?.env).toEqual({ STEADYHAND_JUDGE_LOADS: judge });
+});

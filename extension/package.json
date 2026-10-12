@@ -19,6 +19,7 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --project unit --coverage",
+    "test:limits": "vitest run --project unit --mode limits",
     "test:guards": "vitest run --project guards --mode guards --coverage",
     "build": "node build.ts",
     "floors:record": "node tests/record-floors.ts",

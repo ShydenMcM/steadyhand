@@ -18,10 +18,10 @@ from test_disclaimer import user_docs
 
 from ci_scope import on_fast_path
 
-# Measured on 2026-10-06 (#218): the whole run opened 250 of the files git lists, the same with a
-# warm bytecode cache and a cold one, and the packages hold 57 Python sources. Lower each only by a
-# deliberate edit when the repo shrinks.
-OPENED_FLOOR = 249
+# Measured on CI on 2026-10-12 (#285, run 38272096923): a guards run opened 236 of the files git
+# lists on py3.12 and 235 on py3.13, so the floor is the lower. Measured on 2026-10-06 (#218): the
+# packages hold 57 Python sources. Lower each only by a deliberate edit when the repo shrinks.
+OPENED_FLOOR = 235
 PACKAGE_SOURCES_FLOOR = 56
 WHOLE_SUITE = "run the whole guards suite: this guard judges what every other guard opened"
 

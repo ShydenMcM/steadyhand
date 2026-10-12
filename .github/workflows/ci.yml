@@ -81,6 +81,11 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
       - run: uv run --locked pytest -W error --cov --cov-report=term-missing
         if: steps.scope.outputs.docs_only != 'true'
+      # The unit limits are judged without coverage, whose tracer would be timed with the code
+      # (#285: each file's load). The run under coverage reports loads but judges none.
+      - name: Unit limits, judged without coverage
+        if: steps.scope.outputs.docs_only != 'true'
+        run: uv run --locked pytest -W error -p no:cacheprovider
       # The ten-year backtest is timed on its own: under coverage's tracing it would time the
       # tracer, which roughly triples the run.
       - name: Performance, a ten-year backtest in under 30 seconds
@@ -239,6 +244,10 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         working-directory: extension
       - run: npm test
+        if: steps.scope.outputs.docs_only != 'true'
+        working-directory: extension
+      # The unit limits, judged without coverage (#285: each file's load).
+      - run: npm run test:limits
         if: steps.scope.outputs.docs_only != 'true'
         working-directory: extension
       - run: npm run build

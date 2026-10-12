@@ -36,6 +36,8 @@ export default defineConfig(({ mode }) => ({
           exclude: [...configDefaults.exclude, GUARDS],
           // Last, so the time it measures to each file's first hook is that file's load alone.
           setupFiles: ["tests/load-clock.ts"],
+          // A limits run (`--mode limits`, no coverage) judges each file's load; others report it.
+          env: { STEADYHAND_JUDGE_LOADS: mode === "limits" ? "1" : "" },
         },
       },
       { extends: true, test: { name: "guards", include: [GUARDS] } },

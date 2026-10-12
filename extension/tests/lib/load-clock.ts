@@ -18,11 +18,17 @@ export interface Load {
   wallMicroseconds: number;
 }
 
-declare module "vitest" {
-  interface TaskMeta {
-    load?: Load;
-  }
-}
+/** The load recorded on a test file's meta by `tests/load-clock.ts`, if any. */
+export const loadOf = (meta: object): Load | undefined => (meta as { load?: Load }).load;
+
+/** Record `load` on a test file's meta, for the reporter. */
+export const recordLoad = (meta: object, load: Load): void => {
+  (meta as { load?: Load }).load = load;
+};
+
+/** The environment variable a limits run sets (`npm run test:limits`): only then are loads
+ * judged, since under coverage the tracer is timed with the file. */
+export const JUDGE_ENV = "STEADYHAND_JUDGE_LOADS";
 
 /** Files allowed over the limit until their ticket moves the cost out, each with its measured cost
  * and that ticket. Shyden, 2026-10-12 (#285): "Burn-down until #286". It only shrinks: a listed

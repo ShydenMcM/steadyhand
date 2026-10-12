@@ -25,10 +25,11 @@ LOCK = {
     "if": SKIP,
     "run": "python3 scripts/lock_fast_path.py",
 }
-# Measured on 2026-10-12 (#285, the two guards jobs added): 7 gated jobs whose later steps number
-# 39, the lock included. Lower each only by a deliberate edit when the workflow shrinks.
+# Measured on 2026-10-12 (#285, the two guards jobs and the two limits steps added): 7 gated jobs
+# whose later steps number 41, the lock included. Lower each only by a deliberate edit when the
+# workflow shrinks.
 GATED_FLOOR = 7
-SKIPPED_STEPS_FLOOR = 39
+SKIPPED_STEPS_FLOOR = 41
 
 # PyYAML reads the bare key `on` as the boolean True, so a key may be a bool.
 WORKFLOW = ci()

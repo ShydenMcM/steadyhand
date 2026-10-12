@@ -8,6 +8,7 @@ file, heaviest first; and fails a unit run with any file over the limit, naming 
 run reports but is not judged: its step's one limit bounds it.
 """
 
+import sys
 import time
 from collections.abc import Generator
 from dataclasses import dataclass
@@ -39,6 +40,8 @@ class Load:
     path: str
     cpu_microseconds: int
     wall_microseconds: int
+    # Timed while coverage traced the run: its tracer was timed with the file, so it is not judged.
+    traced: bool = False
 
 
 LOADS: list[Load] = []
@@ -51,13 +54,14 @@ def over_limit(loads: list[Load]) -> list[Load]:
 
 def judged(chosen: str, loads: list[Load]) -> list[str]:
     """Why a run of the *chosen* suite fails on *loads*, one line per file: a file over the limit,
-    or a listed file now within it. Only a unit run is judged; a guards run's step limit bounds it.
+    or a listed file now within it. Only a unit run's untraced loads are judged: a guards run's step
+    limit bounds it, and a load timed under coverage timed its tracer too (the 1 s rule's terms).
     """
     if chosen != "unit":
         return []
     over = set(over_limit(loads))
     refusals = []
-    for load in loads:
+    for load in (load for load in loads if not load.traced):
         if load.path in LOAD_BURN_DOWN and load not in over:
             refusals.append(
                 f"LOAD BURN-DOWN: {load.path} now loads within the limit "
@@ -101,8 +105,15 @@ def pytest_make_collect_report(
                 collector.path.resolve().relative_to(ROOT).as_posix(),
                 (time.thread_time_ns() - cpu) // 1000,
                 (time.perf_counter_ns() - wall) // 1000,
+                traced=under_coverage(),
             )
         )
+
+
+def under_coverage() -> bool:
+    """Whether coverage is measuring this run: its tracer, not the file, would be timed."""
+    module = sys.modules.get("coverage")
+    return module is not None and module.Coverage.current() is not None
 
 
 def pytest_sessionfinish(session: pytest.Session) -> None:
@@ -117,5 +128,9 @@ def pytest_terminal_summary(
     terminalreporter.section("test file loads (#285)")
     for line in report(LOADS):
         terminalreporter.write_line(line)
+    if any(load.traced for load in LOADS):
+        terminalreporter.write_line(
+            "coverage traced these loads, so none is judged: the limits step runs without it"
+        )
     for refusal in judged(config.getoption("suite"), LOADS):
         terminalreporter.write_line(refusal, red=True)
