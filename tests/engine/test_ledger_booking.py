@@ -19,7 +19,7 @@ from steadyhand.money import IDR, Money
 from steadyhand.portfolio import CashMovement, MovementKind, Portfolio
 
 D0 = date(2026, 1, 5)
-LONG = 100_000
+LONG = 10_000
 
 
 def rp(amount: int) -> Money:
@@ -53,7 +53,8 @@ def booking_bytes(portfolio: Portfolio) -> int:
 def test_booking_onto_a_long_ledger_allocates_no_more_than_onto_a_short_one() -> None:
     short = booking_bytes(Portfolio(IDR, (), deposits(100)))
     long = booking_bytes(Portfolio(IDR, (), deposits(LONG)))
-    # Copying a 100,000-entry ledger allocated about 1.7 MB; one more link, a few hundred bytes.
+    # Copying a 10,000-entry ledger allocated 170,248 bytes, 88 times the 1,928 on 100 entries;
+    # one more link, 648 bytes. Measured 2026-10-12 (#282); 100,000 entries cost 0.25 s of CPU.
     assert short > 0
     assert long <= 2 * short, f"booking allocated {long} bytes on {LONG:,} entries, {short} on 100"
 
