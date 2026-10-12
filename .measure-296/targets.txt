@@ -1,0 +1,7 @@
+tests/idx/test_yahoo.py::test_bbri_s_golden_years_are_restored_except_where_a_volume_is_not_whole
+tests/idx/test_yahoo.py::test_a_restored_day_is_the_same_whatever_range_is_asked
+tests/idx/test_yahoo.py::test_bbri_s_2021_dividend_restores_to_what_bri_announced
+tests/idx/test_yahoo.py::test_bbri_s_whole_recording_proves_one_factor_up_to_its_rights_issue
+tests/idx/test_cache.py::test_a_look_back_is_fetched_once_without_its_prices
+tests/idx/test_cache.py::test_a_backtest_over_a_cache_holding_narrower_ranges_never_asks_twice
+tests/idx/test_yahoo_answers.py
