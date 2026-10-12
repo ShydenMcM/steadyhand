@@ -3,7 +3,7 @@
  *
  * Shyden's rule (2026-10-02): such a guard proves what it inspected, counted at the level it
  * judges. `searched` puts that count inside the verdict, so an empty finding never stands alone.
- * The Python guards' `tests/meta/population.py` is its twin.
+ * The Python guards' `tests/guards/population.py` is its twin.
  */
 
 /** A verdict over a population of none: it says nothing, so it is refused. */

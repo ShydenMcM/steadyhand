@@ -8,12 +8,12 @@ import shlex
 from pathlib import Path
 from typing import Any
 
-import yaml
+from ci_workflow import ci, parse
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github/workflows"
 # PyYAML reads the bare key `on` as the boolean True, so a key may be a bool.
-CI: dict[str | bool, Any] = yaml.safe_load((WORKFLOWS / "ci.yml").read_text(encoding="utf-8"))
+CI = ci()
 JOBS: dict[str, dict[str, Any]] = CI["jobs"]
 GATED = sorted(name for name, job in JOBS.items() if "environment" not in job)
 
@@ -109,7 +109,7 @@ def test_nothing_publishes_to_testpypi_any_more() -> None:
 
 
 def test_the_yahoo_shape_check_runs_only_by_hand() -> None:
-    shape: dict[str | bool, Any] = yaml.safe_load(
+    shape: dict[str | bool, Any] = parse(
         (WORKFLOWS / "yahoo-shape.yml").read_text(encoding="utf-8")
     )
     assert shape[True] == {"workflow_dispatch": None}

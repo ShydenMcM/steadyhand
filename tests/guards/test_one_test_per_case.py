@@ -168,7 +168,7 @@ def rel(path: Path) -> str:
 
 def test_every_test_in_the_suite_is_read() -> None:
     names = {rel(path) for path in FILES}
-    assert {"tests/meta/test_one_test_per_case.py", "tests/engine/test_backtest.py"} <= names
+    assert {"tests/guards/test_one_test_per_case.py", "tests/engine/test_backtest.py"} <= names
     # Independent of the walk: the test modules as git lists them (#178).
     assert names == {rel(path) for path in tracked(TESTS, ".py") if path.name.startswith("test_")}
     total = sum(len(read_file(path).tests) for path in FILES)

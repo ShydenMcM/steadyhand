@@ -14,6 +14,9 @@ import {
   recordFloors,
 } from "./lib/floors.ts";
 
+/** The environment of the CI job that records floors (#285). */
+const RECORDER = { CI: "true", GITHUB_WORKFLOW: "record-floors" };
+
 const scratches: string[] = [];
 
 /** A fresh directory for one test, removed after it. */
@@ -62,8 +65,8 @@ test("a measurement equal to its record breaks nothing", () => {
 
 test("growth breaks the floor until it is recorded, naming the delta", () => {
   expect(floorBreach("a.files", 4, {}, floorsFile({ "a.files": 3 }))).toBe(
-    "floor a.files: measured 4, recorded 3 (+1); read the growth against the diff, then run " +
-      "npm run floors:record",
+    "floor a.files: measured 4, recorded 3 (+1); read the growth against the diff, then " +
+      "label the pull request record-floors, then npm run floors:fetch <run id>",
   );
 });
 
@@ -76,14 +79,16 @@ test("a loss breaks the floor and says a reader may have gone blind", () => {
 
 test("an id with no record breaks the floor, naming the recorder", () => {
   expect(floorBreach("a.files", 3, {}, floorsFile({}))).toBe(
-    "floor a.files: none recorded, measured 3; run npm run floors:record",
+    "floor a.files: none recorded, measured 3; label the pull request record-floors, then npm run floors:fetch <run id>",
   );
 });
 
 test("recording appends the measurement and the test that asserted it, and judges nothing", () => {
   const measurements = join(scratch(), "m.jsonl");
   const floors = floorsFile({ "a.files": 3 });
-  expect(floorBreach("a.files", 9, { [RECORD_ENV]: measurements }, floors)).toBeUndefined();
+  expect(
+    floorBreach("a.files", 9, { [RECORD_ENV]: measurements, ...RECORDER }, floors),
+  ).toBeUndefined();
   const [line] = parseMeasurements(readFileSync(measurements, "utf8"));
   expect(line).toMatchObject({ id: "a.files", measured: 9 });
   expect(line?.test).toMatch(
@@ -91,10 +96,13 @@ test("recording appends the measurement and the test that asserted it, and judge
   );
 });
 
-test("recording refuses to run in CI, so CI can never pass a floor unjudged", () => {
-  const env = { [RECORD_ENV]: join(scratch(), "m.jsonl"), CI: "true" };
-  expect(() => floorBreach("a.files", 3, env, floorsFile({}))).toThrow(
-    "floors are recorded on a developer's machine, never in CI",
+test.each([
+  ["on a laptop", {}],
+  ["in the checks the floors feed", { CI: "true", GITHUB_WORKFLOW: "ci" }],
+])("recording refuses to run %s, so a gate run can never pass a floor unjudged", (_where, env) => {
+  const recording = { [RECORD_ENV]: join(scratch(), "m.jsonl"), ...env };
+  expect(() => floorBreach("a.files", 3, recording, floorsFile({}))).toThrow(
+    "floors are recorded only by the record-floors workflow, never on a laptop or in the checks they feed",
   );
 });
 
@@ -102,7 +110,7 @@ test("recording refuses to run in CI, so CI can never pass a floor unjudged", ()
  * there `expect.getState()` still named the test before, so the runner is asked instead). */
 const recordFromAHook = (): unknown => {
   try {
-    floorBreach("a.files", 3, { [RECORD_ENV]: join(scratch(), "m.jsonl") });
+    floorBreach("a.files", 3, { [RECORD_ENV]: join(scratch(), "m.jsonl"), ...RECORDER });
     return undefined;
   } catch (error) {
     return error;

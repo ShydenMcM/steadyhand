@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
+from ci_workflow import ci
 from population import searched
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,13 +25,13 @@ LOCK = {
     "if": SKIP,
     "run": "python3 scripts/lock_fast_path.py",
 }
-# Measured on 2026-10-06 (#220): 5 gated jobs whose later steps number 31, the lock included.
-# Lower each only by a deliberate edit when the workflow shrinks.
-GATED_FLOOR = 4
-SKIPPED_STEPS_FLOOR = 30
+# Measured on 2026-10-12 (#285, the two guards jobs added): 7 gated jobs whose later steps number
+# 39, the lock included. Lower each only by a deliberate edit when the workflow shrinks.
+GATED_FLOOR = 7
+SKIPPED_STEPS_FLOOR = 39
 
 # PyYAML reads the bare key `on` as the boolean True, so a key may be a bool.
-WORKFLOW: dict[str | bool, Any] = yaml.safe_load(CI.read_text(encoding="utf-8"))
+WORKFLOW = ci()
 JOBS: dict[str, dict[str, Any]] = WORKFLOW["jobs"]
 GATED = sorted(name for name, job in JOBS.items() if "environment" not in job)
 DEPLOYS = sorted(name for name, job in JOBS.items() if "environment" in job)
@@ -40,6 +40,8 @@ DEPLOYS = sorted(name for name, job in JOBS.items() if "environment" in job)
 def test_the_gated_and_deploy_jobs_are_the_ones_expected() -> None:
     assert "lint" in GATED
     assert "extension" in GATED
+    assert "guards" in GATED
+    assert "extension-guards" in GATED
     assert DEPLOYS == ["deploy-dev"]
     assert len(GATED) >= GATED_FLOOR
 

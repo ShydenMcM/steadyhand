@@ -1,0 +1,39 @@
+name: record-floors
+
+# The floors recorder (#285). Shyden's rulings, every project: "A CI job records" (2026-10-09) and
+# "CI records, laptop commits" (2026-10-12). Labelling a pull request `record-floors` runs every
+# extension suite in record mode on it and uploads the raised `floors.json`; on the laptop,
+# `npm run floors:fetch <run id>` writes it for review and a commit. It is never one of the
+# checks the floors feed, and it holds no key that could push.
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    name: record
+    if: github.event.label.name == 'record-floors'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      - run: npm ci --ignore-scripts
+        working-directory: extension
+      - run: npm run floors:record
+        working-directory: extension
+      - name: Keep the recorded floors
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: floors
+          path: extension/tests/floors.json
+          if-no-files-found: error

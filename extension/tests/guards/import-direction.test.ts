@@ -1,17 +1,17 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { floorBreach } from "./lib/floors.ts";
-import { importsOf, layerOf, targetOf, upstreamImports } from "./lib/imports.ts";
-import { searched } from "./lib/population.ts";
+import { floorBreach } from "../lib/floors.ts";
+import { importsOf, layerOf, targetOf, upstreamImports } from "../lib/imports.ts";
+import { searched } from "../lib/population.ts";
 import {
   EXTENSION,
   parse,
   preScannedImports,
   readSource,
   UnreadableSourceError,
-} from "./lib/source.ts";
-import { filesUnder, gitListed } from "./lib/walk.ts";
+} from "../lib/source.ts";
+import { filesUnder, gitListed } from "../lib/walk.ts";
 
 const SUFFIXES = [".ts", ".js"] as const;
 const PACKAGE_FILES = filesUnder("packages", SUFFIXES);

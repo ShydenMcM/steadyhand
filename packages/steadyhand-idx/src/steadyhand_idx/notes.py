@@ -2,7 +2,7 @@
 
 Each key follows the engine's rules in ``steadyhand.notes``: a dotted lowercase identifier that is
 never reworded, held in a constant named after its value, so a lesson can attach to it. The
-engine's key meta-test (``tests/meta/test_note_keys.py``) reads this module as well as the
+engine's key meta-test (``tests/guards/test_note_keys.py``) reads this module as well as the
 engine's, so a key is never defined twice across the two packages.
 """
 

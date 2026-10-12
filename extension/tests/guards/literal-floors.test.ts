@@ -1,9 +1,9 @@
 import { expect, test } from "vitest";
-import { floorBreach } from "./lib/floors.ts";
-import { assertionsOf, floorConstants, literalFloors, variablesOf } from "./lib/literal-floors.ts";
-import { searched } from "./lib/population.ts";
-import { codeText, parse, readSource, tokens, ts, UnreadableSourceError } from "./lib/source.ts";
-import { filesUnder, gitListed } from "./lib/walk.ts";
+import { floorBreach } from "../lib/floors.ts";
+import { assertionsOf, floorConstants, literalFloors, variablesOf } from "../lib/literal-floors.ts";
+import { searched } from "../lib/population.ts";
+import { codeText, parse, readSource, tokens, ts, UnreadableSourceError } from "../lib/source.ts";
+import { filesUnder, gitListed } from "../lib/walk.ts";
 
 const SUFFIXES = [".ts", ".js"] as const;
 

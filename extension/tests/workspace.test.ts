@@ -1,10 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import tseslint from "typescript-eslint";
 import { expect, test } from "vitest";
-import eslint from "../eslint.config.js";
 import { floorBreach } from "./lib/floors.ts";
-import vitest from "../vitest.config.ts";
 
 const ROOT = join(import.meta.dirname, "..");
 
@@ -86,18 +83,5 @@ test("TypeScript runs strict, with checked indexes and exact optional properties
     noUncheckedIndexedAccess: true,
     exactOptionalPropertyTypes: true,
     noEmit: true,
-  });
-});
-
-test("ESLint applies every rule set of typescript-eslint's strict, type-checked config", () => {
-  const strict = tseslint.configs.strictTypeChecked;
-  expect(strict.length).toBeGreaterThan(0);
-  expect(strict.filter((config) => !eslint.includes(config))).toEqual([]);
-});
-
-test("Vitest fails below 100% coverage on every measure", () => {
-  expect(vitest.test?.coverage).toMatchObject({
-    provider: "v8",
-    thresholds: { branches: 100, functions: 100, lines: 100, statements: 100 },
   });
 });

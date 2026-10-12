@@ -531,7 +531,7 @@ def download_history(ticker: str, start: date, end: date) -> YahooHistory:  # pr
     """Ask Yahoo for one ticker's history (network; run by hand by the yahoo-shape workflow).
 
     This is the only function that talks to Yahoo, and the only code excluded from coverage:
-    ``tests/meta/test_coverage_exclusions.py`` holds it to that. Everything it returns goes
+    ``tests/guards/test_coverage_exclusions.py`` holds it to that. Everything it returns goes
     through ``history_from_frames``, which the tests run on real recorded data.
     """
     import yfinance  # noqa: PLC0415 - a heavy import, paid only when data is really fetched
