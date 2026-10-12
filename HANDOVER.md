@@ -5,7 +5,7 @@
 **Direction (#214):** steadyhand becomes a Chrome extension in TypeScript that reads the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. EXT stories #222-#245 follow the clean-up queue below.
 
 ## Branches and heads
-- `develop` = `bf95a10` (#284 hypothesis bump), green, `deploy-dev` success (run 38188822013). Default branch. Merge green PRs into `develop` without asking; never `main`.
+- `develop` = `912f541` (handover #293 on #284's hypothesis bump), green, `deploy-dev` success (run 38189480379). Default branch. Merge green PRs into `develop` without asking; never `main`.
 - **`282-unit-tests-under-1s`**, pushed, no PR yet, head `bb5e507` (read with `git rev-parse origin/282-unit-tests-under-1s`), behind develop by two commits (merge develop in before the next push). Three cuts, each green and mutation-verified (`.superpowers/sdd/282/evidence.md`).
 
 ## Clean-up queue (Shyden: "Cleanup first, every project"), all before #222
@@ -21,7 +21,7 @@ Order: #285 → #286 → #290 → #292 → #282's limit last. #282's cuts go on 
 
 ## Resume steps
 1. Run `ListAgents`; no subagents were started this session.
-2. **Clean-up pass 1 needs Shyden's run:** the auto-mode classifier refused local deletions. He chose to run `zsh <scratchpad>/cleanup-pass1.zsh` himself (removes 21 closed-ticket worktrees, 49 local branches whose tip IS a merged PR head, 15.2 GB of `.venv`/`node_modules`/caches in `.superpowers/sdd`). The scratchpad is session-local: if it is gone, rebuild from the steps in memory `feedback-branch-tip-equals-merged-head`. Then pass 2 (should find nothing new), add a pass-log entry to `~/.claude/global-rules/reference/reference-cleanup.md`, run `~/.claude/scripts/cleanup-done.sh steadyhand`. Kept on purpose: `ext/s1-ci-fast-path` (7 WIP commits past PR #260's head), `203/spec-amendment-wip`, `ext/s1-ci-fast-path-fold`, `scratch/221-chain`, `scratch/221-guards`, `ext/s3b-guards` (#222 WIP); list them for Shyden. Pass 1 done: six duplicated memories removed, remote branches already clean, no done-but-open issues; section C is the weekly cloud routine's (last run 2026-10-11, no PR).
+2. **Clean-up done 2026-10-12** (ledger recorded, pass log in `reference-cleanup.md`): Shyden ran the script; 21 worktrees, 49 merged branches and 15.2 GB of caches removed (`.superpowers/sdd` 2.6 GB). Kept for Shyden's call, no PR, closed tickets: `203/spec-amendment-wip`, `ext/s1-ci-fast-path` (7 WIP commits past PR #260's head), `ext/s1-ci-fast-path-fold`, `scratch/221-chain`, `scratch/221-guards`; `ext/s3b-guards` is #222 WIP.
 3. **#282 warm cache, plan by extraction:** recorder writes a seed cache (full recorded range per golden stock) as a committed fixture; `recorded_source(folder, *, seeded=True)` copies it in when absent; cold-path tests pass `seeded=False`; an `integration` test rebuilds the seed and compares table contents. Check that full-range seeding serves every narrower request (`test_a_restored_day_is_the_same_whatever_range_is_asked`). Predicted mutations before and after each cut (AC 7).
 4. Then #285, #286, #290, #292, and last #282's limit, CPU check and guard (ONE push); add the CPU constant to `CPU_LIMITS` in `~/.claude/hooks/unit-limit-never-raised.py`.
 
