@@ -518,6 +518,17 @@ def unwhole(day: date, price: str, *, volume: int = 100, dividend: str = "0") ->
     return YahooRow(day, *(Decimal(price),) * 4, volume=volume, dividend=Decimal(dividend))
 
 
+@pytest.mark.parametrize(
+    ("price", "evidence_rows"),
+    [("3550.0001", 0), ("3550.00011", 1), ("3549.9999", 0), ("3549.99989", 1)],
+)
+def test_a_price_within_a_hundredth_of_a_rupiah_cent_counts_as_whole(
+    price: str, evidence_rows: int
+) -> None:
+    history = YahooHistory("BBCA.JK", (unwhole(date(2021, 3, 1), price),), ())
+    assert len(evidence(history)) == evidence_rows
+
+
 def unproven() -> YahooDataSource:
     """Two days off the grid are 8 prices, too few for a proof, and the second pays a dividend."""
     rows = (
@@ -688,9 +699,10 @@ def test_bbri_s_golden_years_are_restored_except_where_a_volume_is_not_whole() -
     # rupiah on a day that is not a flat row with no volume (57 flat days there have one too); the
     # 153 before the 5-for-1 split of 2017-11-10 also have a volume that is not whole (#162).
     history = history_from_json(BBRI_WHOLE)
-    runs = find_runs(evidence(history))
+    found = evidence(history)
+    runs = find_runs(found)
     span = (date(2017, 1, 31), date(2021, 9, 7))
-    assert len([row for row in evidence(history) if span[0] <= row.day <= span[1]]) == 1_103
+    assert len([row for row in found if span[0] <= row.day <= span[1]]) == 1_103
     with pytest.raises(UnrecoverablePricesError) as refused:
         unadjust(history, BBRI, calendar(), span, runs)
     assert (len(refused.value.days), refused.value.days[-1]) == (153, date(2017, 11, 9))
