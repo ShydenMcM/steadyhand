@@ -429,6 +429,13 @@ def test_a_row_s_prices_are_restored_each_on_its_own_tick() -> None:
     assert restore_prices(recorded, Decimal("1.100019"), VERIFIED_DAY, grid()) == [3550, 5025, 1995]
 
 
+def test_a_row_is_restored_on_the_grid_it_is_given() -> None:
+    sevens = (TickTier(1, 7),)
+    verified = Dated(Where("test", "ticks"), (date(2020, 3, 13),), (TickRow("test", 100, sevens),))
+    assert restore_prices([Decimal(10)], Decimal(1), date(2020, 3, 13), Grid(verified)) == [7]
+    assert restore_prices([Decimal(10)], Decimal(1), date(2020, 3, 13)) == [10]
+
+
 def test_a_row_before_the_first_grid_cannot_be_restored() -> None:
     with pytest.raises(
         ValueError, match=r"^there is no tick grid for 2013-12-31, before 2014-01-06$"
