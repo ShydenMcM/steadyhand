@@ -1,13 +1,14 @@
-"""No test reads a file on CI's docs-only fast path, judged from what the run opened (#218).
+"""No guard reads a file on CI's docs-only fast path, judged from what the run opened (#218).
 
 ``scripts/ci_scope.py`` lets a pull request that only adds or edits ``HANDOVER.md`` and
 ``docs/superpowers/**`` skip the tests. That is safe only while no test reads those files, so
-the recorder installed by ``tests/conftest.py`` notes every repository file the run opens, and
-this guard, moved to the end of the run, judges them against the classifier's own allowlist.
-A partial run has not opened what the whole suite opens, so it fails by name; run the whole
-suite. Some CLI journeys run the installed console script in its own process
-(``tests/cli/cli_world.py``), which the hook cannot see, so a static check covers what that code
-could name.
+the recorder installed by ``tests/conftest.py`` in a guards run notes every repository file the
+run opens, and this guard, moved to the end of the run, judges them against the classifier's own
+allowlist. A partial run has not opened what the whole suite opens, so it fails by name; run the
+whole suite. A unit run is judged from outside the process instead: CI's lock makes those files
+unreadable before every job (Shyden, 2026-10-12, #285). Some CLI journeys run the installed
+console script in its own process (``tests/cli/cli_world.py``), which the hook cannot see, so a
+static check covers what that code could name.
 """
 
 import pytest
@@ -17,12 +18,12 @@ from test_disclaimer import user_docs
 
 from ci_scope import on_fast_path
 
-# Measured on 2026-10-06 (#218): the whole run opened 250 of the files git lists, the same with a
-# warm bytecode cache and a cold one, and the packages hold 57 Python sources. Lower each only by a
-# deliberate edit when the repo shrinks.
-OPENED_FLOOR = 249
+# Measured on CI on 2026-10-12 (#285, run 38272096923): a guards run opened 236 of the files git
+# lists on py3.12 and 235 on py3.13, so the floor is the lower. Measured on 2026-10-06 (#218): the
+# packages hold 57 Python sources. Lower each only by a deliberate edit when the repo shrinks.
+OPENED_FLOOR = 235
 PACKAGE_SOURCES_FLOOR = 56
-WHOLE_SUITE = "run the whole suite: this guard judges what every other test opened"
+WHOLE_SUITE = "run the whole guards suite: this guard judges what every other guard opened"
 
 
 @pytest.mark.last
@@ -40,7 +41,7 @@ def test_the_run_opened_no_file_on_the_docs_only_fast_path(request: pytest.Fixtu
     expected = {path.relative_to(ROOT).as_posix() for path in user_docs(ROOT / "docs")}
     assert "docs/lq45-members.md" in expected
     assert sorted(expected - opened) == [], WHOLE_SUITE
-    assert len(opened) >= OPENED_FLOOR
+    assert len(opened) >= OPENED_FLOOR, f"opened {len(opened)} of the files git lists"
 
 
 def test_no_package_code_names_a_file_on_the_fast_path() -> None:

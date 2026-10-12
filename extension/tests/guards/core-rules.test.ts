@@ -2,9 +2,9 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { browserGlobals, numberTypes, numberWords, typedDeclarations } from "./lib/core-rules.ts";
-import { floorBreach } from "./lib/floors.ts";
-import { searched } from "./lib/population.ts";
+import { browserGlobals, numberTypes, numberWords, typedDeclarations } from "../lib/core-rules.ts";
+import { floorBreach } from "../lib/floors.ts";
+import { searched } from "../lib/population.ts";
 import {
   nodes,
   parse,
@@ -13,8 +13,8 @@ import {
   ts,
   typeChecked,
   UnreadableSourceError,
-} from "./lib/source.ts";
-import { filesUnder, gitListed } from "./lib/walk.ts";
+} from "../lib/source.ts";
+import { filesUnder, gitListed } from "../lib/walk.ts";
 
 const SUFFIXES = [".ts", ".js"] as const;
 const CORE = filesUnder("packages/core/src", SUFFIXES);

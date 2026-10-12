@@ -5,7 +5,8 @@
  * that goes blind to part of its population fails, and so does growth until it is recorded. A
  * floor typed into a test drifts the day after it is measured, so every figure lives in
  * `tests/floors.json`, written only by `npm run floors:record`, which raises a figure and never
- * lowers one, and never runs in CI.
+ * lowers one, and runs only in the `record-floors` workflow; `npm run floors:fetch` brings its
+ * record to the laptop for a commit (#285).
  */
 import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -63,6 +64,10 @@ const currentTest = (): string => {
  * `expect(floorBreach(id, population.length)).toBeUndefined()`, in the test whose search judged
  * that population.
  */
+/** How a floor gets recorded (#285: CI records, the laptop commits). */
+export const RECORD_ADVICE =
+  "label the pull request record-floors, then npm run floors:fetch <run id>";
+
 export const floorBreach = (
   id: string,
   measured: number,
@@ -71,8 +76,11 @@ export const floorBreach = (
 ): string | undefined => {
   const recording = env[RECORD_ENV];
   if (recording !== undefined) {
-    if (env.CI !== undefined) {
-      throw new Error("floors are recorded on a developer's machine, never in CI");
+    if (env.GITHUB_WORKFLOW !== "record-floors") {
+      throw new Error(
+        "floors are recorded only by the record-floors workflow, never on a laptop or in the " +
+          "checks they feed",
+      );
     }
     const line: Measurement = { id, measured, test: currentTest() };
     appendFileSync(recording, `${JSON.stringify(line)}\n`);
@@ -80,12 +88,12 @@ export const floorBreach = (
   }
   const recorded = readFloors(floorsPath)[id];
   if (recorded === undefined) {
-    return `floor ${id}: none recorded, measured ${String(measured)}; run npm run floors:record`;
+    return `floor ${id}: none recorded, measured ${String(measured)}; ${RECORD_ADVICE}`;
   }
   if (measured > recorded) {
     return (
       `floor ${id}: measured ${String(measured)}, recorded ${String(recorded)} (+${String(measured - recorded)}); ` +
-      "read the growth against the diff, then run npm run floors:record"
+      `read the growth against the diff, then ${RECORD_ADVICE}`
     );
   }
   if (measured < recorded) {

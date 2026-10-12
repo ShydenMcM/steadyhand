@@ -8,10 +8,29 @@ import file_reads
 import pytest
 from cli_world import Cli
 from hypothesis import settings
+from load_clock import pytest_make_collect_report, pytest_sessionfinish, pytest_terminal_summary
+from suites import pytest_addoption, pytest_ignore_collect, pytest_itemcollected
 
-# Installed before any test module is collected, so every repository file the run opens is
-# recorded for the docs-only fast-path guard, which runs last (tests/meta/test_fast_path_reads.py).
-file_reads.install()
+__all__ = [
+    "pytest_addoption",
+    "pytest_ignore_collect",
+    "pytest_itemcollected",
+    "pytest_make_collect_report",
+    "pytest_sessionfinish",
+    "pytest_terminal_summary",
+]
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """In a guards run, record every repository file it opens, before any test module is
+    collected, for the docs-only read guard that runs last (tests/guards/test_fast_path_reads.py).
+
+    A unit run records nothing: CI's lock makes those files unreadable before every job, which
+    covers it from outside the process (Shyden, 2026-10-12, #285).
+    """
+    if config.getoption("suite") == "guards":
+        file_reads.install()
+
 
 # No deadline in any profile: a per-example deadline times the machine as well as the code, and
 # a busy laptop turned it into a red the next run could not reproduce (#30).

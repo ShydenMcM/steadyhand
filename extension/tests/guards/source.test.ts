@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, expect, test } from "vitest";
-import { floorBreach } from "./lib/floors.ts";
-import { searched } from "./lib/population.ts";
+import { floorBreach } from "../lib/floors.ts";
+import { searched } from "../lib/population.ts";
 import {
   codeText,
   lineOf,
@@ -14,8 +14,8 @@ import {
   ts,
   typeChecked,
   UnreadableSourceError,
-} from "./lib/source.ts";
-import { filesUnder, gitListed } from "./lib/walk.ts";
+} from "../lib/source.ts";
+import { filesUnder, gitListed } from "../lib/walk.ts";
 
 /** Every source file of the workspace a guard may read: TypeScript and JavaScript, tests too. */
 const SUFFIXES = [".ts", ".js"] as const;

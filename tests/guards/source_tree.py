@@ -1,4 +1,4 @@
-"""The one reader of Python source for the guards in ``tests/meta`` (#190).
+"""The one reader of Python source for the guards in ``tests/guards`` (#190).
 
 Shyden's rule (2026-10-02), control (d): a reader refuses what it cannot classify by name, and
 never skips it. ``ast.parse`` alone raises a ``SyntaxError`` that names ``<unknown>``, so a guard

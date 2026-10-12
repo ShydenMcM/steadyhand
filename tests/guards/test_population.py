@@ -27,11 +27,11 @@ def test_a_verdict_over_no_population_is_refused_by_name() -> None:
 
 
 def test_git_lists_this_file_and_its_neighbours() -> None:
-    meta = tracked(ROOT / "tests/meta", ".py")
+    meta = tracked(ROOT / "tests/guards", ".py")
     assert Path(__file__) in meta
-    assert ROOT / "tests/meta/population.py" in meta
+    assert ROOT / "tests/guards/population.py" in meta
     assert all(  # runtime population: the files git listed
-        path.suffix == ".py" and ROOT / "tests/meta" in path.parents for path in meta
+        path.suffix == ".py" and ROOT / "tests/guards" in path.parents for path in meta
     )
 
 
@@ -50,4 +50,4 @@ def test_git_lists_a_new_file_and_not_an_ignored_one(tmp_path: Path) -> None:
 def test_no_git_on_the_path_is_refused_by_name(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PATH", "")
     with pytest.raises(BlindGuardError, match=r"^git is not on the path: "):
-        tracked(ROOT / "tests/meta", ".py")
+        tracked(ROOT / "tests/guards", ".py")
