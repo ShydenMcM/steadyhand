@@ -1,17 +1,19 @@
 """The CI scope classifier: a docs-only change skips the expensive steps, anything else runs
 everything, and a diff it cannot place or compute runs everything too (#218). A path that goes
 away is never docs-only: lesson ``sources`` cite specs under ``docs/superpowers/``, and a test
-checks that each one exists."""
+checks that each one exists.
 
-import os
+A unit test starts no process (#286): here git is stood in (``tests/scripts/conftest.py``). The
+real git cases are in ``tests/integration/scripts/test_ci_scope_git.py``."""
+
+import re
 import runpy
-import shutil
-import subprocess
 import sys
-from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from script_imports import imported_modules
+from stood_in_git import FakeGit
 
 from ci_scope import (
     FULL,
@@ -25,120 +27,45 @@ from ci_scope import (
     verdict_for,
 )
 
-Build = Callable[[Path], None]
+SCRIPT = Path(__file__).resolve().parents[2] / "scripts/ci_scope.py"
 
 
-GIT = shutil.which("git")
-
-
-def git(repo: Path, *args: str) -> None:
-    assert GIT is not None, "git is not on the path"
-    subprocess.run(  # noqa: S603 - git, with arguments written in the tests
-        [GIT, "-c", "user.name=t", "-c", "user.email=t@example.com", *args],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-    )
-
-
-def write(repo: Path, name: str, text: str = "x\n") -> None:
-    path = repo / name
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-
-
-def two_commits(tmp_path: Path, change: Build) -> Path:
-    """A repo whose base commit holds a code file, a read doc and a plan; HEAD applies *change*."""
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    git(repo, "init", "-q", "-b", "main")
-    write(repo, "packages/a.py")
-    write(repo, "docs/lq45-members.md")
-    write(repo, "docs/superpowers/plans/p.md", "the plan\n" * 20)
-    write(repo, "HANDOVER.md")
-    git(repo, "add", "-A")
-    git(repo, "commit", "-q", "-m", "base")
-    change(repo)
-    git(repo, "add", "-A")
-    git(repo, "commit", "-q", "--allow-empty", "-m", "head")
-    return repo
-
-
-def edit_handover_and_plan(repo: Path) -> None:
-    write(repo, "HANDOVER.md", "new\n")
-    write(repo, "docs/superpowers/specs/s.md")
-
-
-def edit_handover_and_code(repo: Path) -> None:
-    write(repo, "HANDOVER.md", "new\n")
-    write(repo, "packages/a.py", "y\n")
-
-
-def edit_code(repo: Path) -> None:
-    write(repo, "packages/a.py", "y\n")
-
-
-def edit_read_doc(repo: Path) -> None:
-    write(repo, "docs/lq45-members.md", "changed\n")
-
-
-def delete_plan(repo: Path) -> None:
-    (repo / "docs/superpowers/plans/p.md").unlink()
-
-
-def delete_read_doc(repo: Path) -> None:
-    (repo / "docs/lq45-members.md").unlink()
-
-
-def rename_plan(repo: Path) -> None:
-    git(repo, "mv", "docs/superpowers/plans/p.md", "docs/superpowers/plans/q.md")
-
-
-def rename_plan_out_of_the_fast_path(repo: Path) -> None:
-    git(repo, "mv", "docs/superpowers/plans/p.md", "docs/p.md")
-
-
-def rename_read_doc_into_the_fast_path(repo: Path) -> None:
-    git(repo, "mv", "docs/lq45-members.md", "docs/superpowers/plans/lq45-members.md")
-
-
-def no_change(repo: Path) -> None:
-    del repo
-
-
-@pytest.mark.parametrize(
-    ("change", "docs_only"),
-    [
-        pytest.param(edit_handover_and_plan, True, id="docs-only"),
-        pytest.param(edit_handover_and_code, False, id="mixed"),
-        pytest.param(edit_code, False, id="code-only"),
-        pytest.param(edit_read_doc, False, id="markdown-a-test-reads"),
-        pytest.param(delete_plan, False, id="deleted-plan"),
-        pytest.param(delete_read_doc, False, id="deleted-read-doc"),
-        pytest.param(rename_plan, False, id="renamed-within-the-fast-path"),
-        pytest.param(rename_plan_out_of_the_fast_path, False, id="renamed-out-of-the-fast-path"),
-        pytest.param(rename_read_doc_into_the_fast_path, False, id="renamed-into-the-fast-path"),
-        pytest.param(no_change, False, id="empty-diff"),
-    ],
-)
-def test_a_change_is_classified_by_every_path_it_touches(
-    tmp_path: Path, change: Build, *, docs_only: bool
+def test_changes_asks_git_for_the_name_status_diff_and_reads_its_answer(
+    tmp_path: Path, fake_git: FakeGit
 ) -> None:
-    repo = two_commits(tmp_path, change)
-    assert verdict_for(changes(repo, "HEAD^1", "HEAD")).docs_only is docs_only
-
-
-def test_a_rename_names_both_its_sides_and_its_old_side_goes_away(tmp_path: Path) -> None:
-    repo = two_commits(tmp_path, rename_plan_out_of_the_fast_path)
-    assert changes(repo, "HEAD^1", "HEAD") == [
+    fake_git.stdout = b"R087\0docs/superpowers/plans/p.md\0docs/p.md\0D\0docs/lq45-members.md\0"
+    assert changes(tmp_path, "BASE", "HEAD") == [
         Change("docs/superpowers/plans/p.md", removed=True),
         Change("docs/p.md", removed=False),
+        Change("docs/lq45-members.md", removed=True),
     ]
+    assert fake_git.called_in(tmp_path, "diff", "--name-status", "-z", "-M", "BASE", "HEAD")
 
 
-def test_a_deletion_names_the_deleted_path(tmp_path: Path) -> None:
-    repo = two_commits(tmp_path, delete_read_doc)
-    assert changes(repo, "HEAD^1", "HEAD") == [Change("docs/lq45-members.md", removed=True)]
+def test_a_git_diff_that_fails_is_refused_with_its_exit_code_and_message(
+    tmp_path: Path, fake_git: FakeGit
+) -> None:
+    fake_git.returncode = 128
+    fake_git.stderr = b"fatal: ambiguous argument 'HEAD^1':\n  unknown revision\n"
+    with pytest.raises(
+        ScopeError,
+        match=(
+            r"^cannot compute the diff: git diff exited 128: "
+            r"fatal: ambiguous argument 'HEAD\^1': unknown revision$"
+        ),
+    ):
+        changes(tmp_path, "HEAD^1", "HEAD")
+
+
+def test_a_git_message_that_is_not_utf_8_is_still_reported(
+    tmp_path: Path, fake_git: FakeGit
+) -> None:
+    fake_git.returncode = 1
+    fake_git.stderr = b"bad \xff byte"
+    with pytest.raises(
+        ScopeError, match=r"^cannot compute the diff: git diff exited 1: bad \ufffd byte$"
+    ):
+        changes(tmp_path, "HEAD^1", "HEAD")
 
 
 @pytest.mark.parametrize(
@@ -257,88 +184,60 @@ def run_main(tmp_path: Path, event: str, repo: Path) -> tuple[int, str]:
 
 
 def test_a_docs_only_pull_request_skips_the_expensive_steps(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, fake_git: FakeGit, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    repo = two_commits(tmp_path, edit_handover_and_plan)
-    assert run_main(tmp_path, "pull_request", repo) == (0, "docs_only=true\n")
+    fake_git.stdout = b"M\0HANDOVER.md\0A\0docs/superpowers/specs/s.md\0"
+    assert run_main(tmp_path, "pull_request", tmp_path) == (0, "docs_only=true\n")
     assert capsys.readouterr().out == "ci-scope: docs-only: 2 paths, all on the fast path\n"
 
 
 def test_a_code_pull_request_runs_everything(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, fake_git: FakeGit, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    repo = two_commits(tmp_path, edit_handover_and_code)
-    assert run_main(tmp_path, "pull_request", repo) == (0, "docs_only=false\n")
+    fake_git.stdout = b"M\0HANDOVER.md\0M\0packages/a.py\0"
+    assert run_main(tmp_path, "pull_request", tmp_path) == (0, "docs_only=false\n")
     assert capsys.readouterr().out == (
         f"ci-scope: {FULL}: packages/a.py is not on the docs-only fast path\n"
     )
 
 
-def merge_of(tmp_path: Path, pull_request: Build, base_moves_on: Build) -> Path:
-    """The commit CI checks out for a pull request: its branch merged into a base that moved on
-    after the branch was cut, so HEAD^1 is the base and HEAD^2 the pull request's head."""
-    repo = two_commits(tmp_path, no_change)
-    git(repo, "switch", "-q", "-c", "pull-request")
-    pull_request(repo)
-    git(repo, "add", "-A")
-    git(repo, "commit", "-q", "-m", "the pull request")
-    git(repo, "switch", "-q", "main")
-    base_moves_on(repo)
-    git(repo, "add", "-A")
-    git(repo, "commit", "-q", "-m", "the base moves on")
-    git(repo, "merge", "-q", "--no-ff", "-m", "merge", "pull-request")
-    return repo
-
-
-@pytest.mark.parametrize(
-    ("pull_request", "base_moves_on", "written"),
-    [
-        pytest.param(
-            edit_handover_and_plan, edit_code, "docs_only=true\n", id="docs-onto-a-code-change"
-        ),
-        pytest.param(
-            edit_code, edit_handover_and_plan, "docs_only=false\n", id="code-onto-a-docs-change"
-        ),
-    ],
-)
-def test_a_merge_commit_is_judged_by_the_pull_requests_own_change(
-    tmp_path: Path, pull_request: Build, base_moves_on: Build, written: str
+def test_a_pull_request_is_judged_against_its_merge_commits_first_parent(
+    tmp_path: Path, fake_git: FakeGit
 ) -> None:
-    repo = merge_of(tmp_path, pull_request, base_moves_on)
-    assert run_main(tmp_path, "pull_request", repo) == (0, written)
+    """CI checks out a pull request's merge commit, whose first parent is the base branch, so the
+    diff is HEAD^1 to HEAD: the pull request's own change, whatever the base did meanwhile."""
+    fake_git.stdout = b"M\0HANDOVER.md\0"
+    run_main(tmp_path, "pull_request", tmp_path)
+    assert fake_git.called_in(tmp_path, "diff", "--name-status", "-z", "-M", "HEAD^1", "HEAD")
+
+
+def test_a_diff_it_cannot_compute_runs_everything_and_says_so(
+    tmp_path: Path, fake_git: FakeGit, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake_git.returncode = 128
+    fake_git.stderr = b"fatal: ambiguous argument 'HEAD^1'\n"
+    assert run_main(tmp_path, "pull_request", tmp_path) == (0, "docs_only=false\n")
+    assert capsys.readouterr().out == (
+        f"ci-scope: {FULL}: cannot compute the diff: git diff exited 128: "
+        "fatal: ambiguous argument 'HEAD^1'\n"
+    )
 
 
 @pytest.mark.parametrize("event", ["push", "workflow_dispatch", "schedule"])
 def test_every_event_but_a_pull_request_runs_everything(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], event: str
 ) -> None:
-    repo = two_commits(tmp_path, edit_handover_and_plan)
-    assert run_main(tmp_path, event, repo) == (0, "docs_only=false\n")
+    """No git is stood in: a run that called it would be refused (#286)."""
+    assert run_main(tmp_path, event, tmp_path) == (0, "docs_only=false\n")
     assert capsys.readouterr().out == (
         f"ci-scope: {FULL}: a {event} run always runs everything (deploys included)\n"
     )
 
 
-def test_a_diff_it_cannot_compute_runs_everything_and_says_so(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    repo = tmp_path / "one-commit"
-    repo.mkdir()
-    git(repo, "init", "-q", "-b", "main")
-    write(repo, "HANDOVER.md")
-    git(repo, "add", "-A")
-    git(repo, "commit", "-q", "-m", "only")
-    assert run_main(tmp_path, "pull_request", repo) == (0, "docs_only=false\n")
-    out = capsys.readouterr().out
-    assert out.startswith(f"ci-scope: {FULL}: cannot compute the diff: git diff exited 128: ")
-    assert "HEAD^1" in out
-
-
 def test_without_an_output_file_it_says_everything_runs(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    repo = two_commits(tmp_path, edit_handover_and_plan)
-    assert main(["pull_request"], {}, repo) == 0
+    assert main(["pull_request"], {}, tmp_path) == 0
     assert capsys.readouterr().out == (
         f"ci-scope: {FULL}: GITHUB_OUTPUT is not set, so no step can be skipped\n"
     )
@@ -353,44 +252,64 @@ def test_it_takes_exactly_the_event_name(tmp_path: Path, argv: list[str]) -> Non
 def test_without_git_on_the_path_it_runs_everything_and_says_so(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    repo = two_commits(tmp_path, edit_handover_and_plan)
     monkeypatch.setenv("PATH", str(tmp_path / "no-tools-here"))
-    assert run_main(tmp_path, "pull_request", repo) == (0, "docs_only=false\n")
+    assert run_main(tmp_path, "pull_request", tmp_path) == (0, "docs_only=false\n")
     assert capsys.readouterr().out == (
         f"ci-scope: {FULL}: cannot compute the diff: git is not on the path\n"
     )
 
 
-SCRIPT = Path(__file__).resolve().parents[2] / "scripts/ci_scope.py"
+def test_the_workflow_command_imports_from_the_standard_library_alone() -> None:
+    """CI runs it with the runner's system python3, before uv installs anything. The run under
+    that bare interpreter is in the integration suite; here, every import it makes is read."""
+    imported = imported_modules(SCRIPT)
+    assert "subprocess" in imported
+    assert sorted(imported - sys.stdlib_module_names) == []
 
 
-def test_the_workflow_command_runs_on_the_standard_library_alone(tmp_path: Path) -> None:
-    """CI runs it with the runner's system python3, before uv installs anything: -S drops
-    site-packages, so an import from outside the standard library fails here first."""
-    repo = two_commits(tmp_path, edit_handover_and_plan)
-    out = output_of(tmp_path)
-    result = subprocess.run(  # noqa: S603 - this interpreter, running the script under test
-        [sys.executable, "-I", "-S", str(SCRIPT), "pull_request"],
-        cwd=repo,
-        env={"GITHUB_OUTPUT": str(out), "PATH": os.environ["PATH"]},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert (result.returncode, result.stdout, result.stderr) == (
-        0,
-        "ci-scope: docs-only: 2 paths, all on the fast path\n",
-        "",
-    )
-    assert out.read_text(encoding="utf-8") == "docs_only=true\n"
+@pytest.mark.parametrize(
+    ("source", "found"),
+    [
+        pytest.param("import os.path\n", {"os"}, id="import"),
+        pytest.param("import json as j, csv\n", {"json", "csv"}, id="aliased-and-several"),
+        pytest.param("from xml.etree import ElementTree\n", {"xml"}, id="from-import"),
+        pytest.param("def f():\n    import yaml\n", {"yaml"}, id="inside-a-function"),
+    ],
+)
+def test_every_import_form_is_read(tmp_path: Path, source: str, found: set[str]) -> None:
+    script = tmp_path / "script.py"
+    script.write_text(source, encoding="utf-8")
+    assert imported_modules(script) == found
+
+
+@pytest.mark.parametrize(
+    ("source", "refusal"),
+    [
+        pytest.param("from . import x\n", "a relative import in script.py", id="relative"),
+        pytest.param("__import__('yaml')\n", "a dynamic import in script.py, line 1", id="dunder"),
+        pytest.param(
+            "import importlib\nimportlib.import_module('yaml')\n",
+            "a dynamic import in script.py, line 2",
+            id="import-module",
+        ),
+    ],
+)
+def test_an_import_it_cannot_read_is_refused(tmp_path: Path, source: str, refusal: str) -> None:
+    script = tmp_path / "script.py"
+    script.write_text(source, encoding="utf-8")
+    with pytest.raises(AssertionError, match=f"^{re.escape(refusal)}"):
+        imported_modules(script)
 
 
 def test_run_as_a_script_it_reads_the_event_the_environment_and_the_working_directory(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    fake_git: FakeGit,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    repo = two_commits(tmp_path, edit_handover_and_code)
+    fake_git.stdout = b"M\0HANDOVER.md\0M\0packages/a.py\0"
     out = output_of(tmp_path)
-    monkeypatch.chdir(repo)
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GITHUB_OUTPUT", str(out))
     monkeypatch.setattr(sys, "argv", [str(SCRIPT), "pull_request"])
     with pytest.raises(SystemExit) as exited:
@@ -400,3 +319,4 @@ def test_run_as_a_script_it_reads_the_event_the_environment_and_the_working_dire
         f"ci-scope: {FULL}: packages/a.py is not on the docs-only fast path\n"
     )
     assert out.read_text(encoding="utf-8") == "docs_only=false\n"
+    assert fake_git.called_in(tmp_path, "diff", "--name-status", "-z", "-M", "HEAD^1", "HEAD")

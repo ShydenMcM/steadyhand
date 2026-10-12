@@ -1,15 +1,20 @@
 /**
  * The tools' own configuration, judged by loading each tool (#285). Loading them costs more CPU
  * than a unit file may spend (measured 2026-10-12: typescript-eslint 0.34 s, Playwright 0.21 s,
- * Vitest's config 0.10 s), so this file is the one entry on `LOAD_BURN_DOWN` until #286 moves it
- * to the integration suite (Shyden, 2026-10-12, "Burn-down until #286").
+ * Vitest's config 0.10 s), so #286 moved this file to the integration suite (Shyden, 2026-10-12,
+ * "Burn-down until #286").
  */
 import tseslint from "typescript-eslint";
 import { readdirSync } from "node:fs";
 import { expect, test } from "vitest";
-import eslint from "../eslint.config.js";
-import playwright from "../playwright.config.ts";
-import vitestConfig, { GUARDS_COVERED, UNIT_COVERED } from "../vitest.config.ts";
+import eslint from "../../eslint.config.js";
+import playwright from "../../playwright.config.ts";
+import vitestConfig, {
+  GUARDS,
+  GUARDS_COVERED,
+  INTEGRATION,
+  UNIT_COVERED,
+} from "../../vitest.config.ts";
 
 test("ESLint applies every rule set of typescript-eslint's strict, type-checked config", () => {
   const strict = tseslint.configs.strictTypeChecked;
@@ -40,7 +45,9 @@ test("each suite's run covers its own list", () => {
 });
 
 test("every helper in tests/lib is held to coverage by exactly one suite", () => {
-  const helpers = readdirSync(new URL("lib", import.meta.url)).map((name) => `tests/lib/${name}`);
+  const helpers = readdirSync(new URL("../lib", import.meta.url)).map(
+    (name) => `tests/lib/${name}`,
+  );
   expect(helpers).toContain("tests/lib/floors.ts");
   const listed = [...UNIT_COVERED, ...GUARDS_COVERED];
   expect(helpers.filter((path) => listed.filter((entry) => entry === path).length !== 1)).toEqual(
@@ -57,4 +64,31 @@ test.each([
   const config = vitestConfig({ command: "serve", mode });
   const unitProject = config.test?.projects?.[0] as { test?: { env?: Record<string, string> } };
   expect(unitProject.test?.env).toEqual({ STEADYHAND_JUDGE_LOADS: judge });
+});
+
+interface Project {
+  test?: { name?: string; include?: string[]; exclude?: string[]; setupFiles?: string[] };
+}
+const projects = (unit.test?.projects ?? []) as Project[];
+const project = (name: string): Project["test"] =>
+  projects.find((candidate) => candidate.test?.name === name)?.test;
+
+test("the three projects are unit, guards and integration, in that order", () => {
+  expect(projects.map((candidate) => candidate.test?.name)).toEqual([
+    "unit",
+    "guards",
+    "integration",
+  ]);
+});
+
+test.each([
+  ["guards", GUARDS],
+  ["integration", INTEGRATION],
+])("the %s project holds its own folder, which unit leaves out", (name, glob) => {
+  expect(project(name)?.include).toEqual([glob]);
+  expect(project("unit")?.exclude).toContain(glob);
+});
+
+test("a unit run refuses processes before anything else is set up, and clocks loads last", () => {
+  expect(project("unit")?.setupFiles).toEqual(["tests/no-process.ts", "tests/load-clock.ts"]);
 });

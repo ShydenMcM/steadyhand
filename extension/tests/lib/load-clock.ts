@@ -30,31 +30,15 @@ export const recordLoad = (meta: object, load: Load): void => {
  * judged, since under coverage the tracer is timed with the file. */
 export const JUDGE_ENV = "STEADYHAND_JUDGE_LOADS";
 
-/** Files allowed over the limit until their ticket moves the cost out, each with its measured cost
- * and that ticket. Shyden, 2026-10-12 (#285): "Burn-down until #286". It only shrinks: a listed
- * file that loads within the limit is refused until it is taken off, and nothing is ever added. */
-export const LOAD_BURN_DOWN: Readonly<Record<string, string>> = {
-  "tests/tool-configs.test.ts":
-    "loads typescript-eslint (0.34 s of CPU), Playwright (0.21 s) and Vitest's config (0.10 s), " +
-    "measured 2026-10-12; #286 moves it to the integration suite",
-};
-
-/** Why a load is refused, or undefined when it is not: a file over the limit, or a listed file
- * now within it. */
-export const loadRefusal = (load: Load): string | undefined => {
-  const over = load.cpuMicroseconds > LOAD_CPU_LIMIT_MICROSECONDS;
-  const listed = Object.hasOwn(LOAD_BURN_DOWN, load.path);
-  if (listed && !over) {
-    return (
-      `LOAD BURN-DOWN: ${load.path} now loads within the limit ` +
-      `(${String(load.cpuMicroseconds)} us of CPU): take it off LOAD_BURN_DOWN in tests/lib/load-clock.ts`
-    );
-  }
-  return over && !listed
+/** Why a load is refused, or undefined when it is not: a file over the limit. The list of files
+ * allowed over it until their ticket moved the cost out emptied when #286 moved the tool
+ * configuration checks to the integration suite; it only ever shrank (Shyden, 2026-10-12, #285),
+ * so it is gone. */
+export const loadRefusal = (load: Load): string | undefined =>
+  load.cpuMicroseconds > LOAD_CPU_LIMIT_MICROSECONDS
     ? `LOAD LIMIT: ${load.path} took ${String(load.cpuMicroseconds)} us of CPU to load, over ` +
-        `${String(LOAD_CPU_LIMIT_MICROSECONDS)}: cut its import-time work or move it out of unit`
+      `${String(LOAD_CPU_LIMIT_MICROSECONDS)}: cut its import-time work or move it out of unit`
     : undefined;
-};
 
 const column = (value: number): string => String(value).padStart(10);
 

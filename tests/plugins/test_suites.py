@@ -1,4 +1,4 @@
-"""Which suite a test file belongs to, and a run that collects across the line (#285).
+"""Which suite a test file belongs to, and a run that collects across the line (#285, #286).
 
 Planted paths, never the tree: each misfiling a run could make is written out here by hand.
 """
@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 import suites
-from suites import GUARDS, TESTS, refuse_strays, skips, suite_of
+from suites import GUARDS, INTEGRATION, SUITES, TESTS, refuse_strays, skips, suite_of
 
 
 @pytest.mark.parametrize(
@@ -18,6 +18,10 @@ from suites import GUARDS, TESTS, refuse_strays, skips, suite_of
         ("guards/test_no_float.py", "guards"),
         ("guards/nested/test_deeper.py", "guards"),
         ("guardsx/test_prefix_only.py", "unit"),
+        ("integration", "integration"),
+        ("integration/scripts/test_ci_scope_git.py", "integration"),
+        ("integrationx/test_prefix_only.py", "unit"),
+        ("test_integration.py", "unit"),
         ("test_guards.py", "unit"),
         ("cli/test_cli.py", "unit"),
         ("repo/test_deploy_dev.py", "unit"),
@@ -33,6 +37,15 @@ def test_the_guards_folder_is_tests_guards() -> None:
     assert expected == GUARDS
 
 
+def test_the_integration_folder_is_tests_integration() -> None:
+    expected = Path(__file__).resolve().parents[1] / "integration"
+    assert expected == INTEGRATION
+
+
+def test_there_are_three_suites_and_unit_comes_first() -> None:
+    assert SUITES == ("unit", "guards", "integration")
+
+
 @pytest.mark.parametrize(
     ("chosen", "path", "skipped"),
     [
@@ -44,13 +57,20 @@ def test_the_guards_folder_is_tests_guards() -> None:
         ("guards", "cli/test_cli.py", True),
         ("guards", "conftest.py", True),
         ("guards", "guards/test_no_float.py", False),
+        ("guards", "integration", True),
+        ("unit", "integration", True),
+        ("unit", "integration/cli/test_journeys_installed.py", True),
+        ("integration", "cli", True),
+        ("integration", "guards", True),
+        ("integration", "conftest.py", True),
+        ("integration", "integration/cli/test_journeys_installed.py", False),
     ],
 )
 def test_a_run_skips_the_other_suites_files(chosen: str, path: str, *, skipped: bool) -> None:
     assert skips(chosen, TESTS / path) is skipped
 
 
-@pytest.mark.parametrize("chosen", ["unit", "guards"])
+@pytest.mark.parametrize("chosen", ["unit", "guards", "integration"])
 def test_a_run_walks_down_through_the_folders_above_the_guards(chosen: str) -> None:
     assert skips(chosen, TESTS) is False
     assert skips(chosen, TESTS.parent) is False
@@ -62,7 +82,14 @@ def items(*paths: str) -> list[SimpleNamespace]:
 
 @pytest.mark.parametrize(
     ("chosen", "stray"),
-    [("unit", "guards/test_no_float.py"), ("guards", "cli/test_cli.py")],
+    [
+        ("unit", "guards/test_no_float.py"),
+        ("unit", "integration/scripts/test_ci_scope_git.py"),
+        ("guards", "cli/test_cli.py"),
+        ("guards", "integration/scripts/test_ci_scope_git.py"),
+        ("integration", "cli/test_cli.py"),
+        ("integration", "guards/test_no_float.py"),
+    ],
 )
 def test_a_test_from_the_other_suite_is_refused_by_name(chosen: str, stray: str) -> None:
     mixed = items("guards/test_lessons.py", "cli/test_init.py", stray)
@@ -72,7 +99,11 @@ def test_a_test_from_the_other_suite_is_refused_by_name(chosen: str, stray: str)
 
 @pytest.mark.parametrize(
     ("chosen", "own"),
-    [("unit", "cli/test_init.py"), ("guards", "guards/test_lessons.py")],
+    [
+        ("unit", "cli/test_init.py"),
+        ("guards", "guards/test_lessons.py"),
+        ("integration", "integration/cli/test_journeys_installed.py"),
+    ],
 )
 def test_a_run_of_its_own_suite_alone_passes(chosen: str, own: str) -> None:
     refuse_strays(chosen, items(own, own))
@@ -96,7 +127,14 @@ def config(chosen: str) -> SimpleNamespace:
 
 @pytest.mark.parametrize(
     ("chosen", "path", "answer"),
-    [("unit", "guards", True), ("unit", "cli", None), ("guards", "cli", True)],
+    [
+        ("unit", "guards", True),
+        ("unit", "integration", True),
+        ("unit", "cli", None),
+        ("guards", "cli", True),
+        ("integration", "cli", True),
+        ("integration", "integration", None),
+    ],
 )
 def test_the_collect_hook_skips_with_true_and_otherwise_leaves_it_to_others(
     chosen: str, path: str, *, answer: bool | None

@@ -4,7 +4,6 @@ Every run goes through ``main`` with the recorded Yahoo answers, the real bar ca
 state database in a temporary data directory, at a fixed time in Jakarta.
 """
 
-import multiprocessing
 import sqlite3
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import closing, contextmanager
@@ -20,7 +19,6 @@ from cli_world import (
     golden_backtest,
     opened,
     paper,
-    paper_process,
     recorded_source,
     rules,
     run_on,
@@ -613,31 +611,6 @@ def test_days_another_run_saves_meanwhile_are_left_to_it(tmp_path: Path) -> None
             (Outcome.RAN, trading_days()[1:4]),
             (Outcome.UP_TO_DATE, ()),
         ]
-
-
-def test_two_runs_started_together_run_each_day_exactly_once(tmp_path: Path) -> None:
-    together = paper(tmp_path / "together")
-    alone = paper(tmp_path / "alone")
-    for cli in (together, alone):
-        run_on(cli, START)
-    target = at(trading_days()[8])
-    assert run_on(alone, trading_days()[8]).code == 0
-    context = multiprocessing.get_context("spawn")
-    start = context.Event()
-    processes = [
-        context.Process(target=paper_process, args=(str(together.home), target.isoformat(), start))
-        for _ in range(2)
-    ]
-    for process in processes:
-        process.start()
-    start.set()
-    for process in processes:
-        process.join(timeout=120)
-    assert [process.exitcode for process in processes] == [0, 0]
-    assert tables(together) == tables(alone)
-    with opened(together) as store:
-        assert store.days() == trading_days()[:9]
-        assert len(store.runs()) == 3
 
 
 MONTHLY_CONFIG = GOLDEN_CONFIG.replace(
