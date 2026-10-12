@@ -1,8 +1,9 @@
 """Recovering Yahoo's unreported price factor from the IDX tick grid (#160 spec §4, §9.1)."""
 
+import re
 from collections.abc import Sequence
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
 from hypothesis import example, given
@@ -15,6 +16,7 @@ from steadyhand_idx.factor import (
     FIT_TOLERANCE,
     GRID_START,
     MIN_PRICES,
+    DayGrid,
     Grid,
     PriceRow,
     Restoration,
@@ -24,6 +26,7 @@ from steadyhand_idx.factor import (
     is_noise,
     restore_dividend,
     restore_price,
+    restore_prices,
 )
 from steadyhand_idx.notes import DATA_PRICES_RESTORED
 from steadyhand_idx.ticks import TickRow, TickTier, parse_ticks
@@ -240,6 +243,124 @@ def test_a_price_below_the_first_tier_uses_the_first_tick() -> None:
     assert grid().nearest(Decimal("0.4"), VERIFIED_DAY) == 0
 
 
+FIVE_TIERS = (
+    TickTier(1, 1),
+    TickTier(200, 2),
+    TickTier(500, 5),
+    TickTier(2000, 10),
+    TickTier(5000, 25),
+)
+
+
+@pytest.mark.parametrize(
+    ("value", "nearest"),
+    [
+        ("0.4", 0),  # below every tier: a tick of 1
+        ("199.6", 200),  # tick 1 (tick 2 gives 200 too, so the next case tells them apart)
+        ("201", 200),  # tick 2, half to even (tick 1 gives 201)
+        ("203", 204),  # tick 2, half to even (tick 1 gives 203)
+        ("1997", 1995),  # tick 5 (tick 2 gives 1996, tick 10 gives 2000)
+        ("2003", 2000),  # tick 10 (tick 5 gives 2005)
+        ("4994", 4990),  # tick 10 (tick 25 gives 5000)
+        ("5012", 5000),  # tick 25 (tick 10 gives 5010)
+    ],
+)
+def test_a_day_grid_rounds_a_value_on_the_tick_of_its_own_tier(value: str, nearest: int) -> None:
+    assert DayGrid.of(FIVE_TIERS).nearest(Decimal(value)) == nearest
+
+
+def test_a_day_grid_keeps_its_tiers() -> None:
+    assert DayGrid.of(FIVE_TIERS).tiers == FIVE_TIERS
+
+
+@pytest.mark.parametrize(
+    ("tiers", "message"),
+    [
+        ((TickTier(1, 1), TickTier(500, 5), TickTier(500, 10)), "got 500 after 500"),
+        ((TickTier(1, 1), TickTier(500, 5), TickTier(200, 2)), "got 200 after 500"),
+    ],
+)
+def test_a_day_grid_refuses_tiers_that_do_not_rise(
+    tiers: tuple[TickTier, ...], message: str
+) -> None:
+    with pytest.raises(ValueError, match=rf"^a day's tiers must rise, {message}$"):
+        DayGrid.of(tiers)
+
+
+@pytest.mark.parametrize(
+    ("tiers", "message"),
+    [
+        (
+            (TickTier(1, 1), TickTier(200, 2), TickTier(501, 5)),
+            "501 must be a multiple of both ticks around it (2 and 5)",
+        ),
+        (
+            (TickTier(1, 5), TickTier(502, 2)),
+            "502 must be a multiple of both ticks around it (5 and 2)",
+        ),
+    ],
+)
+def test_a_day_grid_refuses_a_tier_boundary_off_either_tick(
+    tiers: tuple[TickTier, ...], message: str
+) -> None:
+    with pytest.raises(ValueError, match=rf"^a day's tier boundary {re.escape(message)}$"):
+        DayGrid.of(tiers)
+
+
+def every_rupiah(row: PriceRow) -> list[Decimal]:
+    """The candidates as the spec defines them: g / p1 for every whole rupiah g in range."""
+    first = row.prices[0]
+    found: list[Decimal] = []
+    whole = max(int(first.to_integral_value(ROUND_HALF_UP)), 1)
+    while whole < 2 * (first + FIT_TOLERANCE):
+        factor = whole / first
+        if all(grid().fits(price, factor, row.day) for price in row.prices):
+            found.append(factor)
+        whole += 1
+    return found
+
+
+@pytest.mark.parametrize(
+    ("true", "factor", "day"),
+    [
+        ((5000, 5025, 4990, 5000), "1.6", VERIFIED_DAY),  # tries 3,125 to 6,250, past 5,000
+        ((196, 200, 198, 204), "1.2", VERIFIED_DAY),  # tries 163 to 326, past 200
+        ((480, 500, 476, 496), "1.3", VERIFIED_DAY),  # tries 369 to 738, past 500
+        ((1990, 2010, 1985, 2000), "1.1", date(2017, 3, 1)),  # five tiers, past 2,000
+        ((4975, 5025, 4950, 5000), "1.05", date(2015, 3, 2)),  # three tiers, past 5,000
+        ((100, 100, 100, 100), "1", VERIFIED_DAY),  # a tick of 1: every rupiah is tried
+    ],
+)
+def test_candidates_are_those_a_rupiah_by_rupiah_search_finds(
+    true: tuple[int, ...], factor: str, day: date
+) -> None:
+    (row,) = recorded([true], Decimal(factor), first=day)
+    found = candidates(row, grid())
+    assert found == every_rupiah(row)
+    assert found  # the true factor at least
+
+
+@pytest.mark.parametrize(
+    ("prices", "fits"),
+    [
+        (("1995", "2010"), True),
+        (("1995", "2005"), False),  # 2005 is off the tick of 10
+        (("2005", "1995"), False),  # whichever price misses
+    ],
+)
+def test_a_day_grid_fits_a_row_only_when_every_price_fits(
+    prices: tuple[str, ...], *, fits: bool
+) -> None:
+    row = tuple(Decimal(price) for price in prices)
+    assert DayGrid.of(FIVE_TIERS).fits(row, Decimal(1)) is fits
+
+
+def test_a_day_grid_fit_is_within_one_rupiah_cent_after_the_factor() -> None:
+    day = DayGrid.of(FIVE_TIERS)
+    assert day.fits((Decimal("3227.273"),), Decimal("1.1"))  # 3550.0003
+    assert not day.fits((Decimal("3227.273"),), Decimal("1.10001"))  # 3550.0326
+
+
 def test_a_fit_is_within_one_rupiah_cent() -> None:
     assert grid().fits(Decimal(3550) + FIT_TOLERANCE, Decimal(1), VERIFIED_DAY)
     assert not grid().fits(
@@ -300,6 +421,26 @@ def test_restored_prices_are_whole_rupiah_on_their_tick() -> None:
         3550, IDR
     )
     assert restore_price(Decimal("4568.10"), Decimal("1.100019"), VERIFIED_DAY) == Money(5025, IDR)
+
+
+def test_a_row_s_prices_are_restored_each_on_its_own_tick() -> None:
+    recorded = [Decimal("3227.2706"), Decimal("4568.10"), Decimal("1813.6")]
+    assert restore_prices(recorded, Decimal("1.100019"), VERIFIED_DAY) == [3550, 5025, 1995]
+    assert restore_prices(recorded, Decimal("1.100019"), VERIFIED_DAY, grid()) == [3550, 5025, 1995]
+
+
+def test_a_row_is_restored_on_the_grid_it_is_given() -> None:
+    sevens = (TickTier(1, 7),)
+    verified = Dated(Where("test", "ticks"), (date(2020, 3, 13),), (TickRow("test", 100, sevens),))
+    assert restore_prices([Decimal(10)], Decimal(1), date(2020, 3, 13), Grid(verified)) == [7]
+    assert restore_prices([Decimal(10)], Decimal(1), date(2020, 3, 13)) == [10]
+
+
+def test_a_row_before_the_first_grid_cannot_be_restored() -> None:
+    with pytest.raises(
+        ValueError, match=r"^there is no tick grid for 2013-12-31, before 2014-01-06$"
+    ):
+        restore_prices([Decimal(3550)], Decimal(1), date(2013, 12, 31))
 
 
 def test_restored_dividends_are_quantised_to_one_hundredth_of_a_rupiah_cent() -> None:

@@ -119,6 +119,12 @@ class TestBar:
         with pytest.raises(InvalidBarError, match="BBRI 2026-01-05: close is in USD, expected IDR"):
             bar(close=Money(415_000, usd()))
 
+    def test_a_price_in_a_copy_of_the_instrument_currency_is_accepted(self) -> None:
+        # Currencies are compared by value: a separately built IDR is IDR (#296).
+        copy = Currency(IDR.code, IDR.minor_units)
+        assert copy is not IDR
+        assert bar(close=Money(4_150, copy)).close == rp(4_150)
+
     @pytest.mark.parametrize("volume", [-1, True, "1"])
     def test_volume_must_be_a_non_negative_int(self, volume: object) -> None:
         with pytest.raises(InvalidBarError, match="volume must be a non-negative int"):

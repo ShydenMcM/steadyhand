@@ -12,11 +12,13 @@ output is the runs those rows form, each proven or not.
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Context, Decimal
 from functools import cache
+from itertools import pairwise
 
 from steadyhand import IDR, Instrument, Money, Note
 from steadyhand_idx._datafile import Dated, load_shipped
@@ -129,38 +131,95 @@ class Restoration:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class DayGrid:
+    """One day's tick grid: its tiers, and each tier's lower bound and tick for a lookup."""
+
+    tiers: tuple[TickTier, ...]
+    bounds: tuple[int, ...]
+    ticks: tuple[int, ...]
+
+    @classmethod
+    def of(cls, tiers: tuple[TickTier, ...]) -> DayGrid:
+        """*tiers* as a lookup. They must rise, so a bisect finds each value's own tier, and each
+        boundary must be a multiple of the ticks on both sides, as ``tick_sizes.toml`` requires,
+        so stepping a tick at a time from one multiple lands on every multiple of the next tier
+        (``candidates``)."""
+        for lower, upper in pairwise(tiers):
+            if upper.from_price <= lower.from_price:
+                msg = f"a day's tiers must rise, got {upper.from_price} after {lower.from_price}"
+                raise ValueError(msg)
+            if upper.from_price % lower.tick or upper.from_price % upper.tick:
+                msg = (
+                    f"a day's tier boundary {upper.from_price} must be a multiple of both ticks "
+                    f"around it ({lower.tick} and {upper.tick})"
+                )
+                raise ValueError(msg)
+        return cls(tiers, tuple(tier.from_price for tier in tiers), tuple(t.tick for t in tiers))
+
+    def tick(self, value: Decimal | int) -> int:
+        """The tick of the tier with the highest lower bound at or below *value*, or 1 below
+        every tier."""
+        below = bisect_right(self.bounds, value)
+        return self.ticks[below - 1] if below else 1
+
+    def nearest(self, value: Decimal) -> Decimal:
+        """The multiple of *value*'s own tier's tick nearest *value*, half to even."""
+        tick = self.tick(value)
+        return (value / tick).to_integral_value(ROUND_HALF_EVEN) * tick
+
+    def fits(self, prices: Sequence[Decimal], factor: Decimal) -> bool:
+        """Whether every one of *prices* times *factor* is within ``FIT_TOLERANCE`` of the
+        nearest multiple of its tier's tick."""
+        for price in prices:
+            value = price * factor
+            if abs(value - self.nearest(value)) > FIT_TOLERANCE:
+                return False
+        return True
+
+
+_FIVE_TIER_DAYS = DayGrid.of(_FIVE_TIERS)
+_THREE_TIER_DAYS = DayGrid.of(_THREE_TIERS)
+
+
 class Grid:
-    """The tick grid of each day: ``tick_sizes.toml`` where it is verified, inference before."""
+    """The tick grid of each day: ``tick_sizes.toml`` where it is verified, inference before.
+
+    Each day's grid is looked up once per row of prices, never once per price (#296).
+    """
 
     def __init__(self, verified: Dated[TickRow]) -> None:
-        self._verified = verified
+        self._verified = Dated(
+            verified.where, verified.starts, tuple(DayGrid.of(row.tiers) for row in verified.values)
+        )
 
     @classmethod
     def shipped(cls) -> Grid:
         return _shipped()
 
+    def on(self, day: date) -> DayGrid | None:
+        """The day's grid, or ``None`` before ``GRID_START``."""
+        if day >= self._verified.first:
+            return self._verified.on(day)
+        if day >= FIVE_TIERS_FROM:
+            return _FIVE_TIER_DAYS
+        if day >= GRID_START:
+            return _THREE_TIER_DAYS
+        return None
+
     def tiers_on(self, day: date) -> tuple[TickTier, ...] | None:
         """The day's tiers, or ``None`` before ``GRID_START``."""
-        if day >= self._verified.first:
-            return self._verified.on(day).tiers
-        if day >= FIVE_TIERS_FROM:
-            return _FIVE_TIERS
-        if day >= GRID_START:
-            return _THREE_TIERS
-        return None
+        grid = self.on(day)
+        return None if grid is None else grid.tiers
 
     def nearest(self, value: Decimal, day: date) -> Decimal | None:
         """The multiple of *value*'s own tier's tick nearest *value*; ``None`` with no grid."""
-        tiers = self.tiers_on(day)
-        if tiers is None:
-            return None
-        tick = next((tier.tick for tier in reversed(tiers) if tier.from_price <= value), 1)
-        return (value / tick).to_integral_value(ROUND_HALF_EVEN) * tick
+        grid = self.on(day)
+        return None if grid is None else grid.nearest(value)
 
     def fits(self, price: Decimal, factor: Decimal, day: date) -> bool:
-        value = price * factor
-        nearest = self.nearest(value, day)
-        return nearest is not None and abs(value - nearest) <= FIT_TOLERANCE
+        grid = self.on(day)
+        return grid is not None and grid.fits((price,), factor)
 
 
 @cache
@@ -172,22 +231,27 @@ def candidates(row: PriceRow, grid: Grid) -> list[Decimal]:
     """Every factor from about 1 to about 2 that puts all of *row*'s prices on its grid.
 
     The factors tried are g / p1 for every whole rupiah g from the one nearest the open p1 up to,
-    not including, 2 * (p1 + FIT_TOLERANCE): every factor that puts p1 on a whole rupiah. Both
+    not including, 2 * (p1 + FIT_TOLERANCE): every factor that puts p1 on a whole rupiah. Only
+    the g on their own tier's tick are tried (#296): any other g / p1 puts p1 within 1e-20 of a
+    whole rupiah that is at least a rupiah from every multiple of its tick, so it never fits. Both
     edges allow for float noise in p1, so the true factor is always tried. At the lower edge,
     starting at the nearest whole rupiah keeps f = 1 under upward noise (§3.5). At the upper
     edge, a recorded price may sit up to FIT_TOLERANCE off the true one, the slack every fit
     already allows, so a true factor just below 2 is still tried under downward noise. A factor
     tried past either edge can only make a second fit, which refuses the run (§4.4).
     """
+    day = grid.on(row.day)
+    if day is None:
+        return []
     first = row.prices[0]
     start = max(int(first.to_integral_value(ROUND_HALF_UP)), 1)
     found: list[Decimal] = []
-    whole = start
+    whole = start + -start % day.tick(start)
     while whole < 2 * (first + FIT_TOLERANCE):
         factor = whole / first
-        if all(grid.fits(price, factor, row.day) for price in row.prices):
+        if day.fits(row.prices, factor):
             found.append(factor)
-        whole += 1
+        whole += day.tick(whole)
     return found
 
 
@@ -204,7 +268,8 @@ def find_runs(rows: Sequence[PriceRow], grid: Grid | None = None) -> tuple[Run, 
     passing: list[Decimal] = []
     for row in reversed(rows):
         if members:
-            still = [f for f in passing if all(tiles.fits(p, f, row.day) for p in row.prices)]
+            day = tiles.on(row.day)
+            still = [] if day is None else [f for f in passing if day.fits(row.prices, f)]
             if still:
                 members.append(row)
                 passing = still
@@ -230,23 +295,33 @@ def _refine(rows: list[PriceRow], factor: Decimal, grid: Grid, count: int) -> De
     """The mean of (nearest tick / recorded price) over every price, to 7 significant figures."""
     total = Decimal(0)
     for row in rows:
+        day = _grid_on(row.day, grid)
         for price in row.prices:
-            total += _on_grid(price * factor, row.day, grid) / price
+            total += day.nearest(price * factor) / price
     return _SIGNIFICANT.plus(total / count)
 
 
-def _on_grid(value: Decimal, day: date, grid: Grid) -> Decimal:
-    nearest = grid.nearest(value, day)
-    if nearest is None:
+def _grid_on(day: date, grid: Grid) -> DayGrid:
+    found = grid.on(day)
+    if found is None:
         msg = f"there is no tick grid for {day.isoformat()}, before {GRID_START.isoformat()}"
         raise ValueError(msg)
-    return nearest
+    return found
 
 
 def restore_price(recorded: Decimal, factor: Decimal, day: date, grid: Grid | None = None) -> Money:
     """The tick multiple nearest *recorded* times *factor*, as the price traded on *day*."""
-    tiles = Grid.shipped() if grid is None else grid
-    return Money(int(_on_grid(recorded * factor, day, tiles)), IDR)
+    (amount,) = restore_prices((recorded,), factor, day, grid)
+    return Money(amount, IDR)
+
+
+def restore_prices(
+    recorded: Sequence[Decimal], factor: Decimal, day: date, grid: Grid | None = None
+) -> list[int]:
+    """``restore_price`` of each of one day's *recorded* prices, in whole rupiah, looking the
+    day's grid up once."""
+    found = _grid_on(day, Grid.shipped() if grid is None else grid)
+    return [int(found.nearest(price * factor)) for price in recorded]
 
 
 def restore_dividend(recorded: Decimal, factor: Decimal) -> Decimal:
