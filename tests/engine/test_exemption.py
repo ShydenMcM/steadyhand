@@ -5,8 +5,6 @@ from datetime import date, timedelta
 from functools import cache
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand.exemption import ClaimDay, DividendClaim, Protection, cover_claims, settle_claims
 from steadyhand.money import IDR, Currency, CurrencyMismatchError, Money
@@ -378,12 +376,19 @@ def test_the_property_below_runs_over_twelve_trading_days() -> None:
     assert (len(TRADING), TRADING[0], TRADING[-1]) == (12, JUL1, date(2025, 7, 16))
 
 
-@given(
-    gross=st.integers(1, 100_000),
-    steps=st.lists(
-        st.tuples(st.integers(0, 100), st.integers(0, 150)), min_size=1, max_size=len(TRADING)
-    ),
-    last_day=st.integers(0, len(TRADING) - 1),
+# Unit stand-in of the property in tests/properties/test_engine_exemption.py (#290):
+# the smallest claim never covered, the largest bought in full every day to
+# the last day, one covered in parts with a shortfall in between, and one covered 60% with only
+# 20% held, so 40% breaks and the 40% never covered is taxed after its deadline: two bookings
+# of part of the claim, which a booking of the whole gross would overtax.
+@pytest.mark.parametrize(
+    ("gross", "steps", "last_day"),
+    [
+        (1, [(0, 0)], 0),
+        (100_000, [(100, 150)] * len(TRADING), len(TRADING) - 1),
+        (99_999, [(30, 0), (30, 10), (40, 150), (0, 0), (0, 100)], 2),
+        (100_000, [(60, 20), (0, 20), (0, 20), (0, 0)], 0),
+    ],
 )
 def test_a_claims_tax_never_exceeds_its_full_tax_plus_one_unit_per_extra_booking(
     gross: int, steps: list[tuple[int, int]], last_day: int

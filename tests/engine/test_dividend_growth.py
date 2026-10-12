@@ -12,8 +12,6 @@ from decimal import Decimal
 from functools import cache
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand._ratio import ratio_down
 from steadyhand.market import PayDates
@@ -403,13 +401,22 @@ def test_it_reviews_on_its_first_day_and_its_first_day_in_each_year_only() -> No
     assert decide(date(2026, 1, 2), kept) == {ASII: Decimal(1)}
 
 
-@given(
-    st.lists(
-        st.dates(min_value=date(2025, 1, 1), max_value=date(2027, 12, 31)),
-        min_size=1,
-        max_size=12,
-        unique=True,
-    ).map(sorted)
+# Unit stand-in of the property in tests/properties/test_engine_dividend_growth.py (#290):
+# one day; days inside a year, then into each new year, ending on New Year's Day 2027;
+# and a whole year skipped.
+@pytest.mark.parametrize(
+    "days",
+    [
+        [date(2025, 1, 1)],
+        [
+            date(2025, 6, 1),
+            date(2025, 6, 2),
+            date(2026, 1, 2),
+            date(2026, 12, 31),
+            date(2027, 1, 1),
+        ],
+        [date(2025, 3, 4), date(2027, 12, 31)],
+    ],
 )
 def test_it_reviews_on_no_day_but_the_first_and_each_new_years_first(days: list[date]) -> None:
     """A review sells TLKM, which never passes; any other day keeps it."""

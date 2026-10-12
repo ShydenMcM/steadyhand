@@ -1,14 +1,13 @@
 """Settings shared by every test suite in the workspace, and the ``cli`` fixture."""
 
 import gc
-import os
 from pathlib import Path
 
 import file_reads
+import hypothesis_profile
 import no_process
 import pytest
 from cli_world import Cli
-from hypothesis import settings
 from load_clock import pytest_make_collect_report, pytest_sessionfinish, pytest_terminal_summary
 from stood_in_git import FakeGit, stand_in
 from suites import pytest_addoption, pytest_ignore_collect, pytest_itemcollected
@@ -29,7 +28,8 @@ def pytest_configure(config: pytest.Config) -> None:
 
     A unit run records nothing: CI's lock makes those files unreadable before every job, which
     covers it from outside the process (Shyden, 2026-10-12, #285). A unit run instead refuses every
-    process and outside connection, from before the first test module is imported (#286).
+    process and outside connection, from before the first test module is imported (#286). A
+    properties run loads the one Hypothesis profile, which draws every property's full count (#290).
     """
     suite = config.getoption("suite")
     if suite == "guards":
@@ -37,13 +37,8 @@ def pytest_configure(config: pytest.Config) -> None:
     if suite == "unit":
         no_process.install()
         config.pluginmanager.register(no_process, "no-process")
-
-
-# No deadline in any profile: a per-example deadline times the machine as well as the code, and
-# a busy laptop turned it into a red the next run could not reproduce (#30).
-settings.register_profile("dev", max_examples=100, deadline=None)
-settings.register_profile("ci", max_examples=500, deadline=None, print_blob=True)
-settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "dev"))
+    if suite == "properties":
+        hypothesis_profile.load()
 
 
 def pytest_collection_finish() -> None:

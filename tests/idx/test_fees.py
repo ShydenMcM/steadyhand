@@ -8,8 +8,6 @@ from fractions import Fraction
 from functools import cache
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand import IDR, Currency, Money, Side, UnsupportedDateError
 from steadyhand_idx._datafile import DataFileError, load_shipped
@@ -105,9 +103,18 @@ TOTAL_PERCENT = {
 }
 
 
-@given(
-    gross=st.integers(min_value=0, max_value=10**12),
-    key=st.sampled_from(sorted(TOTAL_PERCENT, key=str)),
+# Unit stand-in of the property in tests/properties/test_idx_fees.py (#290):
+# each preset and side once, at the ends of the gross drawn and where the 0.1%
+# sale tax rounds down to nothing and to one.
+@pytest.mark.parametrize(
+    ("gross", "key"),
+    [
+        (0, ("custom", Side.BUY)),
+        (10**12, ("custom", Side.SELL)),
+        (999, ("ajaib", Side.SELL)),
+        (1_001, ("ajaib", Side.SELL)),
+        (12_345_679, ("ajaib", Side.BUY)),
+    ],
 )
 def test_costs_round_once_against_the_trader(gross: int, key: tuple[str, Side]) -> None:
     preset, side = key

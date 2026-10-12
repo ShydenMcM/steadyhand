@@ -12,8 +12,6 @@ from decimal import Decimal
 from functools import cache
 
 import pytest
-from hypothesis import example, given, settings
-from hypothesis import strategies as st
 
 from steadyhand.income import (
     PROJECTION_LABEL,
@@ -309,18 +307,14 @@ def rank(scenario: ScenarioProjection) -> Decimal:
     return Decimal("Infinity") if scenario.years is None else scenario.years
 
 
-grosses = st.integers(min_value=12, max_value=10**9)
-values = st.integers(min_value=1, max_value=10**11)
-targets = st.integers(min_value=1, max_value=10**7)
-rates = st.decimals(min_value=Decimal("-0.2"), max_value=Decimal("0.2"), places=4, allow_nan=False)
-added = st.integers(min_value=0, max_value=10**6)
-
-# Each example simulates up to three times 600 months, so these run fewer examples than the
-# profile's default.
+# Unit stand-ins of the properties in tests/properties/test_engine_income_projection.py (#290).
 
 
-@settings(max_examples=100)
-@given(values, targets, added)
+# The ends of what it draws, and a small goal with a contribution.
+@pytest.mark.parametrize(
+    ("value", "target", "contribution"),
+    [(1, 1, 0), (10**11, 10**7, 10**6), (5_000, 300, 7)],
+)
 def test_a_zero_run_rate_cannot_be_projected(value: int, target: int, contribution: int) -> None:
     projection = project(
         rate(0), measured("0"), rp(value), goal(target, contribution or None), rules()
@@ -328,11 +322,17 @@ def test_a_zero_run_rate_cannot_be_projected(value: int, target: int, contributi
     assert {s.outcome for s in projection.scenarios} == {ProjectionOutcome.CANNOT}
 
 
-@settings(max_examples=100)
-@given(grosses, values, targets, rates, added, added)
 # Found by hypothesis (#97): rounding the income down every month made Rp6 a month take 1.7 years
-# where Rp5 took 1.6.
-@example(gross=12, value=14, target=6, growth=Decimal(0), smaller=5, extra=1)
+# where Rp5 took 1.6. Then the ends of what it draws, shrinking and growing.
+@pytest.mark.parametrize(
+    ("gross", "value", "target", "growth", "smaller", "extra"),
+    [
+        (12, 14, 6, Decimal(0), 5, 1),
+        (12, 1, 10**7, Decimal("-0.2"), 0, 1),
+        (10**9, 10**11, 10**7, Decimal("0.2"), 10**6, 10**6),
+    ],
+    ids=["issue-97", "smallest-shrinking", "largest-growing"],
+)
 def test_a_larger_contribution_never_takes_longer(
     gross: int, value: int, target: int, growth: Decimal, smaller: int, extra: int
 ) -> None:
@@ -352,8 +352,17 @@ def test_a_larger_contribution_never_takes_longer(
         assert rank(larger) <= rank(fewer)
 
 
-@settings(max_examples=100)
-@given(grosses, values, targets, rates, added)
+# The smallest income shrinking, the largest growing, a mid case with a contribution, and the
+# same goal growing faster than both caps (5% and 10%), where each cap decides the order.
+@pytest.mark.parametrize(
+    ("gross", "value", "target", "growth", "contribution"),
+    [
+        (12, 1, 1, Decimal("-0.2"), 0),
+        (10**9, 10**11, 10**7, Decimal("0.2"), 10**6),
+        (5_000, 2_000_000, 50_000, Decimal("0.0123"), 1_000),
+        (5_000, 2_000_000, 50_000, Decimal("0.2"), 0),
+    ],
+)
 def test_pessimistic_never_beats_base_and_base_never_beats_optimistic(
     gross: int, value: int, target: int, growth: Decimal, contribution: int
 ) -> None:

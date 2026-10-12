@@ -5,8 +5,6 @@ from datetime import date
 from functools import cache
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand import UnsupportedDateError
 from steadyhand_idx._datafile import DataFileError, Dated, load_shipped
@@ -66,7 +64,25 @@ def test_rounding_lands_on_the_grid(price: int, down: int, up: int) -> None:
     assert row().round_up(price) == up
 
 
-@given(st.integers(min_value=1, max_value=2_000_000))
+# Unit stand-in of the property in tests/properties/test_idx_ticks.py (#290):
+# the ends of the prices drawn, and each side of every tier's first price.
+@pytest.mark.parametrize(
+    "price",
+    [
+        1,
+        199,
+        200,
+        201,
+        499,
+        501,
+        1_999,
+        2_001,
+        4_999,
+        5_000,
+        5_001,
+        2_000_000,
+    ],
+)
 def test_rounding_is_tight_and_valid(price: int) -> None:
     low, high = row().round_down(price), row().round_up(price)
     assert low <= price <= high
