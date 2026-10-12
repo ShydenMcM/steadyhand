@@ -53,7 +53,7 @@ jobs:
   test:
     name: test (py${{ matrix.python }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -79,7 +79,7 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
         if: steps.scope.outputs.docs_only != 'true'
-      - name: "Measure (#296, throwaway): the target tests, old and new restoring code alternated, three pairs"
+      - name: "Measure (#296, throwaway): the whole unit suite, old and new restoring code alternated, three pairs"
         if: steps.scope.outputs.docs_only != 'true'
         run: |
           nproc; grep -m1 'model name' /proc/cpuinfo; uptime
@@ -89,7 +89,7 @@ jobs:
               for f in $files; do
                 if [ "$side" = before ]; then cp ".measure-296/before/$f" "${f//__//}"; else git checkout -- "${f//__//}"; fi
               done
-              PROBE_OUT="$RUNNER_TEMP/probe-$i-$side.jsonl" PYTHONPATH="$PWD/.measure-296" uv run --locked pytest -W error -p probe -p no:cacheprovider -q $(cat .measure-296/targets.txt) > "$RUNNER_TEMP/run.txt" 2>&1 || true
+              PROBE_OUT="$RUNNER_TEMP/probe-$i-$side.jsonl" PYTHONPATH="$PWD/.measure-296" uv run --locked pytest -W error -p probe -p no:cacheprovider -q --ignore=tests/idx/test_factor.py > "$RUNNER_TEMP/run.txt" 2>&1 || true
               tail -n 1 "$RUNNER_TEMP/run.txt"
               sed "s/^/PROBE$i-$side /" "$RUNNER_TEMP/probe-$i-$side.jsonl"
             done
