@@ -379,9 +379,10 @@ def unadjust(
         if amounts is None or volume is None:
             unrecoverable.append(row.day)
             continue
-        opening, high, low, closing = (Money(amount, IDR) for amount in amounts)
+        opening, high, low, closing = amounts
+        prices = Money(opening, IDR), Money(high, IDR), Money(low, IDR), Money(closing, IDR)
         try:
-            bars.append(Bar(instrument, row.day, opening, high, low, closing, volume))
+            bars.append(Bar(instrument, row.day, *prices, volume))
         except InvalidBarError as error:
             msg = f"{history.ticker}: {error}"
             raise DataUnavailableError(msg) from error
