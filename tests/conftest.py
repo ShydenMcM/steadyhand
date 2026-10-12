@@ -5,10 +5,12 @@ import os
 from pathlib import Path
 
 import file_reads
+import no_process
 import pytest
 from cli_world import Cli
 from hypothesis import settings
 from load_clock import pytest_make_collect_report, pytest_sessionfinish, pytest_terminal_summary
+from stood_in_git import FakeGit, stand_in
 from suites import pytest_addoption, pytest_ignore_collect, pytest_itemcollected
 
 __all__ = [
@@ -26,10 +28,15 @@ def pytest_configure(config: pytest.Config) -> None:
     collected, for the docs-only read guard that runs last (tests/guards/test_fast_path_reads.py).
 
     A unit run records nothing: CI's lock makes those files unreadable before every job, which
-    covers it from outside the process (Shyden, 2026-10-12, #285).
+    covers it from outside the process (Shyden, 2026-10-12, #285). A unit run instead refuses every
+    process and outside connection, from before the first test module is imported (#286).
     """
-    if config.getoption("suite") == "guards":
+    suite = config.getoption("suite")
+    if suite == "guards":
         file_reads.install()
+    if suite == "unit":
+        no_process.install()
+        config.pluginmanager.register(no_process, "no-process")
 
 
 # No deadline in any profile: a per-example deadline times the machine as well as the code, and
@@ -59,3 +66,9 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 def cli(tmp_path: Path) -> Cli:
     """``steadyhand-idx`` with an empty data directory of its own (M5 spec §9.1)."""
     return Cli(tmp_path / "home")
+
+
+@pytest.fixture
+def fake_git(monkeypatch: pytest.MonkeyPatch) -> FakeGit:
+    """Git stood in for the CI scripts' unit tests, which start no process (#286)."""
+    return stand_in(monkeypatch)

@@ -1,11 +1,5 @@
 import { expect, test } from "vitest";
-import {
-  LOAD_BURN_DOWN,
-  LOAD_CPU_LIMIT_MICROSECONDS,
-  loadOf,
-  loadRefusal,
-  report,
-} from "./lib/load-clock.ts";
+import { LOAD_CPU_LIMIT_MICROSECONDS, loadOf, loadRefusal, report } from "./lib/load-clock.ts";
 
 const load = (path: string, cpu: number, wall = cpu + 5) => ({
   path,
@@ -25,25 +19,6 @@ test("a load over the limit is refused, naming the file and its CPU", () => {
   expect(loadRefusal(load("tests/heavy.test.ts", 100_001))).toBe(
     "LOAD LIMIT: tests/heavy.test.ts took 100001 us of CPU to load, over 100000: " +
       "cut its import-time work or move it out of unit",
-  );
-});
-
-const LISTED = "tests/tool-configs.test.ts";
-
-test("the burn-down list holds only the tool configuration checks, and why", () => {
-  // Shyden, 2026-10-12 (#285), "Burn-down until #286": it only shrinks; nothing is ever added.
-  expect(Object.keys(LOAD_BURN_DOWN)).toEqual([LISTED]);
-  expect(LOAD_BURN_DOWN[LISTED]).toContain("#286");
-});
-
-test("a listed file over the limit is reported, not refused", () => {
-  expect(loadRefusal(load(LISTED, 700_000))).toBeUndefined();
-});
-
-test.each([0, 100_000])("a listed file loading in %i us must come off the list", (cpu) => {
-  expect(loadRefusal(load(LISTED, cpu))).toBe(
-    `LOAD BURN-DOWN: ${LISTED} now loads within the limit (${String(cpu)} us of CPU): ` +
-      "take it off LOAD_BURN_DOWN in tests/lib/load-clock.ts",
   );
 });
 

@@ -21,6 +21,7 @@
     "test": "vitest run --project unit --coverage",
     "test:limits": "vitest run --project unit --mode limits",
     "test:guards": "vitest run --project guards --mode guards --coverage",
+    "test:integration": "vitest run --project integration",
     "build": "node build.ts",
     "floors:record": "node tests/record-floors.ts",
     "floors:fetch": "node tests/fetch-floors.ts"

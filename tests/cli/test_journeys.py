@@ -1,7 +1,8 @@
-"""The journeys of M5 spec §9.1. M5a's run the installed ``steadyhand-idx``, each command in its
-own process as a user runs it; none reads market data, so none needs the network. The paper
-journey reads market data, so it runs in-process over the recorded Yahoo answers, as every
-``paper`` test does."""
+"""The journeys of M5 spec §9.1, in-process. A unit test starts no process (#286), so M5a's
+journeys run through the console script's own entry point here, and as a user runs them, the
+installed ``steadyhand-idx`` in its own process per command, in
+``tests/integration/cli/test_journeys_installed.py``. The paper journey reads market data, so it
+runs over the recorded Yahoo answers, as every ``paper`` test does."""
 
 import stat
 from dataclasses import replace
@@ -9,10 +10,8 @@ from pathlib import Path
 
 from cli_world import (
     GOLDEN_CONFIG,
-    SCRIPT,
     Cli,
     at,
-    installed,
     opened,
     recorded_source,
     trading_days,
@@ -26,13 +25,10 @@ from steadyhand_idx.config import load
 from steadyhand_idx.notes import PAPER_RESUMED
 
 
-def test_the_console_script_is_installed() -> None:
-    assert SCRIPT.is_file()
-
-
 def test_a_first_time_users_journey(tmp_path: Path) -> None:
     home = tmp_path / "home"
-    started = installed(home, "init", stdin="I understand\ny\n1\nn\n")
+    cli = Cli(home)
+    started = cli("init", stdin="I understand\ny\n1\nn\n")
     assert started.code == 0, started.err
     assert started.out.startswith(DISCLAIMER)
     assert stat.S_IMODE(home.stat().st_mode) == 0o700
@@ -46,49 +42,50 @@ def test_a_first_time_users_journey(tmp_path: Path) -> None:
         "growth_years": 5,
     }
 
-    listed = installed(home, "strategies")
+    listed = cli("strategies")
     assert listed.code == 0
     assert "buy-and-hold     low" in listed.out
     assert "monthly-savings  low" in listed.out
     assert "dividend-growth  low" in listed.out
     assert "What this means" in listed.out
 
-    explained = installed(home, "explain", "buy-and-hold")
+    explained = cli("explain", "buy-and-hold")
     assert explained.code == 0
     assert explained.out.startswith("# buy-and-hold\n")
-    assert installed(home, "explain", "dividend-growth").out.startswith("# dividend-growth\n")
+    assert cli("explain", "dividend-growth").out.startswith("# dividend-growth\n")
 
-    course = installed(home, "learn")
+    course = cli("learn")
     assert course.code == 0
     assert course.out.startswith("Module 1: Start here\n")
-    assert installed(home, "learn", "start.welcome").code == 0
+    assert cli("learn", "start.welcome").code == 0
 
-    assert installed(home, "training", "experienced").code == 0
-    quiet = installed(home, "strategies")
+    assert cli("training", "experienced").code == 0
+    quiet = cli("strategies")
     assert "What this means" not in quiet.out
-    assert installed(home, "training").out.startswith("Training level: experienced\n")
+    assert cli("training").out.startswith("Training level: experienced\n")
 
 
 def test_the_exit_codes_and_their_messages(tmp_path: Path) -> None:
     home = tmp_path / "home"
-    assert installed(home, "--version") == (0, f"steadyhand-idx {__version__}\n", "")
-    helped = installed(home, "--help")
+    cli = Cli(home)
+    assert cli("--version") == (0, f"steadyhand-idx {__version__}\n", "")
+    helped = cli("--help")
     assert (helped.code, helped.err) == (0, "")
     assert helped.out.startswith("usage: steadyhand-idx ")
-    unknown = installed(home, "nonsense")
+    unknown = cli("nonsense")
     assert unknown.code == 2
     assert unknown.err.startswith("steadyhand-idx: argument command: invalid choice: 'nonsense'")
-    assert installed(home, "explain", "nothing") == (
+    assert cli("explain", "nothing") == (
         2,
         "",
         "steadyhand-idx: no strategy named 'nothing'\n",
     )
-    assert installed(home, "learn", "nothing") == (
+    assert cli("learn", "nothing") == (
         2,
         "",
         "steadyhand-idx: no lesson named 'nothing'\n",
     )
-    assert installed(home, "training") == (
+    assert cli("training") == (
         2,
         "",
         (
@@ -96,7 +93,7 @@ def test_the_exit_codes_and_their_messages(tmp_path: Path) -> None:
             "run steadyhand-idx init first\n"
         ),
     )
-    refused = installed(home, "init", stdin="no\n")
+    refused = cli("init", stdin="no\n")
     assert refused.code == 2
     assert (
         refused.err == "steadyhand-idx: the disclaimer was not accepted, so nothing was written\n"

@@ -1,13 +1,15 @@
-"""Two suites under ``tests/``: the whole-repo guards, and unit (#285).
+"""Three suites under ``tests/``: unit, the whole-repo guards (#285) and integration (#286).
 
-Shyden's rule (2026-10-08, every project): a test that reads or parses the whole tracked tree to
-check a rule across the code is a guard, run in its own CI job with one limit at its step; every
-other test is unit, bound by the unit rules. The guards live in ``tests/guards``.
+Shyden's rules (2026-10-08, every project): a test that reads or parses the whole tracked tree to
+check a rule across the code is a guard, run in its own CI job with one limit at its step; a test
+whose real case needs a process (real git, the installed console script, a second process racing
+for a lock) is an integration test, also in its own job with one limit; every other test is unit,
+bound by the unit rules. The guards live in ``tests/guards``, integration in ``tests/integration``.
 
-``pytest`` runs unit; ``pytest --suite guards`` runs the guards. A run skips the other suite's
-folders before importing them, and refuses by name any test it collected from the other suite
-anyway: a file named on the command line is collected whatever ``pytest_ignore_collect`` says
-(measured on 2026-10-12).
+``pytest`` runs unit; ``pytest --suite guards`` and ``pytest --suite integration`` run the others.
+A run skips the other suites' folders before importing them, and refuses by name any test it
+collected from another suite anyway: a file named on the command line is collected whatever
+``pytest_ignore_collect`` says (measured on 2026-10-12).
 """
 
 from collections.abc import Iterable
@@ -18,7 +20,9 @@ import pytest
 
 TESTS = Path(__file__).resolve().parents[1]
 GUARDS = TESTS / "guards"
-SUITES = ("unit", "guards")
+INTEGRATION = TESTS / "integration"
+SUITES = ("unit", "guards", "integration")
+FOLDERS = {"guards": GUARDS, "integration": INTEGRATION}
 
 
 class Located(Protocol):
@@ -27,13 +31,18 @@ class Located(Protocol):
 
 
 def suite_of(path: Path) -> str:
-    """The suite *path* belongs to: ``guards`` for ``tests/guards`` and everything in it."""
-    return "guards" if path == GUARDS or GUARDS in path.parents else "unit"
+    """The suite *path* belongs to: ``guards`` for ``tests/guards`` and everything in it,
+    ``integration`` for ``tests/integration`` likewise, and ``unit`` for the rest."""
+    for suite, folder in FOLDERS.items():
+        if path == folder or folder in path.parents:
+            return suite
+    return "unit"
 
 
 def skips(chosen: str, path: Path) -> bool:
     """Whether a run of the *chosen* suite leaves *path* uncollected. The folders above
-    ``tests/guards`` are walked by both, or a guards run would never reach it."""
+    ``tests/guards`` and ``tests/integration`` are walked by every run, or no run but unit would
+    ever reach them."""
     return suite_of(path) != chosen and path not in GUARDS.parents
 
 
@@ -53,7 +62,10 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "--suite",
         choices=SUITES,
         default="unit",
-        help="the suite to run: unit (the default) or guards, the whole-repo guards (#285)",
+        help=(
+            "the suite to run: unit (the default), guards, the whole-repo guards (#285), or "
+            "integration, the tests whose real case needs a process (#286)"
+        ),
     )
 
 

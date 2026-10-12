@@ -1,65 +1,85 @@
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+/**
+ * The build's logic with the bundler stood in (#286): esbuild runs its own process, which a unit
+ * test may not start, so here its `build` is a mock that records what it was asked. The real build,
+ * and the bundles it emits, are tested in `tests/integration/build.test.ts`.
+ */
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, expect, test } from "vitest";
-import { build, ENTRY_POINTS } from "../build.ts";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+
+const bundled = vi.hoisted(() => vi.fn<(options: unknown) => Promise<unknown>>());
+vi.mock("esbuild", () => ({ build: bundled }));
+
+const { build, ENTRY_POINTS, manifest } = await import("../build.ts");
 
 let outdir = "";
-let built: Promise<void> | undefined;
 
-beforeAll(async () => {
-  outdir = await mkdtemp(join(tmpdir(), "steadyhand-build-"));
+beforeEach(async () => {
+  outdir = await mkdtemp(join(tmpdir(), "steadyhand-build-unit-"));
+  bundled.mockReset();
+  bundled.mockResolvedValue({ errors: [], warnings: [] });
 });
 
-afterAll(async () => {
+afterEach(async () => {
   await rm(outdir, { recursive: true, force: true });
 });
 
-/** The build, run once on first use, so a failing build fails each test that reads it by name. */
-const output = async (): Promise<string> => {
-  built ??= build(outdir);
-  await built;
-  return outdir;
+const ROOT = join(import.meta.dirname, "..");
+const pkg = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8")) as {
+  version: string;
+  description: string;
 };
 
-const bundle = async (name: string): Promise<string> =>
-  readFile(join(await output(), `${name}.js`), "utf8");
+test("the entry points are the content script, the side panel and the service worker", () => {
+  expect(ENTRY_POINTS).toEqual(["content-script", "side-panel", "service-worker"]);
+});
 
-test("the build emits one bundle per entry point and the manifest, nothing else", async () => {
-  expect((await readdir(await output())).sort()).toEqual([
-    "content-script.js",
-    "manifest.json",
-    "service-worker.js",
-    "side-panel.js",
+test("esbuild is asked once for one self-contained browser script per entry point", async () => {
+  await build(outdir);
+  expect(bundled.mock.calls).toEqual([
+    [
+      {
+        absWorkingDir: ROOT,
+        entryPoints: [
+          { in: "packages/shell/src/content-script.ts", out: "content-script" },
+          { in: "packages/shell/src/side-panel.ts", out: "side-panel" },
+          { in: "packages/shell/src/service-worker.ts", out: "service-worker" },
+        ],
+        outdir,
+        bundle: true,
+        format: "iife",
+        platform: "browser",
+        target: "es2024",
+        charset: "utf8",
+        legalComments: "none",
+        logLevel: "warning",
+      },
+    ],
   ]);
 });
 
-test.each(ENTRY_POINTS)("%s is one self-contained script, no module syntax left", async (name) => {
-  const text = await bundle(name);
-  expect(text.startsWith('"use strict";\n(() => {\n')).toBe(true);
-  expect(text).not.toMatch(/^\s*(?:import|export)\b/m);
-  // An external package left behind as a call Chrome cannot resolve.
-  expect(text).not.toContain("require(");
+test("the build empties its output folder first and writes the manifest beside the bundles", async () => {
+  await writeFile(join(outdir, "stale.js"), "left over");
+  await build(outdir);
+  expect(await readdir(outdir)).toEqual(["manifest.json"]);
+  expect(await readFile(join(outdir, "manifest.json"), "utf8")).toBe(
+    `${JSON.stringify(manifest(pkg), null, 2)}\n`,
+  );
 });
 
-test.each(["@steadyhand/core", "@steadyhand/readers", "@steadyhand/history"])(
-  "the side panel bundle carries %s, which it imports through the workspace",
-  async (name) => {
-    expect(await bundle("side-panel")).toContain(`"${name}"`);
-  },
-);
+test("a bundler failure fails the build and writes no manifest", async () => {
+  bundled.mockRejectedValue(new Error("Build failed with 1 error"));
+  await expect(build(outdir)).rejects.toThrow("Build failed with 1 error");
+  expect(await readdir(outdir)).toEqual([]);
+});
 
-test("the manifest is Manifest V3 at the workspace's version, asking for no permission", async () => {
-  const pkg = JSON.parse(
-    await readFile(join(import.meta.dirname, "..", "package.json"), "utf8"),
-  ) as {
-    version: string;
-  };
-  expect(JSON.parse(await readFile(join(await output(), "manifest.json"), "utf8"))).toEqual({
+test("the manifest is Manifest V3 at the given version, asking for no permission", () => {
+  expect(manifest({ version: "1.2.3", description: "d" })).toEqual({
     manifest_version: 3,
     name: "steadyhand",
-    version: pkg.version,
-    description: "What the strategy you chose implies, read from what your broker's page shows.",
+    version: "1.2.3",
+    description: "d",
     background: { service_worker: "service-worker.js" },
   });
 });
