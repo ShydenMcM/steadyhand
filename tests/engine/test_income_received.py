@@ -10,8 +10,6 @@ from decimal import Decimal
 from functools import cache
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand.corporate import Entitlement, Holdings
 from steadyhand.engine import DayReport, EngineState
@@ -169,7 +167,16 @@ def test_a_run_with_no_days_has_no_income_report() -> None:
         received_income([], final(), rules())
 
 
-@given(st.lists(st.integers(min_value=1, max_value=10**12), min_size=1, max_size=5))
+# Unit stand-in of the property in tests/properties/test_engine_income_received.py (#290):
+# one smallest dividend, five largest, and a mix.
+@pytest.mark.parametrize(
+    "amounts",
+    [
+        [1],
+        [10**12] * 5,
+        [3, 7, 1_000, 999_999],
+    ],
+)
 def test_take_home_is_never_more_than_gross(amounts: list[int]) -> None:
     day = date(2025, 3, 10)
     run = [report(day, paid=[paid(day, amount) for amount in amounts])]

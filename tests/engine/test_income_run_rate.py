@@ -12,8 +12,6 @@ from decimal import Decimal
 from functools import cache
 
 import pytest
-from hypothesis import assume, given
-from hypothesis import strategies as st
 
 from steadyhand.corporate import PAY_LAG_TRADING_DAYS, Entitlement, Holdings, apply_actions
 from steadyhand.income import (
@@ -193,17 +191,16 @@ def test_the_pay_lag_is_at_least_one_trading_day() -> None:
         rate_of(holding(BBCA=100), {BBCA: []}, 0)
 
 
-prices = st.decimals(
-    min_value=Decimal("0.0001"),
-    max_value=Decimal(10_000),
-    places=4,
-    allow_nan=False,
-    allow_infinity=False,
+# Unit stand-in of the property in tests/properties/test_engine_income_run_rate.py (#290):
+# the ends of what it draws and a price with every decimal place used.
+@pytest.mark.parametrize(
+    ("per_share", "shares"),
+    [
+        (Decimal("0.0001"), 1),
+        (Decimal(10_000), 10**7),
+        (Decimal("12.3456"), 333),
+    ],
 )
-ratios = st.tuples(st.integers(1, 10), st.integers(1, 10)).filter(lambda pair: pair[0] != pair[1])
-
-
-@given(prices, st.integers(min_value=1, max_value=10**7))
 def test_without_a_later_split_a_dividend_is_priced_as_the_engine_credits_it(
     per_share: Decimal, shares: int
 ) -> None:
@@ -214,12 +211,21 @@ def test_without_a_later_split_a_dividend_is_priced_as_the_engine_credits_it(
     assert rate.holdings[0].dividends == engine.entitled
 
 
-@given(prices, st.integers(min_value=1, max_value=10**6), ratios, ratios)
+# Unit stand-in of the property in tests/properties/test_engine_income_run_rate.py (#290):
+# two forward splits, a reverse then a forward, and two that leave a share
+# count to round.
+@pytest.mark.parametrize(
+    ("per_share", "shares", "first", "second"),
+    [
+        (Decimal("0.0001"), 1, (1, 2), (1, 3)),
+        (Decimal(10_000), 10**6, (10, 1), (3, 7)),
+        (Decimal("7.5"), 1_001, (2, 1), (1, 3)),
+    ],
+)
 def test_restating_across_two_splits_equals_restating_across_their_combined_ratio(
     per_share: Decimal, shares: int, first: tuple[int, int], second: tuple[int, int]
 ) -> None:
     combined = (first[0] * second[0], first[1] * second[1])
-    assume(combined[0] != combined[1])
     paid = CashDividend(BBCA, date(2024, 9, 2), per_share)
     two: list[CorporateAction] = [
         paid,

@@ -8,8 +8,6 @@ from decimal import Decimal
 from functools import cache
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand import (
     IDR,
@@ -149,9 +147,21 @@ def test_a_reference_below_the_minimum_price_is_refused() -> None:
         rules().price_band(BBCA, rp(40), TODAY)
 
 
-@given(
-    reference=st.integers(min_value=50, max_value=1_000_000),
-    on=st.sampled_from([date(2021, 1, 4), date(2023, 6, 5), date(2023, 9, 4), TODAY]),
+# Unit stand-in of the property in tests/properties/test_idx_rules.py (#290):
+# each band table's date, at the ends of the references drawn and across
+# each side of the band tiers' edges at 200 and 5,000.
+@pytest.mark.parametrize(
+    ("reference", "on"),
+    [
+        (50, date(2021, 1, 4)),
+        (1_000_000, date(2021, 1, 4)),
+        (199, date(2023, 6, 5)),
+        (200, date(2023, 6, 5)),
+        (5_000, date(2023, 9, 4)),
+        (5_001, date(2023, 9, 4)),
+        (4_999, TODAY),
+        (1_000_000, TODAY),
+    ],
 )
 def test_band_edges_are_the_widest_valid_prices_inside_the_band(reference: int, on: date) -> None:
     low, high = rules().price_band(BBCA, rp(reference), on)

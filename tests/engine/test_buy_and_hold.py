@@ -4,8 +4,6 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand.market import PayDates
 from steadyhand.money import IDR, Money
@@ -108,12 +106,16 @@ def test_an_empty_first_day_leaves_an_empty_set() -> None:
     assert later.weights == {}
 
 
-@given(
-    held=st.dictionaries(st.sampled_from(STOCKS), st.integers(1, 10**10), max_size=5),
-    spendable=st.integers(0, 10**10),
-    unsettled=st.integers(0, 10**10),
-    chosen=st.sets(st.sampled_from(STOCKS)),
-    buyable=st.sets(st.sampled_from(STOCKS)),
+# Unit stand-in of the property in tests/properties/test_engine_buy_and_hold.py (#290):
+# nothing held, chosen or buyable; every stock held, chosen and buyable at
+# the largest amounts; and a set that only partly overlaps what can be bought.
+@pytest.mark.parametrize(
+    ("held", "spendable", "unsettled", "chosen", "buyable"),
+    [
+        ({}, 0, 0, set(), set()),
+        (dict.fromkeys(STOCKS, 10**10), 10**10, 10**10, set(STOCKS), set(STOCKS)),
+        ({ASII: 1, TLKM: 5_000}, 100, 7, {ASII, BBCA, BBRI}, {BBRI, UNVR}),
+    ],
 )
 def test_it_never_sells_and_buys_only_its_set(
     held: dict[Instrument, int],

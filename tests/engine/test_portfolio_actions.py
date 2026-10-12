@@ -3,8 +3,6 @@
 from datetime import date, timedelta
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand.money import IDR, Currency, CurrencyMismatchError, Money
 from steadyhand.portfolio import ChronologyError, InsufficientCashError, MovementKind, Portfolio
@@ -163,10 +161,17 @@ def test_a_split_needs_a_holding_a_split_and_a_date_in_order() -> None:
         holding(100, 100_000).apply_split(Split(BBRI, D0 - timedelta(days=1), 1, 5))
 
 
-@given(
-    quantity=st.integers(min_value=1, max_value=10**6),
-    cost=st.integers(min_value=10**6, max_value=10**9),
-    ratio=st.tuples(st.integers(1, 20), st.integers(1, 20)).filter(lambda r: r[0] != r[1]),
+# Unit stand-in of the property in tests/properties/test_engine_portfolio_actions.py (#290):
+# a split that leaves nothing, the ends of what it draws, and a reverse split
+# that rounds down.
+@pytest.mark.parametrize(
+    ("quantity", "cost", "ratio"),
+    [
+        (1, 10**6, (2, 1)),
+        (10**6, 10**9, (1, 20)),
+        (7, 10**6, (20, 1)),
+        (333, 5_000_000, (3, 2)),
+    ],
 )
 def test_splits_keep_the_total_cost_basis(quantity: int, cost: int, ratio: tuple[int, int]) -> None:
     before = holding(quantity, cost)

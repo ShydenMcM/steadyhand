@@ -25,11 +25,11 @@ LOCK = {
     "if": SKIP,
     "run": "python3 scripts/lock_fast_path.py",
 }
-# Measured on 2026-10-13 (#286, the two integration jobs added to #285's 7): 9 gated jobs whose
-# later steps number 49, the lock included. Lower each only by a deliberate edit when the
+# Measured on 2026-10-13 (#290, the properties job added to #286's 9): 10 gated jobs whose
+# later steps number 53, the lock included. Lower each only by a deliberate edit when the
 # workflow shrinks.
-GATED_FLOOR = 9
-SKIPPED_STEPS_FLOOR = 49
+GATED_FLOOR = 10
+SKIPPED_STEPS_FLOOR = 53
 
 # PyYAML reads the bare key `on` as the boolean True, so a key may be a bool.
 WORKFLOW = ci()
@@ -45,6 +45,7 @@ def test_the_gated_and_deploy_jobs_are_the_ones_expected() -> None:
     assert "extension-guards" in GATED
     assert "integration" in GATED
     assert "extension-integration" in GATED
+    assert "properties" in GATED
     assert DEPLOYS == ["deploy-dev"]
     assert len(GATED) >= GATED_FLOOR
 

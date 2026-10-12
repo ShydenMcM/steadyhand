@@ -1,4 +1,4 @@
-"""Which suite a test file belongs to, and a run that collects across the line (#285, #286).
+"""Which suite a test file belongs to, and a run that collects across the line (#285, #286, #290).
 
 Planted paths, never the tree: each misfiling a run could make is written out here by hand.
 """
@@ -8,7 +8,18 @@ from types import SimpleNamespace
 
 import pytest
 import suites
-from suites import GUARDS, INTEGRATION, SUITES, TESTS, refuse_strays, skips, suite_of
+from suites import (
+    GUARDS,
+    INTEGRATION,
+    PROPERTIES,
+    SUITES,
+    TESTS,
+    is_property,
+    refuse_properties,
+    refuse_strays,
+    skips,
+    suite_of,
+)
 
 
 @pytest.mark.parametrize(
@@ -21,6 +32,11 @@ from suites import GUARDS, INTEGRATION, SUITES, TESTS, refuse_strays, skips, sui
         ("integration", "integration"),
         ("integration/scripts/test_ci_scope_git.py", "integration"),
         ("integrationx/test_prefix_only.py", "unit"),
+        ("properties", "properties"),
+        ("properties/test_engine_money.py", "properties"),
+        ("properties/hypothesis_profile.py", "properties"),
+        ("propertiesx/test_prefix_only.py", "unit"),
+        ("engine/test_money.py", "unit"),
         ("test_integration.py", "unit"),
         ("test_guards.py", "unit"),
         ("cli/test_cli.py", "unit"),
@@ -42,8 +58,13 @@ def test_the_integration_folder_is_tests_integration() -> None:
     assert expected == INTEGRATION
 
 
-def test_there_are_three_suites_and_unit_comes_first() -> None:
-    assert SUITES == ("unit", "guards", "integration")
+def test_the_properties_folder_is_tests_properties() -> None:
+    expected = Path(__file__).resolve().parents[1] / "properties"
+    assert expected == PROPERTIES
+
+
+def test_there_are_four_suites_and_unit_comes_first() -> None:
+    assert SUITES == ("unit", "guards", "integration", "properties")
 
 
 @pytest.mark.parametrize(
@@ -64,13 +85,22 @@ def test_there_are_three_suites_and_unit_comes_first() -> None:
         ("integration", "guards", True),
         ("integration", "conftest.py", True),
         ("integration", "integration/cli/test_journeys_installed.py", False),
+        ("unit", "properties", True),
+        ("unit", "properties/test_engine_money.py", True),
+        ("guards", "properties", True),
+        ("integration", "properties", True),
+        ("properties", "engine", True),
+        ("properties", "engine/test_money.py", True),
+        ("properties", "conftest.py", True),
+        ("properties", "properties", False),
+        ("properties", "properties/test_engine_money.py", False),
     ],
 )
 def test_a_run_skips_the_other_suites_files(chosen: str, path: str, *, skipped: bool) -> None:
     assert skips(chosen, TESTS / path) is skipped
 
 
-@pytest.mark.parametrize("chosen", ["unit", "guards", "integration"])
+@pytest.mark.parametrize("chosen", ["unit", "guards", "integration", "properties"])
 def test_a_run_walks_down_through_the_folders_above_the_guards(chosen: str) -> None:
     assert skips(chosen, TESTS) is False
     assert skips(chosen, TESTS.parent) is False
@@ -89,6 +119,9 @@ def items(*paths: str) -> list[SimpleNamespace]:
         ("guards", "integration/scripts/test_ci_scope_git.py"),
         ("integration", "cli/test_cli.py"),
         ("integration", "guards/test_no_float.py"),
+        ("unit", "properties/test_engine_money.py"),
+        ("properties", "engine/test_money.py"),
+        ("properties", "guards/test_no_float.py"),
     ],
 )
 def test_a_test_from_the_other_suite_is_refused_by_name(chosen: str, stray: str) -> None:
@@ -103,6 +136,7 @@ def test_a_test_from_the_other_suite_is_refused_by_name(chosen: str, stray: str)
         ("unit", "cli/test_init.py"),
         ("guards", "guards/test_lessons.py"),
         ("integration", "integration/cli/test_journeys_installed.py"),
+        ("properties", "properties/test_engine_money.py"),
     ],
 )
 def test_a_run_of_its_own_suite_alone_passes(chosen: str, own: str) -> None:
@@ -134,6 +168,9 @@ def config(chosen: str) -> SimpleNamespace:
         ("guards", "cli", True),
         ("integration", "cli", True),
         ("integration", "integration", None),
+        ("unit", "properties", True),
+        ("properties", "engine", True),
+        ("properties", "properties", None),
     ],
 )
 def test_the_collect_hook_skips_with_true_and_otherwise_leaves_it_to_others(
@@ -146,3 +183,64 @@ def test_the_item_hook_refuses_a_stray_as_it_is_collected() -> None:
     stray = SimpleNamespace(path=TESTS / "guards/test_lessons.py", config=config("unit"))
     with pytest.raises(pytest.UsageError, match=r"tests/guards/test_lessons\.py"):
         suites.pytest_itemcollected(stray)  # type: ignore[arg-type]
+
+
+# Hypothesis marks every function @given wraps with is_hypothesis_test = True: planted here as
+# that mark alone, since a unit test imports no Hypothesis. tests/properties/test_profile.py
+# checks the mark on a real @given.
+def collected(nodeid: str, obj: object) -> SimpleNamespace:
+    return SimpleNamespace(nodeid=nodeid, obj=obj)
+
+
+PROPERTY = SimpleNamespace(is_hypothesis_test=True)
+
+
+@pytest.mark.parametrize(
+    ("test", "found"),
+    [
+        (PROPERTY, True),
+        (SimpleNamespace(is_hypothesis_test=False), False),
+        (SimpleNamespace(is_hypothesis_test=1), False),
+        (SimpleNamespace(), False),
+        (None, False),
+    ],
+    ids=["marked", "marked-false", "marked-not-a-bool", "unmarked", "no-function"],
+)
+def test_a_property_is_a_test_hypothesis_marked(test: object, *, found: bool) -> None:
+    assert is_property(test) is found
+
+
+@pytest.mark.parametrize("chosen", ["unit", "guards", "integration"])
+def test_a_property_outside_the_properties_suite_is_refused_by_name(chosen: str) -> None:
+    mixed = [
+        collected("tests/engine/test_money.py::test_plain", SimpleNamespace()),
+        collected("tests/engine/test_money.py::TestTimes::test_drawn", PROPERTY),
+        collected("tests/idx/test_ticks.py::test_drawn[1]", PROPERTY),
+    ]
+    with pytest.raises(pytest.UsageError) as refused:
+        refuse_properties(chosen, mixed)
+    assert str(refused.value) == (
+        f"a {chosen} run collected Hypothesis properties, which run in tests/properties at their "
+        "full count with a unit stand-in each (#290): "
+        "tests/engine/test_money.py::TestTimes::test_drawn, tests/idx/test_ticks.py::test_drawn[1]"
+    )
+
+
+@pytest.mark.parametrize("chosen", ["unit", "guards", "integration", "properties"])
+def test_a_run_of_plain_tests_passes(chosen: str) -> None:
+    refuse_properties(chosen, [collected("tests/x.py::test_plain", SimpleNamespace())])
+
+
+def test_a_properties_run_passes_its_properties() -> None:
+    refuse_properties("properties", [collected("tests/properties/x.py::test_drawn", PROPERTY)])
+
+
+def test_the_item_hook_refuses_a_property_as_it_is_collected() -> None:
+    drawn = SimpleNamespace(
+        path=TESTS / "engine/test_money.py",
+        config=config("unit"),
+        nodeid="tests/engine/test_money.py::test_drawn",
+        obj=PROPERTY,
+    )
+    with pytest.raises(pytest.UsageError, match=r"tests/engine/test_money\.py::test_drawn$"):
+        suites.pytest_itemcollected(drawn)  # type: ignore[arg-type]

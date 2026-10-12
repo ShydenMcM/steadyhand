@@ -11,8 +11,6 @@ from dataclasses import FrozenInstanceError
 from datetime import date, timedelta
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand.money import IDR, Money
 from steadyhand.portfolio import CashMovement, MovementKind, Portfolio
@@ -80,14 +78,29 @@ def test_booking_onto_a_built_portfolio_keeps_the_ledger_it_was_built_from() -> 
 
 # Each step books onto an earlier snapshot (picked by index) or reads one snapshot's ledger,
 # which fills its cache part-way through the tree.
-STEP = st.tuples(
-    st.sampled_from(["deposit", "tax", "read"]),
-    st.integers(min_value=0, max_value=50),
-    st.integers(min_value=1, max_value=1_000),
+
+
+# Unit stand-in of the property in tests/properties/test_engine_ledger_booking.py (#290):
+# no steps; one read of the empty portfolio; and a tree that books on an
+# older snapshot after a newer one, then books onto snapshots it has just read, whose ledgers
+# are cached.
+@pytest.mark.parametrize(
+    "steps",
+    [
+        [],
+        [("read", 0, 1)],
+        [
+            ("deposit", 0, 500),
+            ("tax", 1, 20),
+            ("deposit", 1, 1_000),
+            ("read", 1, 1),
+            ("tax", 1, 5),
+            ("read", 2, 1),
+            ("deposit", 2, 7),
+            ("read", 4, 1),
+        ],
+    ],
 )
-
-
-@given(st.lists(STEP, max_size=40))
 def test_every_snapshot_in_a_tree_of_bookings_keeps_its_own_ledger(
     steps: list[tuple[str, int, int]],
 ) -> None:

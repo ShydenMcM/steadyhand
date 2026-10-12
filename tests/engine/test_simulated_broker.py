@@ -5,8 +5,6 @@ from decimal import Decimal
 from functools import cache
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand.broker import FillResult, FillSettings, Opening, SimulatedBroker
 from steadyhand.money import IDR, Money
@@ -286,21 +284,23 @@ def test_the_defaults_are_the_specs() -> None:
 
 
 # A cash balance, a number of lots of each stock held, the orders placed, and each stock's open
-# and volume: one draw serves both tests below.
-DRAW = {
-    "cash": st.integers(0, 30_000_000),
-    "held": st.integers(0, 40),
-    "orders": st.lists(
-        st.tuples(
-            st.sampled_from([Side.BUY, Side.SELL]),
-            st.sampled_from([BBCA, BBRI]),
-            st.integers(1, 30),
-        ),
-        max_size=6,
-    ),
-    "opens": st.tuples(st.integers(7_700, 10_700), st.integers(3_450, 4_950)),
-    "volumes": st.tuples(st.integers(0, 50_000), st.integers(0, 50_000)),
-}
+# and volume: one draw serves both tests below. Two of the draws their unit stand-ins take:
+BUSY = (
+    30_000_000,
+    40,
+    [(Side.BUY, BBCA, 30), (Side.SELL, BBRI, 30), (Side.SELL, BBRI, 30), (Side.BUY, BBRI, 1)],
+    (10_700, 4_950),
+    (50_000, 50_000),
+)
+SHORT = (
+    1_000_000,
+    3,
+    [(Side.BUY, BBCA, 30), (Side.SELL, BBCA, 3), (Side.BUY, BBRI, 2)],
+    (9_000, 4_000),
+    (150, 0),
+)
+# Cash for exactly one lot at the slipped, tick-rounded price, and not for its costs.
+EXACT = (902_500, 0, [(Side.BUY, BBCA, 1)], (9_000, 4_000), (50_000, 50_000))
 
 
 def drawn(
@@ -324,8 +324,20 @@ def drawn(
     return book, placed, run(book, *placed, bars=bars)
 
 
+# Unit stand-in of the property in tests/properties/test_engine_simulated_broker.py (#290):
+# nothing at all; the most of everything, with a second sale beyond what is
+# held; too little volume for the orders in one stock and none at all in the other; and cash
+# for one lot's price but not its costs.
+@pytest.mark.parametrize(
+    ("cash", "held", "orders", "opens", "volumes"),
+    [
+        (0, 0, [], (7_700, 3_450), (0, 0)),
+        BUSY,
+        SHORT,
+        EXACT,
+    ],
+)
 @pytest.mark.parametrize("probe", [TODAY, date(2025, 6, 4), SETTLES], ids=str)
-@given(**DRAW)
 def test_the_settled_cash_is_never_negative_from_the_trade_to_its_settlement(
     probe: date,
     cash: int,
@@ -338,7 +350,17 @@ def test_the_settled_cash_is_never_negative_from_the_trade_to_its_settlement(
     assert result.portfolio.settled_cash(probe).amount >= 0
 
 
-@given(**DRAW)
+# Unit stand-in of the property in tests/properties/test_engine_simulated_broker.py (#290):
+# the same four draws as the test above.
+@pytest.mark.parametrize(
+    ("cash", "held", "orders", "opens", "volumes"),
+    [
+        (0, 0, [], (7_700, 3_450), (0, 0)),
+        BUSY,
+        SHORT,
+        EXACT,
+    ],
+)
 def test_fills_keep_cash_whole_lots_ticks_and_bands(
     cash: int,
     held: int,

@@ -6,8 +6,6 @@ from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
-from hypothesis import example, given
-from hypothesis import strategies as st
 
 from steadyhand import IDR, Instrument, Money
 from steadyhand.notes import Note
@@ -402,6 +400,13 @@ def test_downward_noise_at_the_first_price_keeps_one_as_a_candidate() -> None:
 # recorded over 1.9999201 with Rp0.001 of downward noise, give p1 = 24.9999988: the true price,
 # Rp50, is above 2 * p1, so a window that stopped below 2 * p1 left f = 1 alone and "proved" it.
 EDGE_DAYS = [[50, 50, 50, 50]] * 4 + [[50, 50, 50, 82]]
+MOVING_DAYS = [
+    [1_000, 1_005, 990, 1_000],
+    [1_020, 1_030, 1_000, 1_015],
+    [1_015, 1_050, 1_010, 1_045],
+    [1_045, 1_045, 1_020, 1_025],
+    [1_025, 1_060, 1_025, 1_055],
+]
 
 
 def test_downward_noise_near_a_factor_of_two_keeps_the_true_factor_a_candidate() -> None:
@@ -453,29 +458,17 @@ def test_no_rows_form_no_runs() -> None:
     assert find_runs([]) == ()
 
 
-ERAS = (date(2015, 3, 2), date(2017, 3, 1), VERIFIED_DAY)
-
-
-@st.composite
-def true_run(draw: st.DrawFn) -> tuple[date, list[list[int]]]:
-    """Five to eight days of traded prices on one era's grid, within a factor of two."""
-    first = draw(st.sampled_from(ERAS))
-    base = draw(st.integers(min_value=50, max_value=20_000))
-    days = draw(st.integers(min_value=5, max_value=8))
-    prices: list[list[int]] = []
-    for offset in range(days):
-        day = first + timedelta(offset)
-        raw = draw(st.lists(st.integers(base, 2 * base), min_size=4, max_size=4))
-        nearest = [grid().nearest(Decimal(p), day) for p in raw]
-        prices.append([int(n) for n in nearest if n is not None])
-    return first, prices
-
-
-@example(drawn=(date(2015, 3, 2), EDGE_DAYS), factor=Decimal("1.9999201"), noise=Decimal("-0.001"))
-@given(
-    true_run(),
-    st.decimals(min_value=1, max_value=Decimal("1.9999999"), places=7),
-    st.sampled_from([Decimal(0), Decimal("0.001"), Decimal("-0.001"), Decimal("0.0004")]),
+# Unit stand-in of the property in tests/properties/test_idx_factor.py (#290):
+# the example it always ran, which is left refused; a seven-place factor with upward noise on
+# the 2017 grid; and a factor of 1.5 with smaller noise on the verified grid. The last two are
+# proven, so their restored prices are checked (measured on 2026-10-13).
+@pytest.mark.parametrize(
+    ("drawn", "factor", "noise"),
+    [
+        ((date(2015, 3, 2), EDGE_DAYS), Decimal("1.9999201"), Decimal("-0.001")),
+        ((date(2017, 3, 1), MOVING_DAYS), Decimal("1.1234567"), Decimal("0.001")),
+        ((VERIFIED_DAY, [[4_000, 5_000, 6_000, 7_950]] * 6), Decimal("1.5"), Decimal("0.0004")),
+    ],
 )
 def test_a_proven_factor_restores_the_true_prices(
     drawn: tuple[date, list[list[int]]], factor: Decimal, noise: Decimal

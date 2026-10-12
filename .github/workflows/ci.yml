@@ -15,7 +15,6 @@ concurrency:
 
 env:
   UV_VERSION: "0.12.18"
-  HYPOTHESIS_PROFILE: ci
 
 jobs:
   lint:
@@ -393,11 +392,58 @@ jobs:
 
   # Develop's deploy (spec §12.1): the extension zip, its build provenance attested and then
   # verified here, on the run that made it. It always runs in full (#218).
+  # Every Hypothesis property at its full count, drawing fresh cases each run (#290), in its own
+  # suite with one limit at its step and coverage off. Unit keeps a fast stand-in of each.
+  properties:
+    name: properties (py${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: "Scope: may this docs-only change skip the rest?"
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: python3 scripts/ci_scope.py "$EVENT_NAME"
+      - name: "Lock the docs-only fast path: no later step may read it"
+        if: steps.scope.outputs.docs_only != 'true'
+        run: python3 scripts/lock_fast_path.py
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        if: steps.scope.outputs.docs_only != 'true'
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+      - run: uv sync --locked
+        if: steps.scope.outputs.docs_only != 'true'
+      - name: The properties suite
+        if: steps.scope.outputs.docs_only != 'true'
+        timeout-minutes: 2
+        run: uv run --locked pytest -W error --suite properties -p no:cacheprovider
+
   deploy-dev:
     name: deploy-dev
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     needs:
-      [lint, test, audit, build, extension, guards, extension-guards, integration, extension-integration]
+      [
+        lint,
+        test,
+        audit,
+        build,
+        extension,
+        guards,
+        extension-guards,
+        integration,
+        extension-integration,
+        properties,
+      ]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:
