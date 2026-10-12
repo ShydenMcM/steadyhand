@@ -53,7 +53,7 @@ jobs:
   test:
     name: test (py${{ matrix.python }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -79,6 +79,24 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
         if: steps.scope.outputs.docs_only != 'true'
+      - name: "Measure (#302, throwaway): nine whole unit runs, gc as usual then frozen after collection"
+        if: steps.scope.outputs.docs_only != 'true'
+        run: |
+          nproc; grep -m1 'model name' /proc/cpuinfo; uptime
+          files="packages/steadyhand-idx/src/steadyhand_idx/factor.py packages/steadyhand-idx/src/steadyhand_idx/yahoo.py packages/steadyhand/src/steadyhand/types.py"
+          probe() {
+            rc=0
+            PROBE_OUT="$RUNNER_TEMP/p-$1.jsonl" PROBE_GC_FREEZE="$2" PYTHONPATH="$PWD/.measure-302" uv run --locked pytest -W error -p probe -p no:cacheprovider -q > "$RUNNER_TEMP/run.txt" 2>&1 || rc=$?
+            echo "run $1 freeze=$2 exit $rc: $(tail -n 1 "$RUNNER_TEMP/run.txt")"
+            sed "s/^/PROBE$1 /" "$RUNNER_TEMP/p-$1.jsonl"
+          }
+          rewrite() { for f in $files; do cp "$f" "$RUNNER_TEMP/copy"; cat "$RUNNER_TEMP/copy" > "$f"; done; git status --short packages; }
+          probe 1 0; probe 2 0; probe 3 0; probe 4 0
+          rewrite; probe 5 0
+          probe 6 1; probe 7 1
+          rewrite; probe 8 1
+          find packages tests scripts -name __pycache__ -type d -prune -exec rm -rf {} +
+          probe 9 1
       - run: uv run --locked pytest -W error --cov --cov-report=term-missing
         if: steps.scope.outputs.docs_only != 'true'
       # The ten-year backtest is timed on its own: under coverage's tracing it would time the
