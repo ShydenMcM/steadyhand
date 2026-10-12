@@ -11,13 +11,13 @@ import pytest
 from cli_world import (
     GOLDEN_CONFIG,
     GROWTH_CONFIG,
-    PLACEHOLDERS,
     RESTORED,
     Cli,
     Result,
     golden_backtest,
     market_cli,
 )
+from record_cli_seed import PLACEHOLDERS
 from record_golden import END, GOLDEN, RECORDED, START, replay, run, settings, universe
 
 from steadyhand import (
