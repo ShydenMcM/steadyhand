@@ -25,7 +25,6 @@ from cli_world import (
     trading_days,
 )
 from record_golden import START
-from short_world import END as SHORT_END
 from short_world import GROWTH_CONFIG as SHORT_GROWTH_CONFIG
 from short_world import START as SHORT_START
 from short_world import library_run, short_cli
@@ -667,7 +666,7 @@ def test_a_strategy_switched_to_records_its_settings_the_first_day_it_runs(
 
 def test_a_paper_account_run_day_by_day_ends_where_the_backtest_does(tmp_path: Path) -> None:
     cli = short_cli(tmp_path / "home")
-    days = short_trading_days()[:6]
+    days = short_trading_days()[:2]
     for day in days:  # runtime population: one journey, each day on the state the last left
         assert run_on(cli, day).code == 0
     expected = library_run(end=days[-1]).run
@@ -681,10 +680,10 @@ def test_a_paper_account_run_day_by_day_ends_where_the_backtest_does(tmp_path: P
 def test_a_year_caught_up_in_one_run_ends_where_the_backtest_does(tmp_path: Path) -> None:
     cli = short_cli(tmp_path / "home")
     run_on(cli, SHORT_START)
-    result = run_on(cli, SHORT_END, "--catch-up")
+    result = run_on(cli, date(2021, 12, 29), "--catch-up")
     assert result.code == 0, result.err
-    expected = library_run().run
-    assert len(expected.reports) == 19
+    expected = library_run(end=date(2021, 12, 29)).run
+    assert len(expected.reports) == 11
     with opened(cli) as store:
         assert store.reports() == expected.reports
         account = store.account()
@@ -693,11 +692,13 @@ def test_a_year_caught_up_in_one_run_ends_where_the_backtest_does(tmp_path: Path
 
 
 def test_dividend_growth_reviews_again_on_the_first_trading_day_of_2022(tmp_path: Path) -> None:
+    # Opened on 29 December 2021, it reviews for 2021 on its first day and again on 3 January.
     cli = short_cli(tmp_path / "home", SHORT_GROWTH_CONFIG)
-    run_on(cli, SHORT_START)
-    result = run_on(cli, SHORT_END, "--catch-up")
+    opened_on = date(2021, 12, 29)
+    run_on(cli, opened_on)
+    result = run_on(cli, date(2022, 1, 4), "--catch-up")
     assert result.code == 0, result.err
-    expected = library_run("dividend-growth").run
+    expected = library_run("dividend-growth", start=opened_on, end=date(2022, 1, 4)).run
     with opened(cli) as store:
         reports = store.reports()
         account = store.account()

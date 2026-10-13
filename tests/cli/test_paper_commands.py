@@ -7,6 +7,7 @@ each page names are checked on the page itself.
 """
 
 import io
+import shutil
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
@@ -25,9 +26,9 @@ from cli_world import (
     trading_days,
 )
 from record_golden import START
-from short_world import END as SHORT_END
 from short_world import SHORT_CONFIG, library_run, short_cli
 from short_world import START as SHORT_START
+from short_world import WEEK_END as SHORT_WEEK_END
 from short_world import trading_days as short_trading_days
 
 from steadyhand import (
@@ -552,17 +553,32 @@ def short_ran_to(tmp_path: Path, day: date, config: str = SHORT_CONFIG) -> Cli:
     return replace(cli, now=at(day))
 
 
-def short_halted(tmp_path: Path) -> Cli:
-    """An account halted by the daily-loss limit on 2021-12-16, the day it is left on."""
-    cli = short_cli(tmp_path / "home", quiet(SHORT_JUMPY))
-    second = short_trading_days()[1]
-    assert run_on(cli, SHORT_START).code == 0
-    assert run_on(cli, second).code == 3
-    return replace(cli, now=at(second), env={"USER": "tester"})
+def saved_account(
+    tmp_path: Path,
+    day: date,
+    config: str = SHORT_CONFIG,
+    *,
+    exemption: bool = False,
+    max_weight: str = "0.35",
+    daily_loss: str = "0.05",
+) -> Cli:
+    """An account saved as ``paper run`` leaves it on *day*, with every day's report, built by the
+    library's backtest of the same days with the exemption and limits that *config* sets (passed
+    again here): ``test_paper_run.py`` proves the two end alike, and a page test then pays for
+    its one command, not for a paper run of every day up to *day*."""
+    cli = short_cli(tmp_path / "home", config)
+    result = library_run(end=day, exemption=exemption, max_weight=max_weight, daily_loss=daily_loss)
+    account = Account(SHORT_START, result.run.strategy, result.run.final)
+    with opened(cli) as store:
+        after = None
+        for report in result.run.reports:  # runtime population: the days the run saved
+            assert store.save(account, after=after, report=report)
+            after = account.last_day
+    return replace(cli, now=at(day))
 
 
 def test_status_shows_each_holding_with_its_last_close_value_and_weight(tmp_path: Path) -> None:
-    cli = short_ran_to(tmp_path, date(2022, 1, 10), quiet(SHORT_CONFIG))
+    cli = saved_account(tmp_path, date(2022, 1, 10), quiet(SHORT_CONFIG))
     result = cli("paper", "status")
     assert result.code == 0
     assert (
@@ -591,7 +607,7 @@ def test_status_shows_a_dividend_entitlement_until_it_is_paid(tmp_path: Path) ->
 
 
 def test_status_shows_open_claims_under_their_label(tmp_path: Path) -> None:
-    cli = short_ran_to(tmp_path, date(2022, 1, 7), quiet(SHORT_CONFIG + EXEMPT))
+    cli = saved_account(tmp_path, date(2022, 1, 7), quiet(SHORT_CONFIG + EXEMPT), exemption=True)
     result = cli("paper", "status")
     assert "Dividend entitlements: none\n" in result.out
     assert (
@@ -603,12 +619,11 @@ def test_status_shows_open_claims_under_their_label(tmp_path: Path) -> None:
 def test_a_claims_reinvested_parts_are_shown_with_how_long_each_is_protected(
     tmp_path: Path,
 ) -> None:
-    cli = short_ran_to(tmp_path, SHORT_END, quiet(SHORT_CONFIG + EXEMPT))
+    cli = saved_account(tmp_path, date(2022, 1, 10), quiet(SHORT_CONFIG + EXEMPT), exemption=True)
     result = cli("paper", "status")
     assert (
-        "- XAAA: IDR 825,000 paid on 2022-01-07, IDR 200,000 still to reinvest by 2022-03-31, "
-        "IDR 313,500 protected until 2024-12-31, IDR 206,000 protected until 2024-12-31, "
-        "IDR 105,500 protected until 2024-12-31\n"
+        "- XAAA: IDR 825,000 paid on 2022-01-07, IDR 305,500 still to reinvest by 2022-03-31, "
+        "IDR 313,500 protected until 2024-12-31, IDR 206,000 protected until 2024-12-31\n"
     ) in result.out
     with opened(cli) as store:
         account = store.account()
@@ -619,7 +634,7 @@ def test_a_claims_reinvested_parts_are_shown_with_how_long_each_is_protected(
 
 
 def test_the_status_page_names_every_figure_it_shows(tmp_path: Path) -> None:
-    cli = short_ran_to(tmp_path, SHORT_END, SHORT_CONFIG + EXEMPT)
+    cli = saved_account(tmp_path, date(2022, 1, 10), SHORT_CONFIG + EXEMPT, exemption=True)
     with opened(cli) as store:
         account = store.account()
         assert account is not None
@@ -639,21 +654,21 @@ def test_the_status_page_names_every_figure_it_shows(tmp_path: Path) -> None:
 
 
 def test_report_shows_the_latest_day_by_default_with_its_holdings(tmp_path: Path) -> None:
-    cli = short_ran_to(tmp_path, SHORT_END, quiet(SHORT_CONFIG))
+    cli = saved_account(tmp_path, SHORT_WEEK_END, quiet(SHORT_CONFIG))
     result = cli("report")
     assert (result.code, result.err) == (0, "")
-    assert result.out.startswith("Day report for 2022-01-11\n\n")
+    assert result.out.startswith("Day report for 2021-12-21\n\n")
     assert (
         "Holdings:\n"
         "Stock  Quantity  Last close           Value  Weight\n"
-        "XAAA      33800   IDR 1,055  IDR 35,659,000  34.13%\n"
+        "XAAA      33400   IDR 1,020  IDR 34,068,000  33.67%\n"
     ) in result.out
 
 
 def test_a_blocked_order_is_shown_with_its_reason_and_the_dividends_of_the_day(
     tmp_path: Path,
 ) -> None:
-    cli = short_ran_to(tmp_path, SHORT_END, quiet(SHORT_TIGHT))
+    cli = saved_account(tmp_path, date(2022, 1, 7), quiet(SHORT_TIGHT), max_weight="0.30")
     result = cli("report", "--day", "2022-01-07")
     assert result.code == 0
     assert (
@@ -689,32 +704,35 @@ def test_a_report_names_the_key_of_each_blocked_orders_reason(tmp_path: Path) ->
 
 
 def test_the_income_report_is_the_backtests_over_the_same_days(tmp_path: Path) -> None:
-    cli = short_ran_to(tmp_path, SHORT_END, quiet(SHORT_CONFIG))
+    cli = saved_account(tmp_path, SHORT_WEEK_END, quiet(SHORT_CONFIG))
     result = cli("report", "--income")
     assert (result.code, result.err) == (0, "")
-    reference = library_run().run.income
+    reference = library_run(end=SHORT_WEEK_END).run.income
     assert reference is not None
     assert result.out == page("\n".join(income_page(reference).lines))
-    # The backtest summary's income figures, as the page writes them.
-    assert (
-        "Goal: IDR 2,000 a month\n"
-        "Received: IDR 61,875 a month, 3093.75% of the goal\n"
-        "Run-rate: IDR 224,415 a month, 11220.75% of the goal\n"
-        "\n"
-        f"{PROJECTION_LABEL}:\n"
-    ) in result.out
+    # XAAA's dividend is entitled, not yet paid: nothing received, a run-rate from what is held.
+    assert "Goal: IDR 2,000 a month\nReceived: IDR 0 a month, 0.00% of the goal\n" in result.out
+    assert f"\n\n{PROJECTION_LABEL}:\n" in result.out
 
 
 def test_resume_names_who_resumed_from_logname_or_else_unknown(tmp_path: Path) -> None:
-    cli = replace(short_halted(tmp_path), env={"LOGNAME": "operator"})
+    # One halted account, saved as the second day's daily-loss halt left it, copied for each case.
+    second = short_trading_days()[1]
+    saved = saved_account(tmp_path, second, quiet(SHORT_JUMPY), daily_loss="0.001")
+    first = replace(saved, env={"USER": "tester"})
+    for name in ("again", "both"):
+        shutil.copytree(first.home, tmp_path / name / "home")
+    cli = replace(first, env={"LOGNAME": "operator"})
     assert cli("resume", "buy-and-hold", stdin="resume\n").code == 0
     with opened(cli) as store:
         assert store.audit()[-1].note.text.endswith(", by operator")
-    again = short_halted(tmp_path / "again")
-    assert replace(again, env={})("resume", "buy-and-hold", stdin="resume\n").code == 0
+    again = replace(first, home=tmp_path / "again" / "home", env={})
+    assert again("resume", "buy-and-hold", stdin="resume\n").code == 0
     with opened(again) as store:
         assert store.audit()[-1].note.text.endswith(", by unknown")
-    both = replace(short_halted(tmp_path / "both"), env={"USER": "tester", "LOGNAME": "operator"})
+    both = replace(
+        first, home=tmp_path / "both" / "home", env={"USER": "tester", "LOGNAME": "operator"}
+    )
     assert both("resume", "buy-and-hold", stdin="resume\n").code == 0
     with opened(both) as store:
         assert store.audit()[-1].note.text.endswith(", by tester")

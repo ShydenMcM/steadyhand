@@ -176,20 +176,24 @@ def settings(*, income: bool = True) -> BacktestSettings:
 def library_run(
     strategy: str = "buy-and-hold",
     *,
+    start: date = START,
     end: date = END,
     broker_fees: str | None = None,
     exemption: bool = False,
     max_weight: str = "0.35",
+    daily_loss: str = "0.05",
 ) -> BacktestResult:
-    """The library's backtest from the window's start to *end*, with ``SHORT_CONFIG``'s settings
-    unless told, and each strategy made from ``VALUES``."""
+    """The library's backtest from *start* to *end*, the window's own by default, with
+    ``SHORT_CONFIG``'s settings unless told, and each strategy made from ``VALUES``."""
     entry = STRATEGIES[strategy]
     chosen = replace(settings(), lookback_years=entry.lookback_years(VALUES))
-    limits = replace(chosen.engine.limits, max_weight=Decimal(max_weight))
+    limits = replace(
+        chosen.engine.limits, max_weight=Decimal(max_weight), daily_loss=Decimal(daily_loss)
+    )
     engine = replace(chosen.engine, limits=limits, dividend_reinvestment_exemption=exemption)
     rules = IdxMarketRules() if broker_fees is None else IdxMarketRules(broker_fees=broker_fees)
     market = Market(universe(), yahoo(), rules)
-    return backtest(entry(VALUES), market, START, end, replace(chosen, engine=engine))
+    return backtest(entry(VALUES), market, start, end, replace(chosen, engine=engine))
 
 
 def write_universe(home: Path) -> None:
