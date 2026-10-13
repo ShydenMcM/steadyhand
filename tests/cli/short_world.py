@@ -9,16 +9,17 @@ does not report, which steadyhand proves from them and restores, as it does BBRI
 made up (``X`` then three letters), as are the prices: no real stock's data is written here.
 """
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import date, timedelta
 from decimal import Decimal
-from functools import cache
+from functools import cache, partial
 from itertools import product
 from pathlib import Path
 
 from cli_world import Cli
+from record_golden import summary, write_summary
 
 from steadyhand import (
     IDR,
@@ -178,6 +179,7 @@ def library_run(
     end: date = END,
     cash: int = 100_000_000,
     broker_fees: str | None = None,
+    exemption: bool = False,
 ) -> BacktestResult:
     """The library's backtest from the window's start to *end*, with ``SHORT_CONFIG``'s settings
     unless told, and each strategy made from ``VALUES``."""
@@ -185,6 +187,9 @@ def library_run(
     chosen = replace(
         settings(), capital=Money(cash, IDR), lookback_years=entry.lookback_years(VALUES)
     )
+    if exemption:
+        engine = replace(chosen.engine, dividend_reinvestment_exemption=True)
+        chosen = replace(chosen, engine=engine)
     rules = IdxMarketRules() if broker_fees is None else IdxMarketRules(broker_fees=broker_fees)
     return backtest(entry(VALUES), Market(universe(), yahoo(), rules), START, end, chosen)
 
@@ -245,3 +250,27 @@ RESTORED = (
     "by 1.100000, proven by 112 prices that fit the IDX tick grid at that factor and at no other."
 )
 """The window's one warning: XCCC's restoration, as BBRI's is the golden window's."""
+
+
+GOLDEN = Path(__file__).resolve().parents[1] / "fixtures" / "golden" / "made-up"
+RUNS: dict[str, Callable[[], BacktestResult]] = {
+    "buy-and-hold": library_run,
+    "dividend-growth": partial(library_run, "dividend-growth"),
+    "exemption-on": partial(library_run, exemption=True),
+}
+"""The made-up window's pinned runs, the stand-ins of the golden runs: buy-and-hold, dividend-growth
+with its look-back and its review on 3 January 2022, and buy-and-hold with the reinvestment
+exemption switched on."""
+
+
+def golden(name: str) -> Path:
+    """Where *name*'s pinned summary is stored."""
+    return GOLDEN / f"{name}_{START.isoformat()}_{END.isoformat()}.json"
+
+
+def record(name: str, path: Path | None = None) -> Path:
+    """Run *name* and write its summary as ``record_golden`` writes the golden files: to its
+    pinned file unless *path*. After a change that moves these numbers on purpose, re-record with
+    ``PYTHONPATH=tests/cli:scripts uv run python -c "import short_world as w; [w.record(n) for n
+    in w.RUNS]"`` and review the diff."""
+    return write_summary(summary(RUNS[name]()), golden(name) if path is None else path)

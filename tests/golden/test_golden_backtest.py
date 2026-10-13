@@ -22,20 +22,19 @@ import pytest
 from record_golden import (
     END,
     EXEMPT_GOLDEN,
-    GOLDEN,
     GROWTH_GOLDEN,
     HISTORY_START,
     STOCKS,
     main,
-    record,
-    record_exempt,
-    record_growth,
     recorded,
     run,
-    run_exempt,
-    run_growth,
     summary,
 )
+from short_world import RESTORED as SHORT_RESTORED
+from short_world import RUNS, SPLIT, library_run
+from short_world import START as SHORT_START
+from short_world import golden as short_golden
+from short_world import record as record_short
 
 from steadyhand import (
     CLAIMS_LABEL,
@@ -57,26 +56,6 @@ from steadyhand_idx.notes import DATA_PRICES_RESTORED
 @cache
 def rules() -> IdxMarketRules:
     return IdxMarketRules()
-
-
-def test_buy_and_hold_reproduces_the_stored_results_exactly(tmp_path: Path) -> None:
-    stored = json.loads(GOLDEN.read_text(encoding="utf-8"))
-    assert summary(run(tmp_path)) == stored
-
-
-def test_the_recorder_writes_the_stored_file_byte_for_byte(tmp_path: Path) -> None:
-    written = record(tmp_path / "cache", tmp_path / "golden.json")
-    assert written.read_bytes() == GOLDEN.read_bytes()
-
-
-def test_the_switch_on_run_reproduces_its_stored_results_exactly(tmp_path: Path) -> None:
-    stored = json.loads(EXEMPT_GOLDEN.read_text(encoding="utf-8"))
-    assert summary(run_exempt(tmp_path)) == stored
-
-
-def test_the_recorder_writes_the_switch_on_file_byte_for_byte(tmp_path: Path) -> None:
-    written = record_exempt(tmp_path / "cache", tmp_path / "exempt.json")
-    assert written.read_bytes() == EXEMPT_GOLDEN.read_bytes()
 
 
 def test_the_switch_on_run_holds_a_claim_of_each_kind_as_worked_by_hand() -> None:
@@ -118,16 +97,6 @@ def test_the_switch_on_run_holds_a_claim_of_each_kind_as_worked_by_hand() -> Non
     # Tax shows in the month it was booked, not the month its dividend was paid (M4 spec §6.5).
     taxed = {month[0]: month[2] for month in stored["income"]["received"]["by_month"] if month[2]}
     assert taxed == {"2021-11-01": 44_209, "2022-04-01": 16_000}
-
-
-def test_the_dividend_growth_run_reproduces_its_stored_results_exactly(tmp_path: Path) -> None:
-    stored = json.loads(GROWTH_GOLDEN.read_text(encoding="utf-8"))
-    assert summary(run_growth(tmp_path)) == stored
-
-
-def test_the_recorder_writes_the_dividend_growth_file_byte_for_byte(tmp_path: Path) -> None:
-    written = record_growth(tmp_path / "cache", tmp_path / "growth.json")
-    assert written.read_bytes() == GROWTH_GOLDEN.read_bytes()
 
 
 def test_the_dividend_growth_run_reviews_as_worked_by_hand() -> None:
@@ -175,42 +144,6 @@ def test_the_recorder_takes_no_arguments(capsys: pytest.CaptureFixture[str]) -> 
     assert "uv run python scripts/record_golden.py" in capsys.readouterr().out
 
 
-def test_the_window_holds_the_events_it_was_chosen_for(tmp_path: Path) -> None:
-    """The golden file is only worth pinning if the run meets a split, dividends, and prices
-    restored from an adjustment Yahoo does not report (#160)."""
-    result = run(tmp_path)
-    held = {p.instrument.symbol: p.quantity for p in result.run.final.holdings.portfolio.positions}
-    # BBCA's 1-for-5 split on 13 October 2021: every share bought became five.
-    bought = sum(
-        fill.quantity
-        for report in result.run.reports
-        for fill in report.fills
-        if fill.order.instrument.symbol == "BBCA"
-    )
-    assert bought > 0
-    assert held["BBCA"] == 5 * bought
-    paid = {e.instrument.symbol for report in result.run.reports for e in report.paid}
-    assert paid == {"ASII", "BBCA", "BBRI", "TLKM", "UNVR"}
-    # BBRI's prices up to 2021-09-07 are restored (f = 1.100019), so it is ordered on the first
-    # day and bought at the next open, and its 2021 dividend is credited at the restored Rp98.9057
-    # a share.
-    (bbri,) = [
-        e for report in result.run.reports for e in report.paid if e.instrument.symbol == "BBRI"
-    ]
-    assert (bbri.ex_date, bbri.gross) == (date(2021, 4, 6), Money(445_075, IDR))  # 4,500 shares
-    assert held["BBRI"] == 4_600
-    # The restoration is the run's one warning: BBRI's whole recording from GRID_START.
-    assert result.warnings == (
-        Note(
-            DATA_PRICES_RESTORED,
-            "BBRI: Yahoo's prices from 2014-01-06 to 2021-09-07 carry an adjustment Yahoo does "
-            "not report, so steadyhand restored them: every price and dividend in that span is "
-            "multiplied by 1.100019, proven by 7,380 prices that fit the IDX tick grid at that "
-            "factor and at no other.",
-        ),
-    )
-
-
 def test_a_fetch_outside_the_recording_is_refused(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match=r"^ASII\.JK: the fixture covers 2017-01-31 to 2022-01-31"):
         run(tmp_path, end=date(2022, 2, 7))
@@ -231,40 +164,108 @@ def test_the_recordings_reach_five_years_before_the_run_ends(stock: str) -> None
     assert (rows[0].day, rows[-1].day) == (HISTORY_START, END)
 
 
-def test_the_income_report_agrees_with_what_the_engine_paid(tmp_path: Path) -> None:
-    result = run(tmp_path)
+# The stand-ins of the golden runs moved to tests/integration/golden/test_golden_backtest.py
+# (#292): each of the same name, over the made-up window (tests/cli/short_world.py), against its
+# own pinned file in tests/fixtures/golden/made-up.
+
+
+def test_buy_and_hold_reproduces_the_stored_results_exactly() -> None:
+    stored = json.loads(short_golden("buy-and-hold").read_text(encoding="utf-8"))
+    assert summary(RUNS["buy-and-hold"]()) == stored
+
+
+def test_the_recorder_writes_the_stored_file_byte_for_byte(tmp_path: Path) -> None:
+    written = record_short("buy-and-hold", tmp_path / "golden.json")
+    assert written.read_bytes() == short_golden("buy-and-hold").read_bytes()
+
+
+def test_the_switch_on_run_reproduces_its_stored_results_exactly() -> None:
+    stored = json.loads(short_golden("exemption-on").read_text(encoding="utf-8"))
+    assert summary(RUNS["exemption-on"]()) == stored
+    # The window's one dividend is a claim, reinvested in part by the buys after it was paid.
+    assert stored["claims"] == [
+        [
+            "XAAA",
+            "2021-12-17",
+            "2022-01-07",
+            825_000,
+            "2022-03-31",
+            200_000,
+            [[313_500, "2024-12-31"], [206_000, "2024-12-31"], [105_500, "2024-12-31"]],
+        ]
+    ]
+
+
+def test_the_recorder_writes_the_switch_on_file_byte_for_byte(tmp_path: Path) -> None:
+    written = record_short("exemption-on", tmp_path / "exempt.json")
+    assert written.read_bytes() == short_golden("exemption-on").read_bytes()
+
+
+def test_the_dividend_growth_run_reproduces_its_stored_results_exactly() -> None:
+    stored = json.loads(short_golden("dividend-growth").read_text(encoding="utf-8"))
+    assert summary(RUNS["dividend-growth"]()) == stored
+
+
+def test_the_recorder_writes_the_dividend_growth_file_byte_for_byte(tmp_path: Path) -> None:
+    written = record_short("dividend-growth", tmp_path / "growth.json")
+    assert written.read_bytes() == short_golden("dividend-growth").read_bytes()
+
+
+def test_the_window_holds_the_events_it_was_chosen_for() -> None:
+    """The made-up window is only worth pinning if the run meets a split, a dividend, and prices
+    restored from an adjustment Yahoo does not report."""
+    result = library_run()
+    held = {p.instrument.symbol: p.quantity for p in result.run.final.holdings.portfolio.positions}
+    # XBBB's 1-for-2 split on 22 December 2021: every share bought before it became two.
+    fills = [fill for report in result.run.reports for fill in report.fills]
+    before = sum(f.quantity for f in fills if f.order.instrument.symbol == "XBBB" and f.day < SPLIT)
+    after = sum(f.quantity for f in fills if f.order.instrument.symbol == "XBBB" and f.day > SPLIT)
+    assert before > 0
+    assert held["XBBB"] == 2 * before + after
+    # XAAA's Rp25 a share on the 33,000 shares held on its ex-date, paid on 7 January 2022.
+    (paid,) = [e for report in result.run.reports for e in report.paid]
+    assert (paid.instrument.symbol, paid.ex_date, paid.pay_date, paid.gross) == (
+        "XAAA",
+        date(2021, 12, 17),
+        date(2022, 1, 7),
+        Money(825_000, IDR),
+    )
+    # The restoration is the run's one warning.
+    assert result.warnings == (Note(DATA_PRICES_RESTORED, SHORT_RESTORED),)
+
+
+def test_the_income_report_agrees_with_what_the_engine_paid() -> None:
+    result = library_run()
     income = result.run.income
     assert income is not None
     paid = {
         (e.instrument.symbol, e.ex_date): e for report in result.run.reports for e in report.paid
     }
     expected = [dividend for held in income.run_rate.holdings for dividend in held.dividends]
-    # Every dividend of the trailing year was paid in the run, on the pay date the calendar uses.
-    assert len(expected) == len(paid) == 8
+    # Every dividend of the trailing year from inside the window was paid in the run, on the pay
+    # date the calendar uses; the two from before it were not the run's to pay.
+    inside = [e for e in expected if e.ex_date >= SHORT_START]
+    assert len(inside) == len(paid) == 1
     assert all(  # runtime population: the dividends the run's income report holds
-        e.pay_date == paid[(e.instrument.symbol, e.ex_date)].pay_date for e in expected
+        e.pay_date == paid[(e.instrument.symbol, e.ex_date)].pay_date for e in inside
     )
-    # BBCA's 2021-04-08 dividend: Rp432 a share on the 500 shares held before the 1-for-5 split,
-    # and Rp86.4 a share, restated, on the 2,500 held after it. Rp216,000 either way.
-    bbca = paid[("BBCA", date(2021, 4, 8))]
-    assert bbca.gross == Money(216_000, IDR)
-    assert bbca in expected
+    # XBBB's 2021-12-01 dividend: Rp160 a share before its 1-for-2 split, Rp80 restated, on the
+    # 16,500 shares held after it.
+    (xbbb,) = [e for e in expected if e.instrument.symbol == "XBBB"]
+    assert (xbbb.ex_date, xbbb.gross) == (date(2021, 12, 1), Money(1_320_000, IDR))
 
 
 @pytest.mark.parametrize("strategy", sorted(STRATEGIES))
-@pytest.mark.parametrize("cut", [date(2021, 4, 7), date(2021, 10, 12), date(2021, 11, 29)])
-def test_a_run_to_day_d_decides_as_a_longer_run_did_up_to_d(
-    strategy: str, cut: date, tmp_path: Path
-) -> None:
-    # The cuts fall on the day before BBCA's dividend ex-date, the day before its split, and the
-    # day before UNVR's ex-date; each longer run goes on for twenty more trading days.
-    # Decisions only: an income report reads no bar after its day, and a run cut this early
-    # would need history from before the recordings start.
-    short = run(tmp_path / "short", strategy, cut, income=False)
-    longer = run(tmp_path / "long", strategy, _trading_days_after(cut, 20), income=False)
+@pytest.mark.parametrize("cut", [date(2021, 12, 16), date(2021, 12, 21), date(2021, 12, 30)])
+def test_a_run_to_day_d_decides_as_a_longer_run_did_up_to_d(strategy: str, cut: date) -> None:
+    # The cuts fall on the day before XAAA's ex-date, the day before XBBB's split, and the day
+    # before dividend-growth's review of 3 January 2022; each longer run goes on for five more
+    # trading days.
+    short = library_run(strategy, end=cut)
+    longer = library_run(strategy, end=_trading_days_after(cut, 5))
     count = len(short.run.reports)
     assert short.run.reports[-1].day == cut
-    assert len(longer.run.reports) == count + 20
+    assert len(longer.run.reports) == count + 5
     assert longer.run.reports[:count] == short.run.reports
 
 
