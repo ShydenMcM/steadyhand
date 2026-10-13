@@ -17,7 +17,6 @@ from cli_world import (
     GOLDEN_CONFIG,
     Cli,
     at,
-    golden_backtest,
     opened,
     paper,
     recorded_source,
@@ -25,7 +24,11 @@ from cli_world import (
     tables,
     trading_days,
 )
-from record_golden import END, START
+from record_golden import START
+from short_world import END as SHORT_END
+from short_world import SHORT_CONFIG, library_run, short_cli
+from short_world import START as SHORT_START
+from short_world import trading_days as short_trading_days
 
 from steadyhand import (
     CLAIMS_LABEL,
@@ -69,12 +72,6 @@ TIGHT = GOLDEN_CONFIG.replace('[risk]\nmax_weight = "0.25"\n', '[risk]\nmax_weig
 """A 19% limit per stock, under buy-and-hold's 20% of each of the five: its first orders are cut to
 the limit and its later top-ups skipped. With BBRI's prices restored (#160), the golden settings
 spread the money five ways and never block an order."""
-
-DEEP = GOLDEN_CONFIG.replace(
-    '[risk]\nmax_weight = "0.25"\n', '[risk]\nmax_weight = "0.25"\nmax_drawdown = "0.05"\n'
-)
-"""A drawdown limit breached on 2021-03-08 and still breached on 2021-04-30: 9.37% below,
-rounded down as every limit is written."""
 
 
 def quiet(config: str = GOLDEN_CONFIG) -> str:
@@ -156,69 +153,6 @@ def test_status_on_the_opening_day_shows_the_cash_and_the_orders_queued(tmp_path
     )
 
 
-def test_status_shows_each_holding_with_its_last_close_value_and_weight(tmp_path: Path) -> None:
-    cli = ran_to(tmp_path, date(2021, 6, 30), quiet())
-    result = cli("paper", "status")
-    assert result.code == 0
-    assert (
-        "Cash: IDR 1,587,638 settled, IDR 0 unsettled\n"
-        "Holdings value: IDR 84,138,500\n"
-        "Total value: IDR 85,726,138\n"
-        "\n"
-        "Holdings:\n"
-        "Stock  Quantity  Last close           Value  Weight\n"
-        "ASII       3300   IDR 4,940  IDR 16,302,000  19.02%\n"
-        "BBCA        500  IDR 30,125  IDR 15,062,500  17.57%\n"
-        "BBRI       4600   IDR 3,940  IDR 18,124,000  21.14%\n"
-        "TLKM       6600   IDR 3,150  IDR 20,790,000  24.25%\n"
-        "UNVR       2800   IDR 4,950  IDR 13,860,000  16.17%\n"
-        "\n"
-        "Queued for the next open:\n"
-        "- buy 100 TLKM\n"
-    ) in result.out
-
-
-def test_status_shows_a_dividend_entitlement_until_it_is_paid(tmp_path: Path) -> None:
-    cli = ran_to(tmp_path, date(2021, 4, 8), quiet())
-    result = cli("paper", "status")
-    assert (
-        "Dividend entitlements:\n"
-        "- BBRI: IDR 445,075 before tax, ex-date 2021-04-06, paid on 2021-04-26\n"
-        "- BBCA: IDR 216,000 before tax, ex-date 2021-04-08, paid on 2021-04-28\n"
-    ) in result.out
-
-
-def test_status_shows_open_claims_under_their_label(tmp_path: Path) -> None:
-    cli = ran_to(tmp_path, date(2021, 4, 28), quiet(GOLDEN_CONFIG + EXEMPT))
-    result = cli("paper", "status")
-    assert "Dividend entitlements: none\n" in result.out
-    assert (
-        f"Reinvestment-exemption claims ({CLAIMS_LABEL}):\n"
-        "- BBRI: IDR 445,075 paid on 2021-04-26, IDR 120,075 still to reinvest by 2022-03-31, "
-        "IDR 325,000 protected until 2023-12-31\n"
-        "- BBCA: IDR 216,000 paid on 2021-04-28, IDR 216,000 still to reinvest by 2022-03-31\n"
-    ) in result.out
-
-
-def test_a_claims_reinvested_parts_are_shown_with_how_long_each_is_protected(
-    tmp_path: Path,
-) -> None:
-    cli = ran_to(tmp_path, date(2021, 6, 30), quiet(GOLDEN_CONFIG + EXEMPT))
-    result = cli("paper", "status")
-    assert (
-        "- BBRI: IDR 445,075 paid on 2021-04-26, IDR 0 still to reinvest by 2022-03-31, "
-        "IDR 325,000 protected until 2023-12-31, IDR 120,075 protected until 2023-12-31\n"
-        "- BBCA: IDR 216,000 paid on 2021-04-28, IDR 0 still to reinvest by 2022-03-31, "
-        "IDR 195,925 protected until 2023-12-31, IDR 20,075 protected until 2023-12-31\n"
-    ) in result.out
-    with opened(cli) as store:
-        account = store.account()
-        assert account is not None
-        report = store.report(account.last_day)
-        assert report is not None
-    assert FIGURES["Protection.amount"] in status_page(account, report).keys
-
-
 def test_a_halted_account_shows_its_halt_and_the_resume_command_and_exits_0(
     tmp_path: Path,
 ) -> None:
@@ -272,26 +206,6 @@ def paper_day(state: EngineState) -> DayReport:
     )
 
 
-def test_the_status_page_names_every_figure_it_shows(tmp_path: Path) -> None:
-    cli = ran_to(tmp_path, date(2021, 4, 28), GOLDEN_CONFIG + EXEMPT)
-    with opened(cli) as store:
-        account = store.account()
-        assert account is not None
-        report = store.report(account.last_day)
-        assert report is not None
-    shown = status_page(account, report)
-    assert shown.keys == [
-        FIGURES["DayReport.settled"],
-        FIGURES["DayReport.unsettled"],
-        FIGURES["DayReport.holdings_value"],
-        FIGURES["DayReport.value"],
-        FIGURES["Holdings.last_closes"],
-        FIGURES["DividendClaim.gross"],
-        FIGURES["DividendClaim.uncovered"],
-        FIGURES["Protection.amount"],
-    ]
-
-
 # report (M5 spec §7.2).
 
 
@@ -304,18 +218,6 @@ def test_report_before_the_first_run_says_how_to_open_the_account(
     assert result.err == (
         "steadyhand-idx: there is no paper account yet; run steadyhand-idx paper run first\n"
     )
-
-
-def test_report_shows_the_latest_day_by_default_with_its_holdings(tmp_path: Path) -> None:
-    cli = ran_to(tmp_path, date(2021, 6, 30), quiet())
-    result = cli("report")
-    assert (result.code, result.err) == (0, "")
-    assert result.out.startswith("Day report for 2021-06-30\n\n")
-    assert (
-        "Holdings:\n"
-        "Stock  Quantity  Last close           Value  Weight\n"
-        "ASII       3300   IDR 4,940  IDR 16,302,000  19.02%\n"
-    ) in result.out
 
 
 def test_a_days_report_shows_its_fills_its_blocked_orders_and_its_cash(tmp_path: Path) -> None:
@@ -354,44 +256,6 @@ def test_a_days_report_shows_its_fills_its_blocked_orders_and_its_cash(tmp_path:
     )
 
 
-def test_a_blocked_order_is_shown_with_its_reason_and_the_dividends_of_the_day(
-    tmp_path: Path,
-) -> None:
-    cli = ran_to(tmp_path, date(2021, 6, 30), quiet(TIGHT))
-    result = cli("report", "--day", "2021-06-29")
-    assert result.code == 0
-    assert (
-        "Queued for the next open:\n"
-        "- buy 100 UNVR\n"
-        "\n"
-        "Blocked orders:\n"
-        "- skipped: buy 100 ASII: already at the 19.00% limit per stock\n"
-        "- skipped: buy 100 BBRI: already at the 19.00% limit per stock\n"
-        "- skipped: buy 100 TLKM: already at the 19.00% limit per stock\n"
-    ) in result.out
-    assert "Dividends paid:\n- TLKM: IDR 991,259 before tax\n" in result.out
-
-
-def test_the_skipped_order_is_in_the_audit_log_under_its_key(tmp_path: Path) -> None:
-    cli = ran_to(tmp_path, date(2021, 6, 29), TIGHT)
-    with opened(cli) as store:
-        first = next(line for line in store.audit() if line.note.key == PAPER_ORDER_SKIPPED)
-    assert (first.day, first.note.text) == (
-        date(2021, 2, 2),
-        "skipped: buy 100 ASII: already at the 19.00% limit per stock",
-    )
-
-
-def test_a_report_names_the_key_of_each_blocked_orders_reason(tmp_path: Path) -> None:
-    cli = ran_to(tmp_path, date(2021, 6, 30), TIGHT)
-    with opened(cli) as store:
-        cut, skipped = store.report(START), store.report(date(2021, 6, 29))
-    assert cut is not None
-    assert skipped is not None
-    assert LIMIT_WEIGHT_CUT in day_report_page(cut, None).keys
-    assert LIMIT_WEIGHT_FULL in day_report_page(skipped, None).keys
-
-
 @pytest.mark.parametrize("day", ["2021-01-29", "2021-02-06", "2021-02-04"])
 def test_a_day_with_no_saved_report_names_the_first_and_last_saved(
     tmp_path: Path, day: str
@@ -403,27 +267,6 @@ def test_a_day_with_no_saved_report_names_the_first_and_last_saved(
         f"steadyhand-idx: there is no report for {day}; the saved days run from 2021-02-01 "
         "to 2021-02-03\n"
     )
-
-
-def test_the_income_report_is_the_backtests_over_the_same_days(tmp_path: Path) -> None:
-    cli = ran_to(tmp_path, END, quiet())
-    result = cli("report", "--income")
-    assert (result.code, result.err) == (0, "")
-    reference = golden_backtest(cli, END, goal=True).run.income
-    assert reference is not None
-    assert result.out == page("\n".join(income_page(reference).lines))
-    # The golden record's income figures (tests/fixtures/golden), as the page writes them.
-    assert (
-        "Goal: IDR 1,000,000 a month\n"
-        "Received: IDR 202,442 a month, 20.24% of the goal\n"
-        "Run-rate: IDR 206,964 a month, 20.70% of the goal\n"
-        "\n"
-        f"{PROJECTION_LABEL}:\n"
-        "Reaching IDR 1,000,000 a month, adding IDR 0 a month\n"
-        "- pessimistic: from IDR 2,207,626 a year, growing 0.00% a year: not within 50 years\n"
-        "- base: from IDR 2,759,533 a year, growing 5.00% a year: the goal in 18.0 years\n"
-        "- optimistic: from IDR 2,759,533 a year, growing 6.09% a year: the goal in 16.0 years\n"
-    ) in result.out
 
 
 def test_the_day_a_limit_halts_the_account_shows_the_halt(tmp_path: Path) -> None:
@@ -514,21 +357,6 @@ def test_a_typed_resume_clears_the_halt_and_the_next_day_orders_again(tmp_path: 
         assert store.runs()[-1].outcome is Outcome.RAN
 
 
-def test_resume_names_who_resumed_from_logname_or_else_unknown(tmp_path: Path) -> None:
-    cli = replace(halted(tmp_path), env={"LOGNAME": "operator"})
-    assert cli("resume", "buy-and-hold", stdin="resume\n").code == 0
-    with opened(cli) as store:
-        assert store.audit()[-1].note.text.endswith(", by operator")
-    again = halted(tmp_path / "again")
-    assert replace(again, env={})("resume", "buy-and-hold", stdin="resume\n").code == 0
-    with opened(again) as store:
-        assert store.audit()[-1].note.text.endswith(", by unknown")
-    both = replace(halted(tmp_path / "both"), env={"USER": "tester", "LOGNAME": "operator"})
-    assert both("resume", "buy-and-hold", stdin="resume\n").code == 0
-    with opened(both) as store:
-        assert store.audit()[-1].note.text.endswith(", by tester")
-
-
 @pytest.mark.parametrize("answer", ["", "\n", "yes\n", "Resume\n", " resume\n"])
 def test_any_other_answer_leaves_the_halt_in_place(tmp_path: Path, answer: str) -> None:
     cli = halted(tmp_path)
@@ -539,27 +367,6 @@ def test_any_other_answer_leaves_the_halt_in_place(tmp_path: Path, answer: str) 
         f"steadyhand-idx: you typed {answer.rstrip(chr(10))!r}, not 'resume'; nothing was changed\n"
     )
     assert tables(cli) == before
-
-
-def test_resume_is_refused_while_the_drawdown_is_still_past_its_limit(tmp_path: Path) -> None:
-    cli = ran_to(tmp_path, date(2021, 4, 30), quiet(DEEP))
-    before = tables(cli)
-    result = cli("resume", "buy-and-hold", stdin="resume\n")
-    assert (result.code, result.out) == (3, "")
-    assert result.err == (
-        "steadyhand-idx: the unit value is still 9.12% below its high-water mark, at or past "
-        "the 5.00% drawdown limit; the halt stays until it recovers or you raise "
-        "risk.max_drawdown\n"
-    )
-    assert tables(cli) == before
-    raised = DEEP.replace('max_drawdown = "0.05"', 'max_drawdown = "0.10"')
-    cli.config.write_text(quiet(raised), encoding="utf-8")
-    assert cli("resume", "buy-and-hold", stdin="resume\n").code == 0
-    with opened(cli) as store:
-        account = store.account()
-        assert account is not None
-        assert account.state.halt is None
-        assert store.audit()[-1].note.key == PAPER_RESUMED
 
 
 def drawn_down() -> tuple[Account, Halt]:
@@ -720,3 +527,215 @@ def test_any_other_answer_leaves_the_strategy_as_it_was(tmp_path: Path, answer: 
         "changed\n"
     )
     assert tables(cli) == before
+
+
+# The stand-ins of the golden-window tests moved to tests/integration/cli/
+# test_paper_commands_golden.py (#292): each of the same name, over the made-up window.
+
+SHORT_RISK = '[risk]\nmax_weight = "0.35"\n'
+SHORT_TIGHT = SHORT_CONFIG.replace(SHORT_RISK, '[risk]\nmax_weight = "0.30"\n')
+"""A 30% limit per stock, under buy-and-hold's third of each of the three: its first orders are
+cut to the limit and its later top-ups skipped."""
+SHORT_DEEP = SHORT_CONFIG.replace(SHORT_RISK, SHORT_RISK + 'max_drawdown = "0.003"\n')
+"""A drawdown limit breached on 2021-12-20: 0.45% below, rounded down as every limit is written."""
+SHORT_JUMPY = SHORT_CONFIG.replace(SHORT_RISK, SHORT_RISK + 'daily_loss_limit = "0.001"\n')
+"""A daily-loss limit the made-up window's second day breaches."""
+
+
+def short_ran_to(tmp_path: Path, day: date, config: str = SHORT_CONFIG) -> Cli:
+    """An account opened on the made-up window's first day and run up to *day*."""
+    cli = short_cli(tmp_path / "home", config)
+    assert run_on(cli, SHORT_START).code == 0
+    if day != SHORT_START:
+        done = run_on(cli, day, "--catch-up")
+        assert done.code in (0, 3), done.err
+    return replace(cli, now=at(day))
+
+
+def short_halted(tmp_path: Path) -> Cli:
+    """An account halted by the daily-loss limit on 2021-12-16, the day it is left on."""
+    cli = short_cli(tmp_path / "home", quiet(SHORT_JUMPY))
+    second = short_trading_days()[1]
+    assert run_on(cli, SHORT_START).code == 0
+    assert run_on(cli, second).code == 3
+    return replace(cli, now=at(second), env={"USER": "tester"})
+
+
+def test_status_shows_each_holding_with_its_last_close_value_and_weight(tmp_path: Path) -> None:
+    cli = short_ran_to(tmp_path, date(2022, 1, 10), quiet(SHORT_CONFIG))
+    result = cli("paper", "status")
+    assert result.code == 0
+    assert (
+        "Cash: IDR 494,515 settled, IDR 0 unsettled\n"
+        "Holdings value: IDR 103,246,500\n"
+        "Total value: IDR 103,741,015\n"
+        "\n"
+        "Holdings:\n"
+        "Stock  Quantity  Last close           Value  Weight\n"
+        "XAAA      33700   IDR 1,045  IDR 35,216,500  33.95%\n"
+        "XBBB      16500   IDR 2,065  IDR 34,072,500  32.84%\n"
+        "XCCC       4700   IDR 7,225  IDR 33,957,500  32.73%\n"
+        "\n"
+        "Queued for the next open:\n"
+        "- buy 100 XAAA\n"
+    ) in result.out
+
+
+def test_status_shows_a_dividend_entitlement_until_it_is_paid(tmp_path: Path) -> None:
+    cli = short_ran_to(tmp_path, date(2021, 12, 17), quiet(SHORT_CONFIG))
+    result = cli("paper", "status")
+    assert (
+        "Dividend entitlements:\n"
+        "- XAAA: IDR 825,000 before tax, ex-date 2021-12-17, paid on 2022-01-07\n"
+    ) in result.out
+
+
+def test_status_shows_open_claims_under_their_label(tmp_path: Path) -> None:
+    cli = short_ran_to(tmp_path, date(2022, 1, 7), quiet(SHORT_CONFIG + EXEMPT))
+    result = cli("paper", "status")
+    assert "Dividend entitlements: none\n" in result.out
+    assert (
+        f"Reinvestment-exemption claims ({CLAIMS_LABEL}):\n"
+        "- XAAA: IDR 825,000 paid on 2022-01-07, IDR 825,000 still to reinvest by 2022-03-31\n"
+    ) in result.out
+
+
+def test_a_claims_reinvested_parts_are_shown_with_how_long_each_is_protected(
+    tmp_path: Path,
+) -> None:
+    cli = short_ran_to(tmp_path, SHORT_END, quiet(SHORT_CONFIG + EXEMPT))
+    result = cli("paper", "status")
+    assert (
+        "- XAAA: IDR 825,000 paid on 2022-01-07, IDR 200,000 still to reinvest by 2022-03-31, "
+        "IDR 313,500 protected until 2024-12-31, IDR 206,000 protected until 2024-12-31, "
+        "IDR 105,500 protected until 2024-12-31\n"
+    ) in result.out
+    with opened(cli) as store:
+        account = store.account()
+        assert account is not None
+        report = store.report(account.last_day)
+        assert report is not None
+    assert FIGURES["Protection.amount"] in status_page(account, report).keys
+
+
+def test_the_status_page_names_every_figure_it_shows(tmp_path: Path) -> None:
+    cli = short_ran_to(tmp_path, SHORT_END, SHORT_CONFIG + EXEMPT)
+    with opened(cli) as store:
+        account = store.account()
+        assert account is not None
+        report = store.report(account.last_day)
+        assert report is not None
+    shown = status_page(account, report)
+    assert shown.keys == [
+        FIGURES["DayReport.settled"],
+        FIGURES["DayReport.unsettled"],
+        FIGURES["DayReport.holdings_value"],
+        FIGURES["DayReport.value"],
+        FIGURES["Holdings.last_closes"],
+        FIGURES["DividendClaim.gross"],
+        FIGURES["DividendClaim.uncovered"],
+        FIGURES["Protection.amount"],
+    ]
+
+
+def test_report_shows_the_latest_day_by_default_with_its_holdings(tmp_path: Path) -> None:
+    cli = short_ran_to(tmp_path, SHORT_END, quiet(SHORT_CONFIG))
+    result = cli("report")
+    assert (result.code, result.err) == (0, "")
+    assert result.out.startswith("Day report for 2022-01-11\n\n")
+    assert (
+        "Holdings:\n"
+        "Stock  Quantity  Last close           Value  Weight\n"
+        "XAAA      33800   IDR 1,055  IDR 35,659,000  34.13%\n"
+    ) in result.out
+
+
+def test_a_blocked_order_is_shown_with_its_reason_and_the_dividends_of_the_day(
+    tmp_path: Path,
+) -> None:
+    cli = short_ran_to(tmp_path, SHORT_END, quiet(SHORT_TIGHT))
+    result = cli("report", "--day", "2022-01-07")
+    assert result.code == 0
+    assert (
+        "Queued for the next open:\n"
+        "- buy 100 XBBB\n"
+        "\n"
+        "Blocked orders:\n"
+        "- cut: buy XBBB from 1700 to 100 shares: cut to the 30.00% limit per stock\n"
+        "- skipped: buy 3500 XAAA: already at the 30.00% limit per stock\n"
+        "- skipped: buy 500 XCCC: already at the 30.00% limit per stock\n"
+    ) in result.out
+    assert "Dividends paid:\n- XAAA: IDR 742,500 before tax\n" in result.out
+
+
+def test_the_skipped_order_is_in_the_audit_log_under_its_key(tmp_path: Path) -> None:
+    cli = short_ran_to(tmp_path, date(2021, 12, 17), SHORT_TIGHT)
+    with opened(cli) as store:
+        first = next(line for line in store.audit() if line.note.key == PAPER_ORDER_SKIPPED)
+    assert (first.day, first.note.text) == (
+        date(2021, 12, 16),
+        "skipped: buy 800 XBBB: already at the 30.00% limit per stock",
+    )
+
+
+def test_a_report_names_the_key_of_each_blocked_orders_reason(tmp_path: Path) -> None:
+    cli = short_ran_to(tmp_path, date(2021, 12, 17), SHORT_TIGHT)
+    with opened(cli) as store:
+        cut, skipped = store.report(SHORT_START), store.report(date(2021, 12, 17))
+    assert cut is not None
+    assert skipped is not None
+    assert LIMIT_WEIGHT_CUT in day_report_page(cut, None).keys
+    assert LIMIT_WEIGHT_FULL in day_report_page(skipped, None).keys
+
+
+def test_the_income_report_is_the_backtests_over_the_same_days(tmp_path: Path) -> None:
+    cli = short_ran_to(tmp_path, SHORT_END, quiet(SHORT_CONFIG))
+    result = cli("report", "--income")
+    assert (result.code, result.err) == (0, "")
+    reference = library_run().run.income
+    assert reference is not None
+    assert result.out == page("\n".join(income_page(reference).lines))
+    # The backtest summary's income figures, as the page writes them.
+    assert (
+        "Goal: IDR 2,000 a month\n"
+        "Received: IDR 61,875 a month, 3093.75% of the goal\n"
+        "Run-rate: IDR 224,415 a month, 11220.75% of the goal\n"
+        "\n"
+        f"{PROJECTION_LABEL}:\n"
+    ) in result.out
+
+
+def test_resume_names_who_resumed_from_logname_or_else_unknown(tmp_path: Path) -> None:
+    cli = replace(short_halted(tmp_path), env={"LOGNAME": "operator"})
+    assert cli("resume", "buy-and-hold", stdin="resume\n").code == 0
+    with opened(cli) as store:
+        assert store.audit()[-1].note.text.endswith(", by operator")
+    again = short_halted(tmp_path / "again")
+    assert replace(again, env={})("resume", "buy-and-hold", stdin="resume\n").code == 0
+    with opened(again) as store:
+        assert store.audit()[-1].note.text.endswith(", by unknown")
+    both = replace(short_halted(tmp_path / "both"), env={"USER": "tester", "LOGNAME": "operator"})
+    assert both("resume", "buy-and-hold", stdin="resume\n").code == 0
+    with opened(both) as store:
+        assert store.audit()[-1].note.text.endswith(", by tester")
+
+
+def test_resume_is_refused_while_the_drawdown_is_still_past_its_limit(tmp_path: Path) -> None:
+    cli = short_ran_to(tmp_path, date(2021, 12, 20), quiet(SHORT_DEEP))
+    before = tables(cli)
+    result = cli("resume", "buy-and-hold", stdin="resume\n")
+    assert (result.code, result.out) == (3, "")
+    assert result.err == (
+        "steadyhand-idx: the unit value is still 0.45% below its high-water mark, at or past "
+        "the 0.30% drawdown limit; the halt stays until it recovers or you raise "
+        "risk.max_drawdown\n"
+    )
+    assert tables(cli) == before
+    raised = SHORT_DEEP.replace('max_drawdown = "0.003"', 'max_drawdown = "0.005"')
+    cli.config.write_text(quiet(raised), encoding="utf-8")
+    assert cli("resume", "buy-and-hold", stdin="resume\n").code == 0
+    with opened(cli) as store:
+        account = store.account()
+        assert account is not None
+        assert account.state.halt is None
+        assert store.audit()[-1].note.key == PAPER_RESUMED
