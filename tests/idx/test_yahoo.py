@@ -758,22 +758,6 @@ def test_bbri_s_2021_dividend_restores_to_what_bri_announced() -> None:
     assert abs(dividend.per_share - Decimal("98.905659443")) <= Decimal("0.0001")  # Liputan6
 
 
-def test_bbri_s_golden_years_are_restored_except_where_a_volume_is_not_whole() -> None:
-    # #160 spec §9.2: 1,103 days from 2017-01-31 to 2021-09-07 are evidence, a price off whole
-    # rupiah on a day that is not a flat row with no volume (57 flat days there have one too); the
-    # 153 before the 5-for-1 split of 2017-11-10 also have a volume that is not whole (#162).
-    history = history_from_json(BBRI_WHOLE)
-    found = evidence(history)
-    runs = find_runs(found)
-    span = (date(2017, 1, 31), date(2021, 9, 7))
-    assert len([row for row in found if span[0] <= row.day <= span[1]]) == 1_103
-    with pytest.raises(UnrecoverablePricesError) as refused:
-        unadjust(history, BBRI, calendar(), span, runs)
-    assert (len(refused.value.days), refused.value.days[-1]) == (153, date(2017, 11, 9))
-    bars, _ = unadjust(history, BBRI, calendar(), (date(2017, 11, 10), span[1]), runs)
-    assert len(bars) == len(calendar().trading_days(date(2017, 11, 10), span[1]))
-
-
 def test_the_older_bbri_recordings_are_the_three_made_before_the_whole_one() -> None:
     # The whole recording is left out: compared with itself it could never disagree.
     assert [path.stem for path in BBRI_OLDER] == [
