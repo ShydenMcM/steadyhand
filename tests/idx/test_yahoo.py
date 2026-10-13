@@ -1,13 +1,15 @@
 """The Yahoo data source, run on real recorded responses (spec §10.3: real data, replayed)."""
 
-from dataclasses import fields, replace
-from datetime import date
+from collections.abc import Iterator
+from dataclasses import dataclass, fields, replace
+from datetime import date, datetime
 from decimal import Decimal
 from functools import cache
 from itertools import pairwise
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
+from zoneinfo import ZoneInfo
 
-import pandas as pd
 import pytest
 
 from steadyhand import (
@@ -42,6 +44,9 @@ from steadyhand_idx.yahoo import (
     ticker_for,
     unadjust,
 )
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "yahoo"
 BBCA_FILE = FIXTURES / "BBCA.JK_2021-09-01_2021-11-30.json"
@@ -205,72 +210,131 @@ def test_an_unusable_split_ratio_is_refused(ratio: str) -> None:
         unadjust(history, UNVR, calendar(), (date(2023, 5, 15), date(2023, 6, 9)))
 
 
-def _frames(history: YahooHistory) -> tuple[pd.DataFrame, pd.Series]:
-    """The pandas objects yfinance returns, rebuilt from a recording: the same columns, dtypes
-    and time zone as ``Ticker.history`` and ``Ticker.splits`` (checked live by test_yahoo_live)."""
-    index = pd.DatetimeIndex([pd.Timestamp(row.day) for row in history.rows]).tz_localize(
-        "Asia/Jakarta"
-    )
-    frame = pd.DataFrame(
+JAKARTA = ZoneInfo("Asia/Jakarta")
+COLUMNS = ("Open", "High", "Low", "Close", "Adj Close", "Volume", "Dividends", "Stock Splits")
+
+
+@dataclass(frozen=True)
+class Stamps:
+    """A pandas ``DatetimeIndex`` as ``history_from_frames`` reads it: its zone and its length."""
+
+    tz: str
+    stamps: tuple[datetime, ...]
+
+    def __len__(self) -> int:
+        return len(self.stamps)
+
+
+@dataclass(frozen=True)
+class Frame:
+    """``Ticker.history``'s frame as ``history_from_frames`` reads it, in plain Python: its column
+    names, its rows by timestamp and its index's zone. Building the real pandas frame needs pandas,
+    whose import is over the unit load limit, so the real frames are converted in
+    ``tests/integration/idx/test_yahoo_frames.py`` (#292) and these stand in for them here."""
+
+    index: Stamps
+    records: tuple[dict[str, float], ...]
+    columns: tuple[str, ...] = COLUMNS
+
+    @property
+    def empty(self) -> bool:
+        return not self.records
+
+    def iterrows(self) -> Iterator[tuple[datetime, dict[str, float]]]:
+        return zip(self.index.stamps, self.records, strict=True)
+
+
+@dataclass(frozen=True)
+class Splits:
+    """``Ticker.splits`` as ``history_from_frames`` reads it: ratios by timestamp."""
+
+    index: Stamps
+    ratios: tuple[float, ...]
+
+    def items(self) -> Iterator[tuple[datetime, float]]:
+        return zip(self.index.stamps, self.ratios, strict=True)
+
+
+def _stamp(day: date) -> datetime:
+    return datetime(day.year, day.month, day.day, tzinfo=JAKARTA)
+
+
+def _frames(history: YahooHistory, zone: str = "Asia/Jakarta") -> tuple[Frame, Splits]:
+    """*history* as the frames yfinance returns, in the shape ``Frame`` and ``Splits`` keep."""
+    records = tuple(
         {
-            "Open": [float(row.open) for row in history.rows],
-            "High": [float(row.high) for row in history.rows],
-            "Low": [float(row.low) for row in history.rows],
-            "Close": [float(row.close) for row in history.rows],
-            "Adj Close": [float(row.close) for row in history.rows],
-            "Volume": [row.volume for row in history.rows],
-            "Dividends": [float(row.dividend) for row in history.rows],
-            "Stock Splits": [0.0 for _ in history.rows],
-        },
-        index=index,
+            "Open": float(row.open),
+            "High": float(row.high),
+            "Low": float(row.low),
+            "Close": float(row.close),
+            "Adj Close": float(row.close),
+            "Volume": float(row.volume),
+            "Dividends": float(row.dividend),
+            "Stock Splits": 0.0,
+        }
+        for row in history.rows
     )
-    split_index = pd.DatetimeIndex([pd.Timestamp(day) for day, _ in history.splits])
-    splits = pd.Series(
-        [float(ratio) for _, ratio in history.splits],
-        index=split_index.tz_localize("Asia/Jakarta"),
-    )
-    return frame, splits
+    frame = Frame(Stamps(zone, tuple(_stamp(row.day) for row in history.rows)), records)
+    split_stamps = Stamps("Asia/Jakarta", tuple(_stamp(day) for day, _ in history.splits))
+    return frame, Splits(split_stamps, tuple(float(ratio) for _, ratio in history.splits))
 
 
-@pytest.mark.parametrize("path", [BBCA_FILE, BBRI_FILE, UNVR_FILE])
-def test_frames_convert_to_exactly_what_was_recorded(path: Path) -> None:
-    recorded = history_from_json(path)
-    assert history_from_frames(recorded.ticker, *_frames(recorded)) == recorded
+def _converted(ticker: str, frame: Frame, splits: Splits) -> YahooHistory:
+    return history_from_frames(ticker, cast("pd.DataFrame", frame), cast("pd.Series", splits))
+
+
+def _row(day: date, prices: str, volume: int, dividend: str = "0") -> YahooRow:
+    """A row of *prices*, its open, high, low and close separated by spaces."""
+    opened, high, low, close = (Decimal(price) for price in prices.split())
+    return YahooRow(day, opened, high, low, close, volume, Decimal(dividend))
+
+
+# Three made-up days: prices whose float is not their Decimal (7300.3), a dividend, a day with no
+# volume, and a split.
+SHORT = YahooHistory(
+    "BBCA.JK",
+    (
+        _row(date(2021, 10, 4), "7250.5 7300.3 7200.75 7275", 1_000),
+        _row(date(2021, 10, 5), "7275 7325 7250 7300.3", 2_500, "12.3"),
+        _row(date(2021, 10, 6), "7300 7300 7300 7300", 0),
+    ),
+    ((date(2021, 10, 13), Decimal(5)),),
+)
+
+
+def test_frames_convert_to_exactly_what_was_recorded() -> None:
+    assert _converted("BBCA.JK", *_frames(SHORT)) == SHORT
 
 
 @pytest.mark.parametrize("column", ["Open", "High", "Low", "Close", "Volume"])
 def test_a_row_yahoo_gives_no_price_is_no_bar(column: str) -> None:
     """Yahoo's unfinished day has no close (as today's had on 2026-10-01): it is no bar, and
     reading the whole history up to today must not stop on it (plan scope decision 20)."""
-    history = history_from_json(BBCA_FILE)
-    frame, splits = _frames(history)
-    frame[column] = frame[column].astype(float)
-    frame.loc[frame.index[-1], column] = float("nan")
-    assert history_from_frames("BBCA.JK", frame, splits).rows == history.rows[:-1]
+    frame, splits = _frames(SHORT)
+    frame.records[-1][column] = float("nan")
+    assert _converted("BBCA.JK", frame, splits).rows == SHORT.rows[:-1]
 
 
 def test_a_dividend_on_a_row_with_no_price_is_refused() -> None:
-    history = history_from_json(BBCA_FILE)
-    frame, splits = _frames(history)
-    last = frame.index[-1]
-    frame.loc[last, "Close"] = float("nan")
-    frame.loc[last, "Dividends"] = 25.0
-    day = history.rows[-1].day.isoformat()
+    frame, splits = _frames(SHORT)
+    frame.records[-1].update(Close=float("nan"), Dividends=25.0)
     with pytest.raises(
         DataUnavailableError,
-        match=rf"^BBCA\.JK: Yahoo has no prices for {day}, the ex-date of a dividend",
+        match=r"^BBCA\.JK: Yahoo has no prices for 2021-10-06, the ex-date of a dividend",
     ):
-        history_from_frames("BBCA.JK", frame, splits)
+        _converted("BBCA.JK", frame, splits)
 
 
 def test_a_changed_response_shape_is_refused() -> None:
-    frame, splits = _frames(history_from_json(UNVR_FILE))
+    frame, splits = _frames(SHORT)
+    no_dividends = replace(frame, columns=tuple(c for c in COLUMNS if c != "Dividends"))
     with pytest.raises(DataUnavailableError, match=r"^X\.JK: Yahoo's response has no 'Dividends'"):
-        history_from_frames("X.JK", frame.drop(columns=["Dividends"]), splits)
+        _converted("X.JK", no_dividends, splits)
     with pytest.raises(DataUnavailableError, match=r"^X\.JK: Yahoo returned no rows$"):
-        history_from_frames("X.JK", frame.iloc[0:0], splits)
+        _converted("X.JK", Frame(Stamps("Asia/Jakarta", ()), ()), splits)
+    utc, _ = _frames(SHORT, zone="UTC")
     with pytest.raises(DataUnavailableError, match="dates are in UTC, expected Asia/Jakarta"):
-        history_from_frames("X.JK", frame.tz_convert("UTC"), splits)
+        _converted("X.JK", utc, splits)
 
 
 def test_recordings_round_trip_through_json(tmp_path: Path) -> None:
@@ -692,22 +756,6 @@ def test_bbri_s_2021_dividend_restores_to_what_bri_announced() -> None:
     assert isinstance(dividend, CashDividend)
     assert dividend.per_share == Decimal("98.9057")
     assert abs(dividend.per_share - Decimal("98.905659443")) <= Decimal("0.0001")  # Liputan6
-
-
-def test_bbri_s_golden_years_are_restored_except_where_a_volume_is_not_whole() -> None:
-    # #160 spec §9.2: 1,103 days from 2017-01-31 to 2021-09-07 are evidence, a price off whole
-    # rupiah on a day that is not a flat row with no volume (57 flat days there have one too); the
-    # 153 before the 5-for-1 split of 2017-11-10 also have a volume that is not whole (#162).
-    history = history_from_json(BBRI_WHOLE)
-    found = evidence(history)
-    runs = find_runs(found)
-    span = (date(2017, 1, 31), date(2021, 9, 7))
-    assert len([row for row in found if span[0] <= row.day <= span[1]]) == 1_103
-    with pytest.raises(UnrecoverablePricesError) as refused:
-        unadjust(history, BBRI, calendar(), span, runs)
-    assert (len(refused.value.days), refused.value.days[-1]) == (153, date(2017, 11, 9))
-    bars, _ = unadjust(history, BBRI, calendar(), (date(2017, 11, 10), span[1]), runs)
-    assert len(bars) == len(calendar().trading_days(date(2017, 11, 10), span[1]))
 
 
 def test_the_older_bbri_recordings_are_the_three_made_before_the_whole_one() -> None:

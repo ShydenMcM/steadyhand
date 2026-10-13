@@ -4,7 +4,9 @@ properties (#290).
 Shyden's rules (2026-10-08, every project): a test that reads or parses the whole tracked tree to
 check a rule across the code is a guard, run in its own CI job with one limit at its step; a test
 whose real case needs a process (real git, the installed console script, a second process racing
-for a lock) is an integration test, also in its own job with one limit. Shyden's ruling on #290
+for a lock) is an integration test, also in its own job with one limit; so is a long real run
+over the recorded golden window, too heavy for the unit limits, with a short stand-in of it in
+unit (#292, under the rule that a cut never drops a real run). Shyden's ruling on #290
 (2026-10-12): every Hypothesis property runs at its full count in a properties suite, with a fast
 stand-in of it in unit. Every other test is unit, bound by the unit rules. The guards live in
 ``tests/guards``, integration in ``tests/integration``, the properties in ``tests/properties``.
@@ -93,7 +95,8 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default="unit",
         help=(
             "the suite to run: unit (the default), guards, the whole-repo guards (#285), or "
-            "integration, the tests whose real case needs a process (#286), or properties, the "
+            "integration, the tests whose real case needs a process (#286) or runs the recorded "
+            "golden window (#292), or properties, the "
             "Hypothesis properties at their full count (#290)"
         ),
     )

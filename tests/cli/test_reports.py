@@ -1,13 +1,14 @@
-"""The report layouts, from real runs over the recorded golden window: a strategy beside the
-baseline, a comparison, a halt, a run with no goal, and the value formats (M5 spec §5.3, §5.4)."""
+"""The report layouts, from real runs over a short made-up window: a strategy beside the baseline,
+a comparison, a halt, a run with no goal, and the value formats (M5 spec §5.3, §5.4). The same
+tests over the recorded golden window are in ``tests/integration/cli/test_reports_golden.py``
+(#292): a year of five recorded stocks was over the unit limit."""
 
-from collections.abc import Iterator
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from record_golden import END, RECORDED, START, replay, settings, universe
+from short_world import END, START, settings, universe, yahoo
 
 from steadyhand import (
     DATA_BAR_REFUSED,
@@ -27,7 +28,7 @@ from steadyhand import (
     backtest,
     compare,
 )
-from steadyhand_idx import BarCache, CachedDataSource, IdxMarketRules
+from steadyhand_idx import IdxMarketRules
 from steadyhand_idx.reports import (
     GOAL_FIGURES,
     RUN_FIGURES,
@@ -55,10 +56,8 @@ class Cash:
 
 
 @pytest.fixture(scope="module")
-def market(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Market]:
-    with BarCache(tmp_path_factory.mktemp("bars") / "bars.sqlite") as cache:
-        source = CachedDataSource(replay(), cache, today=lambda: RECORDED)
-        yield Market(universe(), source, IdxMarketRules())
+def market() -> Market:
+    return Market(universe(), yahoo(), IdxMarketRules())
 
 
 @pytest.fixture(scope="module")
@@ -68,10 +67,10 @@ def beside(market: Market) -> BacktestResult:
 
 def test_a_strategy_is_shown_beside_the_baseline(beside: BacktestResult) -> None:
     lines = backtest_page(beside, ()).lines
-    assert lines[0] == "Backtest: cash, 2021-02-01 to 2022-01-31, 248 trading days"
+    assert lines[0] == "Backtest: cash, 2021-12-15 to 2022-01-11, 19 trading days"
     assert lines[2].split() == ["cash", "buy-and-hold"]
     assert lines[3].split("  ")[0] == "Final value"
-    assert lines[3].endswith("IDR 100,000,000   IDR 96,825,198")
+    assert lines[3].endswith("IDR 100,000,000  IDR 104,467,795")
 
 
 def test_each_figure_row_carries_its_term_key(beside: BacktestResult) -> None:
@@ -85,11 +84,11 @@ def test_the_backtest_files_hold_the_strategys_days_and_both_columns(
     beside: BacktestResult, tmp_path: Path
 ) -> None:
     summary, daily = backtest_files(beside, tmp_path / "reports")
-    assert summary.name == "backtest-cash-2021-02-01-2022-01-31.md"
+    assert summary.name == "backtest-cash-2021-12-15-2022-01-11.md"
     assert "\n|  | cash | buy-and-hold |\n" in summary.read_text(encoding="utf-8")
     rows = daily.read_text(encoding="utf-8").splitlines()
-    assert rows[1] == "2021-02-01,100000000,100000000,0,0,0,0"
-    assert len(rows) == 249
+    assert rows[1] == "2021-12-15,100000000,100000000,0,0,0,0"
+    assert len(rows) == 20
 
 
 def test_a_comparison_is_a_row_per_run(market: Market, tmp_path: Path) -> None:
@@ -130,13 +129,13 @@ def test_a_run_with_no_goal_shows_no_income_figures(market: Market, tmp_path: Pa
         "goal" in line for line in backtest_page(result, ()).lines
     )
     quiet = replace(result, warnings=())
-    warned = replace(result, warnings=(Note(DATA_BAR_REFUSED, "BBRI: the source refused a day"),))
+    warned = replace(result, warnings=(Note(DATA_BAR_REFUSED, "XAAA: the source refused a day"),))
     assert "Warnings:" in backtest_page(warned, ()).lines
     assert "Warnings:" not in backtest_page(quiet, ()).lines
     summary, _ = backtest_files(quiet, tmp_path)
     assert "## Warnings" not in summary.read_text(encoding="utf-8")
     summary, _ = backtest_files(warned, tmp_path / "warned")
-    assert "\n## Warnings\n\n- BBRI: the source refused a day\n" in summary.read_text(
+    assert "\n## Warnings\n\n- XAAA: the source refused a day\n" in summary.read_text(
         encoding="utf-8"
     )
 

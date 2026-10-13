@@ -20,16 +20,6 @@ import pytest
 # that refuses a raised limit (~/.claude/hooks/unit-limit-never-raised.py, CPU_LIMITS) reads it.
 LOAD_CPU_LIMIT_MICROSECONDS = 100_000
 
-# Files allowed over the limit until their ticket moves the cost out, each with its measured cost
-# and that ticket. Shyden, 2026-10-12 (#285): "Burn-down list". It only shrinks: a listed file
-# that loads within the limit fails the run until it is taken off, and nothing is ever added.
-LOAD_BURN_DOWN = {
-    "tests/idx/test_yahoo.py": (
-        "imports pandas (0.76 s of CPU on the first import, measured 2026-10-12) for the 5 tests "
-        "that build real frames; #292 moves them to integration, with stand-ins left in unit"
-    ),
-}
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -53,27 +43,19 @@ def over_limit(loads: list[Load]) -> list[Load]:
 
 
 def judged(chosen: str, loads: list[Load]) -> list[str]:
-    """Why a run of the *chosen* suite fails on *loads*, one line per file: a file over the limit,
-    or a listed file now within it. Only a unit run's untraced loads are judged: a guards run's step
-    limit bounds it, and a load timed under coverage timed its tracer too (the 1 s rule's terms).
+    """Why a run of the *chosen* suite fails on *loads*, one line per file over the limit. Only a
+    unit run's untraced loads are judged: a guards run's step limit bounds it, and a load timed
+    under coverage timed its tracer too (the 1 s rule's terms). No file is let off: the one listed
+    file went under the limit when #292 moved its pandas tests to integration.
     """
     if chosen != "unit":
         return []
-    over = set(over_limit(loads))
-    refusals = []
-    for load in (load for load in loads if not load.traced):
-        if load.path in LOAD_BURN_DOWN and load not in over:
-            refusals.append(
-                f"LOAD BURN-DOWN: {load.path} now loads within the limit "
-                f"({load.cpu_microseconds} us of CPU): take it off LOAD_BURN_DOWN in "
-                "tests/plugins/load_clock.py"
-            )
-        elif load in over and load.path not in LOAD_BURN_DOWN:
-            refusals.append(
-                f"LOAD LIMIT: {load.path} took {load.cpu_microseconds} us of CPU to load, over "
-                f"{LOAD_CPU_LIMIT_MICROSECONDS}: cut its import-time work or move it out of unit"
-            )
-    return refusals
+    return [
+        f"LOAD LIMIT: {load.path} took {load.cpu_microseconds} us of CPU to load, over "
+        f"{LOAD_CPU_LIMIT_MICROSECONDS}: cut its import-time work or move it out of unit"
+        for load in over_limit(loads)
+        if not load.traced
+    ]
 
 
 def report(loads: list[Load]) -> list[str]:

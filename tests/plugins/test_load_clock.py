@@ -11,7 +11,6 @@ from types import SimpleNamespace
 import load_clock
 import pytest
 from load_clock import (
-    LOAD_BURN_DOWN,
     LOAD_CPU_LIMIT_MICROSECONDS,
     LOADS,
     Load,
@@ -51,7 +50,7 @@ def test_the_report_lists_every_file_heaviest_first() -> None:
 
 
 HEAVY = Load("tests/test_heavy.py", 100_001, 100_001)
-LISTED = "tests/idx/test_yahoo.py"
+YAHOO = "tests/idx/test_yahoo.py"
 
 
 def test_a_unit_run_refuses_a_load_over_the_limit_by_name() -> None:
@@ -63,7 +62,7 @@ def test_a_unit_run_refuses_a_load_over_the_limit_by_name() -> None:
     ]
 
 
-TRACED = [Load(HEAVY.path, 100_001, 100_001, traced=True), Load(LISTED, 1, 1, traced=True)]
+TRACED = [Load(HEAVY.path, 100_001, 100_001, traced=True), Load(YAHOO, 1, 1, traced=True)]
 
 
 def test_a_load_timed_under_coverage_is_not_judged_it_timed_the_tracer() -> None:
@@ -95,27 +94,18 @@ def test_coverage_is_on_while_a_coverage_run_is_current(
 
 
 def test_a_guards_run_judges_no_load_its_step_limit_bounds_it() -> None:
-    assert judged("guards", [HEAVY, Load(LISTED, 1, 1)]) == []
+    assert judged("guards", [HEAVY, Load(YAHOO, 1, 1)]) == []
 
 
-def test_the_burn_down_list_holds_only_test_yahoo_and_why() -> None:
-    """Shyden, 2026-10-12 (#285), "Burn-down list": #292 moves its pandas tests out and empties
-    it. The list only shrinks: an entry is never added."""
-    assert list(LOAD_BURN_DOWN) == [LISTED]
-    assert "pandas" in LOAD_BURN_DOWN[LISTED]
-    assert "#292" in LOAD_BURN_DOWN[LISTED]
-
-
-def test_a_listed_file_over_the_limit_is_reported_not_refused() -> None:
-    assert judged("unit", [Load(LISTED, 900_000, 3_000_000)]) == []
-
-
-@pytest.mark.parametrize("cpu", [0, 100_000])
-def test_a_listed_file_within_the_limit_must_come_off_the_list(cpu: int) -> None:
-    assert judged("unit", [Load(LISTED, cpu, cpu)]) == [
+def test_no_file_is_let_off_the_limit_any_more() -> None:
+    """Shyden, 2026-10-12 (#285), "Burn-down list": it held only ``tests/idx/test_yahoo.py``, for
+    its pandas import, until #292 moved the tests that build pandas frames to integration. Emptied,
+    the list is gone, so that file over the limit is refused like any other."""
+    assert not hasattr(load_clock, "LOAD_BURN_DOWN")
+    assert judged("unit", [Load(YAHOO, 900_000, 3_000_000)]) == [
         (
-            f"LOAD BURN-DOWN: {LISTED} now loads within the limit ({cpu} us of CPU): take it off "
-            "LOAD_BURN_DOWN in tests/plugins/load_clock.py"
+            "LOAD LIMIT: tests/idx/test_yahoo.py took 900000 us of CPU to load, over 100000: "
+            "cut its import-time work or move it out of unit"
         )
     ]
 

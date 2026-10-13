@@ -26,9 +26,10 @@ def test_the_integration_job_runs_the_integration_suite_alone_with_one_limit() -
     ]
     limited = [step for step in steps if "timeout-minutes" in step]
     assert [step["run"] for step in limited] == [INTEGRATION_RUN]
-    # Measured on the laptop on 2026-10-13: 6 s. A step limit is whole minutes, so the least it
-    # can be is 1, about ten times the measured run.
-    assert limited[0]["timeout-minutes"] == 1
+    # #292 moved the long real runs here (the golden window's CLI, paper and backtest runs). The
+    # step took 31 s on CI on both Pythons (PR #316, run 38331680081), against #286's 6 s; a step
+    # limit is whole minutes, and 3 is about six times the measured run.
+    assert limited[0]["timeout-minutes"] == 3
 
 
 def test_the_extension_integration_job_installs_then_runs_its_suite_with_one_limit() -> None:

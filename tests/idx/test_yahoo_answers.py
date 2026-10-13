@@ -25,6 +25,10 @@ from steadyhand_idx.yahoo import (
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "yahoo"
 RECORDINGS = sorted(FIXTURES.glob("*.json"))
+WHOLE_BBRI = FIXTURES / "BBRI.JK_2014-01-06_2026-10-01.json"
+# BBRI's whole recording, 2014 to 2026, is restored in full in the integration suite
+# (tests/integration/idx/test_yahoo_whole_bbri.py): over the unit CPU limit (#292).
+IN_UNIT = [path for path in RECORDINGS if path != WHOLE_BBRI]
 
 
 @cache
@@ -292,6 +296,13 @@ def test_every_recording_has_its_answers_pinned() -> None:
     assert len(RECORDINGS) == 14
 
 
-@pytest.mark.parametrize("path", RECORDINGS, ids=lambda path: path.stem)
+def test_every_recording_but_bbri_s_whole_one_is_checked_in_unit() -> None:
+    assert [path.stem for path in RECORDINGS if path not in IN_UNIT] == [
+        "BBRI.JK_2014-01-06_2026-10-01"
+    ]
+    assert len(IN_UNIT) == 13
+
+
+@pytest.mark.parametrize("path", IN_UNIT, ids=lambda path: path.stem)
 def test_a_recording_restores_to_its_pinned_answers(path: Path) -> None:
     assert answers(path) == PINNED[path.name]
