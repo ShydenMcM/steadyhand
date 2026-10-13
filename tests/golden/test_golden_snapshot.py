@@ -1,13 +1,14 @@
 """Every day of the made-up window's backtests saved and read back (M5 spec §9.2 "Codec").
 
 The stand-ins of the golden runs' codec checks, which run in the integration suite
-(``tests/integration/golden/test_golden_snapshot.py``, #292): the made-up window's switch-off
-run (19 days, with a cut, a split and a paid dividend) and its switch-on run (19 days, ending
-with its one claim reinvested in part).
+(``tests/integration/golden/test_golden_snapshot_recorded.py``, #292): the made-up window's
+switch-off run at a 30% limit per stock (19 days, with cuts, skipped orders, a split and a paid
+dividend) and its switch-on run (19 days,
+ending with its one claim reinvested in part).
 """
 
 import pytest
-from short_world import RUNS
+from short_world import RUNS, library_run
 
 from steadyhand import (
     BacktestResult,
@@ -22,7 +23,7 @@ from steadyhand import (
 
 @pytest.fixture(scope="module")
 def golden() -> tuple[BacktestResult, BacktestResult]:
-    return RUNS["buy-and-hold"](), RUNS["exemption-on"]()
+    return library_run(max_weight="0.30"), RUNS["exemption-on"]()
 
 
 @pytest.mark.parametrize(("which", "days"), [(0, 19), (1, 19)], ids=["off", "on"])

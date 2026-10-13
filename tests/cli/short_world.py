@@ -177,21 +177,19 @@ def library_run(
     strategy: str = "buy-and-hold",
     *,
     end: date = END,
-    cash: int = 100_000_000,
     broker_fees: str | None = None,
     exemption: bool = False,
+    max_weight: str = "0.35",
 ) -> BacktestResult:
     """The library's backtest from the window's start to *end*, with ``SHORT_CONFIG``'s settings
     unless told, and each strategy made from ``VALUES``."""
     entry = STRATEGIES[strategy]
-    chosen = replace(
-        settings(), capital=Money(cash, IDR), lookback_years=entry.lookback_years(VALUES)
-    )
-    if exemption:
-        engine = replace(chosen.engine, dividend_reinvestment_exemption=True)
-        chosen = replace(chosen, engine=engine)
+    chosen = replace(settings(), lookback_years=entry.lookback_years(VALUES))
+    limits = replace(chosen.engine.limits, max_weight=Decimal(max_weight))
+    engine = replace(chosen.engine, limits=limits, dividend_reinvestment_exemption=exemption)
     rules = IdxMarketRules() if broker_fees is None else IdxMarketRules(broker_fees=broker_fees)
-    return backtest(entry(VALUES), Market(universe(), yahoo(), rules), START, end, chosen)
+    market = Market(universe(), yahoo(), rules)
+    return backtest(entry(VALUES), market, START, end, replace(chosen, engine=engine))
 
 
 def write_universe(home: Path) -> None:

@@ -164,9 +164,10 @@ def test_the_recordings_reach_five_years_before_the_run_ends(stock: str) -> None
     assert (rows[0].day, rows[-1].day) == (HISTORY_START, END)
 
 
-# The stand-ins of the golden runs moved to tests/integration/golden/test_golden_backtest.py
-# (#292): each of the same name, over the made-up window (tests/cli/short_world.py), against its
-# own pinned file in tests/fixtures/golden/made-up.
+# The stand-ins of the golden runs moved to
+# tests/integration/golden/test_golden_backtest_recorded.py (#292): each of the same name, over the
+# made-up window (tests/cli/short_world.py), against its own pinned file in
+# tests/fixtures/golden/made-up.
 
 
 def test_buy_and_hold_reproduces_the_stored_results_exactly() -> None:

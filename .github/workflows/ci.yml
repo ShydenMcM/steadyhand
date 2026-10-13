@@ -322,8 +322,9 @@ jobs:
         run: npm run test:guards
 
   # The integration suite (#286): every test whose real case needs a process (real git, the
-  # installed console script, two processes racing for a lock), in its own suite, with one limit
-  # at its step. A unit run refuses every process and outside connection.
+  # installed console script, two processes racing for a lock), and every long real run over the
+  # recorded golden window (#292), in its own suite, with one limit at its step. A unit run refuses
+  # every process and outside connection, and keeps a short stand-in of each long run.
   integration:
     name: integration (py${{ matrix.python }})
     runs-on: ubuntu-24.04
@@ -355,7 +356,8 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
       - name: The integration suite
         if: steps.scope.outputs.docs_only != 'true'
-        timeout-minutes: 1
+        # The golden window's long real runs (#292) take about 1.3 minutes of CI's CPU.
+        timeout-minutes: 3
         run: uv run --locked pytest -W error --suite integration -p no:cacheprovider
 
   extension-integration:
