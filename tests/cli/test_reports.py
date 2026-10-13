@@ -70,7 +70,7 @@ def test_a_strategy_is_shown_beside_the_baseline(beside: BacktestResult) -> None
     assert lines[0] == "Backtest: cash, 2021-12-15 to 2022-01-11, 19 trading days"
     assert lines[2].split() == ["cash", "buy-and-hold"]
     assert lines[3].split("  ")[0] == "Final value"
-    assert lines[3].endswith("IDR 100,000,000  IDR 103,359,041")
+    assert lines[3].endswith("IDR 100,000,000  IDR 104,467,795")
 
 
 def test_each_figure_row_carries_its_term_key(beside: BacktestResult) -> None:

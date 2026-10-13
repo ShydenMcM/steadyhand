@@ -82,12 +82,12 @@ def test_the_csv_row_is_the_golden_runs_figures(short: Cli) -> None:
     figures = dict(zip(header, row, strict=True))
     metrics = library_run().run.metrics
     assert figures["strategy"] == "buy-and-hold"
-    assert int(figures["final_value"]) == metrics.final_value.amount == 103_359_041
+    assert int(figures["final_value"]) == metrics.final_value.amount == 104_467_795
     assert int(figures["deposited"]) == metrics.deposited.amount
     assert Decimal(figures["total_return"]) == metrics.total_return
     assert Decimal(figures["annual_return"]) == metrics.annual_return
     assert int(figures["costs"]) == metrics.costs.total.amount
-    assert int(figures["dividends_gross"]) == metrics.dividends.gross.amount == 617_500
+    assert int(figures["dividends_gross"]) == metrics.dividends.gross.amount == 825_000
     assert int(figures["dividend_tax"]) == metrics.dividends.tax.amount
     assert header == [
         "strategy",
@@ -116,8 +116,8 @@ def test_the_table_is_a_row_per_strategy_then_the_warnings(short: Cli) -> None:
     assert header.split("  ")[0] == "Strategy"
     assert header.endswith("Run-rate, of the goal")
     assert row.startswith("buy-and-hold")
-    assert "IDR 103,359,041" in row
-    assert row.endswith("8355.00%")
+    assert "IDR 104,467,795" in row
+    assert row.endswith("11220.75%")
     assert result.out.startswith(
         "Comparison, 2021-12-15 to 2022-01-11, 19 trading days\n\nStrategy"
     )
@@ -133,5 +133,5 @@ def test_the_markdown_file_is_the_same_table(short: Cli) -> None:
     assert lines[:4] == ["# Comparison, 2021-12-15 to 2022-01-11", "", "19 trading days.", ""]
     assert lines[4].startswith("| Strategy | Final value | Deposited | ")
     assert lines[5] == "|---|" + "---:|" * 14
-    assert lines[6].startswith("| buy-and-hold | IDR 103,359,041 | IDR 100,000,000 | 3.36% | ")
+    assert lines[6].startswith("| buy-and-hold | IDR 104,467,795 | IDR 100,000,000 | 4.47% | ")
     assert lines[-1] == DISCLAIMER

@@ -164,10 +164,10 @@ def universe() -> Lq45Universe:
 
 
 def settings(*, income: bool = True) -> BacktestSettings:
-    """``SHORT_CONFIG``'s: Rp100,000,000, 25% a stock, and a goal of Rp2,000 a month, which the
+    """``SHORT_CONFIG``'s: Rp100,000,000, 35% a stock, so that three stocks can be fully invested, and a goal of Rp2,000 a month, which the
     window's dividends meet, so its projection stops at once (a goal it never met would simulate
     600 months three times, about 30 ms of CPU)."""
-    limits = RiskLimits(max_weight=Decimal("0.25"))
+    limits = RiskLimits(max_weight=Decimal("0.35"))
     goal = IncomeGoal(Money(2_000, IDR)) if income else None
     return BacktestSettings(Money(100_000_000, IDR), EngineSettings(limits=limits), goal)
 
@@ -212,7 +212,7 @@ monthly_income_target_idr = 2_000
 name = "buy-and-hold"
 
 [risk]
-max_weight = "0.25"
+max_weight = "0.35"
 
 [consent]
 disclaimer_accepted = 2026-09-27

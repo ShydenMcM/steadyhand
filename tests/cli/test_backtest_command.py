@@ -162,31 +162,31 @@ def test_the_daily_csv_is_the_golden_run_day_by_day(short: Cli) -> None:
     ]
     assert rows[1:] == expected
     assert len(expected) == 19
-    assert sum(int(row[5]) for row in rows[1:]) == 617_500
+    assert sum(int(row[5]) for row in rows[1:]) == 825_000
 
 
 def test_the_summary_shows_the_golden_figures(short: Cli) -> None:
     result = short("backtest", *SHORT_WINDOW)
     assert result.out.split("\n\n")[1].splitlines() == [
         "                          buy-and-hold",
-        "Final value            IDR 103,359,041",
+        "Final value            IDR 104,467,795",
         "Deposited              IDR 100,000,000",
-        "Total return                     3.36%",
-        "Annual return                   53.83%",
-        "Largest drawdown                 0.33%",
-        "Trading costs              IDR 174,709",
-        "Turnover a year                477.96%",
-        "Dividends before tax       IDR 617,500",
-        "Dividend tax                IDR 61,750",
+        "Total return                     4.47%",
+        "Annual return                   76.79%",
+        "Largest drawdown                 0.45%",
+        "Trading costs              IDR 268,205",
+        "Turnover a year                640.23%",
+        "Dividends before tax       IDR 825,000",
+        "Dividend tax                IDR 82,500",
         "Income goal a month          IDR 2,000",
-        "Received a month            IDR 46,312",
-        "Received, of the goal         2315.60%",
-        "Run-rate a month           IDR 167,100",
-        "Run-rate, of the goal         8355.00%",
+        "Received a month            IDR 61,875",
+        "Received, of the goal         3093.75%",
+        "Run-rate a month           IDR 224,415",
+        "Run-rate, of the goal        11220.75%",
     ]
     metrics = library_run().run.metrics
-    assert metrics.final_value == Money(103_359_041, IDR)
-    assert metrics.costs.total == Money(174_709, IDR)
+    assert metrics.final_value == Money(104_467_795, IDR)
+    assert metrics.costs.total == Money(268_205, IDR)
 
 
 def test_the_summary_then_the_warnings_the_files_and_the_explanations(short: Cli) -> None:
@@ -218,7 +218,7 @@ def test_the_markdown_file_holds_the_summary_and_the_disclaimer(short: Cli) -> N
         "",
         "|  | buy-and-hold |",
         "|---|---:|",
-        "| Final value | IDR 103,359,041 |",
+        "| Final value | IDR 104,467,795 |",
     ]
     assert f"\n## Warnings\n\n- {SHORT_RESTORED}\n" in text
     assert "## Day warnings" not in text
@@ -318,7 +318,7 @@ def test_monthly_savings_runs_against_buy_and_hold(
     )
     assert result.out.split("\n\n")[1].splitlines()[:2] == [
         "                       monthly-savings     buy-and-hold",
-        "Final value            IDR 101,042,022  IDR 101,228,538",
+        "Final value            IDR 101,282,692  IDR 101,629,434",
     ]
 
 
