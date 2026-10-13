@@ -14,7 +14,6 @@ from pathlib import Path
 import pytest
 from cli_world import (
     GOLDEN_CONFIG,
-    GROWTH_CONFIG,
     at,
     golden_backtest,
     opened,
@@ -25,7 +24,12 @@ from cli_world import (
     tables,
     trading_days,
 )
-from record_golden import END, START
+from record_golden import START
+from short_world import END as SHORT_END
+from short_world import GROWTH_CONFIG as SHORT_GROWTH_CONFIG
+from short_world import START as SHORT_START
+from short_world import library_run, short_cli
+from short_world import trading_days as short_trading_days
 
 from steadyhand import (
     IDR,
@@ -207,33 +211,6 @@ def test_thirty_one_days_to_run_proceed_with_catch_up(tmp_path: Path) -> None:
 
 
 # The golden invariant (M5 spec §6.2, §9.2).
-
-
-def test_a_paper_account_run_day_by_day_ends_where_the_backtest_does(tmp_path: Path) -> None:
-    cli = paper(tmp_path)
-    days = trading_days()[:12]
-    for day in days:  # runtime population: one journey, each day on the state the last left
-        assert run_on(cli, day).code == 0
-    expected = golden_backtest(cli, days[-1]).run
-    with opened(cli) as store:
-        assert store.reports() == expected.reports
-        account = store.account()
-        assert account is not None
-        assert account.state == expected.final
-
-
-def test_a_year_caught_up_in_one_run_ends_where_the_backtest_does(tmp_path: Path) -> None:
-    cli = paper(tmp_path)
-    run_on(cli, START)
-    result = run_on(cli, END, "--catch-up")
-    assert result.code == 0, result.err
-    expected = golden_backtest(cli, END).run
-    assert len(expected.reports) == len(trading_days()) == 248
-    with opened(cli) as store:
-        assert store.reports() == expected.reports
-        account = store.account()
-        assert account is not None
-        assert account.state == expected.final
 
 
 def test_the_public_fetch_gives_each_trading_day_its_inputs_oldest_first(tmp_path: Path) -> None:
@@ -619,30 +596,6 @@ MONTHLY_CONFIG = GOLDEN_CONFIG.replace(
 """The golden settings with ``monthly-savings`` spreading the starting cash over four months."""
 
 
-def test_dividend_growth_reviews_again_on_the_first_trading_day_of_2022(tmp_path: Path) -> None:
-    cli = paper(tmp_path, GROWTH_CONFIG)
-    run_on(cli, START)
-    result = run_on(cli, END, "--catch-up")
-    assert result.code == 0, result.err
-    expected = golden_backtest(cli, END).run
-    with opened(cli) as store:
-        reports = store.reports()
-        account = store.account()
-    assert reports == expected.reports
-    assert account is not None
-    assert account.state == expected.final
-    # 3 January 2022 tests 2019 to 2021: TLKM now passes and UNVR no longer does. The orders
-    # it places that day fill on the 4th.
-    filled = {
-        (fill.order.instrument.symbol, fill.order.side.value)
-        for report in reports
-        if report.day == date(2022, 1, 4)
-        for fill in report.fills
-    }
-    assert {("TLKM", "buy"), ("UNVR", "sell")} <= filled
-    assert account.state.memory == {"set": "IDX:BBCA IDX:TLKM", "year": "2022"}
-
-
 def test_the_settings_of_the_strategy_that_runs_are_recorded_with_the_engines(
     tmp_path: Path,
 ) -> None:
@@ -706,3 +659,58 @@ def test_a_strategy_switched_to_records_its_settings_the_first_day_it_runs(
     cash = account.state.holdings.portfolio.spendable_cash(trading_days()[1])
     assert cash == Money(1_579_730, IDR)
     assert account.state.memory == {"instalment": "394932", "due": "3", "month": "2021-02"}
+
+
+# The stand-ins of the golden-window runs moved to tests/integration/cli/
+# test_paper_run_golden.py (#292): each of the same name, over the made-up window.
+
+
+def test_a_paper_account_run_day_by_day_ends_where_the_backtest_does(tmp_path: Path) -> None:
+    cli = short_cli(tmp_path / "home")
+    days = short_trading_days()[:6]
+    for day in days:  # runtime population: one journey, each day on the state the last left
+        assert run_on(cli, day).code == 0
+    expected = library_run(end=days[-1]).run
+    with opened(cli) as store:
+        assert store.reports() == expected.reports
+        account = store.account()
+        assert account is not None
+        assert account.state == expected.final
+
+
+def test_a_year_caught_up_in_one_run_ends_where_the_backtest_does(tmp_path: Path) -> None:
+    cli = short_cli(tmp_path / "home")
+    run_on(cli, SHORT_START)
+    result = run_on(cli, SHORT_END, "--catch-up")
+    assert result.code == 0, result.err
+    expected = library_run().run
+    assert len(expected.reports) == 19
+    with opened(cli) as store:
+        assert store.reports() == expected.reports
+        account = store.account()
+        assert account is not None
+        assert account.state == expected.final
+
+
+def test_dividend_growth_reviews_again_on_the_first_trading_day_of_2022(tmp_path: Path) -> None:
+    cli = short_cli(tmp_path / "home", SHORT_GROWTH_CONFIG)
+    run_on(cli, SHORT_START)
+    result = run_on(cli, SHORT_END, "--catch-up")
+    assert result.code == 0, result.err
+    expected = library_run("dividend-growth").run
+    with opened(cli) as store:
+        reports = store.reports()
+        account = store.account()
+    assert reports == expected.reports
+    assert account is not None
+    assert account.state == expected.final
+    # 3 January 2022 tests 2019 to 2021: XBBB now passes and XAAA no longer does. The orders it
+    # places that day fill on the 4th.
+    filled = {
+        (fill.order.instrument.symbol, fill.order.side.value)
+        for report in reports
+        if report.day == date(2022, 1, 4)
+        for fill in report.fills
+    }
+    assert {("XBBB", "buy"), ("XAAA", "sell")} <= filled
+    assert account.state.memory == {"set": "IDX:XBBB IDX:XCCC", "year": "2022"}
