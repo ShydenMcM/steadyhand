@@ -121,8 +121,8 @@ def test_a_holding_whose_old_prices_cannot_be_recovered_keeps_its_dividend_histo
 # The stand-ins of the golden-window tests moved to tests/integration/cli/
 # test_backtest_command_golden.py (#292): each of the same name, over the made-up window.
 
-SHORT_STEM = "backtest-buy-and-hold-2021-02-01-2021-02-26"
-WEEK_STEM = "backtest-buy-and-hold-2021-02-01-2021-02-05"
+SHORT_STEM = "backtest-buy-and-hold-2021-12-15-2022-01-11"
+WEEK_STEM = "backtest-buy-and-hold-2021-12-15-2021-12-21"
 
 
 @pytest.fixture
@@ -162,30 +162,30 @@ def test_the_daily_csv_is_the_golden_run_day_by_day(short: Cli) -> None:
     ]
     assert rows[1:] == expected
     assert len(expected) == 19
-    assert sum(int(row[5]) for row in rows[1:]) == 1_240_000
+    assert sum(int(row[5]) for row in rows[1:]) == 617_500
 
 
 def test_the_summary_shows_the_golden_figures(short: Cli) -> None:
     result = short("backtest", *SHORT_WINDOW)
     assert result.out.split("\n\n")[1].splitlines() == [
         "                          buy-and-hold",
-        "Final value            IDR 103,981,291",
+        "Final value            IDR 103,359,041",
         "Deposited              IDR 100,000,000",
-        "Total return                     3.98%",
-        "Annual return                   72.99%",
+        "Total return                     3.36%",
+        "Annual return                   53.83%",
         "Largest drawdown                 0.33%",
         "Trading costs              IDR 174,709",
-        "Turnover a year                514.37%",
-        "Dividends before tax     IDR 1,240,000",
-        "Dividend tax               IDR 124,000",
+        "Turnover a year                477.96%",
+        "Dividends before tax       IDR 617,500",
+        "Dividend tax                IDR 61,750",
         "Income goal a month          IDR 2,000",
-        "Received a month            IDR 93,000",
-        "Received, of the goal         4650.00%",
-        "Run-rate a month           IDR 263,625",
-        "Run-rate, of the goal        13181.25%",
+        "Received a month            IDR 46,312",
+        "Received, of the goal         2315.60%",
+        "Run-rate a month           IDR 167,100",
+        "Run-rate, of the goal         8355.00%",
     ]
     metrics = library_run().run.metrics
-    assert metrics.final_value == Money(103_981_291, IDR)
+    assert metrics.final_value == Money(103_359_041, IDR)
     assert metrics.costs.total == Money(174_709, IDR)
 
 
@@ -194,7 +194,7 @@ def test_the_summary_then_the_warnings_the_files_and_the_explanations(short: Cli
     assert result.err == ""
     reports = short.home / "reports"
     assert result.out.startswith(
-        "Backtest: buy-and-hold, 2021-02-01 to 2021-02-05, 5 trading days\n\n"
+        "Backtest: buy-and-hold, 2021-12-15 to 2021-12-21, 5 trading days\n\n"
     )
     # XCCC's prices are restored: the one warning says so, and nothing is refused.
     assert f"\n\nWarnings:\n- {SHORT_RESTORED}\n\n" in result.out
@@ -212,13 +212,13 @@ def test_the_markdown_file_holds_the_summary_and_the_disclaimer(short: Cli) -> N
     short("backtest", *SHORT_WINDOW)
     text = (short.home / "reports" / f"{SHORT_STEM}.md").read_text(encoding="utf-8")
     assert text.splitlines()[:7] == [
-        "# Backtest: buy-and-hold, 2021-02-01 to 2021-02-26",
+        "# Backtest: buy-and-hold, 2021-12-15 to 2022-01-11",
         "",
         "19 trading days.",
         "",
         "|  | buy-and-hold |",
         "|---|---:|",
-        "| Final value | IDR 103,981,291 |",
+        "| Final value | IDR 103,359,041 |",
     ]
     assert f"\n## Warnings\n\n- {SHORT_RESTORED}\n" in text
     assert "## Day warnings" not in text
@@ -244,7 +244,7 @@ def test_a_member_with_no_bars_gives_day_warnings_in_the_file(short: Cli) -> Non
     exclusions.write_text("".join(kept), encoding="utf-8")
     assert short("backtest", *WEEK).code == 0
     text = (short.home / "reports" / f"{WEEK_STEM}.md").read_text(encoding="utf-8")
-    assert "\n## Day warnings\n\n- buy-and-hold, 2021-02-01: ZAAA has no bar on 2021-02-01" in text
+    assert "\n## Day warnings\n\n- buy-and-hold, 2021-12-15: ZAAA has no bar on 2021-12-15" in text
     assert text.count(": ZAAA has no bar on ") == 5
 
 
@@ -277,9 +277,9 @@ def test_dividend_growth_reads_its_look_back_and_ends_as_the_library_run(tmp_pat
     result = short("backtest", *WEEK, "--strategy", "dividend-growth")
     assert (result.code, result.err) == (0, "")
     assert result.out.startswith(
-        "Backtest: dividend-growth, 2021-02-01 to 2021-02-05, 5 trading days\n\n"
+        "Backtest: dividend-growth, 2021-12-15 to 2021-12-21, 5 trading days\n\n"
     )
-    daily = short.home / "reports" / "backtest-dividend-growth-2021-02-01-2021-02-05.csv"
+    daily = short.home / "reports" / "backtest-dividend-growth-2021-12-15-2021-12-21.csv"
     with daily.open(encoding="utf-8", newline="") as file:
         last = list(csv.reader(file))[-1]
     expected = library_run("dividend-growth", end=WEEK_END).run.reports[-1].value.amount
@@ -288,18 +288,18 @@ def test_dividend_growth_reads_its_look_back_and_ends_as_the_library_run(tmp_pat
     assert expected != 100_000_000
 
 
-SAVINGS_MONTHS = ("2021-02", "2021-03")
+SAVINGS_MONTHS = ("2021-12", "2022-01")
 
 
 @pytest.fixture
 def savings(tmp_path: Path) -> tuple[Result, dict[str, list[int]]]:
-    """One monthly-savings run over two instalments, February's and March's, and the cash it
+    """One monthly-savings run over two instalments, December's and January's, and the cash it
     held each day, by month."""
     config = SHORT_CONFIG.replace('name = "buy-and-hold"', 'name = "buy-and-hold"\ninstalments = 2')
     short = short_cli(tmp_path / "home", config)
-    window = ("--from", "2021-02-22", "--to", "2021-03-05")
+    window = ("--from", "2021-12-27", "--to", "2022-01-07")
     result = short("backtest", *window, "--strategy", "monthly-savings")
-    daily = short.home / "reports" / "backtest-monthly-savings-2021-02-22-2021-03-05.csv"
+    daily = short.home / "reports" / "backtest-monthly-savings-2021-12-27-2022-01-07.csv"
     cash: dict[str, list[int]] = {}
     with daily.open(encoding="utf-8", newline="") as file:
         for row in csv.DictReader(file):
@@ -314,11 +314,11 @@ def test_monthly_savings_runs_against_buy_and_hold(
     result, _ = savings
     assert (result.code, result.err) == (0, "")
     assert result.out.startswith(
-        "Backtest: monthly-savings, 2021-02-22 to 2021-03-05, 10 trading days\n\n"
+        "Backtest: monthly-savings, 2021-12-27 to 2022-01-07, 9 trading days\n\n"
     )
     assert result.out.split("\n\n")[1].splitlines()[:2] == [
         "                       monthly-savings     buy-and-hold",
-        "Final value            IDR 100,593,454  IDR 100,935,812",
+        "Final value            IDR 101,042,022  IDR 101,228,538",
     ]
 
 

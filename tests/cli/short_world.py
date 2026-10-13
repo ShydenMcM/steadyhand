@@ -12,7 +12,7 @@ made up (``X`` then three letters), as are the prices: no real stock's data is w
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import replace
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from functools import cache
 from itertools import product
@@ -40,14 +40,15 @@ from steadyhand_idx.rules import IdxMarketRules
 from steadyhand_idx.universe import Lq45Membership, Lq45Record, Lq45Universe
 from steadyhand_idx.yahoo import YahooDataSource, YahooHistory, YahooRow
 
-START, END = date(2021, 2, 1), date(2021, 2, 26)
-"""Nineteen trading days: 12 February 2021 (Chinese New Year) is a holiday."""
-DATA_END = date(2021, 3, 5)
-"""The made-up data runs a week past the window, so a run can cross into March."""
-RECORDED = date(2021, 3, 8)
-DIVIDEND = date(2021, 2, 4)
-"""XAAA's ex-date: Rp50 a share, paid inside the window."""
-SPLIT = date(2021, 2, 10)
+START, END = date(2021, 12, 15), date(2022, 1, 11)
+"""Nineteen trading days across the turn of the year, so ``dividend-growth`` reviews again on
+3 January 2022, its first trading day."""
+DATA_END = date(2022, 1, 18)
+"""The made-up data runs a week past the window."""
+RECORDED = date(2022, 1, 20)
+DIVIDEND = date(2021, 12, 17)
+"""XAAA's ex-date in the window, its 2021 dividend of Rp25 a share, paid on 7 January 2022."""
+SPLIT = date(2021, 12, 22)
 """XBBB's 1-for-2 split: every share becomes two, at half the price."""
 STOCKS = ("XAAA", "XBBB", "XCCC")
 PLACEHOLDERS = tuple("Z" + "".join(letters) for letters in product("ABCDEFGHIJ", repeat=3))[:42]
@@ -59,20 +60,32 @@ down one. XBBB's steps halve with its price at the split."""
 VOLUME = 5_000_000
 """Shares traded a day: enough that no order waits for volume."""
 LOOK_BACK = {
-    "XAAA": ((date(2018, 5, 7), 30), (date(2019, 5, 6), 40), (date(2020, 5, 4), 45)),
-    "XBBB": ((date(2018, 5, 7), 150), (date(2019, 5, 6), 120), (date(2020, 5, 4), 100)),
-    "XCCC": ((date(2018, 5, 7), 110), (date(2019, 5, 6), 132), (date(2020, 5, 4), 154)),
+    "XAAA": ((date(2018, 12, 17), 30), (date(2019, 12, 17), 40), (date(2020, 12, 17), 45)),
+    "XBBB": (
+        (date(2018, 12, 17), 150),
+        (date(2019, 12, 17), 100),
+        (date(2020, 12, 17), 120),
+        (date(2021, 12, 1), 160),
+    ),
+    "XCCC": (
+        (date(2018, 12, 17), 110),
+        (date(2019, 12, 17), 132),
+        (date(2020, 12, 17), 154),
+        (date(2021, 12, 1), 176),
+    ),
 }
-"""Each stock's true dividend a share in each of the three years before the window, on a row of
-its own at its opening price: XAAA's and XCCC's grow, XBBB's fall, so ``dividend-growth`` with a
-two-year test picks XAAA and XCCC."""
+"""Each stock's true dividends a share before the window, on rows of their own at its opening
+price. ``dividend-growth`` with a two-year test passes a stock whose dividend was paid in each of
+the three years before and whose last is at least its first: in 2021 (2018 to 2020) XAAA and XCCC
+pass and XBBB does not; on 3 January 2022 (2019 to 2021, XAAA's 2021 dividend being its Rp25 in
+the window) XBBB and XCCC pass and XAAA does not."""
 ADJUSTMENT = Decimal("1.1")
 """What Yahoo divided XCCC's prices by without reporting it: steadyhand restores them."""
 
 
 @cache
 def trading_days() -> tuple[date, ...]:
-    return days_to_run(date(2021, 1, 31), DATA_END, IdxMarketRules())
+    return days_to_run(START - timedelta(days=1), DATA_END, IdxMarketRules())
 
 
 def _yahoo(price: int, stock: str, day: date) -> Decimal:
@@ -102,7 +115,7 @@ def history(ticker: str) -> YahooHistory:
         prices = (true - step, true + step, true - 2 * step, true)
         opening, high, low, last = (_yahoo(price, stock, day) for price in prices)
         volume = VOLUME * (2 if stock == "XBBB" and day < SPLIT else 1)
-        dividend = Decimal(50) if stock == "XAAA" and day == DIVIDEND else Decimal(0)
+        dividend = Decimal(25) if stock == "XAAA" and day == DIVIDEND else Decimal(0)
         rows.append(YahooRow(day, opening, high, low, last, volume, dividend))
     splits = ((SPLIT, Decimal(2)),) if stock == "XBBB" else ()
     return YahooHistory(ticker, tuple(rows), splits)
@@ -212,7 +225,7 @@ GROWTH_CONFIG = SHORT_CONFIG.replace(
 )
 
 WINDOW = ("--from", START.isoformat(), "--to", END.isoformat())
-WEEK_END = date(2021, 2, 5)
+WEEK_END = date(2021, 12, 21)
 WEEK = ("--from", START.isoformat(), "--to", WEEK_END.isoformat())
 """The window's first five trading days, for a test of how a command is wired, not of what a
 run meets: each day costs the engine about a millisecond of CPU."""
@@ -227,8 +240,8 @@ def short_cli(home: Path, config: str = SHORT_CONFIG, source: SourceFactory = un
 
 
 RESTORED = (
-    "XCCC: Yahoo's prices from 2018-05-07 to 2021-03-05 carry an adjustment Yahoo does not "
+    "XCCC: Yahoo's prices from 2018-12-17 to 2022-01-18 carry an adjustment Yahoo does not "
     "report, so steadyhand restored them: every price and dividend in that span is multiplied "
-    "by 1.100000, proven by 108 prices that fit the IDX tick grid at that factor and at no other."
+    "by 1.100000, proven by 112 prices that fit the IDX tick grid at that factor and at no other."
 )
 """The window's one warning: XCCC's restoration, as BBRI's is the golden window's."""

@@ -67,10 +67,10 @@ def beside(market: Market) -> BacktestResult:
 
 def test_a_strategy_is_shown_beside_the_baseline(beside: BacktestResult) -> None:
     lines = backtest_page(beside, ()).lines
-    assert lines[0] == "Backtest: cash, 2021-02-01 to 2021-02-26, 19 trading days"
+    assert lines[0] == "Backtest: cash, 2021-12-15 to 2022-01-11, 19 trading days"
     assert lines[2].split() == ["cash", "buy-and-hold"]
     assert lines[3].split("  ")[0] == "Final value"
-    assert lines[3].endswith("IDR 100,000,000  IDR 103,981,291")
+    assert lines[3].endswith("IDR 100,000,000  IDR 103,359,041")
 
 
 def test_each_figure_row_carries_its_term_key(beside: BacktestResult) -> None:
@@ -84,10 +84,10 @@ def test_the_backtest_files_hold_the_strategys_days_and_both_columns(
     beside: BacktestResult, tmp_path: Path
 ) -> None:
     summary, daily = backtest_files(beside, tmp_path / "reports")
-    assert summary.name == "backtest-cash-2021-02-01-2021-02-26.md"
+    assert summary.name == "backtest-cash-2021-12-15-2022-01-11.md"
     assert "\n|  | cash | buy-and-hold |\n" in summary.read_text(encoding="utf-8")
     rows = daily.read_text(encoding="utf-8").splitlines()
-    assert rows[1] == "2021-02-01,100000000,100000000,0,0,0,0"
+    assert rows[1] == "2021-12-15,100000000,100000000,0,0,0,0"
     assert len(rows) == 20
 
 

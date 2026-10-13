@@ -52,7 +52,7 @@ def test_compare_needs_a_strategy_and_the_configuration(market: Cli, tmp_path: P
 # The stand-ins of the golden-window tests moved to tests/integration/cli/
 # test_compare_command_golden.py (#292): each of the same name, over the made-up window.
 
-SHORT_STEM = "compare-2021-02-01-2021-02-26"
+SHORT_STEM = "compare-2021-12-15-2022-01-11"
 
 
 @pytest.fixture
@@ -64,7 +64,7 @@ def test_each_strategy_ends_as_it_does_alone_with_the_longest_look_back(tmp_path
     short = short_cli(tmp_path / "home", SHORT_GROWTH_CONFIG)
     names = ("buy-and-hold", "dividend-growth")
     assert short("compare", *WEEK, *names).code == 0
-    stem = "compare-2021-02-01-2021-02-05"
+    stem = "compare-2021-12-15-2021-12-21"
     with (short.home / "reports" / f"{stem}.csv").open(encoding="utf-8", newline="") as file:
         final = {row["strategy"]: int(row["final_value"]) for row in csv.DictReader(file)}
     # One fetch with dividend-growth's three-year look-back serves both; buy-and-hold alone takes
@@ -82,12 +82,12 @@ def test_the_csv_row_is_the_golden_runs_figures(short: Cli) -> None:
     figures = dict(zip(header, row, strict=True))
     metrics = library_run().run.metrics
     assert figures["strategy"] == "buy-and-hold"
-    assert int(figures["final_value"]) == metrics.final_value.amount == 103_981_291
+    assert int(figures["final_value"]) == metrics.final_value.amount == 103_359_041
     assert int(figures["deposited"]) == metrics.deposited.amount
     assert Decimal(figures["total_return"]) == metrics.total_return
     assert Decimal(figures["annual_return"]) == metrics.annual_return
     assert int(figures["costs"]) == metrics.costs.total.amount
-    assert int(figures["dividends_gross"]) == metrics.dividends.gross.amount == 1_240_000
+    assert int(figures["dividends_gross"]) == metrics.dividends.gross.amount == 617_500
     assert int(figures["dividend_tax"]) == metrics.dividends.tax.amount
     assert header == [
         "strategy",
@@ -116,10 +116,10 @@ def test_the_table_is_a_row_per_strategy_then_the_warnings(short: Cli) -> None:
     assert header.split("  ")[0] == "Strategy"
     assert header.endswith("Run-rate, of the goal")
     assert row.startswith("buy-and-hold")
-    assert "IDR 103,981,291" in row
-    assert row.endswith("13181.25%")
+    assert "IDR 103,359,041" in row
+    assert row.endswith("8355.00%")
     assert result.out.startswith(
-        "Comparison, 2021-02-01 to 2021-02-26, 19 trading days\n\nStrategy"
+        "Comparison, 2021-12-15 to 2022-01-11, 19 trading days\n\nStrategy"
     )
     # XCCC's prices are restored: that is the one warning, and none is refused.
     assert f"\n\nWarnings:\n- {SHORT_RESTORED}\n\n" in result.out
@@ -130,8 +130,8 @@ def test_the_table_is_a_row_per_strategy_then_the_warnings(short: Cli) -> None:
 def test_the_markdown_file_is_the_same_table(short: Cli) -> None:
     short("compare", *SHORT_WINDOW, "buy-and-hold")
     lines = (short.home / "reports" / f"{SHORT_STEM}.md").read_text(encoding="utf-8").splitlines()
-    assert lines[:4] == ["# Comparison, 2021-02-01 to 2021-02-26", "", "19 trading days.", ""]
+    assert lines[:4] == ["# Comparison, 2021-12-15 to 2022-01-11", "", "19 trading days.", ""]
     assert lines[4].startswith("| Strategy | Final value | Deposited | ")
     assert lines[5] == "|---|" + "---:|" * 14
-    assert lines[6].startswith("| buy-and-hold | IDR 103,981,291 | IDR 100,000,000 | 3.98% | ")
+    assert lines[6].startswith("| buy-and-hold | IDR 103,359,041 | IDR 100,000,000 | 3.36% | ")
     assert lines[-1] == DISCLAIMER
