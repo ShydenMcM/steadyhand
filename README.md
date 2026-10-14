@@ -22,6 +22,13 @@ for the first sub-project is in
 
 A hosted service, a signal seller, or anything that touches other people's money. Real orders are placed by you, in your own broker app.
 
+## Dev builds
+
+Every merge into `develop` that passes CI deploys to dev: the `deploy-dev` job in
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) builds the Chrome extension, attests and
+verifies the zip's build provenance, and keeps the zip with that run for 90 days. There is no hosted
+dev site, because steadyhand is [never a hosted service](#what-it-will-never-be).
+
 ## Contributing
 
 Every sentence a report says beyond its figures, and every figure it shows, carries a stable key,
