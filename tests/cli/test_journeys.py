@@ -1,23 +1,23 @@
 """The journeys of M5 spec §9.1, in-process. A unit test starts no process (#286), so M5a's
 journeys run through the console script's own entry point here, and as a user runs them, the
 installed ``steadyhand-idx`` in its own process per command, in
-``tests/integration/cli/test_journeys_installed.py``. The paper journey reads market data, so it
-runs over the recorded Yahoo answers, as every ``paper`` test does."""
+``tests/integration/cli/test_journeys_installed.py``. The paper journey runs over the made-up
+market of ``short_world``; the same journey over the recorded golden window is in
+``tests/integration/cli/test_journeys_golden.py`` (#282)."""
 
 import stat
 from dataclasses import replace
 from pathlib import Path
 
 from cli_world import (
-    GOLDEN_CONFIG,
     Cli,
     at,
     opened,
-    recorded_source,
-    trading_days,
-    write_universe,
 )
-from record_golden import START
+from short_world import SHORT_CONFIG, WEEK, uncached
+from short_world import START as SHORT_START
+from short_world import trading_days as short_trading_days
+from short_world import write_universe as write_short_universe
 
 from steadyhand import DISCLAIMER, RISK_HALT_DAILY_LOSS
 from steadyhand_idx import __version__
@@ -101,42 +101,45 @@ def test_the_exit_codes_and_their_messages(tmp_path: Path) -> None:
     assert not home.exists()
 
 
+# The paper trader's journey over the recorded golden window moved to
+# tests/integration/cli/test_journeys_golden.py (#282). Its stand-in, of the same name, takes the
+# same steps over the made-up window.
+
+
 def test_a_paper_traders_journey(tmp_path: Path) -> None:
     home = tmp_path / "home"
-    cli = Cli(home, recorded_source, at(START))
+    cli = Cli(home, uncached, at(SHORT_START))
     cli.init(training="off")
-    write_universe(home)
-    settings = GOLDEN_CONFIG + '\n[training]\nlevel = "off"\n'
+    write_short_universe(home)
+    settings = SHORT_CONFIG + '\n[training]\nlevel = "off"\n'
     cli.config.write_text(settings, encoding="utf-8")
 
-    # The golden window: an income report reads five years back, which the recordings cover
-    # for this last day (M4 spec §8).
-    tested = cli("backtest", "--from", "2021-02-01", "--to", "2022-01-31")
+    tested = cli("backtest", *WEEK)
     assert tested.code == 0, tested.err
-    assert tested.out.startswith("Backtest: buy-and-hold, 2021-02-01 to 2022-01-31")
+    assert tested.out.startswith("Backtest: buy-and-hold, 2021-12-15 to 2021-12-21")
 
     first = cli("paper", "run")
     assert first.code == 0, first.err
-    assert first.out.startswith("2021-02-01: 0 fill(s), 5 order(s) queued, value IDR 100,000,000")
+    assert first.out.startswith("2021-12-15: 0 fill(s), 3 order(s) queued, value IDR 100,000,000")
     again = cli("paper", "run")
     assert again.code == 0
-    assert again.out.startswith("already up to date for 2021-02-01\n")
+    assert again.out.startswith("already up to date for 2021-12-15\n")
     status = cli("paper", "status")
     assert status.code == 0
-    assert status.out.startswith("Paper account opened on 2021-02-01, running buy-and-hold")
+    assert status.out.startswith("Paper account opened on 2021-12-15, running buy-and-hold")
     report = cli("report")
     assert report.code == 0
-    assert report.out.startswith("Day report for 2021-02-01\n")
+    assert report.out.startswith("Day report for 2021-12-15\n")
     income = cli("report", "--income")
     assert income.code == 0, income.err
-    assert income.out.startswith("Income as of 2021-02-01\n")
+    assert income.out.startswith("Income as of 2021-12-15\n")
 
     jumpy = settings.replace(
-        'max_weight = "0.25"\n', 'max_weight = "0.25"\ndaily_loss_limit = "0.001"\n'
+        'max_weight = "0.35"\n', 'max_weight = "0.35"\ndaily_loss_limit = "0.001"\n'
     )
     assert jumpy != settings
     cli.config.write_text(jumpy, encoding="utf-8")
-    second = replace(cli, now=at(trading_days()[1]), env={"USER": "trader"})
+    second = replace(cli, now=at(short_trading_days()[1]), env={"USER": "trader"})
     halted = second("paper", "run")
     assert halted.code == 3
     assert "steadyhand-idx resume buy-and-hold" in halted.err
@@ -145,9 +148,9 @@ def test_a_paper_traders_journey(tmp_path: Path) -> None:
     assert resumed.out.endswith(
         f"Resumed. From the next day run, the strategy's orders are placed again.\n\n{DISCLAIMER}\n"
     )
-    later = replace(cli, now=at(trading_days()[2]))("paper", "run")
+    later = replace(cli, now=at(short_trading_days()[2]))("paper", "run")
     assert later.code == 0, later.err
     with opened(cli) as store:
-        assert store.days() == trading_days()[:3]
+        assert store.days() == short_trading_days()[:3]
         keys = [line.note.key for line in store.audit()]
     assert keys.index(PAPER_RESUMED) == keys.index(RISK_HALT_DAILY_LOSS) + 1
