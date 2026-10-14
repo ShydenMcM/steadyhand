@@ -4,8 +4,6 @@ import operator
 from decimal import Decimal
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand.money import IDR, Currency, CurrencyMismatchError, Money, Rounding
 
@@ -135,9 +133,17 @@ class TestTimes:
         with pytest.raises(TypeError, match="rate must be a Decimal, got int"):
             rp(1).times(1, Rounding.UP)  # type: ignore[arg-type]
 
-    @given(
-        amount=st.integers(min_value=0, max_value=10**15),
-        rate=st.decimals(min_value=0, max_value=1, places=6, allow_nan=False, allow_infinity=False),
+    # Unit stand-in of the property in tests/properties/test_engine_money.py (#290): the ends of
+    # what it draws, the smallest rate that rounds, and a value with a long fraction.
+    @pytest.mark.parametrize(
+        ("amount", "rate"),
+        [
+            (0, Decimal(0)),
+            (10**15, Decimal(1)),
+            (1, Decimal("0.000001")),
+            (10**15, Decimal("0.999999")),
+            (7, Decimal("0.333333")),
+        ],
     )
     def test_up_and_down_bracket_the_exact_value(self, amount: int, rate: Decimal) -> None:
         up = rp(amount).times(rate, Rounding.UP)

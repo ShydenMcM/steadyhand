@@ -41,6 +41,8 @@ known-first-party = ["steadyhand", "steadyhand_idx", "ci_scope", "lock_fast_path
 # Tests assert, use literal values, pass bools on purpose, and implement interfaces minimally.
 "tests/**" = ["S101", "PLR2004", "FBT003", "ARG002", "PLR0913", "PLR0917"]
 "scripts/**" = ["T201"]
+# The refusal's plants call every process entry point on purpose; each is refused before it runs.
+"tests/plugins/test_no_process.py" = ["S603", "S605", "S606", "S607"]
 
 [tool.mypy]
 strict = true
@@ -56,7 +58,9 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
-pythonpath = ["scripts", "tests/meta", "tests/cli", "tests/perf"]
+# tests/engine and tests/idx: each property in tests/properties calls its unit stand-in there;
+# tests/properties: its Hypothesis profile, which tests/conftest.py loads (#290).
+pythonpath = ["scripts", "tests/plugins", "tests/repo", "tests/guards", "tests/cli", "tests/perf", "tests/scripts", "tests/engine", "tests/idx", "tests/properties"]
 addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-ra", "-m", "not live and not perf"]
 markers = [
     "live: talks to Yahoo; run by the yahoo-shape workflow, by hand, with -m live, never on a PR",

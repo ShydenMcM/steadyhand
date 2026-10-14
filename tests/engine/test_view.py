@@ -8,8 +8,6 @@ from functools import cache
 from math import prod
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand._ratio import ratio_down
 from steadyhand.market import PayDates, UnsupportedDateError, add_trading_days
@@ -319,19 +317,28 @@ def test_an_ex_date_the_rules_cannot_place_raises_their_own_error() -> None:
         view_on(0).pay_date(date(2015, 12, 30))
 
 
-_STOCKS = st.sampled_from([BBCA, BBRI])
-_DAYS = st.dates(min_value=date(2019, 1, 1), max_value=date(2021, 12, 31))
-_DIVIDEND = st.builds(CashDividend, _STOCKS, _DAYS, st.integers(1, 10_000).map(Decimal))
-_SPLIT = st.builds(
-    lambda stock, day, shares: Split(stock, day, *shares),
-    _STOCKS,
-    _DAYS,
-    st.tuples(st.integers(1, 10), st.integers(1, 10)).filter(lambda pair: pair[0] != pair[1]),
+ACTIONS: list[CorporateAction] = [
+    CashDividend(BBCA, date(2019, 3, 1), Decimal(100)),
+    Split(BBCA, date(2019, 6, 3), 1, 2),
+    CashDividend(BBRI, date(2020, 1, 2), Decimal(7)),
+    Split(BBRI, date(2020, 5, 4), 5, 1),
+    CashDividend(BBCA, date(2021, 12, 31), Decimal(10_000)),
+    Split(BBCA, date(2021, 12, 31), 3, 7),
+]
+
+
+# Unit stand-in of the property in tests/properties/test_engine_view.py (#290):
+# no actions; every action, today the last day drawable; and the same with
+# today on a dividend's ex-date between them.
+@pytest.mark.parametrize(
+    ("actions", "today"),
+    [
+        ([], date(2019, 1, 1)),
+        (ACTIONS, date(2021, 12, 31)),
+        (ACTIONS, date(2020, 1, 2)),
+    ],
 )
-
-
 @pytest.mark.parametrize("stock", [BBCA, BBRI], ids=lambda stock: stock.symbol)
-@given(st.lists(st.one_of(_DIVIDEND, _SPLIT), max_size=12), _DAYS)
 def test_nothing_after_today_is_returned_and_each_dividend_is_restated_by_its_own_splits(
     stock: Instrument, actions: list[CorporateAction], today: date
 ) -> None:

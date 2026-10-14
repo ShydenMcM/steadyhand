@@ -5,8 +5,6 @@ from decimal import Decimal
 from functools import cache
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand.money import IDR, Money
 from steadyhand.notes import (
@@ -180,10 +178,17 @@ def test_units_cannot_be_bought_at_nothing_and_are_never_negative() -> None:
         UnitValue(Decimal(1), 1)  # type: ignore[arg-type]
 
 
-@given(
-    units=st.integers(1, 10**12),
-    value=st.integers(1, 10**13),
-    deposit=st.integers(1, 10**12),
+# Unit stand-in of the property in tests/properties/test_engine_risk.py (#290):
+# the ends of what it draws, a price far below one, and one with a long
+# fraction.
+@pytest.mark.parametrize(
+    ("units", "value", "deposit"),
+    [
+        (1, 1, 1),
+        (10**12, 10**13, 10**12),
+        (10**12, 1, 10**12),
+        (3, 10, 7),
+    ],
 )
 def test_a_deposit_never_moves_the_price(units: int, value: int, deposit: int) -> None:
     fund = UnitValue(Decimal(units)).revalue(rp(value))

@@ -59,7 +59,7 @@ from steadyhand_idx.factor import (
     Run,
     find_runs,
     restore_dividend,
-    restore_price,
+    restore_prices,
 )
 
 if TYPE_CHECKING:
@@ -232,8 +232,20 @@ def _split(instrument: Instrument, day: date, ratio: Decimal) -> Split:
 
 
 def _whole(value: Decimal) -> int | None:
-    nearest = value.to_integral_value()
-    return int(nearest) if abs(value - nearest) <= WHOLE_RUPIAH_TOLERANCE else None
+    found = _wholes((value,))
+    return None if found is None else found[0]
+
+
+def _wholes(values: Sequence[Decimal]) -> list[int] | None:
+    """Each of *values* in whole rupiah, or ``None`` as soon as one is not within
+    ``WHOLE_RUPIAH_TOLERANCE`` of a whole rupiah."""
+    found: list[int] = []
+    for value in values:
+        nearest = value.to_integral_value()
+        if abs(value - nearest) > WHOLE_RUPIAH_TOLERANCE:
+            return None
+        found.append(int(nearest))
+    return found
 
 
 def actions_in(
@@ -286,12 +298,15 @@ class UnprovenDividendsError(UnavailableDaysError):
 
 def reversed_prices(history: YahooHistory, row: YahooRow) -> tuple[Decimal, ...]:
     """*row*'s open, high, low and close with every reported split after it reversed."""
-    factor = _factor(history, row.day)
-    return tuple(value * factor for value in (row.open, row.high, row.low, row.close))
+    return _reversed(row, _factor(history, row.day))
+
+
+def _reversed(row: YahooRow, factor: Decimal) -> tuple[Decimal, ...]:
+    return (row.open * factor, row.high * factor, row.low * factor, row.close * factor)
 
 
 def _all_whole(prices: Sequence[Decimal]) -> bool:
-    return all(_whole(price) is not None for price in prices)
+    return _wholes(prices) is not None
 
 
 def _placeholder(row: YahooRow) -> bool:
@@ -317,12 +332,12 @@ def _covering(runs: Sequence[Run], day: date) -> Run | None:
 
 def _amounts(prices: Sequence[Decimal], run: Run | None, day: date) -> list[int] | None:
     """The traded prices: whole as they are, restored in a proven run, else ``None``."""
-    whole = [_whole(price) for price in prices]
-    if all(amount is not None for amount in whole):
-        return [cast("int", amount) for amount in whole]
+    whole = _wholes(prices)
+    if whole is not None:
+        return whole
     if run is None or run.factor is None:
         return None
-    return [restore_price(price, run.factor, day).amount for price in prices]
+    return restore_prices(prices, run.factor, day)
 
 
 def _factor(history: YahooHistory, day: date) -> Decimal:
@@ -358,14 +373,16 @@ def unadjust(
                 "which the IDX calendar says was a holiday"
             )
             raise DataUnavailableError(msg)
-        amounts = _amounts(reversed_prices(history, row), _covering(runs, row.day), row.day)
-        volume = _whole(row.volume / _factor(history, row.day))
+        factor = _factor(history, row.day)
+        amounts = _amounts(_reversed(row, factor), _covering(runs, row.day), row.day)
+        volume = _whole(row.volume / factor)
         if amounts is None or volume is None:
             unrecoverable.append(row.day)
             continue
-        opening, high, low, closing = (Money(amount, IDR) for amount in amounts)
+        opening, high, low, closing = amounts
+        prices = Money(opening, IDR), Money(high, IDR), Money(low, IDR), Money(closing, IDR)
         try:
-            bars.append(Bar(instrument, row.day, opening, high, low, closing, volume))
+            bars.append(Bar(instrument, row.day, *prices, volume))
         except InvalidBarError as error:
             msg = f"{history.ticker}: {error}"
             raise DataUnavailableError(msg) from error
@@ -514,7 +531,7 @@ def download_history(ticker: str, start: date, end: date) -> YahooHistory:  # pr
     """Ask Yahoo for one ticker's history (network; run by hand by the yahoo-shape workflow).
 
     This is the only function that talks to Yahoo, and the only code excluded from coverage:
-    ``tests/meta/test_coverage_exclusions.py`` holds it to that. Everything it returns goes
+    ``tests/guards/test_coverage_exclusions.py`` holds it to that. Everything it returns goes
     through ``history_from_frames``, which the tests run on real recorded data.
     """
     import yfinance  # noqa: PLC0415 - a heavy import, paid only when data is really fetched

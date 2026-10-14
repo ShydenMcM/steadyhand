@@ -3,8 +3,7 @@
 from contextlib import suppress
 from datetime import date, timedelta
 
-from hypothesis import example, given
-from hypothesis import strategies as st
+import pytest
 
 from steadyhand.money import IDR, Money
 from steadyhand.portfolio import (
@@ -25,15 +24,6 @@ STOCKS = (
 
 type Step = tuple[str, int, int, int, int, int]  # kind, days forward, stock, shares, price, fee
 
-STEP = st.tuples(
-    st.sampled_from(["deposit", "buy", "sell"]),
-    st.integers(min_value=0, max_value=3),
-    st.integers(min_value=0, max_value=len(STOCKS) - 1),
-    st.integers(min_value=1, max_value=5_000),
-    st.integers(min_value=50, max_value=20_000),
-    st.integers(min_value=0, max_value=50_000),
-)
-
 
 def rp(amount: int) -> Money:
     return Money(amount, IDR)
@@ -43,14 +33,28 @@ def make_fill(side: Side, stock: Instrument, shares: int, price: int, fee: int, 
     return Fill(Order(stock, side, shares, on), on, shares, rp(price), Costs(rp(fee), rp(0), rp(0)))
 
 
-@given(st.lists(STEP, max_size=40))
-@example(
+# Unit stand-in of the property in tests/properties/test_engine_portfolio_properties.py (#290):
+# no steps; the example it always ran; and a journey with a buy it cannot
+# pay for and a sale of more than it holds, both refused.
+@pytest.mark.parametrize(
+    "steps",
     [
-        ("deposit", 0, 0, 5_000, 0, 0),
-        ("buy", 0, 1, 300, 4_000, 450),
-        ("sell", 1, 1, 100, 4_100, 200),
-        ("buy", 2, 2, 100, 3_000, 0),
-    ]
+        [],
+        [
+            ("deposit", 0, 0, 5_000, 0, 0),
+            ("buy", 0, 1, 300, 4_000, 450),
+            ("sell", 1, 1, 100, 4_100, 200),
+            ("buy", 2, 2, 100, 3_000, 0),
+        ],
+        [
+            ("deposit", 0, 0, 1, 0, 0),
+            ("buy", 1, 0, 5_000, 20_000, 50_000),
+            ("sell", 3, 2, 1, 50, 0),
+            ("deposit", 0, 2, 5_000, 0, 0),
+            ("buy", 0, 2, 100, 50, 0),
+            ("sell", 2, 2, 101, 50, 0),
+        ],
+    ],
 )
 def test_cash_and_share_invariants(steps: list[Step]) -> None:
     portfolio = Portfolio.empty(IDR)
@@ -90,16 +94,20 @@ def test_cash_and_share_invariants(steps: list[Step]) -> None:
         assert held == expected_shares
 
 
-@given(
-    shares=st.integers(min_value=1, max_value=10_000),
-    price=st.integers(min_value=50, max_value=50_000),
-    buy_fee=st.integers(min_value=0, max_value=100_000),
-    data=st.data(),
+# Unit stand-in of the property in tests/properties/test_engine_portfolio_properties.py (#290):
+# the smallest trade with no fees, the largest with the largest fees (the
+# sale's fee its whole proceeds), and a trade in between.
+@pytest.mark.parametrize(
+    ("shares", "price", "buy_fee", "sell_fee"),
+    [
+        (1, 50, 0, 0),
+        (10_000, 50_000, 100_000, 10_000 * 50_000),
+        (333, 4_150, 1_234, 99),
+    ],
 )
 def test_a_round_trip_at_an_unchanged_price_loses_exactly_the_costs(
-    shares: int, price: int, buy_fee: int, data: st.DataObject
+    shares: int, price: int, buy_fee: int, sell_fee: int
 ) -> None:
-    sell_fee = data.draw(st.integers(min_value=0, max_value=shares * price), label="sell_fee")
     start = shares * price + buy_fee
     stock = STOCKS[1]
     buy = make_fill(Side.BUY, stock, shares, price, buy_fee, D0)
@@ -126,17 +134,24 @@ def _spendable(portfolio: Portfolio, on: date) -> Money:
     return sum(kept, start=rp(0))
 
 
-LATER_STEP = st.tuples(
-    st.sampled_from(["deposit", "buy", "sell", "dividend", "duty-later"]),
-    st.integers(min_value=0, max_value=3),
-    st.integers(min_value=0, max_value=len(STOCKS) - 1),
-    st.integers(min_value=1, max_value=5_000),
-    st.integers(min_value=50, max_value=20_000),
-    st.integers(min_value=0, max_value=50_000),
+# Unit stand-in of the property in tests/properties/test_engine_portfolio_properties.py (#290):
+# no steps, and a journey with every kind of step, a refused sale and a
+# refused buy among them.
+@pytest.mark.parametrize(
+    "steps",
+    [
+        [],
+        [
+            ("deposit", 0, 0, 5_000, 0, 0),
+            ("buy", 1, 1, 300, 4_000, 450),
+            ("duty-later", 0, 0, 1, 50, 0),
+            ("dividend", 1, 1, 77, 50, 0),
+            ("sell", 2, 1, 100, 4_100, 200),
+            ("sell", 0, 2, 100, 50, 0),
+            ("buy", 3, 0, 5_000, 20_000, 50_000),
+        ],
+    ],
 )
-
-
-@given(st.lists(LATER_STEP, max_size=40))
 def test_the_kept_totals_agree_with_the_whole_ledger_on_every_day(steps: list[Step]) -> None:
     portfolio = Portfolio.empty(IDR)
     today = D0

@@ -68,29 +68,40 @@ class Bar:
     volume: int
 
     def __post_init__(self) -> None:
+        # Every bar of every run passes through here, so the checks do no work a valid bar does
+        # not need: the place is named only in a refusal, and once every price is known to be in
+        # the instrument's currency the bracket compares their amounts (#296).
         require_type(self.instrument, Instrument, "instrument")
         require_date(self.day, "bar day")
-        where = f"{self.instrument.symbol} {self.day.isoformat()}"
         expected = self.instrument.currency
-        prices = {"open": self.open, "high": self.high, "low": self.low, "close": self.close}
-        for name, price in prices.items():
+        prices = (
+            ("open", self.open),
+            ("high", self.high),
+            ("low", self.low),
+            ("close", self.close),
+        )
+        for name, price in prices:
             require_type(price, Money, name)
-            if price.currency != expected:
-                msg = f"{where}: {name} is in {price.currency.code}, expected {expected.code}"
+            if price.currency is not expected and price.currency != expected:
+                msg = f"{self._where}: {name} is in {price.currency.code}, expected {expected.code}"
                 raise InvalidBarError(msg)
             if price.amount <= 0:
-                msg = f"{where}: {name} must be positive, got {price}"
+                msg = f"{self._where}: {name} must be positive, got {price}"
                 raise InvalidBarError(msg)
         if type(self.volume) is not int or self.volume < 0:
-            msg = f"{where}: volume must be a non-negative int, got {self.volume!r}"
+            msg = f"{self._where}: volume must be a non-negative int, got {self.volume!r}"
             raise InvalidBarError(msg)
-        bracketed = self.low <= self.open <= self.high and self.low <= self.close <= self.high
-        if not bracketed:
+        low, high = self.low.amount, self.high.amount
+        if not (low <= self.open.amount <= high and low <= self.close.amount <= high):
             msg = (
-                f"{where}: low {self.low} and high {self.high} do not bracket "
+                f"{self._where}: low {self.low} and high {self.high} do not bracket "
                 f"open {self.open} and close {self.close}"
             )
             raise InvalidBarError(msg)
+
+    @property
+    def _where(self) -> str:
+        return f"{self.instrument.symbol} {self.day.isoformat()}"
 
 
 @dataclass(frozen=True, slots=True)

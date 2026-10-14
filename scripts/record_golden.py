@@ -374,21 +374,23 @@ def _figures(figures: IncomeFigures) -> list[int]:
 
 def record(folder: Path, golden: Path = GOLDEN) -> Path:
     """Run the golden backtest with its cache in *folder*, and write its summary to *golden*."""
-    return _write(summary(run(folder)), golden)
+    return write_summary(summary(run(folder)), golden)
 
 
 def record_exempt(folder: Path, golden: Path = EXEMPT_GOLDEN) -> Path:
     """Run the switch-on golden backtest with its cache in *folder*, and write its summary."""
-    return _write(summary(run_exempt(folder)), golden)
+    return write_summary(summary(run_exempt(folder)), golden)
 
 
 def record_growth(folder: Path, golden: Path = GROWTH_GOLDEN) -> Path:
     """Run the ``dividend-growth`` golden backtest with its cache in *folder*, and write its
     summary to *golden*."""
-    return _write(summary(run_growth(folder)), golden)
+    return write_summary(summary(run_growth(folder)), golden)
 
 
-def _write(pinned: dict[str, object], golden: Path) -> Path:
+def write_summary(pinned: dict[str, object], golden: Path) -> Path:
+    """Write *pinned* to *golden* as the golden files are written: sorted keys, one space a
+    level, a newline at the end."""
     text = json.dumps(pinned, indent=1, sort_keys=True) + "\n"
     golden.parent.mkdir(parents=True, exist_ok=True)
     golden.write_text(text, encoding="utf-8")

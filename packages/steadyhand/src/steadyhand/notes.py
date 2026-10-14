@@ -4,7 +4,7 @@ A key is a dotted lowercase identifier that is never reworded, so the training s
 attach a lesson to it; the text is free to change. Every key is a constant below (or, for the
 IDX distribution, in ``steadyhand_idx.notes``), named after its value, and every ``Note`` in
 either package is built from one of them, never from a literal
-(``tests/meta/test_note_keys.py``). Figures have keys too, in ``steadyhand.terms``. This module
+(``tests/guards/test_note_keys.py``). Figures have keys too, in ``steadyhand.terms``. This module
 imports nothing from the rest of the engine, so any engine module can use it without an import
 cycle.
 """

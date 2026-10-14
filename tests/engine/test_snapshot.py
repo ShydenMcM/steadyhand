@@ -6,8 +6,6 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand import (
     IDR,
@@ -15,7 +13,6 @@ from steadyhand import (
     SNAPSHOT_CURRENCIES,
     SNAPSHOT_UPGRADES,
     SNAPSHOT_VERSION,
-    CashMovement,
     Costs,
     Currency,
     Cut,
@@ -32,7 +29,6 @@ from steadyhand import (
     Note,
     Order,
     Portfolio,
-    Position,
     Protection,
     Rejected,
     Side,
@@ -55,148 +51,6 @@ TLKM = Instrument("TLKM", "IDX", IDR)
 
 def rp(amount: int) -> Money:
     return Money(amount, IDR)
-
-
-# Generated values: every type a state or a report holds, within the engine's own checks.
-
-DAYS = st.dates(date(2000, 1, 1), date(2099, 12, 31))
-INSTRUMENTS = st.builds(
-    Instrument,
-    st.from_regex(r"[A-Z0-9][A-Z0-9.\-]{0,5}", fullmatch=True),
-    st.sampled_from(["IDX", "NYSE"]),
-    st.just(IDR),
-)
-TEXT = st.text(min_size=1).filter(lambda text: text.strip() != "")
-MONEY = st.integers(-(10**15), 10**15).map(rp)
-POSITIVE = st.integers(1, 10**15).map(rp)
-NOT_NEGATIVE = st.integers(0, 10**15).map(rp)
-RATES = st.decimals(min_value=0, max_value=10**9, allow_nan=False, allow_infinity=False)
-ORDERS = st.builds(Order, INSTRUMENTS, st.sampled_from(Side), st.integers(1, 10**6), DAYS)
-NOTES = st.builds(Note, st.from_regex(r"[a-z]+(\.[a-z_]+)+", fullmatch=True), TEXT)
-HALTS = st.builds(Halt, DAYS, NOTES)
-
-
-@st.composite
-def fills(draw: st.DrawFn) -> Fill:
-    order = draw(ORDERS)
-    costs = Costs(draw(NOT_NEGATIVE), draw(NOT_NEGATIVE), draw(NOT_NEGATIVE))
-    day = order.placed_on + timedelta(days=draw(st.integers(0, 10)))
-    return Fill(order, day, draw(st.integers(1, order.quantity)), draw(POSITIVE), costs)
-
-
-@st.composite
-def cuts(draw: st.DrawFn) -> Cut:
-    order = draw(st.builds(Order, INSTRUMENTS, st.sampled_from(Side), st.integers(2, 10**6), DAYS))
-    return Cut(order, draw(st.integers(1, order.quantity - 1)), draw(NOTES))
-
-
-@st.composite
-def portfolios(draw: st.DrawFn) -> Portfolio:
-    held = draw(st.lists(INSTRUMENTS, max_size=4, unique_by=lambda i: (i.market, i.symbol)))
-    positions = sorted(
-        (Position(i, draw(st.integers(1, 10**9)), draw(NOT_NEGATIVE)) for i in held),
-        key=lambda p: (p.instrument.market, p.instrument.symbol),
-    )
-    moves = draw(
-        st.lists(
-            st.tuples(DAYS, st.sampled_from(MovementKind), MONEY, st.integers(0, 5)), max_size=8
-        )
-    )
-    ledger = tuple(
-        CashMovement(day, kind, amount, day + timedelta(days=lag))
-        for day, kind, amount, lag in sorted(moves, key=lambda move: move[0])
-    )
-    return Portfolio(IDR, tuple(positions), ledger)
-
-
-@st.composite
-def entitlements(draw: st.DrawFn) -> Entitlement:
-    ex_date = draw(DAYS)
-    pay_date = ex_date + timedelta(days=draw(st.integers(1, 30)))
-    return Entitlement(draw(INSTRUMENTS), ex_date, pay_date, draw(POSITIVE))
-
-
-@st.composite
-def claims(draw: st.DrawFn) -> DividendClaim:
-    ex_date = draw(DAYS)
-    pay_date = ex_date + timedelta(days=draw(st.integers(1, 30)))
-    deadline = pay_date + timedelta(days=draw(st.integers(0, 800)))
-    gross = draw(st.integers(1, 10**12))
-    protections: list[Protection] = []
-    covered = 0
-    for part in draw(st.lists(st.integers(1, gross), max_size=3)):
-        if covered + part <= gross:
-            covered += part
-            protections.append(Protection(rp(part), draw(DAYS)))
-    uncovered = draw(st.integers(0, gross - covered))
-    instrument = draw(INSTRUMENTS)
-    return DividendClaim(
-        instrument, ex_date, pay_date, rp(gross), deadline, rp(uncovered), tuple(protections)
-    )
-
-
-HOLDINGS = st.builds(
-    Holdings,
-    portfolios(),
-    st.lists(ORDERS, max_size=3).map(tuple),
-    st.lists(entitlements(), max_size=3).map(tuple),
-    st.dictionaries(INSTRUMENTS, TEXT, max_size=3),
-    st.dictionaries(INSTRUMENTS, POSITIVE, max_size=3),
-    st.lists(claims(), max_size=3).map(tuple),
-    st.none() | DAYS,
-)
-STATES = st.builds(
-    EngineState,
-    HOLDINGS,
-    st.builds(UnitValue, RATES, RATES, RATES),
-    st.none() | HALTS,
-    st.none() | DAYS,
-    st.dictionaries(st.text(), st.text(), max_size=3),
-)
-
-
-def tuples[T](values: st.SearchStrategy[T]) -> st.SearchStrategy[tuple[T, ...]]:
-    return st.lists(values, max_size=3).map(tuple)
-
-
-REPORTS = st.builds(
-    DayReport,
-    day=DAYS,
-    fills=tuples(fills()),
-    rejected=tuples(st.builds(Rejected, ORDERS, NOTES)),
-    cuts=tuples(cuts()),
-    queued=tuples(ORDERS),
-    entitled=tuples(entitlements()),
-    paid=tuples(entitlements()),
-    tax=MONEY,
-    daily_cost=MONEY,
-    deposit=MONEY,
-    frozen=tuples(st.tuples(INSTRUMENTS, TEXT)),
-    halt=st.none() | HALTS,
-    settled=MONEY,
-    unsettled=MONEY,
-    holdings_value=MONEY,
-    value=MONEY,
-    unit_price=RATES,
-    warnings=tuples(NOTES),
-    notes=tuples(NOTES),
-)
-
-
-@given(STATES)
-def test_every_state_reads_back_equal_and_writes_the_same_json_again(state: EngineState) -> None:
-    text = to_json(encode_state(state))
-    back = decode_state(from_json(text))
-    assert back == state
-    assert to_json(encode_state(back)) == text
-
-
-@given(REPORTS)
-def test_every_report_reads_back_equal_and_writes_the_same_json_again(report: DayReport) -> None:
-    text = to_json(encode_report(report))
-    back = decode_report(from_json(text))
-    assert back == report
-    assert to_json(encode_report(back)) == text
 
 
 # The worked example: one small state, and exactly the JSON it saves as.
@@ -303,19 +157,90 @@ def small_report() -> DayReport:
     )
 
 
+def full_state() -> EngineState:
+    """Every field a state holds, filled: pending orders, entitlements, a claim with a protection,
+    a stock from another market, a halt and memory."""
+    nyse = Instrument("AAPL", "NYSE", IDR)
+    buy = Fill(Order(BBRI, Side.BUY, 500, D0), D0, 500, rp(4_000), Costs(rp(300), rp(1), rp(0)))
+    portfolio = Portfolio.empty(IDR).deposit(rp(5_000_000), D0).apply_fill(buy, D0 + timedelta(2))
+    pay = D0 + timedelta(days=14)
+    claim = DividendClaim(
+        BBRI,
+        D0,
+        pay,
+        rp(90_000),
+        pay + timedelta(days=700),
+        rp(10_000),
+        (Protection(rp(80_000), pay),),
+    )
+    holdings = Holdings(
+        portfolio,
+        (Order(TLKM, Side.SELL, 200, D0), Order(nyse, Side.BUY, 1, D0)),
+        (Entitlement(BBRI, D0, pay, rp(90_000)),),
+        {nyse: "excluded: not on the exchange"},
+        {BBRI: rp(4_150), nyse: rp(1)},
+        (claim,),
+        None,
+    )
+    units = UnitValue(Decimal("5000000"), Decimal("0.99"), Decimal("1.0000"))
+    return EngineState(holdings, units, None, D0 + timedelta(days=2), {"": "", "set": "x"})
+
+
+def full_report() -> DayReport:
+    """Every field a report holds, filled, money below zero included."""
+    order = Order(BBRI, Side.BUY, 1_000, D0)
+    note = Note("order.rejected_cash", "not enough cash")
+    paid = Entitlement(TLKM, D0 - timedelta(days=20), D0, rp(12_500))
+    return DayReport(
+        day=D0,
+        fills=(Fill(order, D0, 600, rp(4_000), Costs(rp(360), rp(2), rp(0))),),
+        rejected=(Rejected(Order(TLKM, Side.SELL, 100, D0), note),),
+        cuts=(Cut(order, 400, Note("order.cut_lots", "cut to what cash buys")),),
+        queued=(Order(TLKM, Side.BUY, 300, D0),),
+        entitled=(Entitlement(BBRI, D0, D0 + timedelta(days=14), rp(90_000)),),
+        paid=(paid,),
+        tax=rp(-1_250),
+        daily_cost=rp(1_500),
+        deposit=rp(1_000_000),
+        frozen=((TLKM, "excluded: suspended"),),
+        halt=Halt(D0, Note(RISK_HALT_DAILY_LOSS, "daily loss limit")),
+        settled=rp(-3),
+        unsettled=rp(2_400_362),
+        holdings_value=rp(2_400_000),
+        value=rp(4_800_000),
+        unit_price=Decimal("0.960000"),
+        warnings=(Note("data.stale", "no close today"),),
+        notes=(note,),
+    )
+
+
+# Unit stand-ins of the properties in tests/properties/test_engine_snapshot.py (#290): the
+# opening state, the worked example and a state with every field filled; the worked report and
+# one with every field filled.
+@pytest.mark.parametrize(
+    "state",
+    [EngineState.opening(rp(1), D0), small_state(), full_state()],
+    ids=["opening", "small", "full"],
+)
+def test_every_state_reads_back_equal_and_writes_the_same_json_again(state: EngineState) -> None:
+    text = to_json(encode_state(state))
+    back = decode_state(from_json(text))
+    assert back == state
+    assert to_json(encode_state(back)) == text
+
+
+@pytest.mark.parametrize("report", [small_report(), full_report()], ids=["small", "full"])
+def test_every_report_reads_back_equal_and_writes_the_same_json_again(report: DayReport) -> None:
+    text = to_json(encode_report(report))
+    back = decode_report(from_json(text))
+    assert back == report
+    assert to_json(encode_report(back)) == text
+
+
 # A restored portfolio behaves as the one it was saved from (M5 spec §6.3).
 
 STOCKS = (BBRI, TLKM)
 type Step = tuple[str, int, int, int, int, int]  # kind, days forward, stock, shares, price, lag
-
-STEPS = st.tuples(
-    st.sampled_from(["deposit", "buy", "sell", "dividend", "tax", "cost"]),
-    st.integers(0, 3),
-    st.integers(0, len(STOCKS) - 1),
-    st.integers(1, 2_000),
-    st.integers(50, 20_000),
-    st.integers(0, 3),
-)
 
 
 def take(portfolio: Portfolio, step: Step, today: date) -> Portfolio:
@@ -341,7 +266,28 @@ def outcome(portfolio: Portfolio, step: Step, today: date) -> object:
         return (type(error), str(error))
 
 
-@given(st.lists(STEPS, max_size=30), STEPS)
+# Unit stand-in of the property in tests/properties/test_engine_snapshot.py (#290): no steps
+# and a refused buy; every kind of step, with a sale of a stock never bought after it; and the
+# same journey with a buy after it.
+JOURNEY: list[Step] = [
+    ("deposit", 0, 0, 2_000, 20_000, 0),
+    ("buy", 1, 0, 1_000, 5_000, 2),
+    ("cost", 0, 1, 1_500, 50, 1),
+    ("dividend", 1, 0, 300, 50, 0),
+    ("tax", 0, 0, 45, 50, 3),
+    ("sell", 2, 0, 500, 6_000, 2),
+    ("sell", 0, 1, 100, 4_000, 0),
+]
+
+
+@pytest.mark.parametrize(
+    ("steps", "following"),
+    [
+        ([], ("buy", 0, 0, 100, 1_000, 2)),
+        (JOURNEY, ("sell", 0, 1, 10, 50, 0)),
+        (JOURNEY, ("buy", 0, 1, 100, 4_000, 2)),
+    ],
+)
 def test_a_restored_portfolio_behaves_as_the_one_it_was_saved_from(
     steps: list[Step], following: Step
 ) -> None:

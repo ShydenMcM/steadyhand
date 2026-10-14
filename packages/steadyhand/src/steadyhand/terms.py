@@ -5,7 +5,7 @@ never reworded, in a constant named after its value, here always under ``term.``
 attaches to a term, so a report's labels can be explained as well as its notes.
 
 ``FIGURES`` maps every figure field, as ``"Class.field"``, to its term. Several fields share a
-term when they show the same quantity. ``tests/meta/test_terms.py`` derives the figure fields
+term when they show the same quantity. ``tests/training/test_terms.py`` derives the figure fields
 itself, by walking the report types, and fails when one is missing here or when an entry here
 names a field that does not exist. This module imports nothing from the rest of the engine.
 """

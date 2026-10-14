@@ -5,8 +5,6 @@ from decimal import Decimal
 from functools import cache
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand.money import IDR, Money, Rounding
 from steadyhand.sizing import CompoundingSizer, Sizer
@@ -85,10 +83,17 @@ def test_a_stock_with_no_price_cannot_be_sized() -> None:
         sizer().size({stock: Decimal("0.1")}, view(10_000_000, {}), {}, PRICES, DAY)
 
 
-@given(
-    value=st.integers(0, 10**10),
-    weights=st.lists(st.integers(0, 1_000), min_size=3, max_size=3),
-    held=st.lists(st.integers(0, 5_000), min_size=3, max_size=3),
+# Unit stand-in of the property in tests/properties/test_engine_sizing.py (#290):
+# nothing at all, all cash at the largest value, all held with no weights
+# (everything sold), and a mix of both sides.
+@pytest.mark.parametrize(
+    ("value", "weights", "held"),
+    [
+        (0, [0, 0, 0], [0, 0, 0]),
+        (10**10, [1_000, 1_000, 1_000], [0, 0, 0]),
+        (0, [0, 0, 0], [5_000, 5_000, 5_000]),
+        (1_234_567, [1, 500, 1_000], [100, 0, 4_999]),
+    ],
 )
 def test_orders_are_whole_lots_that_never_overshoot_the_target(
     value: int, weights: list[int], held: list[int]

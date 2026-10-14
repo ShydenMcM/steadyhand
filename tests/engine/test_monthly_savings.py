@@ -5,8 +5,6 @@ from decimal import Decimal
 from functools import cache
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand._ratio import ratio_down
 from steadyhand.market import PayDates
@@ -131,14 +129,16 @@ def test_a_first_day_on_a_portfolio_that_holds_stocks_sizes_the_instalment_from_
     assert decision.weights == {TLKM: held.weight(TLKM), BBCA: ratio_down(1_000_000, 10_000_000)}
 
 
-@given(
-    instalments=st.integers(1, 24),
-    start=st.integers(1_000, 10**10),
-    months=st.lists(
-        st.tuples(st.integers(0, 10**8), st.integers(0, 4), st.integers(1, 3)),
-        min_size=1,
-        max_size=30,
-    ),
+# Unit stand-in of the property in tests/properties/test_engine_monthly_savings.py (#290):
+# one instalment with nothing to buy; the most instalments, cash and months
+# drawn; and months with nothing to buy between those that buy.
+@pytest.mark.parametrize(
+    ("instalments", "start", "months"),
+    [
+        (1, 1_000, [(0, 0, 1)]),
+        (24, 10**10, [(10**8, 4, 3)] * 30),
+        (3, 50_000, [(0, 1, 2), (10_000, 0, 1), (0, 4, 3), (5, 2, 1), (0, 1, 1)]),
+    ],
 )
 def test_the_reserve_for_the_instalments_still_due_is_never_spent_before_its_month(
     instalments: int, start: int, months: list[tuple[int, int, int]]

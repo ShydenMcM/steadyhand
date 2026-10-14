@@ -7,8 +7,6 @@ from decimal import Decimal
 from functools import cache
 
 import pytest
-from hypothesis import given, settings
-from hypothesis import strategies as st
 
 from steadyhand.corporate import Entitlement, Holdings
 from steadyhand.engine import (
@@ -499,10 +497,17 @@ def test_settings_and_state_check_their_parts() -> None:
         DayInputs(D1, steady(), members={BBCA})  # type: ignore[arg-type]
 
 
-@settings(max_examples=40)
-@given(
-    moves=st.lists(st.tuples(st.integers(-12, 12), st.integers(-12, 12)), min_size=3, max_size=3),
-    capital=st.integers(1_000_000, 50_000_000),
+# Unit stand-in of the property in tests/properties/test_engine_engine.py (#290):
+# prices that never move, rise and fall by the most drawn at the ends of the
+# capital drawn, and a mix.
+@pytest.mark.parametrize(
+    ("moves", "capital"),
+    [
+        ([(0, 0), (0, 0), (0, 0)], 1_000_000),
+        ([(12, 12), (12, 12), (12, 12)], 50_000_000),
+        ([(-12, -12), (-12, -12), (-12, -12)], 1_000_000),
+        ([(5, -7), (-3, 12), (0, -1)], 12_345_678),
+    ],
 )
 def test_every_day_keeps_cash_whole_and_the_value_adding_up(
     moves: list[tuple[int, int]], capital: int

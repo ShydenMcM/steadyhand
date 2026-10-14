@@ -1,36 +1,39 @@
 # Handover: steadyhand
 
-**Updated:** 2026-10-12 07:50 WIB (00:50 UTC). Current state only. The long history (M3 to M7, T1, research notes) is at `git show 932167c:HANDOVER.md`.
+**Updated:** 2026-10-14 (UTC date). Current state only. The long history (M3 to M7, T1, research notes) is at `git show 932167c:HANDOVER.md`.
 
 **Direction (#214):** steadyhand becomes a Chrome extension in TypeScript that reads the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. EXT stories #222-#245 follow the clean-up queue below.
 
 ## Branches and heads
-- `develop` = `912f541` (handover #293 on #284's hypothesis bump), green, `deploy-dev` success (run 38189480379). Default branch. Merge green PRs into `develop` without asking; never `main`.
-- **`282-unit-tests-under-1s`**, pushed, no PR yet, head `bb5e507` (read with `git rev-parse origin/282-unit-tests-under-1s`), behind develop by two commits (merge develop in before the next push). Three cuts, each green and mutation-verified (`.superpowers/sdd/282/evidence.md`).
+- `develop`: `8cbe2e4` (#319's PR #321, squash): PR run 38499345783 green on all 14 required jobs; develop's own run 38499583309 green on all 15 jobs, `deploy-dev` verified `steadyhand-extension-8cbe2e4….zip`. Read the head with `git rev-parse origin/develop`. Required checks: 14. Merge green PRs into `develop` without asking; never `main`.
+- `282-unit-tests-under-1s`: pushed, no PR, head `5edf543`; it has not taken in develop (rebase it on `0f32209` first).
 
-## Clean-up queue (Shyden: "Cleanup first, every project"), all before #222
-Order: #285 → #286 → #290 → #292 → #282's limit last. #282's cuts go on in parallel. #287 and #288 at any point.
-- **#282** In Progress, 13: **amended 2026-10-12 for the global 0.1 s CPU rule** (check AT 0.1 s; every test whose heaviest run, laptop or CI, passes 0.07 s is cut to 0.07 s). Keeps: a warm-cache cut for about 42 CLI tests, nine individual cuts (`test_yahoo` restorations, `test_cache`, `test_ledger_booking`, `test_journeys`), the 1 s limit, the CPU check, the raise-guard.
-- **#292** (8, new): 52 long real runs (34 CLI, 18 golden) move to `integration`, each with a short-window unit stand-in; moved tests stay on the cold cache (AC 7). Ids in `.superpowers/sdd/unit-1s/moves.txt`.
-- **#285** (8) guards suite + load limit; **#286** (5) no process/socket, creates `integration`; **#290** (5) properties suite at 500; **#287** (3) Node 26; **#288** (3) mutations in CI; **#272** (5) Python floors.
+## #319: closed, PR #321 merged: README says how develop deploys to dev (Shyden 2026-10-14)
+- The shyden.co.uk session relayed "no deploy workflow" and Shyden ruled the new dev-deploy rule Not applicable. Measured: `ci.yml`'s `deploy-dev` job already deploys each green develop push (builds the extension, attests and verifies the zip, keeps it 90 days, the repo's retention). Re-asked: **"Rule met, say how"**. The peer was told.
+- PR #321 adds a "Dev builds" README section. AC 4 corrected on #319: README is off the docs-only fast path (the disclaimer guard reads it), so full CI.
+- Filed in passing: **#320** (2): the README still describes a library and CLI, not the #214 extension.
 
-## Measured this session (`.superpowers/sdd/unit-1s/`, git-ignored)
-- Probe on `bb5e507` (`probe-py-bb5e507.jsonl`, 2,379 of 2,379): 139 tests over 0.07 s on the laptop; #282's bucket 96 (about 103 with CI's heavier runs, `cut-list-007.txt`); the rest are property (#290), guard (#285), process (#286).
-- Spike (reverted): every CLI test on one shared, filled cache (`spike-cache/cache.sqlite`, 140 KB, 1,240 bars, 135 fetched ranges): all 139 pass; median over-line test falls to 21% of its CPU (`probe-spike-warm.jsonl`). Seeding a test: file copy 0.20 ms CPU, sqlite backup 0.55 ms, dump replay 10.7 ms.
-- Profiles (`prof-*.prof`, `profsum.py`): CLI paper tests spend about 78% in the cold cache fill (`cache.fetch` → `_ask_every_gap` → `_fill` → `yahoo._fetch`); golden 47% `engine.run_day`, 33% fill.
+## #292: merged, open, blocked by #288 (Shyden 2026-10-13: "keep open")
+- 89 long real runs now in `tests/integration/{idx,cli,golden}`, unchanged; a unit stand-in of each over `tests/cli/short_world.py` (made-up 19 days, 2021-12-15 to 2022-01-11; pinned runs in `tests/fixtures/golden/made-up`; paper page tests use `saved_account`). Evidence on #292 (comment of 02:15 UTC).
+- Open only for AC 3's integration half: 30 mutations in `.superpowers/sdd/292/mut_cli.py` and `mut_paper_golden.py` (git-ignored; `integration_red` names the moved tests), run by #288's workflow. #292 is Todo, `blocked_by: [288]`, linked.
+- The 12 borderline CLI tests are #282's (Shyden 2026-10-13).
+
+## PR-on-red hook (from shyden.co.uk, 2026-10-14): checked, nothing to do
+- All 14 required checks on `develop` are `ci.yml` jobs (`strict: true`). `record-floors.yml` runs on a PR label and `yahoo-shape.yml` on dispatch; neither is required. The hook's `ci.yml` read covers this repo.
 
 ## Resume steps
-1. Run `ListAgents`; no subagents were started this session.
-2. **Clean-up done 2026-10-12** (ledger recorded, pass log in `reference-cleanup.md`): Shyden ran the script; 21 worktrees, 49 merged branches and 15.2 GB of caches removed (`.superpowers/sdd` 2.6 GB). Kept for Shyden's call, no PR, closed tickets: `203/spec-amendment-wip`, `ext/s1-ci-fast-path` (7 WIP commits past PR #260's head), `ext/s1-ci-fast-path-fold`, `scratch/221-chain`, `scratch/221-guards`; `ext/s3b-guards` is #222 WIP.
-3. **#282 warm cache, plan by extraction:** recorder writes a seed cache (full recorded range per golden stock) as a committed fixture; `recorded_source(folder, *, seeded=True)` copies it in when absent; cold-path tests pass `seeded=False`; an `integration` test rebuilds the seed and compares table contents. Check that full-range seeding serves every narrower request (`test_a_restored_day_is_the_same_whatever_range_is_asked`). Predicted mutations before and after each cut (AC 7).
-4. Then #285, #286, #290, #292, and last #282's limit, CPU check and guard (ONE push); add the CPU constant to `CPU_LIMITS` in `~/.claude/hooks/unit-limit-never-raised.py`.
+1. Run `ListAgents`; no subagents were started.
+2. If this file's docs PR (`docs-handover-319`) is still open, read its run by job name and merge it when green.
+3. Next: **#282** (the global unit-limit rule puts it at the top of the queue; every decision in it is on the ticket). Rebase `282-unit-tests-under-1s` on `origin/develop` first. Then #288 (unblocks #292). No Priority field yet (#315 blocked), so the order is the queue's.
 
-## Progress (2026-10-12 00:47 UTC, `.superpowers/sdd/estimates/progress.py`)
-- **Measured:** EXT first release 4 of 28 stories, 21 of 184 points. Whole board open: 33 tickets, 213 points (epic #214 unscored). Closed in the last 7 days: 8 tickets, 30 points.
-- **By tickets: 14% (4 of 28). ETA 2026-11-09, low confidence:** 32 open tickets at 1.14 a day is 28 days.
-- **By effort: 11% (21 of 184). ETA 2026-12-01, low confidence:** 213 open points at 4.3 a day is 50 days.
-- **Assumed:** the last 7 days' pace (test work) holds for feature stories. **Outside waits:** a broker account (#242), Chrome Web Store review.
+## Next on the clean-up queue (all before #222)
+- **#282** (13: warm cache, CPU check, now also the 12 borderline), **#287** (3, Node 26), **#288** (5, mutations in CI, now with #292's 30), **#272** (5, Python floors), **#315** (2, board Priority, blocked by repo-template#6), **#317** (5, orphan check in the PR gate), **#320** (2, README for the extension direction).
 
-## Standing notes
-- Tool fix: `~/.claude/scripts/pr-verdict.sh` reading the router's stderr notice as a required check (backup `.bak-router-noise-2026-10-12`).
-- claude-mem cannot save memories (provider allowance exhausted since 2026-10-10 22:21 UTC).
+## Raised with Shyden
+- Three global hook false positives, for a dedicated `~/.claude` session (his choice, 2026-10-12): `~/.claude/hook-false-positives-2026-10-13.md`.
+
+## Progress (2026-10-14, `uv run --locked python .superpowers/sdd/estimates/progress.py`)
+- **Measured:** EXT first release 4 of 28 stories closed (21 of 184 points). Board open: 35 tickets, 208 points (epic #214 unscored). Closed 2026-10-07 to 2026-10-14: 5 tickets, 26 points.
+- **By tickets: 14% complete (4 of 28 stories). ETA 2026-12-01, low confidence:** 34 open scored tickets at 0.71 a day is 48 days.
+- **By effort: 208 points remaining across 34 scored open tickets. ETA 2026-12-09, low confidence:** 3.7 points a day is 56 days.
+- **Assumed:** last week's pace (test work) holds for feature stories. **Outside waits:** a broker account (#242), Chrome Web Store review, repo-template#6 for #315.

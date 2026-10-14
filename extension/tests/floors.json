@@ -1,15 +1,15 @@
 {
   "browser-globals.identifiers": 1,
-  "compiler-home.imports": 90,
+  "compiler-home.imports": 124,
   "compiler-home.uses": 179,
   "core.files": 1,
   "import-direction.files": 9,
   "import-direction.imports": 12,
-  "literal-floors.assertions": 141,
-  "literal-floors.files": 20,
-  "literal-floors.variables": 257,
+  "literal-floors.assertions": 181,
+  "literal-floors.files": 29,
+  "literal-floors.variables": 328,
   "number-types.values": 1,
   "number-words.nodes": 7,
-  "source.files": 30,
+  "source.files": 39,
   "workspace.locked-packages": 198
 }

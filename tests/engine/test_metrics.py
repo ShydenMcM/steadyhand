@@ -8,8 +8,6 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from steadyhand.corporate import Entitlement, Holdings
 from steadyhand.engine import DayReport, EngineState
@@ -220,7 +218,18 @@ def _deepest_fall(prices: Sequence[Decimal]) -> Decimal:
     return worst.quantize(RATIO_PLACES)
 
 
-@given(st.lists(st.decimals(min_value=0, max_value=5, places=3), min_size=1, max_size=30))
+# Unit stand-in of the property in tests/properties/test_engine_metrics.py (#290):
+# one price, a fall to nothing, a rise, a fall then a deeper one, and thirty.
+@pytest.mark.parametrize(
+    "prices",
+    [
+        [Decimal(0)],
+        [Decimal(5), Decimal(0)],
+        [Decimal("0.001"), Decimal(5)],
+        [Decimal(4), Decimal(3), Decimal(5), Decimal("1.5"), Decimal(2)],
+        [Decimal(i % 7) + Decimal("0.125") for i in range(30)],
+    ],
+)
 def test_the_drawdown_matches_every_pair_checked(prices: list[Decimal]) -> None:
     run = [report(day, price=str(p)) for day, p in zip(days(len(prices)), prices, strict=True)]
     drawdown = measure(run, final(str(prices[-1]))).drawdown
