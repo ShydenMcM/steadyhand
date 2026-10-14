@@ -85,6 +85,20 @@ jobs:
       - name: Unit limits, judged without coverage
         if: steps.scope.outputs.docs_only != 'true'
         run: uv run --locked pytest -W error -p no:cacheprovider
+      - name: "Measure (#282, throwaway): per-test wall and CPU, coverage off, three runs"
+        if: always() && steps.scope.outputs.docs_only != 'true'
+        run: |
+          for i in 1 2 3; do
+            PROBE_OUT="$RUNNER_TEMP/probe-$i.jsonl" PYTHONPATH="$PWD/.measure-282" uv run --locked pytest -W error -p probe -p no:cacheprovider -q > "$RUNNER_TEMP/run-$i.txt" 2>&1
+            tail -1 "$RUNNER_TEMP/run-$i.txt"
+          done
+      - name: Keep the measurements
+        if: always() && steps.scope.outputs.docs_only != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: probe-py${{ matrix.python }}
+          path: ${{ runner.temp }}/probe-*.jsonl
+          if-no-files-found: error
       # The ten-year backtest is timed on its own: under coverage's tracing it would time the
       # tracer, which roughly triples the run.
       - name: Performance, a ten-year backtest in under 30 seconds
