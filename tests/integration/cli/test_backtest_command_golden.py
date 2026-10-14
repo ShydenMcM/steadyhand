@@ -8,11 +8,15 @@ The unit suite keeps a stand-in of each, of the same name, in
 ``tests/cli/test_backtest_command.py``: the same command and checks over nineteen trading days of
 three made-up stocks (``tests/cli/short_world.py``), which meet a dividend, a split and a restored
 adjustment as the golden window does.
+
+#282 moved one more: a holding whose old prices cannot be recovered keeps its dividend history
+(BBRI before 2017-11-10; 0.045 s to 0.071 s of own CPU on the laptop, 2026-10-14).
 """
 
 import csv
 import json
 import stat
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -22,6 +26,7 @@ from cli_world import (
     RESTORED,
     Cli,
     Result,
+    golden_backtest,
     market_cli,
 )
 from record_cli_seed import PLACEHOLDERS
@@ -30,9 +35,11 @@ from record_golden import END, GOLDEN, RECORDED, START, replay, run, settings, u
 from steadyhand import (
     DATA_BAR_REFUSED,
     DISCLAIMER,
+    IDR,
     BacktestResult,
     BuyAndHold,
     Market,
+    Money,
     backtest,
 )
 from steadyhand_idx import BarCache, CachedDataSource, IdxMarketRules
@@ -265,3 +272,20 @@ def test_monthly_savings_keeps_back_the_instalments_still_due(
     _, cash = savings
     reserve = (len(SAVINGS_MONTHS) - 1 - SAVINGS_MONTHS.index(month)) * 25_000_000
     assert reserve <= cash[month][1] < reserve + 25_000_000
+
+
+def test_a_holding_whose_old_prices_cannot_be_recovered_keeps_its_dividend_history(
+    market: Cli,
+) -> None:
+    # The income report reads five years before the last day. Yahoo's BBRI rows before
+    # 2017-11-10 have volumes that are not whole shares once its split is reversed, so those days
+    # cannot be recovered (#162), but a dividend needs no price: the report is built, with BBRI's
+    # 6 April 2021 dividend in its run-rate (M6 spec §4.3), at its restored Rp98.9057 a share on
+    # 4,900 shares (#160). Before M6 the whole run stopped with exit 3.
+    result = market("backtest", "--from", "2022-01-25", "--to", "2022-01-31")
+    assert (result.code, result.err) == (0, "")
+    assert "Run-rate a month           IDR 211,843\n" in result.out
+    found = golden_backtest(market, date(2022, 1, 31), goal=True, start=date(2022, 1, 25))
+    assert found.run.income is not None
+    held = {h.instrument.symbol: h.dividends for h in found.run.income.run_rate.holdings}
+    assert [(d.ex_date, d.gross) for d in held["BBRI"]] == [(date(2021, 4, 6), Money(484_637, IDR))]
