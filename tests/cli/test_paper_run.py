@@ -200,13 +200,22 @@ def test_thirty_one_days_to_run_are_refused_and_nothing_is_written(tmp_path: Pat
         assert len(store.runs()) == 1
 
 
-def test_thirty_one_days_to_run_proceed_with_catch_up(tmp_path: Path) -> None:
-    cli = paper(tmp_path)
-    run_on(cli, START)
-    result = run_on(cli, trading_days()[CATCH_UP_CAP + 1], "--catch-up")
+def test_thirty_one_days_to_run_proceed_with_catch_up(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The real 31 days over the golden window are in tests/integration/cli/
+    # test_paper_run_golden.py (#282). The made-up window is too short for them, so this stand-in
+    # lowers the cap to 3: one day past it is refused alone and runs with --catch-up.
+    monkeypatch.setattr("steadyhand_idx.paper.CATCH_UP_CAP", 3)
+    cli = short_cli(tmp_path / "home")
+    run_on(cli, SHORT_START)
+    refused = run_on(cli, short_trading_days()[4])
+    assert refused.code == 2
+    assert "4 trading days to run since 2021-12-15, more than 3" in refused.err
+    result = run_on(cli, short_trading_days()[4], "--catch-up")
     assert result.code == 0, result.err
     with opened(cli) as store:
-        assert store.days() == trading_days()[: CATCH_UP_CAP + 2]
+        assert store.days() == short_trading_days()[:5]
 
 
 # The golden invariant (M5 spec §6.2, §9.2).
