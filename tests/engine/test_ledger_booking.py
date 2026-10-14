@@ -6,6 +6,7 @@ pin the cost of a booking, that snapshots sharing a chain still keep their own l
 """
 
 import copy
+import sys
 import tracemalloc
 from dataclasses import FrozenInstanceError
 from datetime import date, timedelta
@@ -16,7 +17,7 @@ from steadyhand.money import IDR, Money
 from steadyhand.portfolio import CashMovement, MovementKind, Portfolio
 
 D0 = date(2026, 1, 5)
-LONG = 100_000
+LONG = 10_000
 
 
 def rp(amount: int) -> Money:
@@ -50,7 +51,8 @@ def booking_bytes(portfolio: Portfolio) -> int:
 def test_booking_onto_a_long_ledger_allocates_no_more_than_onto_a_short_one() -> None:
     short = booking_bytes(Portfolio(IDR, (), deposits(100)))
     long = booking_bytes(Portfolio(IDR, (), deposits(LONG)))
-    # Copying a 100,000-entry ledger allocated about 1.7 MB; one more link, a few hundred bytes.
+    # Copying a 10,000-entry ledger allocated 170,248 bytes, 88 times the 1,928 on 100 entries;
+    # one more link, 648 bytes. Measured 2026-10-12 (#282); 100,000 entries cost 0.25 s of CPU.
     assert short > 0
     assert long <= 2 * short, f"booking allocated {long} bytes on {LONG:,} entries, {short} on 100"
 
@@ -156,10 +158,22 @@ def test_a_portfolio_cannot_be_changed_in_place() -> None:
         portfolio.currency = IDR  # type: ignore[misc]
 
 
+def copied_or_none(portfolio: Portfolio) -> Portfolio | None:
+    """The deep copy, or None when it recursed too deep. Caught here and returned, so a failure
+    carries no RecursionError: pytest spends minutes drawing one this deep (#282, profiled)."""
+    try:
+        return copy.deepcopy(portfolio)
+    except RecursionError:
+        return None
+
+
 def test_a_long_ledger_survives_deepcopy() -> None:
-    portfolio = Portfolio(IDR, (), deposits(LONG)).deposit(rp(1), D0)
-    # The chain is LONG links deep; copied (or pickled) link by link it would exceed the
-    # recursion limit, so it travels as the ledger tuple.
-    restored = copy.deepcopy(portfolio)
+    # Three times the recursion limit is deep enough: copied (or pickled) link by link, a
+    # chain that deep would exceed the limit, so it travels as the ledger tuple (#282: the
+    # depth is what is tested, and 100,000 links cost 3 s of CPU to prove the same).
+    deep = 3 * sys.getrecursionlimit()
+    portfolio = Portfolio(IDR, (), deposits(deep)).deposit(rp(1), D0)
+    restored = copied_or_none(portfolio)
+    assert restored is not None, "copied link by link, the chain recursed too deep"
     assert restored == portfolio
-    assert restored.cash_balance() == rp(LONG + 1)
+    assert restored.cash_balance() == rp(deep + 1)

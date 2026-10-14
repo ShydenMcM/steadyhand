@@ -5,20 +5,32 @@ has its stand-in here, of the same name, over ``short_world``'s nineteen made-up
 
 import csv
 import stat
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
 import pytest
-from cli_world import Cli, Result, golden_backtest, market_cli
+from cli_world import Cli, Result, market_cli
 from short_world import GROWTH_CONFIG as SHORT_GROWTH_CONFIG
 from short_world import PLACEHOLDERS as SHORT_PLACEHOLDERS
+from short_world import RECORDED as SHORT_RECORDED
 from short_world import RESTORED as SHORT_RESTORED
 from short_world import SHORT_CONFIG, WEEK, WEEK_END, library_run, short_cli
 from short_world import WINDOW as SHORT_WINDOW
+from short_world import download as short_download
 
-from steadyhand import DATA_BAR_REFUSED, DISCLAIMER, IDR, Money
+from steadyhand import DATA_BAR_REFUSED, DISCLAIMER, IDR, DataSource, Instrument, Money
+from steadyhand_idx import IdxCalendar
 from steadyhand_idx.notes import DATA_PRICES_RESTORED
 from steadyhand_idx.training import catalogue
+from steadyhand_idx.yahoo import (
+    UnrecoverablePricesError,
+    YahooDataSource,
+    YahooHistory,
+    unadjust,
+)
 
 WINDOW = ("--from", "2021-02-01", "--to", "2022-01-31")
 STEM = "backtest-buy-and-hold-2021-02-01-2022-01-31"
@@ -101,21 +113,51 @@ def test_backtest_needs_the_configuration(cli: Cli) -> None:
     )
 
 
+# The real case, BBRI's rows before 2017-11-10 in the golden window, moved to
+# tests/integration/cli/test_backtest_command_golden.py (#282). Its stand-in gives a made-up stock
+# the same fault: an old row whose volume is not whole shares once its split is reversed.
+
+OLD_ROW = date(2018, 12, 17)
+
+
+def odd_volume(ticker: str, start: date, end: date) -> YahooHistory:
+    """The made-up answer, but XBBB's first look-back row trades one share more than Yahoo's
+    split-adjusted volumes allow: half a share once its 1-for-2 split is reversed (#162)."""
+    answer = short_download(ticker, start, end)
+    if ticker != "XBBB.JK":
+        return answer
+    rows = tuple(
+        replace(row, volume=row.volume + 1) if row.day == OLD_ROW else row for row in answer.rows
+    )
+    return YahooHistory(ticker, rows, answer.splits)
+
+
+@contextmanager
+def odd_source(folder: Path) -> Iterator[DataSource]:
+    del folder
+    yield YahooDataSource(download=odd_volume, sleep=lambda _: None, today=lambda: SHORT_RECORDED)
+
+
+def run_rate(page: str) -> str:
+    found = [line for line in page.splitlines() if line.startswith("Run-rate a month")]
+    assert len(found) == 1, page
+    return found[0]
+
+
 def test_a_holding_whose_old_prices_cannot_be_recovered_keeps_its_dividend_history(
-    market: Cli,
+    tmp_path: Path,
 ) -> None:
-    # The income report reads five years before the last day. Yahoo's BBRI rows before
-    # 2017-11-10 have volumes that are not whole shares once its split is reversed, so those days
-    # cannot be recovered (#162), but a dividend needs no price: the report is built, with BBRI's
-    # 6 April 2021 dividend in its run-rate (M6 spec §4.3), at its restored Rp98.9057 a share on
-    # 4,900 shares (#160). Before M6 the whole run stopped with exit 3.
-    result = market("backtest", "--from", "2022-01-25", "--to", "2022-01-31")
+    xbbb = Instrument("XBBB", "IDX", IDR)
+    old = odd_volume("XBBB.JK", OLD_ROW, OLD_ROW)
+    with pytest.raises(UnrecoverablePricesError) as caught:
+        unadjust(old, xbbb, IdxCalendar.shipped(), (OLD_ROW, OLD_ROW))
+    assert caught.value.days == (OLD_ROW,)
+
+    result = short_cli(tmp_path / "odd", source=odd_source)("backtest", *WEEK)
     assert (result.code, result.err) == (0, "")
-    assert "Run-rate a month           IDR 211,843\n" in result.out
-    found = golden_backtest(market, date(2022, 1, 31), goal=True, start=date(2022, 1, 25))
-    assert found.run.income is not None
-    held = {h.instrument.symbol: h.dividends for h in found.run.income.run_rate.holdings}
-    assert [(d.ex_date, d.gross) for d in held["BBRI"]] == [(date(2021, 4, 6), Money(484_637, IDR))]
+    whole = short_cli(tmp_path / "whole")("backtest", *WEEK)
+    assert whole.code == 0, whole.err
+    assert run_rate(result.out) == run_rate(whole.out)
 
 
 # The stand-ins of the golden-window tests moved to tests/integration/cli/

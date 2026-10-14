@@ -4,6 +4,7 @@ Like ``steadyhand.training``, only the output layer may import it, and it import
 decides what to trade (T1 spec §5).
 """
 
+from functools import cache
 from importlib.resources import files
 from importlib.resources.abc import Traversable
 
@@ -17,8 +18,10 @@ LESSONS: Traversable = files(__name__) / "lessons" / "en"
 """The IDX lessons, shipped inside the wheel."""
 
 
+@cache
 def catalogue() -> Catalogue:
-    """Both packages' lessons and the course, loaded and checked (T1 spec §7)."""
+    """Both packages' lessons and the course, loaded and checked (T1 spec §7), once per process:
+    the shipped files do not change while it runs, and a ``Catalogue`` is read-only (#282)."""
     return Catalogue.load([ENGINE_LESSONS, LESSONS], COURSE)
 
 

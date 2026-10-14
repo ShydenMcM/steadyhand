@@ -9,17 +9,18 @@ import sqlite3
 import stat
 import subprocess
 import sys
+import tempfile
 from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta, timezone
 from functools import cache
-from itertools import product
 from multiprocessing.synchronize import Event
 from pathlib import Path
 from typing import NamedTuple
 
-from record_golden import END, RECORDED, START, STOCKS, recorded, replay
+from record_cli_seed import PLACEHOLDERS, SEED, recorded_or_empty
+from record_golden import END, RECORDED, START, STOCKS, replay
 
 from steadyhand import STRATEGIES, BacktestResult, DataSource, Market, backtest
 from steadyhand_idx import BarCache, CachedDataSource
@@ -29,7 +30,6 @@ from steadyhand_idx.paper import days_to_run
 from steadyhand_idx.rules import IdxMarketRules
 from steadyhand_idx.state import STATE_FILE, StateStore
 from steadyhand_idx.universe import Exclusions, Lq45Membership, Lq45Universe
-from steadyhand_idx.yahoo import YahooHistory
 
 NOW = datetime(2026, 9, 27, 18, 0, tzinfo=UTC)
 """18:00 UTC is 01:00 on 28 September in Jakarta, so 'today' is the Jakarta date."""
@@ -93,10 +93,6 @@ class Cli:
         return result
 
 
-PLACEHOLDERS = tuple("Z" + "".join(letters) for letters in product("ABCDEFGHIJ", repeat=3))[:40]
-"""Made-up codes that fill the LQ45 file to 45. No real LQ45 list is ever written into this
-repository (core spec §9.4); these are excluded, so no strategy ever holds one."""
-
 GOLDEN_CONFIG = """[account]
 starting_cash_idr = 100_000_000
 
@@ -132,18 +128,27 @@ RESTORED = (
 """The golden window's one warning: BBRI's restoration in its whole recording (#160)."""
 
 
-def recorded_or_empty(ticker: str, start: date, end: date) -> YahooHistory:
-    """Yahoo's recorded answer for the five golden stocks, and no rows for a placeholder."""
-    if ticker.removesuffix(".JK") in STOCKS:
-        return recorded(ticker, start, end)
-    return YahooHistory(ticker, (), ())
+@cache
+def seed() -> bytes:
+    """The bytes of a bar cache holding the recorded seed (``record_cli_seed``), built once per
+    process: the cache's own migrations make the schema, and the seed's rows go in."""
+    with tempfile.TemporaryDirectory() as scratch:
+        path = Path(scratch) / "cache.sqlite"
+        BarCache(path).close()
+        with closing(sqlite3.connect(path)) as db:
+            db.executescript(SEED.read_text(encoding="utf-8"))
+        return path.read_bytes()
 
 
 @contextmanager
 def recorded_source(folder: Path) -> Iterator[DataSource]:
     """The recorded answers through the real ``YahooDataSource`` and the bar cache in *folder*,
-    on the day they were recorded, as the golden test reads them."""
-    with BarCache(folder / "cache.sqlite") as cache:
+    on the day they were recorded, as the golden test reads them. A folder with no bar cache
+    starts from the seed, as if a first run had filled it; a cache already there is kept."""
+    path = folder / "cache.sqlite"
+    if not path.exists():
+        path.write_bytes(seed())
+    with BarCache(path) as cache:
         yield CachedDataSource(replay(recorded_or_empty), cache, today=lambda: RECORDED)
 
 
