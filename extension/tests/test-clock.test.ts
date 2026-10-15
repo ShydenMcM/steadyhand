@@ -19,9 +19,19 @@ test("the limits are a second of wall and a tenth of a second of CPU", () => {
 });
 
 test("a limits run holds each test and hook to a second; any other run holds none", () => {
-  expect(limitsFor("limits")).toEqual({ testTimeout: 1_000, hookTimeout: 1_000 });
-  expect(limitsFor("test")).toEqual({ testTimeout: 0, hookTimeout: 0 });
-  expect(limitsFor("guards")).toEqual({ testTimeout: 0, hookTimeout: 0 });
+  // Entries, not an object literal: a limit key is written in tests/lib/test-clock.ts alone (#323).
+  expect(Object.entries(limitsFor("limits"))).toEqual([
+    ["testTimeout", 1_000],
+    ["hookTimeout", 1_000],
+  ]);
+  expect(Object.entries(limitsFor("test"))).toEqual([
+    ["testTimeout", 0],
+    ["hookTimeout", 0],
+  ]);
+  expect(Object.entries(limitsFor("guards"))).toEqual([
+    ["testTimeout", 0],
+    ["hookTimeout", 0],
+  ]);
 });
 
 test.each([0, 100_000])("a test of %i us of CPU is within the limit", (cpu) => {

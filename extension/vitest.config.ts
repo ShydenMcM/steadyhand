@@ -28,6 +28,7 @@ export const GUARDS_COVERED = [
   "tests/lib/core-rules.ts",
   "tests/lib/imports.ts",
   "tests/lib/literal-floors.ts",
+  "tests/lib/raised-limits.ts",
   "tests/lib/source.ts",
   "tests/lib/walk.ts",
 ];

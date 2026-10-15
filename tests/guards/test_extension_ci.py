@@ -5,12 +5,12 @@ runs the tool the spec names, so a renamed script or a step dropped from the job
 """
 
 import json
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
+from config_strings import strings_in
 from population import searched, tracked
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -86,19 +86,6 @@ def test_node_comes_from_setup_node_at_the_engine_floor() -> None:
     assert len(setup) == 1
     assert setup[0]["with"]["node-version"] == "24"
     assert manifest().get("engines") == {"node": ">=24"}
-
-
-def strings_in(node: Any) -> Iterator[str]:  # noqa: ANN401 - parsed YAML is untyped
-    """Every key and every string value in a parsed workflow: a run line, an env name, an input."""
-    if isinstance(node, dict):
-        for key, value in node.items():
-            yield str(key)
-            yield from strings_in(value)
-    elif isinstance(node, list):
-        for item in node:
-            yield from strings_in(item)
-    elif isinstance(node, str):
-        yield node
 
 
 def recorder_mentions(workflow: Any) -> list[str]:  # noqa: ANN401 - parsed YAML is untyped
