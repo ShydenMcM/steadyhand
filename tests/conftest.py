@@ -7,6 +7,7 @@ import file_reads
 import hypothesis_profile
 import no_process
 import pytest
+import unit_limits
 from cli_world import Cli
 from load_clock import pytest_make_collect_report, pytest_sessionfinish, pytest_terminal_summary
 from stood_in_git import FakeGit, stand_in
@@ -28,7 +29,8 @@ def pytest_configure(config: pytest.Config) -> None:
 
     A unit run records nothing: CI's lock makes those files unreadable before every job, which
     covers it from outside the process (Shyden, 2026-10-12, #285). A unit run instead refuses every
-    process and outside connection, from before the first test module is imported (#286). A
+    process and outside connection, from before the first test module is imported (#286), and holds
+    each test to 1 s of wall and 0.1 s of its own CPU when coverage is not tracing it (#323). A
     properties run loads the one Hypothesis profile, which draws every property's full count (#290).
     """
     suite = config.getoption("suite")
@@ -37,6 +39,7 @@ def pytest_configure(config: pytest.Config) -> None:
     if suite == "unit":
         no_process.install()
         config.pluginmanager.register(no_process, "no-process")
+        config.pluginmanager.register(unit_limits, "unit-limits")
     if suite == "properties":
         hypothesis_profile.load()
 

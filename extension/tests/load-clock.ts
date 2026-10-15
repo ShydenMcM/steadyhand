@@ -19,13 +19,13 @@ const wall = performance.now();
 
 // Vitest reads a hook's first argument only when it is destructured; the suite is the second.
 // eslint-disable-next-line no-empty-pattern
-beforeAll(({}, suite) => {
+beforeAll(({}, running) => {
   const load = {
-    path: relative(ROOT, suite.file.filepath),
+    path: relative(ROOT, running.file.filepath),
     cpuMicroseconds: thread() - cpu,
     wallMicroseconds: Math.round((performance.now() - wall) * 1000),
   };
-  recordLoad(suite.meta, load);
+  recordLoad(running.meta, load);
   const refusal = loadRefusal(load);
   if (process.env[JUDGE_ENV] === "1" && refusal !== undefined) throw new Error(refusal);
 });

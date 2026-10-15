@@ -39,7 +39,11 @@ const floorsFile = (floors: Record<string, number>): string => {
   return path;
 };
 
-const at = (test: string, id: string, measured: number): Measurement => ({ id, measured, test });
+const at = (testName: string, id: string, measured: number): Measurement => ({
+  id,
+  measured,
+  test: testName,
+});
 
 test("the recorded floors file holds whole numbers of zero or more, by id", () => {
   expect(() => readFloors(FLOORS_PATH)).not.toThrow();
@@ -208,7 +212,7 @@ test("a malformed measurement is refused by its line number", () => {
 });
 
 /** A suite run that writes `measurements` and exits `status`, in place of the real suite. */
-const suite =
+const fakeSuite =
   (measurements: readonly Measurement[], status = 0) =>
   (path: string): number => {
     writeFileSync(path, measurements.map((m) => `${JSON.stringify(m)}\n`).join(""));
@@ -218,7 +222,7 @@ const suite =
 test("a recording writes the raised floors and prints each one that moved", () => {
   const path = floorsFile({ "a.files": 3 });
   const lines: string[] = [];
-  expect(recordFloors(path, suite([at("t1", "a.files", 4)]), (l) => lines.push(l))).toBe(0);
+  expect(recordFloors(path, fakeSuite([at("t1", "a.files", 4)]), (l) => lines.push(l))).toBe(0);
   expect(readFileSync(path, "utf8")).toBe('{\n  "a.files": 4\n}\n');
   expect(lines).toEqual(["a.files: 3 → 4 (+1)"]);
 });
@@ -226,14 +230,14 @@ test("a recording writes the raised floors and prints each one that moved", () =
 test("a recording where nothing moved says so", () => {
   const path = floorsFile({ "a.files": 3 });
   const lines: string[] = [];
-  expect(recordFloors(path, suite([at("t1", "a.files", 3)]), (l) => lines.push(l))).toBe(0);
+  expect(recordFloors(path, fakeSuite([at("t1", "a.files", 3)]), (l) => lines.push(l))).toBe(0);
   expect(lines).toEqual(["no floor moved"]);
 });
 
 test("a recording whose suite failed writes nothing", () => {
   const path = floorsFile({ "a.files": 3 });
   const lines: string[] = [];
-  expect(recordFloors(path, suite([at("t1", "a.files", 9)], 1), (l) => lines.push(l))).toBe(1);
+  expect(recordFloors(path, fakeSuite([at("t1", "a.files", 9)], 1), (l) => lines.push(l))).toBe(1);
   expect(readFloors(path)).toEqual({ "a.files": 3 });
   expect(lines).toEqual(["the suite exited 1: nothing recorded"]);
 });
@@ -241,7 +245,7 @@ test("a recording whose suite failed writes nothing", () => {
 test("a recording with a refusal prints it and writes nothing", () => {
   const path = floorsFile({ "a.files": 3 });
   const lines: string[] = [];
-  expect(recordFloors(path, suite([at("t1", "a.files", 2)]), (l) => lines.push(l))).toBe(1);
+  expect(recordFloors(path, fakeSuite([at("t1", "a.files", 2)]), (l) => lines.push(l))).toBe(1);
   expect(readFloors(path)).toEqual({ "a.files": 3 });
   expect(lines).toEqual([
     "floor a.files: measured 2, below its record of 3; the recorder never lowers a floor. " +

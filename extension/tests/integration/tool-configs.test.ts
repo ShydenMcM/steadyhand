@@ -89,6 +89,10 @@ test.each([
   expect(project("unit")?.exclude).toContain(glob);
 });
 
-test("a unit run refuses processes before anything else is set up, and clocks loads last", () => {
-  expect(project("unit")?.setupFiles).toEqual(["tests/no-process.ts", "tests/load-clock.ts"]);
+test("a unit run refuses processes first, clocks each test, and clocks loads last", () => {
+  expect(project("unit")?.setupFiles).toEqual([
+    "tests/no-process.ts",
+    "tests/test-clock.ts",
+    "tests/load-clock.ts",
+  ]);
 });
