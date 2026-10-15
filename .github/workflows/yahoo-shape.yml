@@ -39,7 +39,9 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked
+      # Its one limit (#323): 6-9 s measured on CI; it waits on Yahoo's network, so two minutes.
       - name: Yahoo still gives what the fixtures recorded
+        timeout-minutes: 2
         run: uv run --locked pytest -W error -m live -p no:cacheprovider tests/idx/test_yahoo_live.py
       - name: Open an issue, unless one is already open
         if: failure()

@@ -87,8 +87,10 @@ jobs:
         run: uv run --locked pytest -W error -p no:cacheprovider
       # The ten-year backtest is timed on its own: under coverage's tracing it would time the
       # tracer, which roughly triples the run.
+      # Its one limit (#323): 13-29 s measured on CI, so two minutes, about four times the slowest.
       - name: Performance, a ten-year backtest in under 30 seconds
         if: steps.scope.outputs.docs_only != 'true'
+        timeout-minutes: 2
         run: uv run --locked pytest -W error -m perf -p no:cacheprovider
 
   audit:
