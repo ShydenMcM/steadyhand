@@ -194,9 +194,9 @@ export const declaringCallsByText = (file: ts.SourceFile): number =>
 
 /** The module an import, export, `import()` or `require()` names, as written; null if not written. */
 const moduleOf = (node: ts.Node): string | null | undefined => {
-  if (ts.isImportDeclaration(node) || (ts.isExportDeclaration(node) && node.moduleSpecifier)) {
-    const specifier = node.moduleSpecifier;
-    return specifier !== undefined && ts.isStringLiteralLike(specifier) ? specifier.text : null;
+  if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+    // The grammar writes a declaration's module as a string; `export { a }` names none.
+    return (node.moduleSpecifier as ts.StringLiteral | undefined)?.text;
   }
   if (
     ts.isCallExpression(node) &&
@@ -252,6 +252,10 @@ const limitAt = (
   const member = memberName(node) ?? (ts.isBindingElement(node) ? bindingKey(node) : undefined);
   if (member !== undefined && LIMIT_MEMBERS.has(member)) {
     return `.${member}, which sets a limit or names a runner`;
+  }
+  // `const { [name]: read } = vi` could read setConfig, or a clock's now, unseen: refused.
+  if (ts.isBindingElement(node) && node.propertyName !== undefined && member === undefined) {
+    return "a destructured member not written as a name";
   }
   if (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) {
     const key = keyName(node.name);

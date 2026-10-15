@@ -169,6 +169,16 @@ const FORMS: readonly (readonly [string, string, string | readonly string[]])[] 
   ],
   ["a function named it", "function it() {}", "it declared here, hiding the runner's"],
   ["a binding named vi", "const { vi } = helpers;", "vi declared here, hiding the runner's"],
+  [
+    "a destructured member not written",
+    "const { [name]: read } = vi;",
+    "a destructured member not written as a name",
+  ],
+  [
+    "a runner destructured into a pattern",
+    "const { test: { only } } = runner;",
+    "test renamed in a binding",
+  ],
 ];
 
 test.each(FORMS)("%s is refused by line", (_, code, what) => {
@@ -215,7 +225,9 @@ const CLOCKS: readonly (readonly [string, string, string])[] = [
   ["process.threadCpuUsage", "process.threadCpuUsage();", ".threadCpuUsage reads a clock"],
   ["process.uptime", "process.uptime();", ".uptime reads a clock"],
   ["performance.timeOrigin", "performance.timeOrigin;", ".timeOrigin reads a clock"],
+  ["now by a quoted key", 'const { "now": read } = performance;', ".now reads a clock"],
   ["new Date()", "const d = new Date();", "new Date() reads a clock"],
+  ["new Date without parentheses", "const d = new Date;", "new Date() reads a clock"],
   ["Date()", "const d = Date();", "Date() reads a clock"],
   ["perf_hooks", 'import { performance } from "node:perf_hooks";', "node:perf_hooks imported"],
   ["perf_hooks bare", 'import { performance } from "perf_hooks";', "perf_hooks imported"],
