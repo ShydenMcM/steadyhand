@@ -1,0 +1,73 @@
+# #282 AC 7, integration half (#288): the three tests moved with stand-ins (the paper journey,
+# 31 days with catch-up, old prices) still catch the mutations they caught before the move
+# (.superpowers/sdd/282/mut_282.py J1, J2, P1, P2, B1b).
+
+[[mutation]]
+id = '282-J1'
+why = 'no daily-loss halt'
+path = 'packages/steadyhand/src/steadyhand/risk.py'
+old = '''
+            if fall >= self._limits.daily_loss:
+'''
+new = '''
+            if False:
+'''
+suite = "integration"
+tests = ["tests/integration/cli/test_journeys_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_journeys_golden.py::test_a_paper_traders_journey"]
+
+[[mutation]]
+id = '282-J2'
+why = 'the resume audited under another key'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/paper.py'
+old = '''
+    line = Note(
+        PAPER_RESUMED,
+'''
+new = '''
+    line = Note(
+        "paper.resumed.not",
+'''
+suite = "integration"
+tests = ["tests/integration/cli/test_journeys_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_journeys_golden.py::test_a_paper_traders_journey"]
+
+[[mutation]]
+id = '282-P1'
+why = '--catch-up ignored'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/paper.py'
+old = 'len(days) > CATCH_UP_CAP and not catch_up:'
+new = 'len(days) > CATCH_UP_CAP:'
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_run_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_paper_run_golden.py::test_thirty_one_days_to_run_proceed_with_catch_up"]
+
+[[mutation]]
+id = '282-P2'
+why = 'the cap fixed at 30, not read at call time'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/paper.py'
+old = 'len(days) > CATCH_UP_CAP and not catch_up:'
+new = 'len(days) > 30 and not catch_up:'
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_run_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_paper_run_golden.py::test_thirty_one_days_to_run_proceed_with_catch_up"]
+
+[[mutation]]
+id = '282-B1b'
+why = 'dividends read through unadjust, as before M6 (exit 3)'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/yahoo.py'
+old = '''
+        return actions_in(history, instrument, start, end, self._runs_for(history, start, end))
+'''
+new = '''
+        runs = self._runs_for(history, start, end)
+        return unadjust(history, instrument, self._calendar, (start, end), runs)[1]
+'''
+suite = "integration"
+tests = ["tests/integration/cli/test_backtest_command_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_backtest_command_golden.py::test_a_holding_whose_old_prices_cannot_be_recovered_keeps_its_dividend_history"]

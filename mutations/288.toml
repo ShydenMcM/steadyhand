@@ -1,0 +1,28 @@
+# #288 AC 4: the workflow proved on planted mutations, predicted before the first run. P1 plants a
+# defect the integration suite must catch; P2 rewrites the code into an equal form no test can see.
+# The third proof, an anchor that matches nothing, failed its run on a throwaway branch and is not
+# kept here, where it would fail every run of this file.
+
+[[mutation]]
+id = "P1"
+why = "The handover leaves the docs-only fast path, so a docs-only pull request runs everything."
+path = "scripts/ci_scope.py"
+old = 'FAST_PATH_FILES = frozenset({"HANDOVER.md"})'
+new = 'FAST_PATH_FILES = frozenset({"HANDOVER.txt"})'
+suite = "integration"
+tests = ["tests/integration/scripts/test_ci_scope_git.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_ci_scope_git.py::test_a_docs_only_pull_request_skips_the_expensive_steps",
+    "tests/integration/scripts/test_ci_scope_git.py::test_a_change_is_classified_by_every_path_it_touches[docs-only]",
+]
+
+[[mutation]]
+id = "P2"
+why = "The rename and copy letters written in the other order: the same set, so nothing changes."
+path = "scripts/ci_scope.py"
+old = 'TWO_PATHS = frozenset("RC")'
+new = 'TWO_PATHS = frozenset("CR")'
+suite = "integration"
+tests = ["tests/integration/scripts/test_ci_scope_git.py"]
+expect = "green"

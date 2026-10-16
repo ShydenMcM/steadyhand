@@ -1,0 +1,66 @@
+name: mutations
+
+# Planted mutations of the non-unit suites (#288). Shyden's rule (2026-10-09, every project): only
+# unit tests run on the laptop, so a mutation judged by a guards, integration or properties test
+# runs here. Labelling a pull request `mutations` runs every mutation file under `mutations/` that
+# the pull request adds or changes; a dispatch on a branch runs the one file it names. Each target
+# runs clean first, then each mutation is applied, judged against its prediction and put back
+# (`scripts/run_mutations.py`). The table goes to the job summary and the `mutations-report`
+# artifact. It holds no secret and only reads.
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      file:
+        description: "The mutation file to run, such as mutations/288.toml"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.12.18"
+
+jobs:
+  mutations:
+    name: mutations
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'mutations'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Name the mutation files
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          FILE: ${{ inputs.file }}
+        run: |
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            printf '%s\n' "$FILE" > mutation-files.txt
+          else
+            git diff --name-only --diff-filter=AM HEAD^1 HEAD -- 'mutations/*.toml' > mutation-files.txt
+          fi
+          cat mutation-files.txt
+      - name: Run the mutations
+        # No file named is a usage error, never an empty green run.
+        timeout-minutes: 25
+        run: |
+          mapfile -t files < mutation-files.txt
+          uv run --locked python scripts/run_mutations.py "${files[@]}"
+      - name: Keep the report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mutations-report
+          path: mutations-report.md
+          if-no-files-found: error
