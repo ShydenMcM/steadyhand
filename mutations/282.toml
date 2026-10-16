@@ -60,6 +60,11 @@ expect = "green"
 
 [[mutation]]
 id = '282-B1b'
+# Predicted red in the holding test; the second run (38871773290, 2026-10-16) kept it green and
+# went red in the three tests named below. The backtest now reads around the days a source
+# refuses (backtest.py's refused-day ranges and _unpriced_actions), so this window no longer stops
+# with exit 3: read from the code, not traced. The holding test's own contract (BBRI's dividend
+# kept, at its restored price) still holds under the mutation; the golden runs see the change.
 why = 'dividends read through unadjust, as before M6 (exit 3)'
 path = 'packages/steadyhand-idx/src/steadyhand_idx/yahoo.py'
 old = '''
@@ -72,4 +77,8 @@ new = '''
 suite = "integration"
 tests = ["tests/integration/cli/test_backtest_command_golden.py"]
 expect = "red"
-red = ["tests/integration/cli/test_backtest_command_golden.py::test_a_holding_whose_old_prices_cannot_be_recovered_keeps_its_dividend_history"]
+red = [
+    "tests/integration/cli/test_backtest_command_golden.py::test_dividend_growth_reads_its_look_back_and_ends_as_the_library_run",
+    "tests/integration/cli/test_backtest_command_golden.py::test_the_broker_fee_preset_comes_from_the_configuration",
+    "tests/integration/cli/test_backtest_command_golden.py::test_the_daily_csv_is_the_golden_run_day_by_day",
+]

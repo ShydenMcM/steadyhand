@@ -308,6 +308,9 @@ red = ["tests/integration/golden/test_golden_backtest_recorded.py::test_the_wind
 
 [[mutation]]
 id = 'Q13'
+# Predicted red in the window test too; the second run (38871773290, 2026-10-16) kept it green.
+# That test checks each dividend's ex-date, gross and the holdings, never a pay date, so a pay
+# date one day late cannot reach it. The seven tests named below went red.
 why = "A dividend is paid a day later than the calendar's pay date."
 path = 'packages/steadyhand/src/steadyhand/corporate.py'
 old = '            run.entitle(action, add_trading_days(rules, day, payout.pay_lag_trading_days))'
@@ -315,7 +318,15 @@ new = '            run.entitle(action, add_trading_days(rules, day, payout.pay_l
 suite = "integration"
 tests = ["tests/integration/golden/test_golden_backtest_recorded.py"]
 expect = "red"
-red = ["tests/integration/golden/test_golden_backtest_recorded.py::test_the_income_report_agrees_with_what_the_engine_paid", "tests/integration/golden/test_golden_backtest_recorded.py::test_the_window_holds_the_events_it_was_chosen_for"]
+red = [
+    "tests/integration/golden/test_golden_backtest_recorded.py::test_buy_and_hold_reproduces_the_stored_results_exactly",
+    "tests/integration/golden/test_golden_backtest_recorded.py::test_the_dividend_growth_run_reproduces_its_stored_results_exactly",
+    "tests/integration/golden/test_golden_backtest_recorded.py::test_the_income_report_agrees_with_what_the_engine_paid",
+    "tests/integration/golden/test_golden_backtest_recorded.py::test_the_recorder_writes_the_dividend_growth_file_byte_for_byte",
+    "tests/integration/golden/test_golden_backtest_recorded.py::test_the_recorder_writes_the_stored_file_byte_for_byte",
+    "tests/integration/golden/test_golden_backtest_recorded.py::test_the_recorder_writes_the_switch_on_file_byte_for_byte",
+    "tests/integration/golden/test_golden_backtest_recorded.py::test_the_switch_on_run_reproduces_its_stored_results_exactly",
+]
 
 [[mutation]]
 id = 'Q14'
