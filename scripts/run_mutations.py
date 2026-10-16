@@ -19,6 +19,7 @@ when any row is not as predicted, and 2 on a usage error.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -29,9 +30,15 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-USAGE = "usage: run_mutations.py <mutation file>..."
+from ci_scope import Change, ScopeError, changes
+
+USAGE = "usage: run_mutations.py <mutation file>... | --plan <github.event_name>"
+LIST = "mutation-files.txt"
 REPORT = "mutations-report.md"
-SUITES = ("guards", "integration", "properties")
+# The extension workspace's non-unit vitest projects, each by its suite name here.
+EXTENSION = "extension/"
+VITEST_PROJECTS = {"extension-guards": "guards", "extension-integration": "integration"}
+SUITES = ("guards", "integration", "properties", *VITEST_PROJECTS)
 EXPECTS = ("red", "green")
 TEXT_KEYS = ("id", "why", "path", "old", "new", "suite", "expect")
 LIST_KEYS = ("tests", "red")
@@ -42,6 +49,13 @@ TOTALS_LINE = re.compile(r"(?m)^=*\s*(\d+ [a-z]+(?:, \d+ [a-z]+)*) in [\d.]+s\b"
 TAIL = 300
 # A file directly in mutations/, so a dispatch's input can name nothing else.
 FILE_NAME = re.compile(r"mutations/[A-Za-z0-9][A-Za-z0-9._-]*\.toml")
+# A test file of a non-unit suite: the Python guards, integration and properties suites, and the
+# extension's guards and integration projects. A pull request that adds or changes one must carry
+# a mutation file that targets it (Shyden, 2026-10-16: "it must be run").
+NON_UNIT_TEST = re.compile(
+    r"tests/(?:guards|integration|properties)/(?:[^/]+/)*test_[^/]+\.py"
+    r"|extension/tests/(?:guards|integration)/(?:[^/]+/)*[^/]+\.test\.ts"
+)
 
 Runner = Callable[[str, tuple[str, ...]], tuple[int, str]]
 
@@ -68,6 +82,14 @@ class Outcome:
     returncode: int
     failed: frozenset[str]
     totals: str
+
+
+@dataclass(frozen=True)
+class Plan:
+    files: tuple[str, ...]
+    changed_tests: tuple[str, ...]
+    uncovered: tuple[str, ...]
+    judged: int
 
 
 @dataclass(frozen=True)
@@ -120,6 +142,13 @@ def _check(found: Mutation, where: str) -> None:
         raise MutationError(msg)
     if not found.tests:
         msg = f"{where}: tests names no target file"
+        raise MutationError(msg)
+    in_workspace = [name.startswith(EXTENSION) for name in found.tests]
+    if found.suite in VITEST_PROJECTS and not all(in_workspace):
+        msg = f"{where}: {found.suite} runs files under {EXTENSION} only"
+        raise MutationError(msg)
+    if found.suite not in VITEST_PROJECTS and any(in_workspace):
+        msg = f"{where}: {found.suite} runs no file under {EXTENSION}"
         raise MutationError(msg)
     if found.old == found.new:
         msg = f"{where}: the mutation changes nothing"
@@ -204,6 +233,56 @@ def parse_outcome(returncode: int, output: str) -> Outcome:
     return Outcome(returncode, failed, totals[-1])
 
 
+def parse_vitest(returncode: int, text: str, root: Path) -> Outcome:
+    """vitest's verdict from its exit code and JSON report, each test named by its file under
+    *root* and its full name; a run that did not finish, or a file that did not load, is refused."""
+    tail = text[-TAIL:]
+    if returncode not in (0, 1):
+        msg = f"exit {returncode} (killed or unknown): {tail}"
+        raise MutationError(msg)
+    try:
+        report = json.loads(text)
+    except ValueError as error:
+        msg = f"no vitest report; the tail: {tail}"
+        raise MutationError(msg) from error
+    try:
+        total = report["numTotalTests"]
+        failed: set[str] = set()
+        for result in report["testResults"]:
+            name = Path(result["name"]).relative_to(root).as_posix()
+            broken = [test for test in result["assertionResults"] if test["status"] == "failed"]
+            if result["status"] == "failed" and not broken:
+                msg = f"{name} failed to load: {result['message'][-TAIL:]}"
+                raise MutationError(msg)
+            failed |= {f"{name}::{test['fullName']}" for test in broken}
+        counts = [
+            (report["numFailedTests"], "failed"),
+            (report["numPassedTests"], "passed"),
+            (report["numPendingTests"], "skipped"),
+            (report["numTodoTests"], "todo"),
+        ]
+    except (KeyError, TypeError, ValueError) as error:
+        msg = f"unreadable vitest report ({error!r}); the tail: {tail}"
+        raise MutationError(msg) from error
+    if total == 0:
+        msg = "no tests ran"
+        raise MutationError(msg)
+    if returncode == 1 and not failed:
+        msg = f"exit 1 but names no failed test; the tail: {tail}"
+        raise MutationError(msg)
+    if returncode == 0 and failed:
+        msg = f"exit 0 but names failed tests; the tail: {tail}"
+        raise MutationError(msg)
+    totals = ", ".join(f"{count} {word}" for count, word in counts if count)
+    return Outcome(returncode, frozenset(failed), totals)
+
+
+def _outcome(suite: str, returncode: int, output: str, root: Path) -> Outcome:
+    if suite in VITEST_PROJECTS:
+        return parse_vitest(returncode, output, root)
+    return parse_outcome(returncode, output)
+
+
 def _failed(name: str, failed: frozenset[str]) -> bool:
     return any(item == name or item.startswith(f"{name}[") for item in failed)
 
@@ -215,12 +294,16 @@ def judge(mutation: Mutation, outcome: Outcome) -> str | None:
     if outcome.returncode == 0:
         return "not caught: every test passed"
     missed = [name for name in mutation.red if not _failed(name, outcome.failed)]
-    return f"named tests stayed green: {', '.join(missed)}" if missed else None
+    if not missed:
+        return None
+    # What went red instead, so a misprediction can be read from the report alone.
+    instead = sorted(outcome.failed)
+    return f"named tests stayed green: {', '.join(missed)}; red instead: {', '.join(instead)}"
 
 
-def _baseline(suite: str, tests: tuple[str, ...], runner: Runner) -> Row:
+def _baseline(root: Path, suite: str, tests: tuple[str, ...], runner: Runner) -> Row:
     try:
-        outcome = parse_outcome(*runner(suite, tests))
+        outcome = _outcome(suite, *runner(suite, tests), root)
     except MutationError as error:
         return Row("baseline", suite, "green", "not read", str(error), ok=False)
     if outcome.returncode != 0:
@@ -243,7 +326,7 @@ def _one(root: Path, mutation: Mutation, runner: Runner) -> Row:
     finally:
         target.write_bytes(original)
     try:
-        outcome = parse_outcome(returncode, output)
+        outcome = _outcome(mutation.suite, returncode, output, root)
     except MutationError as error:
         return row("not read", str(error), ok=False)
     result = "green" if outcome.returncode == 0 else "red"
@@ -258,7 +341,7 @@ def run_all(root: Path, mutations: Sequence[Mutation], runner: Runner) -> list[R
     for mutation in mutations:
         target = (mutation.suite, mutation.tests)
         if target not in clean:
-            baseline = _baseline(*target, runner)
+            baseline = _baseline(root, *target, runner)
             rows.append(baseline)
             clean[target] = baseline.ok
         if clean[target]:
@@ -307,7 +390,7 @@ def command(suite: str, tests: tuple[str, ...]) -> list[str]:
     ]
 
 
-def run_pytest(args: list[str], cwd: Path) -> tuple[int, str]:
+def run_process(args: list[str], cwd: Path) -> tuple[int, str]:
     """One run, with a fresh bytecode prefix: a same-length rewrite within a second could
     otherwise run the previous mutation's cached bytecode."""
     env = {**os.environ, "PYTHONPYCACHEPREFIX": tempfile.mkdtemp(prefix="mutation-")}
@@ -315,6 +398,45 @@ def run_pytest(args: list[str], cwd: Path) -> tuple[int, str]:
         args, cwd=cwd, capture_output=True, text=True, check=False, env=env
     )
     return done.returncode, done.stdout + done.stderr
+
+
+def vitest_command(suite: str, tests: tuple[str, ...], report: Path) -> list[str]:
+    """The target files run in their vitest project, as CI runs it without coverage, the verdict
+    written to *report* as JSON. Paths are the workspace's own, where vitest runs."""
+    return [
+        "npm",
+        "exec",
+        "--no",
+        "--",
+        "vitest",
+        "run",
+        "--project",
+        VITEST_PROJECTS[suite],
+        "--reporter=json",
+        f"--outputFile={report}",
+        *(name.removeprefix(EXTENSION) for name in tests),
+    ]
+
+
+def run_vitest(suite: str, tests: tuple[str, ...], root: Path) -> tuple[int, str]:
+    """One vitest run in the workspace: its JSON report, or its output when it wrote none."""
+    report = Path(tempfile.mkdtemp(prefix="mutation-")) / "report.json"
+    returncode, output = run_process(vitest_command(suite, tests, report), root / "extension")
+    try:
+        return returncode, report.read_text(encoding="utf-8")
+    except OSError:
+        return returncode, output
+
+
+def runner_for(root: Path) -> Runner:
+    """Each suite run by its own tool from its home under *root*."""
+
+    def run(suite: str, tests: tuple[str, ...]) -> tuple[int, str]:
+        if suite in VITEST_PROJECTS:
+            return run_vitest(suite, tests, root)
+        return run_process(command(suite, tests), root)
+
+    return run
 
 
 def main(argv: Sequence[str], runner: Runner, root: Path, env: Mapping[str, str]) -> int:
@@ -350,13 +472,73 @@ def main(argv: Sequence[str], runner: Runner, root: Path, env: Mapping[str, str]
     return 0 if ok else 1
 
 
+def plan_for(changed: Sequence[Change], read: Callable[[str], str]) -> Plan:
+    """The mutation files a pull request's *changed* paths must run, and each non-unit test file
+    it adds or changes that none of them targets. *read* gives a path's text."""
+    present = sorted({change.path for change in changed if not change.removed})
+    files = tuple(path for path in present if FILE_NAME.fullmatch(path))
+    tests = tuple(path for path in present if NON_UNIT_TEST.fullmatch(path))
+    targeted = {
+        target for name in files for found in load(read(name), name) for target in found.tests
+    }
+    uncovered = tuple(path for path in tests if path not in targeted)
+    return Plan(files, tests, uncovered, len(changed))
+
+
+def _count(number: int, noun: str) -> str:
+    return f"{number} {noun}{'' if number == 1 else 's'}"
+
+
+def plan_main(argv: Sequence[str], env: Mapping[str, str], root: Path) -> int:
+    """Write the mutation files this event must run to mutation-files.txt and ``run`` to
+    ``$GITHUB_OUTPUT``. A pull request runs those it adds or changes, and fails when it changes a
+    non-unit test none of them targets; a dispatch runs the one file in ``$FILE``."""
+    if (
+        len(argv) != 1
+        or argv[0] not in ("pull_request", "workflow_dispatch")
+        or "GITHUB_OUTPUT" not in env
+    ):
+        print(USAGE, file=sys.stderr)
+        return 2
+    if argv[0] == "workflow_dispatch":
+        name = env.get("FILE", "")
+        if not FILE_NAME.fullmatch(name):
+            print(f"{name!r} is not a mutations/<name>.toml file; {USAGE}", file=sys.stderr)
+            return 2
+        files: tuple[str, ...] = (name,)
+    else:
+
+        def read(name: str) -> str:
+            try:
+                return (root / name).read_text(encoding="utf-8")
+            except OSError as error:
+                msg = f"cannot read {name} ({error.strerror})"
+                raise MutationError(msg) from error
+
+        try:
+            plan = plan_for(changes(root, "HEAD^1", "HEAD"), read)
+        except (ScopeError, MutationError) as error:
+            print(f"mutations plan: {error}")
+            return 1
+        print(
+            f"mutations plan: {_count(plan.judged, 'path')} judged, "
+            f"{_count(len(plan.changed_tests), 'non-unit test file')} changed, "
+            f"{_count(len(plan.files), 'mutation file')} to run"
+        )
+        if plan.uncovered:
+            for path in plan.uncovered:
+                where = "add one under mutations/"
+                print(f"no mutation file in this pull request targets {path}: {where}")
+            return 1
+        files = plan.files
+    (root / LIST).write_text("".join(f"{name}\n" for name in files), encoding="utf-8")
+    with Path(env["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+        output.write(f"run={'true' if files else 'false'}\n")
+    return 0
+
+
 if __name__ == "__main__":
     here = Path.cwd()
-    raise SystemExit(
-        main(
-            sys.argv[1:],
-            lambda suite, tests: run_pytest(command(suite, tests), here),
-            here,
-            os.environ,
-        )
-    )
+    if sys.argv[1:2] == ["--plan"]:
+        raise SystemExit(plan_main(sys.argv[2:], os.environ, here))
+    raise SystemExit(main(sys.argv[1:], runner_for(here), here, os.environ))

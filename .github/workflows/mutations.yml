@@ -1,15 +1,17 @@
 name: mutations
 
-# Planted mutations of the non-unit suites (#288). Shyden's rule (2026-10-09, every project): only
-# unit tests run on the laptop, so a mutation judged by a guards, integration or properties test
-# runs here. Labelling a pull request `mutations` runs every mutation file under `mutations/` that
-# the pull request adds or changes; a dispatch on a branch runs the one file it names. Each target
-# runs clean first, then each mutation is applied, judged against its prediction and put back
-# (`scripts/run_mutations.py`). The table goes to the job summary and the `mutations-report`
-# artifact. It holds no secret and only reads.
+# Planted mutations of the non-unit suites (#288), a required check. Shyden's rules: only unit tests
+# run on the laptop (2026-10-09), so a mutation judged by a guards, integration or properties test,
+# or by the extension's guards or integration project, runs here; and it must be run (2026-10-16).
+# Every pull request runs the mutation files under `mutations/` that it adds or changes, and fails
+# when it adds or changes a non-unit test file that none of them targets. A pull request touching
+# neither passes at the plan, saying how many paths it judged. A dispatch on a branch runs the one
+# file it names. Each target runs clean first, then each mutation is applied, judged against its
+# prediction and put back (`scripts/run_mutations.py`). The table goes to the job summary and the
+# `mutations-report` artifact. It holds no secret and only reads.
 on:
   pull_request:
-    types: [labeled]
+    branches: [develop, main]
   workflow_dispatch:
     inputs:
       file:
@@ -26,7 +28,6 @@ env:
 jobs:
   mutations:
     name: mutations
-    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'mutations'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -34,31 +35,40 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
+      # Standard library only, on the runner's own python3, before anything is installed.
+      - name: "Plan: which mutation files must run?"
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          FILE: ${{ inputs.file }}
+        run: python3 scripts/run_mutations.py --plan "$EVENT_NAME"
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        if: steps.plan.outputs.run == 'true'
         with:
           version: ${{ env.UV_VERSION }}
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked
-      - name: Name the mutation files
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          FILE: ${{ inputs.file }}
-        run: |
-          if [ "$EVENT_NAME" = workflow_dispatch ]; then
-            printf '%s\n' "$FILE" > mutation-files.txt
-          else
-            git diff --name-only --diff-filter=AM HEAD^1 HEAD -- 'mutations/*.toml' > mutation-files.txt
-          fi
-          cat mutation-files.txt
+        if: steps.plan.outputs.run == 'true'
+      # The extension's guards and integration projects run under vitest in the workspace.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.plan.outputs.run == 'true'
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      # No install script runs: a dependency's postinstall is code nobody reviewed.
+      - run: npm ci --ignore-scripts
+        if: steps.plan.outputs.run == 'true'
+        working-directory: extension
       - name: Run the mutations
-        # No file named is a usage error, never an empty green run.
+        if: steps.plan.outputs.run == 'true'
         timeout-minutes: 25
         run: |
           mapfile -t files < mutation-files.txt
           uv run --locked python scripts/run_mutations.py "${files[@]}"
       - name: Keep the report
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.plan.outputs.run == 'true' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mutations-report

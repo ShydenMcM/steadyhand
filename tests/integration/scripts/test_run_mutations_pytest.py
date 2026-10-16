@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from run_mutations import Mutation, MutationError, Outcome, Row, parse_outcome, run_all, run_pytest
+from run_mutations import Mutation, MutationError, Outcome, Row, parse_outcome, run_all, run_process
 
 SOURCE = "def f():\n    return 1\n"
 # The planted test file, a line a string: tests/guards/test_one_test_per_case.py counts every line
@@ -34,7 +34,7 @@ TESTS = "\n".join(
 def pytest_run(repo: Path, *tests: str) -> tuple[int, str]:
     """A real pytest of *tests* in *repo*, with the summary lines CI's ``-ra`` prints."""
     args = [sys.executable, "-m", "pytest", "-q", "-ra", "-p", "no:cacheprovider", *tests]
-    return run_pytest(args, repo)
+    return run_process(args, repo)
 
 
 @pytest.fixture

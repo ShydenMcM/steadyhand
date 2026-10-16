@@ -47,14 +47,16 @@ red = ["tests/integration/cli/test_paper_run_golden.py::test_thirty_one_days_to_
 
 [[mutation]]
 id = '282-P2'
-why = 'the cap fixed at 30, not read at call time'
+# Predicted red in the moved test; the first run (38868589129, 2026-10-16) was green. The moved
+# test runs the real cap, 30, so a literal 30 behaves the same: only the unit stand-in, which sets
+# the cap at call time, can see this one (as #292's F7). Kept, green, as the record.
+why = 'the cap fixed at 30, not read at call time (blind to the moved test: it runs the real cap)'
 path = 'packages/steadyhand-idx/src/steadyhand_idx/paper.py'
 old = 'len(days) > CATCH_UP_CAP and not catch_up:'
 new = 'len(days) > 30 and not catch_up:'
 suite = "integration"
 tests = ["tests/integration/cli/test_paper_run_golden.py"]
-expect = "red"
-red = ["tests/integration/cli/test_paper_run_golden.py::test_thirty_one_days_to_run_proceed_with_catch_up"]
+expect = "green"
 
 [[mutation]]
 id = '282-B1b'
