@@ -63,7 +63,9 @@ jobs:
         working-directory: extension
       - name: Run the mutations
         if: steps.plan.outputs.run == 'true'
-        timeout-minutes: 25
+        # 3 min 49 s to 5 min 35 s measured with every mutation file run (PR #342); about four times
+        # the slowest (#288).
+        timeout-minutes: 23
         run: |
           mapfile -t files < mutation-files.txt
           uv run --locked python scripts/run_mutations.py "${files[@]}"
