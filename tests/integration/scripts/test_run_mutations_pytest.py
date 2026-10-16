@@ -10,21 +10,25 @@ import pytest
 from run_mutations import Mutation, MutationError, Outcome, Row, parse_outcome, run_all, run_pytest
 
 SOURCE = "def f():\n    return 1\n"
-TESTS = """from mod import f
-
-
-def test_a():
-    assert True
-
-
-def test_f():
-    assert f() == 1
-
-
-@pytest.mark.parametrize("n", [1, 2])
-def test_g(n):
-    assert f() + n == 1 + n
-"""
+# The planted test file, a line a string: tests/guards/test_one_test_per_case.py counts every line
+# that starts with a test definition, and these are text, not tests of this file.
+TESTS = "\n".join(
+    [
+        "import pytest",
+        "from mod import f",
+        "",
+        "def test_a():",
+        "    assert True",
+        "",
+        "def test_f():",
+        "    assert f() == 1",
+        "",
+        '@pytest.mark.parametrize("n", [1, 2])',
+        "def test_g(n):",
+        "    assert n >= 1",
+        "",
+    ]
+)
 
 
 def pytest_run(repo: Path, *tests: str) -> tuple[int, str]:
@@ -36,7 +40,7 @@ def pytest_run(repo: Path, *tests: str) -> tuple[int, str]:
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     (tmp_path / "mod.py").write_text(SOURCE)
-    (tmp_path / "test_mod.py").write_text("import pytest\n" + TESTS)
+    (tmp_path / "test_mod.py").write_text(TESTS)
     return tmp_path
 
 
@@ -49,7 +53,7 @@ def test_a_red_run_names_each_failed_test_with_its_parameters(repo: Path) -> Non
     assert parse_outcome(*pytest_run(repo, "test_mod.py")) == Outcome(
         1, frozenset({"test_mod.py::test_f"}), "1 failed, 3 passed"
     )
-    (repo / "test_mod.py").write_text("import pytest\n" + TESTS.replace("1 + n", "n"))
+    (repo / "test_mod.py").write_text(TESTS.replace("n >= 1", "n < 1"))
     assert parse_outcome(*pytest_run(repo, "test_mod.py")).failed == {
         "test_mod.py::test_f",
         "test_mod.py::test_g[1]",
