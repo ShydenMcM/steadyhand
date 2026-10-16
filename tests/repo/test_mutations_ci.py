@@ -90,9 +90,10 @@ def test_the_runner_runs_the_planned_files_with_the_one_limit() -> None:
     limited = [found for found in job()["steps"] if "timeout-minutes" in found]
     assert limited == [step("Run the mutations")]
     assert limited[0]["run"] == RUN
-    # Assumed until the first runs measure it: #292's 30 mutations and their clean runs, each a
-    # uv start and a few integration files (the whole suite took 31 s on CI, PR #316).
-    assert limited[0]["timeout-minutes"] == 25
+    # Measured on PR #342, every mutation file run: 5 min 35 s (50 mutations, run 38868589129),
+    # 4 min 43 s and 3 min 49 s (56, runs 38871773290 and 38872705889). About four times the
+    # slowest, as ci.yml's limits are; a corpus past that is re-measured, never the limit raised.
+    assert limited[0]["timeout-minutes"] == 23
 
 
 def test_the_report_is_kept_even_when_a_mutation_is_not_as_predicted() -> None:
