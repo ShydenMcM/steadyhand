@@ -1,0 +1,84 @@
+# #282 AC 7, integration half (#288): the three tests moved with stand-ins (the paper journey,
+# 31 days with catch-up, old prices) still catch the mutations they caught before the move
+# (.superpowers/sdd/282/mut_282.py J1, J2, P1, P2, B1b).
+
+[[mutation]]
+id = '282-J1'
+why = 'no daily-loss halt'
+path = 'packages/steadyhand/src/steadyhand/risk.py'
+old = '''
+            if fall >= self._limits.daily_loss:
+'''
+new = '''
+            if False:
+'''
+suite = "integration"
+tests = ["tests/integration/cli/test_journeys_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_journeys_golden.py::test_a_paper_traders_journey"]
+
+[[mutation]]
+id = '282-J2'
+why = 'the resume audited under another key'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/paper.py'
+old = '''
+    line = Note(
+        PAPER_RESUMED,
+'''
+new = '''
+    line = Note(
+        "paper.resumed.not",
+'''
+suite = "integration"
+tests = ["tests/integration/cli/test_journeys_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_journeys_golden.py::test_a_paper_traders_journey"]
+
+[[mutation]]
+id = '282-P1'
+why = '--catch-up ignored'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/paper.py'
+old = 'len(days) > CATCH_UP_CAP and not catch_up:'
+new = 'len(days) > CATCH_UP_CAP:'
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_run_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_paper_run_golden.py::test_thirty_one_days_to_run_proceed_with_catch_up"]
+
+[[mutation]]
+id = '282-P2'
+# Predicted red in the moved test; the first run (38868589129, 2026-10-16) was green. The moved
+# test runs the real cap, 30, so a literal 30 behaves the same: only the unit stand-in, which sets
+# the cap at call time, can see this one (as #292's F7). Kept, green, as the record.
+why = 'the cap fixed at 30, not read at call time (blind to the moved test: it runs the real cap)'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/paper.py'
+old = 'len(days) > CATCH_UP_CAP and not catch_up:'
+new = 'len(days) > 30 and not catch_up:'
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_run_golden.py"]
+expect = "green"
+
+[[mutation]]
+id = '282-B1b'
+# Predicted red in the holding test; the second run (38871773290, 2026-10-16) kept it green and
+# went red in the three tests named below. The backtest now reads around the days a source
+# refuses (backtest.py's refused-day ranges and _unpriced_actions), so this window no longer stops
+# with exit 3: read from the code, not traced. The holding test's own contract (BBRI's dividend
+# kept, at its restored price) still holds under the mutation; the golden runs see the change.
+why = 'dividends read through unadjust, as before M6 (exit 3)'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/yahoo.py'
+old = '''
+        return actions_in(history, instrument, start, end, self._runs_for(history, start, end))
+'''
+new = '''
+        runs = self._runs_for(history, start, end)
+        return unadjust(history, instrument, self._calendar, (start, end), runs)[1]
+'''
+suite = "integration"
+tests = ["tests/integration/cli/test_backtest_command_golden.py"]
+expect = "red"
+red = [
+    "tests/integration/cli/test_backtest_command_golden.py::test_dividend_growth_reads_its_look_back_and_ends_as_the_library_run",
+    "tests/integration/cli/test_backtest_command_golden.py::test_the_broker_fee_preset_comes_from_the_configuration",
+    "tests/integration/cli/test_backtest_command_golden.py::test_the_daily_csv_is_the_golden_run_day_by_day",
+]

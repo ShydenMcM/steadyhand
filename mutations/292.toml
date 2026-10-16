@@ -1,0 +1,388 @@
+# #292 AC 3, integration half (#288): the 30 mutations each unit stand-in caught on the laptop
+# (.superpowers/sdd/292/mut_cli.py K1-K12, mut_paper_golden.py Q1-Q18), run against the moved
+# tests, each predicted red in the same tests it was predicted red in before the move.
+# Q17's and Q18's moved test (BBRI's golden years: 1,103 evidence days, 153 refused) was
+# named by #288 on 2026-10-16, before any run; their unit lists named only the stand-ins.
+
+[[mutation]]
+id = 'K1'
+why = 'The daily CSV writes unsettled cash where settled belongs.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/reports.py'
+old = '''
+                    report.settled,
+                    report.unsettled,'''
+new = '''
+                    report.unsettled,
+                    report.unsettled,'''
+suite = "integration"
+tests = ["tests/integration/cli/test_backtest_command_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_backtest_command_golden.py::test_the_daily_csv_is_the_golden_run_day_by_day"]
+
+[[mutation]]
+id = 'K2'
+why = 'The page drops its warnings.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/reports.py'
+old = '''
+    if warnings:
+        page.add()
+        page.add("Warnings:")'''
+new = '''
+    if False:
+        page.add()
+        page.add("Warnings:")'''
+suite = "integration"
+tests = ["tests/integration/cli/test_backtest_command_golden.py", "tests/integration/cli/test_compare_command_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_backtest_command_golden.py::test_the_summary_then_the_warnings_the_files_and_the_explanations", "tests/integration/cli/test_compare_command_golden.py::test_the_table_is_a_row_per_strategy_then_the_warnings"]
+
+[[mutation]]
+id = 'K3'
+why = 'The Markdown file drops its warnings.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/reports.py'
+old = '''
+    if warnings:
+        lines += ["", "## Warnings"'''
+new = '''
+    if False:
+        lines += ["", "## Warnings"'''
+suite = "integration"
+tests = ["tests/integration/cli/test_backtest_command_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_backtest_command_golden.py::test_the_markdown_file_holds_the_summary_and_the_disclaimer"]
+
+[[mutation]]
+id = 'K4'
+why = 'The Markdown file drops its day warnings.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/reports.py'
+old = '''
+    if day_warnings:
+'''
+new = '''
+    if False:
+'''
+suite = "integration"
+tests = ["tests/integration/cli/test_backtest_command_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_backtest_command_golden.py::test_a_member_with_no_bars_gives_day_warnings_in_the_file"]
+
+[[mutation]]
+id = 'K5'
+why = 'The Markdown table loses its right alignment.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/reports.py'
+old = "        f\"|---|{'---:|' * (len(header) - 1)}\","
+new = "        f\"|---|{'---|' * (len(header) - 1)}\","
+suite = "integration"
+tests = ["tests/integration/cli/test_backtest_command_golden.py", "tests/integration/cli/test_compare_command_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_backtest_command_golden.py::test_the_markdown_file_holds_the_summary_and_the_disclaimer", "tests/integration/cli/test_compare_command_golden.py::test_the_markdown_file_is_the_same_table"]
+
+[[mutation]]
+id = 'K6'
+why = 'A halt is left off the page and the file.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/reports.py'
+old = '''
+        for run in runs
+        if run.halt is not None
+'''
+new = '''
+        for run in runs
+        if False
+'''
+suite = "integration"
+tests = ["tests/integration/cli/test_reports_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_reports_golden.py::test_a_halt_is_reported_on_screen_and_in_the_file"]
+
+[[mutation]]
+id = 'K7'
+why = 'The configured strategy is ignored when no option names one.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/cli.py'
+old = '    entry = _entry(ctx.args.strategy or config.strategy)'
+new = '    entry = _entry(ctx.args.strategy or "monthly-savings")'
+suite = "integration"
+tests = ["tests/integration/cli/test_backtest_command_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_backtest_command_golden.py::test_the_strategy_comes_from_the_configuration_or_the_option"]
+
+[[mutation]]
+id = 'K8'
+why = 'backtest fetches no look-back for the strategy it runs.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/cli.py'
+old = '        config.settings, lookback_years=entry.lookback_years(config.strategy_settings)'
+new = '        config.settings, lookback_years=0'
+suite = "integration"
+tests = ["tests/integration/cli/test_backtest_command_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_backtest_command_golden.py::test_dividend_growth_reads_its_look_back_and_ends_as_the_library_run"]
+
+[[mutation]]
+id = 'K9'
+why = 'compare fetches the shortest look-back, not the longest.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/cli.py'
+old = '    lookback = max(entry.lookback_years'
+new = '    lookback = min(entry.lookback_years'
+suite = "integration"
+tests = ["tests/integration/cli/test_compare_command_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_compare_command_golden.py::test_each_strategy_ends_as_it_does_alone_with_the_longest_look_back"]
+
+[[mutation]]
+id = 'K10'
+why = "The broker's fee preset is ignored."
+path = 'packages/steadyhand-idx/src/steadyhand_idx/cli.py'
+old = '    return Market(universe, source, IdxMarketRules(broker_fees=config.broker_fees))'
+new = '    return Market(universe, source, IdxMarketRules())'
+suite = "integration"
+tests = ["tests/integration/cli/test_backtest_command_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_backtest_command_golden.py::test_the_broker_fee_preset_comes_from_the_configuration"]
+
+[[mutation]]
+id = 'K11'
+why = 'The starting cash is the default whatever the file says.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/config.py'
+old = 'capital=Money(get_int(account, "starting_cash_idr", where["account"], minimum=1), IDR),'
+new = 'capital=Money(100_000_000, IDR),'
+suite = "integration"
+tests = ["tests/integration/cli/test_backtest_command_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_backtest_command_golden.py::test_the_starting_cash_and_goal_come_from_the_configuration"]
+
+[[mutation]]
+id = 'K12'
+why = 'monthly-savings keeps nothing back for the instalments still due.'
+path = 'packages/steadyhand/src/steadyhand/strategies/monthly_savings.py'
+old = '            reserve = (due - 1) * instalment if due > 0 else 0'
+new = '            reserve = 0'
+suite = "integration"
+tests = ["tests/integration/cli/test_backtest_command_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_backtest_command_golden.py::test_monthly_savings_keeps_back_the_instalments_still_due", "tests/integration/cli/test_backtest_command_golden.py::test_monthly_savings_runs_against_buy_and_hold"]
+
+[[mutation]]
+id = 'Q1'
+why = "A holding's last close shows its value instead."
+path = 'packages/steadyhand-idx/src/steadyhand_idx/paper_pages.py'
+old = '''
+                str(close),
+'''
+new = '''
+                str(worth),
+'''
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_commands_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_paper_commands_golden.py::test_status_shows_each_holding_with_its_last_close_value_and_weight", "tests/integration/cli/test_paper_commands_golden.py::test_report_shows_the_latest_day_by_default_with_its_holdings"]
+
+[[mutation]]
+id = 'Q2'
+why = 'An entitlement shows its ex-date as its pay date.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/paper_pages.py'
+old = 'paid on {entitlement.pay_date.isoformat()}'
+new = 'paid on {entitlement.ex_date.isoformat()}'
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_commands_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_paper_commands_golden.py::test_status_shows_a_dividend_entitlement_until_it_is_paid"]
+
+[[mutation]]
+id = 'Q3'
+why = 'The claims lose the label saying they are an estimate.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/paper_pages.py'
+old = '    _section(page, f"{title} ({CLAIMS_LABEL})" if items else title, items)'
+new = '    _section(page, title, items)'
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_commands_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_paper_commands_golden.py::test_status_shows_open_claims_under_their_label"]
+
+[[mutation]]
+id = 'Q4'
+why = "Only a claim's first protected part is shown."
+path = 'packages/steadyhand-idx/src/steadyhand_idx/paper_pages.py'
+old = '''
+        for protection in claim.protections:
+'''
+new = '''
+        for protection in claim.protections[:1]:
+'''
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_commands_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_paper_commands_golden.py::test_a_claims_reinvested_parts_are_shown_with_how_long_each_is_protected"]
+
+[[mutation]]
+id = 'Q5'
+why = "A protected part's figure key is not named."
+path = 'packages/steadyhand-idx/src/steadyhand_idx/paper_pages.py'
+old = '''
+            keys.append(FIGURES["Protection.amount"])
+'''
+new = '''
+            pass
+'''
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_commands_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_paper_commands_golden.py::test_the_status_page_names_every_figure_it_shows", "tests/integration/cli/test_paper_commands_golden.py::test_a_claims_reinvested_parts_are_shown_with_how_long_each_is_protected"]
+
+[[mutation]]
+id = 'Q6'
+why = 'Skipped orders are left out of the day report.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/paper_pages.py'
+old = '''
+    blocked += [(skipped_line(rejected), (rejected.reason.key,)) for rejected in report.rejected]
+'''
+new = ''
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_commands_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_paper_commands_golden.py::test_a_blocked_order_is_shown_with_its_reason_and_the_dividends_of_the_day", "tests/integration/cli/test_paper_commands_golden.py::test_a_report_names_the_key_of_each_blocked_orders_reason"]
+
+[[mutation]]
+id = 'Q7'
+why = 'A cut names no key.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/paper_pages.py'
+old = '    blocked = [(cut_line(cut), (cut.reason.key,)) for cut in report.cuts]'
+new = '    blocked = [(cut_line(cut), ()) for cut in report.cuts]'
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_commands_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_paper_commands_golden.py::test_a_report_names_the_key_of_each_blocked_orders_reason"]
+
+[[mutation]]
+id = 'Q8'
+why = 'A skipped order is audited under another key.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/paper.py'
+old = '        AuditLine(day, Note(PAPER_ORDER_SKIPPED, skipped_line(rejected)))'
+new = '        AuditLine(day, Note("paper.order.cut", skipped_line(rejected)))'
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_commands_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_paper_commands_golden.py::test_the_skipped_order_is_in_the_audit_log_under_its_key"]
+
+[[mutation]]
+id = 'Q9'
+why = 'LOGNAME is preferred to USER.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/cli.py'
+old = '    return env.get("USER") or env.get("LOGNAME") or "unknown"'
+new = '    return env.get("LOGNAME") or env.get("USER") or "unknown"'
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_commands_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_paper_commands_golden.py::test_resume_names_who_resumed_from_logname_or_else_unknown"]
+
+[[mutation]]
+id = 'Q10'
+why = 'A halt is resumed while the drawdown is still past its limit.'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/paper.py'
+old = '    if units.drawdown >= limits.max_drawdown:'
+new = '    if False:'
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_commands_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_paper_commands_golden.py::test_resume_is_refused_while_the_drawdown_is_still_past_its_limit"]
+
+[[mutation]]
+id = 'Q11'
+why = 'dividend-growth never reviews again after its first day.'
+path = 'packages/steadyhand/src/steadyhand/strategies/dividend_growth.py'
+old = '        if memory.get(_YEAR_KEY) != str(view.today.year):'
+new = '        if not memory:'
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_run_golden.py", "tests/integration/golden/test_golden_backtest_recorded.py"]
+expect = "red"
+red = ["tests/integration/cli/test_paper_run_golden.py::test_dividend_growth_reviews_again_on_the_first_trading_day_of_2022", "tests/integration/golden/test_golden_backtest_recorded.py::test_the_dividend_growth_run_reproduces_its_stored_results_exactly"]
+
+[[mutation]]
+id = 'Q12'
+why = 'A split leaves the share count as it was.'
+path = 'packages/steadyhand/src/steadyhand/portfolio.py'
+old = '        quantity = held.quantity * split.new_shares // split.old_shares'
+new = '        quantity = held.quantity'
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_run_golden.py", "tests/integration/golden/test_golden_backtest_recorded.py"]
+expect = "red"
+red = ["tests/integration/golden/test_golden_backtest_recorded.py::test_the_window_holds_the_events_it_was_chosen_for", "tests/integration/golden/test_golden_backtest_recorded.py::test_buy_and_hold_reproduces_the_stored_results_exactly", "tests/integration/cli/test_paper_run_golden.py::test_a_year_caught_up_in_one_run_ends_where_the_backtest_does"]
+
+[[mutation]]
+id = 'Q13'
+# Predicted red in the window test too; the second run (38871773290, 2026-10-16) kept it green.
+# That test checks each dividend's ex-date, gross and the holdings, never a pay date, so a pay
+# date one day late cannot reach it. The seven tests named below went red.
+why = "A dividend is paid a day later than the calendar's pay date."
+path = 'packages/steadyhand/src/steadyhand/corporate.py'
+old = '            run.entitle(action, add_trading_days(rules, day, payout.pay_lag_trading_days))'
+new = '            run.entitle(action, add_trading_days(rules, day, payout.pay_lag_trading_days + 1))'
+suite = "integration"
+tests = ["tests/integration/golden/test_golden_backtest_recorded.py"]
+expect = "red"
+red = [
+    "tests/integration/golden/test_golden_backtest_recorded.py::test_buy_and_hold_reproduces_the_stored_results_exactly",
+    "tests/integration/golden/test_golden_backtest_recorded.py::test_the_dividend_growth_run_reproduces_its_stored_results_exactly",
+    "tests/integration/golden/test_golden_backtest_recorded.py::test_the_income_report_agrees_with_what_the_engine_paid",
+    "tests/integration/golden/test_golden_backtest_recorded.py::test_the_recorder_writes_the_dividend_growth_file_byte_for_byte",
+    "tests/integration/golden/test_golden_backtest_recorded.py::test_the_recorder_writes_the_stored_file_byte_for_byte",
+    "tests/integration/golden/test_golden_backtest_recorded.py::test_the_recorder_writes_the_switch_on_file_byte_for_byte",
+    "tests/integration/golden/test_golden_backtest_recorded.py::test_the_switch_on_run_reproduces_its_stored_results_exactly",
+]
+
+[[mutation]]
+id = 'Q14'
+why = "The last close is read from the run's last bar: a look-ahead."
+path = 'packages/steadyhand/src/steadyhand/view.py'
+old = '''
+        found = self._history.between(instrument, None, self._today)
+        return found[-1].close if found else None'''
+new = '''
+        found = self._history.between(instrument, None, date.max)
+        return found[-1].close if found else None'''
+suite = "integration"
+tests = ["tests/integration/golden/test_golden_backtest_recorded.py"]
+expect = "red"
+red = ["tests/integration/golden/test_golden_backtest_recorded.py::test_a_run_to_day_d_decides_as_a_longer_run_did_up_to_d"]
+
+[[mutation]]
+id = 'Q15'
+why = "The codec drops the dividends paid. (After the paper stand-ins were cut to end before 7 January 2022's payment, the catch-up stand-in no longer meets a paid dividend: the codec stand-in alone catches this one; the catch-up stand-in's strength is Q12's.)"
+path = 'packages/steadyhand/src/steadyhand/snapshot.py'
+old = '        "paid": [_entitlement(e) for e in report.paid],'
+new = '        "paid": [],'
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_run_golden.py", "tests/integration/golden/test_golden_snapshot_recorded.py"]
+expect = "red"
+red = ["tests/integration/golden/test_golden_snapshot_recorded.py::test_every_day_report_of_both_golden_runs_reads_back_equal", "tests/integration/cli/test_paper_run_golden.py::test_a_year_caught_up_in_one_run_ends_where_the_backtest_does"]
+
+[[mutation]]
+id = 'Q16'
+why = 'The recorder writes two spaces a level.'
+path = 'scripts/record_golden.py'
+old = '    text = json.dumps(pinned, indent=1, sort_keys=True)'
+new = '    text = json.dumps(pinned, indent=2, sort_keys=True)'
+suite = "integration"
+tests = ["tests/integration/golden/test_golden_backtest_recorded.py"]
+expect = "red"
+red = ["tests/integration/golden/test_golden_backtest_recorded.py::test_the_recorder_writes_the_stored_file_byte_for_byte", "tests/integration/golden/test_golden_backtest_recorded.py::test_the_recorder_writes_the_switch_on_file_byte_for_byte", "tests/integration/golden/test_golden_backtest_recorded.py::test_the_recorder_writes_the_dividend_growth_file_byte_for_byte"]
+
+[[mutation]]
+id = 'Q17'
+why = "A flat row with no volume counts as evidence (#160): the golden years' count of 1,103."
+path = 'packages/steadyhand-idx/src/steadyhand_idx/yahoo.py'
+old = '        if not _placeholder(row) and not _all_whole(prices):'
+new = '        if not _all_whole(prices):'
+suite = "integration"
+tests = ["tests/integration/idx/test_yahoo_whole_bbri.py"]
+expect = "red"
+red = ["tests/integration/idx/test_yahoo_whole_bbri.py::test_bbri_s_golden_years_are_restored_except_where_a_volume_is_not_whole"]
+
+[[mutation]]
+id = 'Q18'
+why = "A volume that is not whole is restored anyway (#162): the golden years' 153 refused days."
+path = 'packages/steadyhand-idx/src/steadyhand_idx/yahoo.py'
+old = '        if amounts is None or volume is None:'
+new = '        if amounts is None:'
+suite = "integration"
+tests = ["tests/integration/idx/test_yahoo_whole_bbri.py"]
+expect = "red"
+red = ["tests/integration/idx/test_yahoo_whole_bbri.py::test_bbri_s_golden_years_are_restored_except_where_a_volume_is_not_whole"]

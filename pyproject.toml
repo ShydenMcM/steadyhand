@@ -74,7 +74,7 @@ empty_parameter_set_mark = "fail_at_collect"
 
 [tool.coverage.run]
 branch = true
-source_pkgs = ["steadyhand", "steadyhand_idx", "ci_scope", "lock_fast_path"]
+source_pkgs = ["steadyhand", "steadyhand_idx", "ci_scope", "lock_fast_path", "run_mutations"]
 
 [tool.coverage.report]
 fail_under = 100
