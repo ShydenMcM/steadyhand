@@ -5,9 +5,9 @@
 **Direction (#214):** steadyhand becomes a Chrome extension in TypeScript that reads the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. EXT stories #222-#245 follow the clean-up queue below.
 
 ## Branches and heads
-- `develop`: read with `git rev-parse origin/develop` (`fb6f739` when written, PR #344). Merge green PRs into `develop` without asking; never `main`.
-- `docs-handover-345-audit-trail`: this file, one docs commit, PR into `develop`.
-- Local branches left from earlier: `docs-handover-288-done` (PR #344 merged), `288-mutations-in-ci`, `288-pin-mutation-limit`. Delete each only once its tip is confirmed as a merged PR head.
+- `develop`: read with `git rev-parse origin/develop` (`fa9e81c` when written, PR #346). Merge green PRs into `develop` without asking; never `main`.
+- `docs-handover-mobile-rule`: this file, one docs commit, PR into `develop`.
+- Local branches left from earlier: `docs-handover-288-done` (PR #344 merged), `docs-handover-345-audit-trail` (PR #346 merged), `288-mutations-in-ci`, `288-pin-mutation-limit`. Delete each only once its tip is confirmed as a merged PR head.
 
 ## Done this session (2026-10-16)
 - **Logging is two systems** (Shyden, global, "SPLIT the same day" in `reference-engineering-standards.md`): diagnostic logs (repo-template#18, #19, #22, #23) and audit trails (repo-template#24, #25). #339 (the extension's on-device log) is the first kind: its body now names repo-template#19 as a blocker (the GitHub link already existed) and points to #345. **#345 filed** (5, P4, `post-launch`): the paper `audit` table adopts repo-template#25. Shyden chose "Ticket it, after release". Blocked by repo-template#25, #336 and #341, all linked and read back.
@@ -15,6 +15,7 @@
 - **#292 closed** (30 of 30 red as predicted) and **#282 closed** (5 run: 4 red; 282-P2 green and recorded green, since only the stand-in can see it, like F7). Results are posted on each.
 - **Required checks: `main` now equals `develop`**, 15 each, `strict: true`, read back and identical (Shyden: "do not have any gaps"). Posted on #308.
 - **#308 AC 2 decided by Shyden: a daily check.** A scheduled job compares the two lists and opens an issue for ShydenMcM if they differ, with a planted mismatch. It needs a read-only branch-protection key in its own `main`-only environment (prod-cron pattern). **Shyden creates the key**; re-scored 1 → 2 on the board.
+- **Every mobile test is ONE test run on Android AND iOS** (Shyden, global, 2026-10-16; relayed by shyden-co-uk-96; template story repo-template#26). Audited here: steadyhand has no mobile tests (`extension/playwright.config.ts` has no projects, so desktop Chromium only; no tracked file names a phone, apart from esbuild's platform binaries in the lockfile). Mobile Chrome runs no extensions. **Shyden chose "No ticket for now"**: the guard arrives with the shared testing library migration. A guard over two empty sets would prove nothing.
 
 ## Resume steps
 1. Run `ListAgents`. No subagents were started.
