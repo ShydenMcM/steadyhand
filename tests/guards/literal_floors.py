@@ -864,21 +864,21 @@ def _fails(body: list[ast.stmt]) -> bool:
     return False
 
 
-def _checks(tree: ast.AST) -> Iterator[Iterator[tuple[ast.AST, ast.expr]]]:
-    """The lower bounds of every check in *tree*: an assert, an ``if`` that fails the test (its
+def _checks(tree: ast.AST) -> Iterator[tuple[ast.AST, Iterator[tuple[ast.AST, ast.expr]]]]:
+    """Every check in *tree*, with its lower bounds: an assert, an ``if`` that fails the test (its
     condition is what must NOT hold), and unittest's bound assertions."""
     for node in ast.walk(tree):
         if isinstance(node, ast.Assert):
-            yield _bounds(node.test)
+            yield node, _bounds(node.test)
         elif isinstance(node, ast.If) and _fails(node.body):
-            yield _bounds(node.test, negated=True)
+            yield node, _bounds(node.test, negated=True)
         elif (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
             and node.func.attr in UNITTEST_BOUNDS
             and len(node.args) > 1
         ):
-            yield iter([(node, node.args[UNITTEST_BOUNDS[node.func.attr]])])
+            yield node, iter([(node, node.args[UNITTEST_BOUNDS[node.func.attr]])])
 
 
 def _rank(verdict: Verdict) -> int:
@@ -936,12 +936,14 @@ def read(source: str, path: str, project: Project) -> Reading:
     judge = _Judge(project)
     context = _Context(_Module(path, tree, path))
     found = [*_floor_constants(tree, judge, context)]
-    checks = 0
-    for bounds in _checks(tree):
+    asserts = checks = 0
+    for check, bounds in _checks(tree):
         checks += 1
+        if isinstance(check, ast.Assert):
+            asserts += 1
         found.extend(_judged(bounds, judge, context))
     return Reading(
-        asserts=sum(1 for node in ast.walk(tree) if isinstance(node, ast.Assert)),
+        asserts=asserts,
         checks=checks,
         findings=[f"line {line}: {text}" for line, text in sorted(found, key=lambda f: f[0])],
     )
