@@ -553,46 +553,67 @@ class _Judge:
         """A name read through attributes (``consts.N``, ``fund.price``): through a module of ours
         the attribute is followed; through anything else, the name itself is judged, and the
         attribute read is followed by its name."""
-        found = self._bindings(root.id, root, context)
-        if isinstance(found, _Found):
-            imported = [b.imported for b in found.bindings if b.imported is not None]
-            if imported:
-                return _merge(self._imported(*one, attributes, seen) for one in imported)
+        imported = self._imports(root, context)
+        if imported:
+            return _merge(self._imported(*one, attributes, seen) for one in imported)
         named = self.name(root.id, root, context, seen)
         if not attributes:  # a called chain: the call follows the method
             return named
         return _merge(iter([named, self._attribute(attributes[-1], context, seen)]))
 
     def _attribute(self, name: str, context: _Context, seen: frozenset[object]) -> Verdict:
-        """Every value our code gives an attribute called *name*. Only a typed-in number counts:
-        a value that cannot be traced (``self.n = n`` in a constructor) is answered for by the
-        object it is read from, which is judged where it was made."""
+        """Every value our code gives an attribute called *name*, judged as any value is: a value
+        that cannot be traced (``self.n = n`` in a constructor) is refused."""
         key = ("attribute", name)
         if key in seen:
             return COMPUTED
-        values = [(context.module, value) for value in context.module.attributes.get(name, [])]
-        values += [one for one in self.project.attributes(name) if one[0] is not context.module]
-        found = _merge(
-            self.verdict(value, _Context(module), seen | {key}) for module, value in values
+        return _merge(
+            self.verdict(value, _Context(module), seen | {key})
+            for module, value in self._attribute_values(name, context)
         )
-        return found if found.typed_in else COMPUTED
+
+    def _attribute_values(self, name: str, context: _Context) -> list[tuple[_Module, ast.expr]]:
+        """Every value our code, this file first, gives an attribute called *name*."""
+        own = [(context.module, value) for value in context.module.attributes.get(name, [])]
+        return own + [one for one in self.project.attributes(name) if one[0] is not context.module]
 
     def _called(self, call: ast.Call, context: _Context, seen: frozenset[object]) -> Verdict:
-        """A call: into our code it is followed to what it returns; an outside library's result
+        """A call: into our code it is followed to what it returns, and what the name or attribute
+        it calls holds is judged as a value (``f = make()``, a fixture); an outside library's result
         passes; a name bound nowhere is refused. Its arguments are read by the walk around it."""
         func = call.func
         if isinstance(func, ast.Lambda):
             return self._returns(func, context.module, call, context, seen)
-        if (
-            isinstance(func, ast.Name)
-            and func.id not in GIVEN
-            and self._bindings(func.id, func, context) is None
-        ):
-            return Verdict(False, (func.id, UNBOUND))
-        return _merge(
+        held = COMPUTED
+        if isinstance(func, ast.Name) and func.id not in GIVEN:
+            if self._bindings(func.id, func, context) is None:
+                return Verdict(False, (func.id, UNBOUND))
+            held = self.name(func.id, func, context, seen)
+        elif isinstance(func, ast.Attribute):
+            held = self._held_by_attribute(func, context, seen)
+        returned = (
             self._returns(function, module, call, context, seen)
             for module, function in self._callees(func, context, seen)
         )
+        return _merge(iter([held, *returned]))
+
+    def _held_by_attribute(
+        self, func: ast.Attribute, context: _Context, seen: frozenset[object]
+    ) -> Verdict:
+        """What a called attribute holds: through an imported name, what the import gives (an
+        outside library's passes); otherwise every value our code gives an attribute so named."""
+        root, attributes = _root_and_attributes(func)
+        imported = self._imports(root, context) if isinstance(root, ast.Name) else []
+        if imported:
+            return _merge(self._imported(*one, attributes, seen) for one in imported)
+        return self._attribute(func.attr, context, seen)
+
+    def _imports(self, name: ast.Name, context: _Context) -> list[tuple[str, str | None]]:
+        """The imports that bind *name* where it is read: none for a name bound any other way."""
+        found = self._bindings(name.id, name, context)
+        if not isinstance(found, _Found):
+            return []
+        return [b.imported for b in found.bindings if b.imported is not None]
 
     def _callees(
         self, func: ast.expr, context: _Context, seen: frozenset[object]
@@ -603,18 +624,34 @@ class _Judge:
         if not isinstance(func, ast.Attribute):
             return []
         root, attributes = _root_and_attributes(func)
-        if isinstance(root, ast.Name):
-            found = self._bindings(root.id, root, context)
-            if isinstance(found, _Found):
-                imported = [b.imported for b in found.bindings if b.imported is not None]
-                if imported:
-                    return [
-                        callee
-                        for module, attribute in imported
-                        for callee in self._module_functions(module, attribute, attributes, seen)
-                    ]
+        imported = self._imports(root, context) if isinstance(root, ast.Name) else []
+        if imported:
+            return [
+                callee
+                for module, attribute in imported
+                for callee in self._module_functions(module, attribute, attributes, seen)
+            ]
         own = [(context.module, method) for method in context.module.methods.get(func.attr, [])]
-        return [*own, *(m for m in self.project.methods(func.attr) if m[0] is not context.module)]
+        methods = [m for m in self.project.methods(func.attr) if m[0] is not context.module]
+        key = ("attribute-callee", func.attr)
+        if key in seen:
+            return [*own, *methods]
+        held = [
+            callee
+            for module, value in self._attribute_values(func.attr, context)
+            for callee in self._held(value, _Context(module), seen | {key})
+        ]
+        return [*own, *methods, *held]
+
+    def _held(
+        self, value: ast.expr, context: _Context, seen: frozenset[object]
+    ) -> list[tuple[_Module, Function]]:
+        """The function a stored value is: a lambda, or the function a name or attribute holds."""
+        if isinstance(value, ast.Lambda):
+            return [(context.module, value)]
+        if isinstance(value, (ast.Name, ast.Attribute)):
+            return self._callees(value, context, seen)
+        return []
 
     def _module_functions(
         self, module: str, attribute: str | None, rest: list[str], seen: frozenset[object]
@@ -646,10 +683,7 @@ class _Judge:
                 module, attribute = binding.imported
                 callees += self._module_functions(module, attribute, [], seen | {key})
             for value in binding.values:
-                if isinstance(value, ast.Lambda):
-                    callees.append((context.module, value))
-                elif isinstance(value, (ast.Name, ast.Attribute)):
-                    callees += self._callees(value, context, seen | {key})
+                callees += self._held(value, context, seen | {key})
         return callees
 
     def _returns(

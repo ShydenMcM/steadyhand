@@ -278,6 +278,24 @@ def test_a_constant_named_for_a_floor_set_to_a_literal_is_a_floor(
             "n = len(list())\nfor n in found:\n    pass\nassert len(x) >= n\n",
             ["line 4: cannot trace n (a loop over values the test made) in len(x) >= n"],
         ),
+        (
+            (
+                "class Box:\n    def __init__(self, n):\n        self.least = n\n\n"
+                "box = Box(list())\nassert len(x) >= box.least\n"
+            ),
+            ["line 6: cannot trace n (a fixture or helper parameter) in len(x) >= box.least"],
+        ),
+        (
+            (
+                "class Box:\n    def set_least(self, n):\n        self.least = n\n\n"
+                "box = Box()\nbox.set_least(5)\nassert len(x) >= box.least\n"
+            ),
+            ["line 7: cannot trace n (a fixture or helper parameter) in len(x) >= box.least"],
+        ),
+        (
+            "def test_a(least):\n    assert len(x) >= least()\n",
+            ["line 2: cannot trace least (a fixture or helper parameter) in len(x) >= least()"],
+        ),
     ],
     ids=[
         "loop",
@@ -289,6 +307,9 @@ def test_a_constant_named_for_a_floor_set_to_a_literal_is_a_floor(
         "missing-from-our-module",
         "loop-through-our-helper",
         "also-bound-by-a-loop",
+        "attribute-from-a-constructor-argument",
+        "attribute-from-a-method-argument",
+        "fixture-holding-a-function",
     ],
 )
 def test_a_bound_the_reader_cannot_trace_is_refused(source: str, found: list[str]) -> None:
@@ -334,10 +355,19 @@ def test_a_bound_the_reader_cannot_trace_is_refused(source: str, found: list[str
         "x = list()\nassert len(x) not in range(5, 10)\n",
         "x = list()\ny = list()\nassert max(x, y) == x\n",
         (
-            "class Box:\n    def __init__(self, n):\n        self.least = n\n\n"
-            "box = Box(list())\nassert len(x) >= box.least\n"
+            "class Box:\n    def __init__(self):\n        self.least = len(list())\n\n"
+            "box = Box()\nassert len(x) >= box.least\n"
         ),
         "y = list()\nobj = list()\nassert len(x) >= obj.count(y)\n",
+        "def make():\n    return lambda: len(list())\n\nf = make()\nassert len(x) >= f()\n",
+        (
+            "from datetime import datetime\n\nclass World:\n    now = datetime(2026, 1, 5)\n\n"
+            "x = list()\nassert len(x) >= datetime.now()\n"
+        ),
+        (
+            "class Box:\n    def __init__(self):\n        self.check = lambda: len(list())\n\n"
+            "box = Box()\nassert len(x) >= box.check()\n"
+        ),
     ],
     ids=[
         "non-empty",
@@ -369,8 +399,11 @@ def test_a_bound_the_reader_cannot_trace_is_refused(source: str, found: list[str
         "range-from-zero",
         "not-in-a-range",
         "max-of-computed-values",
-        "attribute-from-a-constructor-argument",
+        "attribute-computed-in-a-constructor",
         "library-method-on-an-object",
+        "stored-call-returning-a-computed-function",
+        "library-method-sharing-a-name-with-our-attribute",
+        "attribute-holding-a-computed-function",
     ],
 )
 def test_a_bound_with_no_typed_in_number_is_no_floor(source: str) -> None:
@@ -444,6 +477,25 @@ def test_a_check_written_outside_an_assert_is_read_too(source: str, found: list[
             "def handlers():\n    return [lambda: 5]\n\nassert len(x) >= handlers()[0]()\n",
             ["line 4: floor len(x) >= handlers()[0]()"],
         ),
+        (
+            "def make():\n    return lambda: 5\n\nf = make()\nassert len(x) >= f()\n",
+            ["line 5: floor len(x) >= f()"],
+        ),
+        ("fns = [lambda: 5]\nf = fns[0]\nassert len(x) >= f()\n", ["line 3: floor len(x) >= f()"]),
+        (
+            (
+                "class Box:\n    def __init__(self):\n        self.check = lambda: 5\n\n"
+                "box = Box()\nassert len(x) >= box.check()\n"
+            ),
+            ["line 6: floor len(x) >= box.check()"],
+        ),
+        (
+            (
+                "def five():\n    return 5\n\nclass Box:\n    def __init__(self):\n"
+                "        self.check = five\n\nbox = Box()\nassert len(x) >= box.check()\n"
+            ),
+            ["line 9: floor len(x) >= box.check()"],
+        ),
     ],
     ids=[
         "range",
@@ -457,6 +509,10 @@ def test_a_check_written_outside_an_assert_is_read_too(source: str, found: list[
         "attribute-set-in-a-method",
         "dataclass-default",
         "call-of-an-item",
+        "call-of-a-stored-call-result",
+        "call-of-a-stored-item",
+        "attribute-holding-a-lambda",
+        "attribute-holding-a-function",
     ],
 )
 def test_a_minimum_spelled_another_way_is_a_floor(source: str, found: list[str]) -> None:
