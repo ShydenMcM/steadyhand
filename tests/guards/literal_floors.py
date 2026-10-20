@@ -8,9 +8,10 @@ Shyden's decisions (2026-10-20, on #272):
   is a non-emptiness check and a ceiling is a budget, as in
   ``extension/tests/lib/literal-floors.ts``.
 - A bound that uses a name the reader cannot trace to a value is refused, never read as safe.
-- Everything in our own code is followed: a name, a function, a method (by its name), a module's
-  attribute, a function stored in a name. Only an outside library's value or result passes, as
-  computed by code we do not control.
+- Everything in our own code is followed: a name, a function, a module's attribute, a function
+  stored in a name, and an object's attribute or method by the object's declared type (mypy's),
+  never by its name alone. Only an outside library's value, result or object passes, as computed by
+  code we do not control; an object of a type the check cannot work out is refused.
 - A number used only as an index or slice is not a value the bound takes; a container's own
   numbers still count.
 - Python's ``a < b`` does not say which side is measured, so both sides are judged.
@@ -33,6 +34,7 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from typing import Protocol
 
 FLOOR_NAME = re.compile(r"floor", re.IGNORECASE)
 LOWER = (ast.Gt, ast.GtE)
@@ -52,6 +54,7 @@ UNITTEST_BOUNDS = {
 LOOP = "a loop over values the test made"
 PARAMETER = "a fixture or helper parameter"
 UNBOUND = "never bound in this file"
+TYPE_UNKNOWN = "a type the check cannot work out"
 
 type Function = ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda
 COMPREHENSIONS = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
@@ -204,15 +207,16 @@ class _Module:
     """One file of our code, parsed once: the scope each node sits in, and every binding each scope
     makes, by name."""
 
-    def __init__(self, name: str, tree: ast.Module) -> None:
+    def __init__(self, name: str, tree: ast.Module, key: str) -> None:
         self.name = name
         self.tree = tree
+        self.key = key
         self.scope_of: dict[int, ast.AST] = {}
         self.parent: dict[int, ast.AST | None] = {id(tree): None}
         self.bindings: dict[int, dict[str, list[Binding]]] = {}
         self.globals: dict[int, set[str]] = {}
-        self.methods: dict[str, list[Function]] = {}
-        self.attributes: dict[str, list[ast.expr]] = {}
+        self.classes: list[ast.ClassDef] = []
+        self.attributes: dict[str, list[tuple[ast.Attribute | ast.ClassDef, ast.expr]]] = {}
         self._place(tree, tree)
         for node in ast.walk(tree):
             self._collect(node)
@@ -264,12 +268,13 @@ class _Module:
             self.add(name, name.id, Binding(values=(value,)))
 
     def _attribute(self, target: ast.expr, value: ast.expr) -> None:
-        """An attribute given a value, by its name: ``x.least = 5``, or ``least = 5`` (and a
-        dataclass's ``least: int = 5``) in a class body."""
+        """An attribute given a value, by its name, with what says whose it is: ``x.least = 5`` (the
+        object ``x``), or ``least = 5`` (and a dataclass's ``least: int = 5``) in a class body."""
+        scope = self.scope_of[id(target)]
         if isinstance(target, ast.Attribute):
-            self.attributes.setdefault(target.attr, []).append(value)
-        elif isinstance(target, ast.Name) and isinstance(self.scope_of[id(target)], ast.ClassDef):
-            self.attributes.setdefault(target.id, []).append(value)
+            self.attributes.setdefault(target.attr, []).append((target, value))
+        elif isinstance(target, ast.Name) and isinstance(scope, ast.ClassDef):
+            self.attributes.setdefault(target.id, []).append((scope, value))
 
     def _collect(self, node: ast.AST) -> None:
         """The bindings *node* makes by giving a name a value: an assignment, a loop, a ``with``."""
@@ -313,9 +318,7 @@ class _Module:
             self._import(node)
         elif isinstance(node, ast.ClassDef):
             self.add(node, node.name, Binding())
-            for statement in node.body:
-                if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    self.methods.setdefault(statement.name, []).append(statement)
+            self.classes.append(node)
         elif isinstance(node, ast.ExceptHandler) and node.name is not None:
             self.add(node, node.name, Binding())
         elif isinstance(node, (ast.Global, ast.Nonlocal)):
@@ -363,27 +366,60 @@ class _Module:
         return None
 
 
+# Whose an object is: our classes, by full name, or an outside library's, or a type the check cannot
+# work out (Shyden, 2026-10-20, on #272: matched by the object's declared type, never by name).
+LIBRARY = "library"
+UNKNOWN = "unknown"
+type Owners = frozenset[str] | str
+
+
+class Types(Protocol):
+    """The declared types of our code's objects: mypy's, in the guard."""
+
+    def owners(self, module: str, node: ast.Attribute) -> Owners:
+        """Whose the object is that *node* (in the file *module*) reads an attribute of."""
+        ...
+
+    def class_name(self, module: str, node: ast.ClassDef) -> str:
+        """The full name of the class *node* defines."""
+        ...
+
+    def related(self, name: str) -> frozenset[str] | None:
+        """The classes of ours an object of class *name* may be: the class, its ancestors and its
+        descendants; ``None`` for a protocol, which any class of ours may meet."""
+        ...
+
+
 class Project:
     """Our own code, by module name: the reader follows a name into it. A module not here is an
     outside library, whose values and results pass as computed by code we do not control."""
 
-    def __init__(self, sources: Mapping[str, str]) -> None:
+    def __init__(
+        self, sources: Mapping[str, str], types: Types, keys: Mapping[str, str] | None = None
+    ) -> None:
+        """*sources* by module name; *keys*, each module's file as *types* names it (by default its
+        module name)."""
         self.sources = dict(sources)
+        self.types = types
+        self.keys = dict(keys or {})
         self._modules: dict[str, _Module] = {}
 
     @classmethod
-    def of_files(cls, roots: Mapping[Path, list[Path]]) -> "Project":
+    def of_files(cls, roots: Mapping[Path, list[Path]], types: Types, base: Path) -> "Project":
         """The project made of *roots*: each import root (a folder on the import path) with the
         Python files under it. A file's module name is its path from its root; the first root to
-        hold a name wins, as Python's own import does."""
+        hold a name wins, as Python's own import does. Each file is known to *types* by its path
+        from *base*."""
         sources: dict[str, str] = {}
+        keys: dict[str, str] = {}
         for root, files in roots.items():
             for path in files:
                 parts = path.relative_to(root).with_suffix("").parts
                 parts = parts[:-1] if parts[-1] == "__init__" else parts
-                if parts:
-                    sources.setdefault(".".join(parts), path.read_text(encoding="utf-8"))
-        return cls(sources)
+                if parts and ".".join(parts) not in sources:
+                    sources[".".join(parts)] = path.read_text(encoding="utf-8")
+                    keys[".".join(parts)] = path.relative_to(base).as_posix()
+        return cls(sources, types, keys)
 
     def module(self, name: str) -> _Module | None:
         if name not in self.sources:
@@ -394,28 +430,71 @@ class Project:
             except (SyntaxError, ValueError) as error:
                 msg = f"our module {name}: cannot parse it ({error})"
                 raise UnreadableSourceError(msg) from error
-            self._modules[name] = _Module(name, tree)
+            self._modules[name] = _Module(name, tree, self.keys.get(name, name))
         return self._modules[name]
 
-    def attributes(self, name: str) -> list[tuple[_Module, ast.expr]]:
-        """Every value our code gives an attribute named *name*: followed by its name, since the
-        reader cannot tell which object an attribute is read from."""
+    def _modules_with(self, extra: _Module) -> Iterator[_Module]:
+        """*extra* (the file being read), then every module of ours."""
+        yield extra
+        for name in self.sources:
+            module = self.module(name)
+            if module is not None and module is not extra:
+                yield module
+
+    def _wanted(self, owners: frozenset[str]) -> frozenset[str] | None:
+        """Every class of ours an object of *owners* may be; ``None`` when one is a protocol."""
+        wanted: set[str] = set()
+        for owner in owners:
+            related = self.types.related(owner)
+            if related is None:
+                return None
+            wanted |= related
+        return frozenset(wanted)
+
+    def attributes(
+        self, owners: frozenset[str], name: str, extra: _Module
+    ) -> list[tuple[_Module, ast.expr]]:
+        """Every value our code gives the attribute *name* of an object of *owners*. A value given
+        to an object of a type the check cannot work out may be any object's, so it counts too; one
+        given to an outside library's object is not ours to judge."""
+        wanted = self._wanted(owners)
         found = []
-        for module_name in self.sources:
-            module = self.module(module_name)
-            if module is not None:
-                found += [(module, value) for value in module.attributes.get(name, [])]
+        for module in self._modules_with(extra):
+            for site, value in module.attributes.get(name, []):
+                whose = (
+                    self._class(module, site)
+                    if isinstance(site, ast.ClassDef)
+                    else self.types.owners(module.key, site)
+                )
+                if whose == UNKNOWN or (
+                    isinstance(whose, frozenset) and (wanted is None or whose & wanted)
+                ):
+                    found.append((module, value))
         return found
 
-    def methods(self, name: str) -> list[tuple[_Module, Function]]:
-        """Every method named *name* in our code: a method is followed by its name, since the
-        reader cannot tell which class an object belongs to."""
-        found = []
-        for module_name in self.sources:
-            module = self.module(module_name)
-            if module is not None:
-                found += [(module, method) for method in module.methods.get(name, [])]
+    def methods(
+        self, owners: frozenset[str], name: str, extra: _Module
+    ) -> list[tuple[_Module, Function]]:
+        """Every method *name* of a class of ours an object of *owners* may be."""
+        wanted = self._wanted(owners)
+        found: list[tuple[_Module, Function]] = []
+        for module in self._modules_with(extra):
+            for cls in module.classes:
+                whose = self._class(module, cls)
+                if not isinstance(whose, frozenset) or wanted is None or whose & wanted:
+                    found += [
+                        (module, statement)
+                        for statement in cls.body
+                        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and statement.name == name
+                    ]
         return found
+
+    def _class(self, module: _Module, node: ast.ClassDef) -> Owners:
+        """The class *node* defines, as owners: a class the types cannot name is a type the check
+        cannot work out, whose members may be any object's."""
+        name = self.types.class_name(module.key, node)
+        return UNKNOWN if name == UNKNOWN else frozenset({name})
 
 
 type Frame = Mapping[tuple[int, str], tuple["_Context", ast.expr]]
@@ -453,34 +532,30 @@ class _Judge:
         self.project = project
 
     def verdict(self, expression: ast.AST, context: _Context, seen: frozenset[object]) -> Verdict:
-        chains = _chains(expression)
-        called = {
-            id(node.func)
+        """Every node that can give *expression* its value, judged. A called name or attribute is
+        left to its call; of ``a.b.c`` only the attribute read last is judged, by the object's
+        type, since the attributes before it only lead to that object."""
+        left = {id(node.func) for node in ast.walk(expression) if isinstance(node, ast.Call)}
+        left |= {
+            id(node.value)
             for node in ast.walk(expression)
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Attribute)
         }
         return _merge(
-            self._node(node, chains, context, seen)
+            self._node(node, context, seen)
             for node in _value_nodes(expression)
-            if id(node) not in called
+            if id(node) not in left
         )
 
-    def _node(
-        self,
-        node: ast.AST,
-        chains: dict[int, list[str]],
-        context: _Context,
-        seen: frozenset[object],
-    ) -> Verdict:
+    def _node(self, node: ast.AST, context: _Context, seen: frozenset[object]) -> Verdict:
         if _is_number(node):
             return TYPED_IN
         if isinstance(node, ast.Call):
             return self._called(node, context, seen)
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
-            attributes = chains.get(id(node))
-            if attributes is not None:
-                return self._chain(node, attributes, context, seen)
             return self.name(node.id, node, context, seen)
+        if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
+            return self._read(node, context, seen)
         return COMPUTED
 
     def _bindings(self, name: str, at: ast.AST, context: _Context) -> _Argument | _Found | None:
@@ -529,10 +604,15 @@ class _Judge:
         return (resolved, path[index:]) if resolved is not None else None
 
     def _imported(
-        self, module: str, attribute: str | None, rest: list[str], seen: frozenset[object]
+        self,
+        module: str,
+        attribute: str | None,
+        rest: list[str],
+        seen: frozenset[object],
+        read: tuple[ast.Attribute, _Context] | None = None,
     ) -> Verdict:
-        """A name imported from *module*, read further through *rest*: followed into our code, a
-        value of an outside library passes."""
+        """A name imported from *module*, read further through *rest* (by *read*, the attribute
+        read where it is written): followed into our code, a value of an outside library passes."""
         target = self._resolve(module, [*([attribute] if attribute is not None else []), *rest])
         if target is None:
             return COMPUTED
@@ -543,39 +623,40 @@ class _Judge:
         if found.lookup(head, found.tree) is None:
             return Verdict(False, (head, f"not in our module {found.name}"))
         named = self.name(head, found.tree, _Context(found), seen)
-        if len(remaining) == 1:
+        if len(remaining) == 1 or read is None:
             return named
-        return _merge(iter([named, self._attribute(remaining[-1], _Context(found), seen)]))
+        return _merge(iter([named, self._attribute(*read, seen)]))
 
-    def _chain(
-        self, root: ast.Name, attributes: list[str], context: _Context, seen: frozenset[object]
-    ) -> Verdict:
-        """A name read through attributes (``consts.N``, ``fund.price``): through a module of ours
-        the attribute is followed; through anything else, the name itself is judged, and the
-        attribute read is followed by its name."""
-        imported = self._imports(root, context)
+    def _read(self, node: ast.Attribute, context: _Context, seen: frozenset[object]) -> Verdict:
+        """An attribute read: through an imported name, what the import gives (``consts.N``; an
+        outside library's passes); otherwise the attribute of the object, by its type."""
+        root, attributes = _root_and_attributes(node)
+        imported = self._imports(root, context) if isinstance(root, ast.Name) else []
         if imported:
-            return _merge(self._imported(*one, attributes, seen) for one in imported)
-        named = self.name(root.id, root, context, seen)
-        if not attributes:  # a called chain: the call follows the method
-            return named
-        return _merge(iter([named, self._attribute(attributes[-1], context, seen)]))
+            return _merge(
+                self._imported(*one, attributes, seen, (node, context)) for one in imported
+            )
+        return self._attribute(node, context, seen)
 
-    def _attribute(self, name: str, context: _Context, seen: frozenset[object]) -> Verdict:
-        """Every value our code gives an attribute called *name*, judged as any value is: a value
-        that cannot be traced (``self.n = n`` in a constructor) is refused."""
-        key = ("attribute", name)
+    def _attribute(
+        self, node: ast.Attribute, context: _Context, seen: frozenset[object]
+    ) -> Verdict:
+        """The attribute *node* reads, by the declared type of the object it reads it from: every
+        value our code gives that attribute of a class of ours the object may be, judged as any
+        value is (``self.n = n`` in a constructor is refused); an outside library's object passes;
+        an object of a type the check cannot work out is refused."""
+        owners = self.project.types.owners(context.module.key, node)
+        if owners == LIBRARY:
+            return COMPUTED
+        if not isinstance(owners, frozenset):
+            return Verdict(False, (ast.unparse(node.value), TYPE_UNKNOWN))
+        key = ("attribute", owners, node.attr)
         if key in seen:
             return COMPUTED
         return _merge(
             self.verdict(value, _Context(module), seen | {key})
-            for module, value in self._attribute_values(name, context)
+            for module, value in self.project.attributes(owners, node.attr, context.module)
         )
-
-    def _attribute_values(self, name: str, context: _Context) -> list[tuple[_Module, ast.expr]]:
-        """Every value our code, this file first, gives an attribute called *name*."""
-        own = [(context.module, value) for value in context.module.attributes.get(name, [])]
-        return own + [one for one in self.project.attributes(name) if one[0] is not context.module]
 
     def _called(self, call: ast.Call, context: _Context, seen: frozenset[object]) -> Verdict:
         """A call: into our code it is followed to what it returns, and what the name or attribute
@@ -590,23 +671,12 @@ class _Judge:
                 return Verdict(False, (func.id, UNBOUND))
             held = self.name(func.id, func, context, seen)
         elif isinstance(func, ast.Attribute):
-            held = self._held_by_attribute(func, context, seen)
+            held = self._read(func, context, seen)
         returned = (
             self._returns(function, module, call, context, seen)
             for module, function in self._callees(func, context, seen)
         )
         return _merge(iter([held, *returned]))
-
-    def _held_by_attribute(
-        self, func: ast.Attribute, context: _Context, seen: frozenset[object]
-    ) -> Verdict:
-        """What a called attribute holds: through an imported name, what the import gives (an
-        outside library's passes); otherwise every value our code gives an attribute so named."""
-        root, attributes = _root_and_attributes(func)
-        imported = self._imports(root, context) if isinstance(root, ast.Name) else []
-        if imported:
-            return _merge(self._imported(*one, attributes, seen) for one in imported)
-        return self._attribute(func.attr, context, seen)
 
     def _imports(self, name: ast.Name, context: _Context) -> list[tuple[str, str | None]]:
         """The imports that bind *name* where it is read: none for a name bound any other way."""
@@ -631,17 +701,19 @@ class _Judge:
                 for module, attribute in imported
                 for callee in self._module_functions(module, attribute, attributes, seen)
             ]
-        own = [(context.module, method) for method in context.module.methods.get(func.attr, [])]
-        methods = [m for m in self.project.methods(func.attr) if m[0] is not context.module]
-        key = ("attribute-callee", func.attr)
+        owners = self.project.types.owners(context.module.key, func)
+        if not isinstance(owners, frozenset):
+            return []  # an outside library's method; one of a type not worked out is refused
+        methods = self.project.methods(owners, func.attr, context.module)
+        key = ("attribute-callee", owners, func.attr)
         if key in seen:
-            return [*own, *methods]
+            return methods
         held = [
             callee
-            for module, value in self._attribute_values(func.attr, context)
+            for module, value in self.project.attributes(owners, func.attr, context.module)
             for callee in self._held(value, _Context(module), seen | {key})
         ]
-        return [*own, *methods, *held]
+        return [*methods, *held]
 
     def _held(
         self, value: ast.expr, context: _Context, seen: frozenset[object]
@@ -736,24 +808,6 @@ def _root_and_attributes(node: ast.Attribute) -> tuple[ast.expr, list[str]]:
         attributes.insert(0, current.attr)
         current = current.value
     return current, attributes
-
-
-def _chains(expression: ast.AST) -> dict[int, list[str]]:
-    """For each name read through attributes in *expression* (``consts.N``), the attributes, by the
-    name's node; a called chain (``obj.method()``) is left to the call."""
-    called = {id(node.func) for node in ast.walk(expression) if isinstance(node, ast.Call)}
-    inner = {
-        id(node.value)
-        for node in ast.walk(expression)
-        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Attribute)
-    }
-    found: dict[int, list[str]] = {}
-    for node in ast.walk(expression):
-        if isinstance(node, ast.Attribute) and id(node) not in inner:
-            root, attributes = _root_and_attributes(node)
-            if isinstance(root, ast.Name):
-                found[id(root)] = [] if id(node) in called else attributes
-    return found
 
 
 def _calls(node: ast.expr, name: str) -> bool:
@@ -880,7 +934,7 @@ def read(source: str, path: str, project: Project) -> Reading:
         msg = f"{path}: cannot parse it ({error})"
         raise UnreadableSourceError(msg) from error
     judge = _Judge(project)
-    context = _Context(_Module(path, tree))
+    context = _Context(_Module(path, tree, path))
     found = [*_floor_constants(tree, judge, context)]
     checks = 0
     for bounds in _checks(tree):

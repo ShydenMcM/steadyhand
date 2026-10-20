@@ -7,27 +7,65 @@ no value; both sides of `<` are judged. Each plant is written out by hand, so a 
 drops cannot drop out of this list with it (the global guard-forms catalogue, #446).
 """
 
+import ast
 import textwrap
+from collections.abc import Mapping
 
 import pytest
-from literal_floors import Project, UnreadableSourceError, assert_tokens, read
+from literal_floors import (
+    LIBRARY,
+    UNKNOWN,
+    Owners,
+    Project,
+    UnreadableSourceError,
+    assert_tokens,
+    read,
+)
+
+
+class StandIn:
+    """The plants' types, written by hand where the guard asks mypy: each object, by its source
+    text, is of the class of ours named for it, of a type the check cannot work out, or else of an
+    outside library. A class is related to itself and to the classes named for it (``None``: a
+    protocol, which any class of ours may meet)."""
+
+    def __init__(
+        self,
+        owners: Mapping[str, str] | None = None,
+        related: Mapping[str, frozenset[str] | None] | None = None,
+    ) -> None:
+        self._owners = dict(owners or {})
+        self._related = dict(related or {})
+
+    def owners(self, module: str, node: ast.Attribute) -> Owners:
+        named = self._owners.get(ast.unparse(node.value), LIBRARY)
+        return named if named in (LIBRARY, UNKNOWN) else frozenset({named})
+
+    def class_name(self, module: str, node: ast.ClassDef) -> str:
+        """The class's full name; a class named ``class <name>`` among the owners is one the
+        types cannot name."""
+        named = f"{module.removesuffix('.py')}.{node.name}"
+        return UNKNOWN if f"class {node.name}" in self._owners else named
+
+    def related(self, name: str) -> frozenset[str] | None:
+        return self._related.get(name, frozenset({name}))
+
 
 # Our own code, for the plants that follow a name out of the test file.
-OURS = Project(
-    {
-        "consts": "N = 5\nM = 1\n",
-        "base": "B = 5\n",
-        "chained": "from base import B\nN = B\n",
-        "helpers": (
-            "def minimum():\n    return 5\n\n"
-            "def echo(n):\n    return n\n\n"
-            "class Limits:\n    def least(self):\n        return 5\n"
-        ),
-        "pkg": "",
-        "pkg.consts": "N = 5\n",
-        "shapes": "class Limits:\n    LEAST = 5\n",
-    }
-)
+SOURCES = {
+    "consts": "N = 5\nM = 1\n",
+    "base": "B = 5\n",
+    "chained": "from base import B\nN = B\n",
+    "helpers": (
+        "def minimum():\n    return 5\n\n"
+        "def echo(n):\n    return n\n\n"
+        "class Limits:\n    def least(self):\n        return 5\n"
+    ),
+    "pkg": "",
+    "pkg.consts": "N = 5\n",
+    "shapes": "class Limits:\n    LEAST = 5\n",
+}
+OURS = Project(SOURCES, StandIn())
 
 
 def findings(source: str, project: Project = OURS) -> list[str]:
@@ -134,10 +172,6 @@ def test_a_literal_written_in_the_bound_is_a_floor(source: str, found: list[str]
             ["line 5: floor len(x) >= f()"],
         ),
         (
-            "class C:\n    def least(self):\n        return 5\n\nassert len(x) >= C().least()\n",
-            ["line 5: floor len(x) >= C().least()"],
-        ),
-        (
             "def at_least(n):\n    return n\n\nassert len(x) >= at_least(5)\n",
             ["line 4: floor len(x) >= at_least(5)"],
         ),
@@ -159,7 +193,6 @@ def test_a_literal_written_in_the_bound_is_a_floor(source: str, found: list[str]
         "module-name-from-a-nested-function",
         "stored-lambda",
         "stored-function",
-        "method",
         "argument-through-a-parameter",
     ],
 )
@@ -198,10 +231,6 @@ def test_a_name_bound_to_a_literal_is_a_floor(source: str, found: list[str]) -> 
             ["line 3: floor len(x) >= f()"],
         ),
         (
-            "limits = list()\nassert len(x) >= limits.least()\n",
-            ["line 2: floor len(x) >= limits.least()"],
-        ),
-        (
             "from helpers import echo\nassert len(x) >= echo(5)\n",
             ["line 2: floor len(x) >= echo(5)"],
         ),
@@ -216,7 +245,6 @@ def test_a_name_bound_to_a_literal_is_a_floor(source: str, found: list[str]) -> 
         "imported-function",
         "module-function",
         "stored-imported-function",
-        "method-by-name",
         "argument-into-our-helper",
     ],
 )
@@ -279,20 +307,6 @@ def test_a_constant_named_for_a_floor_set_to_a_literal_is_a_floor(
             ["line 4: cannot trace n (a loop over values the test made) in len(x) >= n"],
         ),
         (
-            (
-                "class Box:\n    def __init__(self, n):\n        self.least = n\n\n"
-                "box = Box(list())\nassert len(x) >= box.least\n"
-            ),
-            ["line 6: cannot trace n (a fixture or helper parameter) in len(x) >= box.least"],
-        ),
-        (
-            (
-                "class Box:\n    def set_least(self, n):\n        self.least = n\n\n"
-                "box = Box()\nbox.set_least(5)\nassert len(x) >= box.least\n"
-            ),
-            ["line 7: cannot trace n (a fixture or helper parameter) in len(x) >= box.least"],
-        ),
-        (
             "def test_a(least):\n    assert len(x) >= least()\n",
             ["line 2: cannot trace least (a fixture or helper parameter) in len(x) >= least()"],
         ),
@@ -307,8 +321,6 @@ def test_a_constant_named_for_a_floor_set_to_a_literal_is_a_floor(
         "missing-from-our-module",
         "loop-through-our-helper",
         "also-bound-by-a-loop",
-        "attribute-from-a-constructor-argument",
-        "attribute-from-a-method-argument",
         "fixture-holding-a-function",
     ],
 )
@@ -354,19 +366,11 @@ def test_a_bound_the_reader_cannot_trace_is_refused(source: str, found: list[str
         "x = list()\nassert len(x) in range(10)\n",
         "x = list()\nassert len(x) not in range(5, 10)\n",
         "x = list()\ny = list()\nassert max(x, y) == x\n",
-        (
-            "class Box:\n    def __init__(self):\n        self.least = len(list())\n\n"
-            "box = Box()\nassert len(x) >= box.least\n"
-        ),
         "y = list()\nobj = list()\nassert len(x) >= obj.count(y)\n",
         "def make():\n    return lambda: len(list())\n\nf = make()\nassert len(x) >= f()\n",
         (
             "from datetime import datetime\n\nclass World:\n    now = datetime(2026, 1, 5)\n\n"
             "x = list()\nassert len(x) >= datetime.now()\n"
-        ),
-        (
-            "class Box:\n    def __init__(self):\n        self.check = lambda: len(list())\n\n"
-            "box = Box()\nassert len(x) >= box.check()\n"
         ),
     ],
     ids=[
@@ -399,11 +403,9 @@ def test_a_bound_the_reader_cannot_trace_is_refused(source: str, found: list[str
         "range-from-zero",
         "not-in-a-range",
         "max-of-computed-values",
-        "attribute-computed-in-a-constructor",
         "library-method-on-an-object",
         "stored-call-returning-a-computed-function",
         "library-method-sharing-a-name-with-our-attribute",
-        "attribute-holding-a-computed-function",
     ],
 )
 def test_a_bound_with_no_typed_in_number_is_no_floor(source: str) -> None:
@@ -448,32 +450,6 @@ def test_a_check_written_outside_an_assert_is_read_too(source: str, found: list[
         ("assert x == max(x, 5)\n", ["line 1: floor x == max(x, 5)"]),
         ("assert min(x, 5) == 5\n", ["line 1: floor min(x, 5) == 5"]),
         (
-            "class Limits:\n    LEAST = 5\n\nassert len(x) >= Limits.LEAST\n",
-            ["line 4: floor len(x) >= Limits.LEAST"],
-        ),
-        (
-            "from shapes import Limits\nassert len(x) >= Limits.LEAST\n",
-            ["line 2: floor len(x) >= Limits.LEAST"],
-        ),
-        (
-            "import shapes\nassert len(x) >= shapes.Limits.LEAST\n",
-            ["line 2: floor len(x) >= shapes.Limits.LEAST"],
-        ),
-        (
-            (
-                "class Box:\n    def __init__(self):\n        self.least = 5\n\n"
-                "box = Box()\nassert len(x) >= box.least\n"
-            ),
-            ["line 6: floor len(x) >= box.least"],
-        ),
-        (
-            (
-                "@dataclass\nclass Box:\n    least: int = 5\n\n"
-                "box = Box()\nassert len(x) >= box.least\n"
-            ),
-            ["line 6: floor len(x) >= box.least"],
-        ),
-        (
             "def handlers():\n    return [lambda: 5]\n\nassert len(x) >= handlers()[0]()\n",
             ["line 4: floor len(x) >= handlers()[0]()"],
         ),
@@ -482,20 +458,6 @@ def test_a_check_written_outside_an_assert_is_read_too(source: str, found: list[
             ["line 5: floor len(x) >= f()"],
         ),
         ("fns = [lambda: 5]\nf = fns[0]\nassert len(x) >= f()\n", ["line 3: floor len(x) >= f()"]),
-        (
-            (
-                "class Box:\n    def __init__(self):\n        self.check = lambda: 5\n\n"
-                "box = Box()\nassert len(x) >= box.check()\n"
-            ),
-            ["line 6: floor len(x) >= box.check()"],
-        ),
-        (
-            (
-                "def five():\n    return 5\n\nclass Box:\n    def __init__(self):\n"
-                "        self.check = five\n\nbox = Box()\nassert len(x) >= box.check()\n"
-            ),
-            ["line 9: floor len(x) >= box.check()"],
-        ),
     ],
     ids=[
         "range",
@@ -503,20 +465,265 @@ def test_a_check_written_outside_an_assert_is_read_too(source: str, found: list[
         "max-equals",
         "equals-max",
         "min-equals",
-        "class-constant",
-        "imported-class-constant",
-        "module-class-constant",
-        "attribute-set-in-a-method",
-        "dataclass-default",
         "call-of-an-item",
         "call-of-a-stored-call-result",
         "call-of-a-stored-item",
-        "attribute-holding-a-lambda",
-        "attribute-holding-a-function",
     ],
 )
 def test_a_minimum_spelled_another_way_is_a_floor(source: str, found: list[str]) -> None:
     assert findings(source) == found
+
+
+BOX = {"box": "planted.Box", "self": "planted.Box"}
+REFUSED_TYPE = "a type the check cannot work out"
+
+
+@pytest.mark.parametrize(
+    ("source", "owners", "related", "found"),
+    [
+        (
+            (
+                "class Box:\n    def __init__(self):\n        self.least = 5\n\nbox = Box()\n"
+                "assert len(x) >= box.least\n"
+            ),
+            BOX,
+            {},
+            ["line 6: floor len(x) >= box.least"],
+        ),
+        (
+            (
+                "@dataclass\nclass Box:\n    least: int = 5\n\n"
+                "box = Box()\nassert len(x) >= box.least\n"
+            ),
+            BOX,
+            {},
+            ["line 6: floor len(x) >= box.least"],
+        ),
+        (
+            "class Limits:\n    LEAST = 5\n\nassert len(x) >= Limits.LEAST\n",
+            {"Limits": "planted.Limits"},
+            {},
+            ["line 4: floor len(x) >= Limits.LEAST"],
+        ),
+        (
+            "from shapes import Limits\nassert len(x) >= Limits.LEAST\n",
+            {"Limits": "shapes.Limits"},
+            {},
+            ["line 2: floor len(x) >= Limits.LEAST"],
+        ),
+        (
+            "import shapes\nassert len(x) >= shapes.Limits.LEAST\n",
+            {"shapes.Limits": "shapes.Limits"},
+            {},
+            ["line 2: floor len(x) >= shapes.Limits.LEAST"],
+        ),
+        (
+            "class Limits:\n    LEAST = 5\n\nassert len(x) >= Limits().LEAST\n",
+            {"Limits()": "planted.Limits"},
+            {},
+            ["line 4: floor len(x) >= Limits().LEAST"],
+        ),
+        (
+            "class C:\n    def least(self):\n        return 5\n\nassert len(x) >= C().least()\n",
+            {"C()": "planted.C"},
+            {},
+            ["line 5: floor len(x) >= C().least()"],
+        ),
+        (
+            "from helpers import Limits\nlimits = Limits()\nassert len(x) >= limits.least()\n",
+            {"limits": "helpers.Limits"},
+            {},
+            ["line 3: floor len(x) >= limits.least()"],
+        ),
+        (
+            (
+                "class Box:\n    def __init__(self):\n        self.check = lambda: 5\n\n"
+                "box = Box()\n"
+                "assert len(x) >= box.check()\n"
+            ),
+            BOX,
+            {},
+            ["line 6: floor len(x) >= box.check()"],
+        ),
+        (
+            (
+                "def five():\n    return 5\n\nclass Box:\n    def __init__(self):\n"
+                "        self.check = five\n\nbox = Box()\nassert len(x) >= box.check()\n"
+            ),
+            BOX,
+            {},
+            ["line 9: floor len(x) >= box.check()"],
+        ),
+        (
+            (
+                "class Box:\n    def __init__(self, n):\n        self.least = n\n\n"
+                "box = Box(list())\nassert len(x) >= box.least\n"
+            ),
+            BOX,
+            {},
+            ["line 6: cannot trace n (a fixture or helper parameter) in len(x) >= box.least"],
+        ),
+        (
+            (
+                "class Box:\n    def set_least(self, n):\n        self.least = n\n\n"
+                "box = Box()\nbox.set_least(5)\nassert len(x) >= box.least\n"
+            ),
+            BOX,
+            {},
+            ["line 7: cannot trace n (a fixture or helper parameter) in len(x) >= box.least"],
+        ),
+        (
+            (
+                "class Box:\n    def __init__(self):\n        self.least = len(list())\n\n"
+                "box = Box()\n"
+                "assert len(x) >= box.least\n"
+            ),
+            BOX,
+            {},
+            [],
+        ),
+        (
+            (
+                "class Box:\n    def __init__(self):\n        self.check = lambda: len(list())\n\n"
+                "box = Box()\nassert len(x) >= box.check()\n"
+            ),
+            BOX,
+            {},
+            [],
+        ),
+        (
+            (
+                "class Span:\n    def __init__(self, days):\n        self.days = days\n\n"
+                "from datetime import date\nassert len(x) >= (date.today() - date.today()).days\n"
+            ),
+            {"self": "planted.Span"},
+            {},
+            [],
+        ),
+        (
+            (
+                "class Words:\n    def split(self):\n        return 5\n\n"
+                "assert len(x) >= len('a b'.split())\n"
+            ),
+            {},
+            {},
+            [],
+        ),
+        ("limits = list()\nassert len(x) >= limits.least()\n", {}, {}, []),
+        (
+            (
+                "class A:\n    least = 5\n\nclass B:\n    least = len(list())\n\nb = B()\n"
+                "assert len(x) >= b.least\n"
+            ),
+            {"b": "planted.B"},
+            {},
+            [],
+        ),
+        (
+            (
+                "class Base:\n    least = len(list())\n\nclass Sub(Base):\n    least = 5\n\n"
+                "def make() -> Base:\n    return Sub()\n\nb = make()\nassert len(x) >= b.least\n"
+            ),
+            {"b": "planted.Base"},
+            {"planted.Base": frozenset({"planted.Base", "planted.Sub"})},
+            ["line 11: floor len(x) >= b.least"],
+        ),
+        (
+            (
+                "class Shape(Protocol):\n    least: int\n\nclass Square:\n    least = 5\n\n"
+                "def make() -> Shape:\n    return Square()\n\ns = make()\n"
+                "assert len(x) >= s.least\n"
+            ),
+            {"s": "planted.Shape"},
+            {"planted.Shape": None},
+            ["line 11: floor len(x) >= s.least"],
+        ),
+        (
+            "thing = list()\nassert len(x) >= thing.least\n",
+            {"thing": UNKNOWN},
+            {},
+            [f"line 2: cannot trace thing ({REFUSED_TYPE}) in len(x) >= thing.least"],
+        ),
+        (
+            "thing = list()\nassert len(x) >= thing.least()\n",
+            {"thing": UNKNOWN},
+            {},
+            [f"line 2: cannot trace thing ({REFUSED_TYPE}) in len(x) >= thing.least()"],
+        ),
+        (
+            (
+                "class Box:\n    least = len(list())\n\nthing = list()\nthing.least = 5\n"
+                "box = Box()\n"
+                "assert len(x) >= box.least\n"
+            ),
+            {"thing": UNKNOWN, "box": "planted.Box"},
+            {},
+            ["line 7: floor len(x) >= box.least"],
+        ),
+        (
+            (
+                "class Box:\n    least = len(list())\n\nns = list()\nns.least = 5\nbox = Box()\n"
+                "assert len(x) >= box.least\n"
+            ),
+            {"box": "planted.Box"},
+            {},
+            [],
+        ),
+        (
+            (
+                "class Box:\n    least = len(list())\n\nclass Mystery:\n    least = 5\n\n"
+                "box = Box()\nassert len(x) >= box.least\n"
+            ),
+            {"box": "planted.Box", "class Mystery": UNKNOWN},
+            {},
+            ["line 8: floor len(x) >= box.least"],
+        ),
+        (
+            (
+                "class Box:\n    pass\n\nclass Mystery:\n    def least(self):\n        return 5\n\n"
+                "box = Box()\nassert len(x) >= box.least()\n"
+            ),
+            {"box": "planted.Box", "class Mystery": UNKNOWN},
+            {},
+            ["line 9: floor len(x) >= box.least()"],
+        ),
+    ],
+    ids=[
+        "attribute-set-in-a-method",
+        "dataclass-default",
+        "class-constant",
+        "imported-class-constant",
+        "module-class-constant",
+        "attribute-of-a-made-object",
+        "method",
+        "imported-class-method",
+        "attribute-holding-a-lambda",
+        "attribute-holding-a-function",
+        "attribute-from-a-constructor-argument",
+        "attribute-from-a-method-argument",
+        "attribute-computed-in-a-constructor",
+        "attribute-holding-a-computed-function",
+        "library-object-sharing-an-attribute-name",
+        "library-method-sharing-a-method-name",
+        "list-method-sharing-a-method-name",
+        "same-attribute-on-another-class-of-ours",
+        "attribute-of-a-subclass",
+        "member-of-a-protocol",
+        "attribute-of-a-type-the-check-cannot-work-out",
+        "method-of-a-type-the-check-cannot-work-out",
+        "set-on-an-object-of-a-type-the-check-cannot-work-out",
+        "set-on-a-library-object",
+        "attribute-of-a-class-the-types-cannot-name",
+        "method-of-a-class-the-types-cannot-name",
+    ],
+)
+def test_an_attribute_or_method_is_judged_by_its_objects_type(
+    source: str,
+    owners: Mapping[str, str],
+    related: Mapping[str, frozenset[str] | None],
+    found: list[str],
+) -> None:
+    assert findings(source, Project(SOURCES, StandIn(owners, related))) == found
 
 
 def test_the_reader_counts_every_assert_it_judged() -> None:
