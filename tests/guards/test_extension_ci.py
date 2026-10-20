@@ -77,15 +77,16 @@ def test_each_script_runs_the_tool_the_spec_names(script: str, command: str) -> 
     assert manifest()["scripts"].get(script) == command
 
 
-def test_node_comes_from_setup_node_at_the_engine_floor() -> None:
+def test_node_comes_from_setup_node_reading_the_nvmrc() -> None:
+    # The version itself and the engines range are pinned in test_supply_chain.py (#287).
     setup = [
         step
         for step in job()["steps"]
         if str(step.get("uses", "")).startswith("actions/setup-node@")
     ]
     assert len(setup) == 1
-    assert setup[0]["with"]["node-version"] == "24"
-    assert manifest().get("engines") == {"node": ">=24"}
+    assert setup[0]["with"]["node-version-file"] == ".nvmrc"
+    assert "node-version" not in setup[0]["with"]
 
 
 def recorder_mentions(workflow: Any) -> list[str]:  # noqa: ANN401 - parsed YAML is untyped

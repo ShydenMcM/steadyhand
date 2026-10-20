@@ -303,7 +303,10 @@ def test_sub_path_actions_are_grouped_above_the_patch_group() -> None:
 
 SETUP_NODE = "actions/setup-node@"
 PACKAGE_JSON = ROOT / "extension/package.json"
+NVMRC = ROOT / ".nvmrc"
 MAJOR = re.compile(r"(?P<major>\d+)(?:\.[\dx]+)*")
+# Measured on 2026-10-20 (#287): four in ci.yml, one each in mutations.yml and record-floors.yml.
+SETUP_NODE_STEPS = 6
 
 
 def major_of(version: object, *, where: str) -> int:
@@ -315,20 +318,25 @@ def major_of(version: object, *, where: str) -> int:
     return int(found["major"])
 
 
-def setup_node_versions() -> list[tuple[str, object]]:
-    """``(where, node-version)`` for each ``actions/setup-node`` step of each job (#270)."""
-    versions: list[tuple[str, object]] = []
+def setup_node_inputs() -> list[tuple[str, dict[str, Any]]]:
+    """``(where, with)`` for each ``actions/setup-node`` step of each job (#270)."""
+    inputs: list[tuple[str, dict[str, Any]]] = []
     for path in workflow_files():
         jobs = yaml.safe_load(path.read_text(encoding="utf-8")).get("jobs", {})
         for job_name, job in jobs.items():
             for step in job.get("steps", []):
                 if str(step.get("uses", "")).startswith(SETUP_NODE):
-                    where = f"{path.name} job {job_name}"
-                    versions.append((where, step.get("with", {}).get("node-version")))
-    return versions
+                    inputs.append((f"{path.name} job {job_name}", step.get("with", {})))
+    return inputs
 
 
-def test_every_setup_node_step_names_its_node_version() -> None:
+def test_nvmrc_names_node_26() -> None:
+    # Shyden, 2026-10-08, every project: "move them all to 26" (#287). nvm on the laptop and every
+    # setup-node step in CI read this one file, so the two run one Node line.
+    assert NVMRC.read_text(encoding="utf-8") == "26\n"
+
+
+def test_every_setup_node_step_reads_the_nvmrc() -> None:
     # Counted another way: every `uses` anywhere in the workflows, so a step the job walk missed
     # (a reusable workflow, a new nesting) makes the two counts differ.
     uses = [
@@ -337,23 +345,22 @@ def test_every_setup_node_step_names_its_node_version() -> None:
         for value in uses_values(yaml.safe_load(path.read_text(encoding="utf-8")))
         if value.startswith(SETUP_NODE)
     ]
-    versions = setup_node_versions()
-    assert len(versions) == len(uses), (versions, uses)
-    unnamed = [where for where, version in versions if version is None]
-    assert searched(unnamed, of=len(versions), what="setup-node steps") == []
+    inputs = setup_node_inputs()
+    assert len(inputs) == len(uses) == SETUP_NODE_STEPS, (inputs, uses)
+    # A version named in the step itself would run a Node the laptop does not (#287).
+    other = [
+        (where, given)
+        for where, given in inputs
+        if given.get("node-version-file") != ".nvmrc" or "node-version" in given
+    ]
+    assert searched(other, of=len(inputs), what="setup-node steps") == []
 
 
 def test_types_node_follows_the_node_that_ci_runs() -> None:
     # Types for a newer Node than CI runs let tsc accept an API that then fails on CI (#268).
     pinned = json.loads(PACKAGE_JSON.read_text(encoding="utf-8"))["devDependencies"]["@types/node"]
-    types_major = major_of(pinned, where="@types/node")
-    versions = setup_node_versions()
-    other = [
-        (where, version)
-        for where, version in versions
-        if major_of(version, where=where) != types_major
-    ]
-    assert searched(other, of=len(versions), what="setup-node steps") == []
+    runtime = NVMRC.read_text(encoding="utf-8").strip()
+    assert major_of(pinned, where="@types/node") == major_of(runtime, where=".nvmrc")
 
 
 def test_dependabot_never_moves_types_node_past_the_runtime() -> None:
@@ -553,8 +560,8 @@ def ceilings(name: str) -> list[str]:
     return found
 
 
-# Ignored for a reason of their own, not a peer's range: @types/node moves with CI's Node (#270).
-OWN_IGNORES = {"@types/node": [held_back("@types/node", "24.0.0")]}
+# Ignored for a reason of their own, not a peer's range: @types/node moves with .nvmrc (#270).
+OWN_IGNORES = {"@types/node": [held_back("@types/node", "26.0.0")]}
 
 
 def test_the_peer_ceilings_are_the_ones_measured() -> None:

@@ -123,7 +123,7 @@ def test_it_installs_the_extension_workspace_as_ci_does_with_no_install_script()
     ]
     assert [found["with"] for found in node] == [
         {
-            "node-version": "24",
+            "node-version-file": ".nvmrc",
             "cache": "npm",
             "cache-dependency-path": "extension/package-lock.json",
         }
