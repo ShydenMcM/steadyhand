@@ -33,9 +33,20 @@ test("the workspace holds exactly the four packages of spec §3", () => {
   );
 });
 
-test("Node 24 or later is required, and npm refuses to install on anything older", () => {
-  expect(manifest("package.json").engines).toEqual({ node: ">=24" });
+// Node 26.3 or later (Shyden, 2026-10-08, every project, #287); 26.0 to 26.2 are left out, as
+// eslint-plugin-astro's range leaves them out. 24.16 stays because Dependabot's npm updater installs
+// on Node 24 (dependabot-core npm_and_yarn/Dockerfile, `ARG NODEJS_VERSION=24`, read 2026-10-08),
+// and engine-strict would refuse its installs. The 24 half goes when Dependabot moves.
+const ENGINES = { node: "^24.16.0 || >=26.3.0" };
+
+test("Node 26.3 or later is required, or 24.16 for Dependabot, and npm refuses anything else", () => {
+  expect(manifest("package.json").engines).toEqual(ENGINES);
   expect(read(".npmrc").split("\n")).toContain("engine-strict=true");
+});
+
+test("the lock records the manifest's engines range", () => {
+  const lock = JSON.parse(read("package-lock.json")) as { packages: Record<string, Manifest> };
+  expect(lock.packages[""]?.engines).toEqual(ENGINES);
 });
 
 test.each(Object.entries(LAYERS))("%s is built on %j and on no other package", (name, below) => {

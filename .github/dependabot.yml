@@ -36,7 +36,7 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "chore(deps)"
-    # @types/node describes the Node that CI runs (setup-node's node-version), so a new major
+    # @types/node describes the Node that CI runs (.nvmrc, read by setup-node), so a new major
     # would let tsc accept an API CI's Node lacks (#270). It moves with the runtime, by hand.
     ignore:
       - dependency-name: "@types/node"
