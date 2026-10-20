@@ -621,6 +621,16 @@ REFUSED_TYPE = "a type the check cannot work out"
         ),
         (
             (
+                "class A:\n    def least(self):\n        return 5\n\nclass B:\n"
+                "    def least(self):\n        return len(list())\n\nb = B()\n"
+                "assert len(x) >= b.least()\n"
+            ),
+            {"b": "planted.B"},
+            {},
+            [],
+        ),
+        (
+            (
                 "class Base:\n    least = len(list())\n\nclass Sub(Base):\n    least = 5\n\n"
                 "def make() -> Base:\n    return Sub()\n\nb = make()\nassert len(x) >= b.least\n"
             ),
@@ -707,6 +717,7 @@ REFUSED_TYPE = "a type the check cannot work out"
         "library-method-sharing-a-method-name",
         "list-method-sharing-a-method-name",
         "same-attribute-on-another-class-of-ours",
+        "same-method-on-another-class-of-ours",
         "attribute-of-a-subclass",
         "member-of-a-protocol",
         "attribute-of-a-type-the-check-cannot-work-out",
