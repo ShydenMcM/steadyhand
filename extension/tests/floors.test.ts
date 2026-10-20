@@ -10,8 +10,11 @@ import {
   parseFloors,
   parseMeasurements,
   RECORD_ENV,
+  RECORDED_SUITES,
   readFloors,
   recordFloors,
+  runSuites,
+  type SuiteRun,
 } from "./lib/floors.ts";
 
 /** The environment of the CI job that records floors (#285). */
@@ -252,4 +255,90 @@ test("a recording with a refusal prints it and writes nothing", () => {
       "Lower it by a deliberate edit if the population really shrank",
     "nothing recorded",
   ]);
+});
+
+test("the recorder runs every TypeScript and every Python suite that can hold a floor (#272)", () => {
+  const pytest = ["run", "--locked", "pytest", "-W", "error", "-p", "no:cacheprovider"];
+  expect(RECORDED_SUITES).toEqual([
+    {
+      name: "vitest",
+      program: "node",
+      args: ["node_modules/vitest/vitest.mjs", "run"],
+      directory: "extension",
+    },
+    { name: "python unit", program: "uv", args: pytest, directory: "repository" },
+    {
+      name: "python guards",
+      program: "uv",
+      args: [...pytest, "--suite", "guards"],
+      directory: "repository",
+    },
+    {
+      name: "python integration",
+      program: "uv",
+      args: [...pytest, "--suite", "integration"],
+      directory: "repository",
+    },
+    {
+      name: "python properties",
+      program: "uv",
+      args: [...pytest, "--suite", "properties"],
+      directory: "repository",
+    },
+    {
+      name: "python perf",
+      program: "uv",
+      args: [...pytest, "-m", "perf"],
+      directory: "repository",
+    },
+  ]);
+});
+
+const suite = (name: string): SuiteRun => ({
+  name,
+  program: name,
+  args: [],
+  directory: "repository",
+});
+
+test("the suites run one after another, and all passing is a pass", () => {
+  const ran: string[] = [];
+  const lines: string[] = [];
+  const status = runSuites(
+    [suite("a"), suite("b"), suite("c")],
+    (run) => {
+      ran.push(run.name);
+      return 0;
+    },
+    (line) => lines.push(line),
+  );
+  expect(status).toBe(0);
+  expect(ran).toEqual(["a", "b", "c"]);
+  expect(lines).toEqual([]);
+});
+
+test("the first failing suite stops the run, is named, and its status is the run's", () => {
+  const ran: string[] = [];
+  const lines: string[] = [];
+  const status = runSuites(
+    [suite("a"), suite("b"), suite("c")],
+    (run) => {
+      ran.push(run.name);
+      return run.name === "b" ? 4 : 0;
+    },
+    (line) => lines.push(line),
+  );
+  expect(status).toBe(4);
+  expect(ran).toEqual(["a", "b"]);
+  expect(lines).toEqual(["suite b exited 4: the later suites were not run"]);
+});
+
+test("a run over no suites is refused, since it would record nothing", () => {
+  expect(() =>
+    runSuites(
+      [],
+      () => 0,
+      () => undefined,
+    ),
+  ).toThrow("the recorder was given no suites to run");
 });

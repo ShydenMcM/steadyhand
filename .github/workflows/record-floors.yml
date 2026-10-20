@@ -2,15 +2,18 @@ name: record-floors
 
 # The floors recorder (#285). Shyden's rulings, every project: "A CI job records" (2026-10-09) and
 # "CI records, laptop commits" (2026-10-12). Labelling a pull request `record-floors` runs every
-# extension suite in record mode on it and uploads the raised `floors.json`; on the laptop,
-# `npm run floors:fetch <run id>` writes it for review and a commit. It is never one of the
-# checks the floors feed, and it holds no key that could push.
+# extension suite and every Python suite but live (#272) in record mode on it and uploads the
+# raised `floors.json`; on the laptop, `npm run floors:fetch <run id>` writes it for review and a
+# commit. It is never one of the checks the floors feed, and it holds no key that could push.
 on:
   pull_request:
     types: [labeled]
 
 permissions:
   contents: read
+
+env:
+  UV_VERSION: "0.12.18"
 
 jobs:
   record:
@@ -29,6 +32,12 @@ jobs:
           cache-dependency-path: extension/package-lock.json
       - run: npm ci --ignore-scripts
         working-directory: extension
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
       - run: npm run floors:record
         working-directory: extension
       - name: Keep the recorded floors

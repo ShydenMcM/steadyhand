@@ -151,7 +151,7 @@ def test_the_recorder_holds_no_key_that_could_push() -> None:
 def test_the_recorder_records_then_uploads_the_floors_file_for_the_laptop() -> None:
     steps = recorder_workflow()["jobs"]["record"]["steps"]
     runs = [step.get("run") for step in steps if "run" in step]
-    assert runs == ["npm ci --ignore-scripts", "npm run floors:record"]
+    assert runs == ["npm ci --ignore-scripts", "uv sync --locked", "npm run floors:record"]
     upload = steps[-1]
     assert str(upload["uses"]).startswith("actions/upload-artifact@")
     assert upload["with"] == {
@@ -160,6 +160,22 @@ def test_the_recorder_records_then_uploads_the_floors_file_for_the_laptop() -> N
         "if-no-files-found": "error",
     }
     assert manifest()["scripts"]["floors:fetch"] == "node tests/fetch-floors.ts"
+
+
+def test_the_recorder_installs_the_uv_and_a_python_that_ci_tests() -> None:
+    # It runs the Python suites too (#272), on the uv and a Python the checks themselves use.
+    ci = yaml.safe_load((WORKFLOWS / "ci.yml").read_text(encoding="utf-8"))
+    workflow = recorder_workflow()
+    assert workflow["env"] == {"UV_VERSION": ci["env"]["UV_VERSION"]}
+    steps = workflow["jobs"]["record"]["steps"]
+    setups = [step for step in steps if str(step.get("uses", "")).startswith("astral-sh/setup-uv@")]
+    assert len(setups) == 1, setups
+    assert setups[0]["with"]["version"] == "${{ env.UV_VERSION }}"
+    assert (
+        setups[0]["with"]["python-version"]
+        in ci["jobs"]["integration"]["strategy"]["matrix"]["python"]
+    )
+    assert steps.index(setups[0]) < steps.index({"run": "uv sync --locked"})
 
 
 def guards_job() -> dict[str, Any]:

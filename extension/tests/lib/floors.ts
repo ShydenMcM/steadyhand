@@ -178,8 +178,8 @@ export const parseMeasurements = (text: string): Measurement[] =>
 
 /**
  * One recording: run the suite with `RECORD_ENV` set, then write the raised floors, or nothing.
- * `run` takes the measurements path and returns the suite's exit status. The recorder never
- * runs in CI, so its own test passes a run that writes measurements instead of the real suite.
+ * `run` takes the measurements path and returns the suites' exit status. A unit test starts no
+ * process, so the recorder's own test passes a run that writes measurements instead of the suites.
  * Returns the recorder's exit status.
  */
 export const recordFloors = (
@@ -215,4 +215,71 @@ export const recordFloors = (
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
+};
+
+/** One suite the recorder runs: its name, the program and its arguments, and its folder. */
+export interface SuiteRun {
+  name: string;
+  program: string;
+  args: readonly string[];
+  directory: "extension" | "repository";
+}
+
+const PYTEST = ["run", "--locked", "pytest", "-W", "error", "-p", "no:cacheprovider"];
+
+/**
+ * Every suite that can hold a floor, in both languages (#272): one recorder covers them all, so
+ * one floors file holds every figure. The Python live suite is left out on purpose: it calls
+ * Yahoo, so it holds no floor (Shyden, 2026-10-20), and recording never depends on a third party.
+ */
+export const RECORDED_SUITES: readonly SuiteRun[] = [
+  {
+    name: "vitest",
+    program: "node",
+    args: ["node_modules/vitest/vitest.mjs", "run"],
+    directory: "extension",
+  },
+  { name: "python unit", program: "uv", args: PYTEST, directory: "repository" },
+  {
+    name: "python guards",
+    program: "uv",
+    args: [...PYTEST, "--suite", "guards"],
+    directory: "repository",
+  },
+  {
+    name: "python integration",
+    program: "uv",
+    args: [...PYTEST, "--suite", "integration"],
+    directory: "repository",
+  },
+  {
+    name: "python properties",
+    program: "uv",
+    args: [...PYTEST, "--suite", "properties"],
+    directory: "repository",
+  },
+  { name: "python perf", program: "uv", args: [...PYTEST, "-m", "perf"], directory: "repository" },
+];
+
+/**
+ * Run `suites` one after another with `run`, which returns each one's exit status. The first
+ * that fails stops the run, is named, and its status is the run's: nothing is recorded from a
+ * run that did not pass whole. Returns 0 when every suite passed.
+ */
+export const runSuites = (
+  suites: readonly SuiteRun[],
+  run: (suite: SuiteRun) => number,
+  log: (line: string) => void,
+): number => {
+  if (suites.length === 0) {
+    throw new Error("the recorder was given no suites to run");
+  }
+  for (const suite of suites) {
+    const status = run(suite);
+    if (status !== 0) {
+      log(`suite ${suite.name} exited ${String(status)}: the later suites were not run`);
+      return status;
+    }
+  }
+  return 0;
 };
