@@ -1,19 +1,36 @@
 """The literal-floor reader (#272), planted with every form a typed-in floor takes.
 
-Shyden's decision (2026-10-20, on #272): a Python literal floor is EVERY typed-in lower bound in an
-assert, as in TypeScript, with no exemption, and a bound that uses a name the reader cannot trace
-to a value in its file is refused, not read as safe. Each plant is written out by hand, so a form
-the reader drops cannot drop out of this list with it (the global guard-forms catalogue, #446).
+Shyden's decisions (2026-10-20, on #272): a Python literal floor is EVERY typed-in lower bound, as
+in TypeScript, with no exemption; a bound that uses a name the reader cannot trace is refused, not
+read as safe; everything in our own code is followed and only outside libraries pass; an index is
+no value; both sides of `<` are judged. Each plant is written out by hand, so a form the reader
+drops cannot drop out of this list with it (the global guard-forms catalogue, #446).
 """
 
 import textwrap
 
 import pytest
-from literal_floors import UnreadableSourceError, assert_tokens, read
+from literal_floors import Project, UnreadableSourceError, assert_tokens, read
+
+# Our own code, for the plants that follow a name out of the test file.
+OURS = Project(
+    {
+        "consts": "N = 5\nM = 1\n",
+        "base": "B = 5\n",
+        "chained": "from base import B\nN = B\n",
+        "helpers": (
+            "def minimum():\n    return 5\n\n"
+            "def echo(n):\n    return n\n\n"
+            "class Limits:\n    def least(self):\n        return 5\n"
+        ),
+        "pkg": "",
+        "pkg.consts": "N = 5\n",
+    }
+)
 
 
-def findings(source: str) -> list[str]:
-    return read(textwrap.dedent(source), "planted.py").findings
+def findings(source: str, project: Project = OURS) -> list[str]:
+    return read(textwrap.dedent(source), "planted.py", project).findings
 
 
 @pytest.mark.parametrize(
@@ -41,6 +58,8 @@ def findings(source: str) -> list[str]:
             "for d in found:\n    assert 5 <= d.size <= big\n",
             ["line 2: floor 5 <= d.size <= big"],
         ),
+        ('assert cash >= Decimal("5")\n', ["line 1: floor cash >= Decimal('5')"]),
+        ("assert gap >= Decimal('1e-20')\n", ["line 1: floor gap >= Decimal('1e-20')"]),
     ],
     ids=[
         "at-least",
@@ -62,6 +81,8 @@ def findings(source: str) -> list[str]:
         "inside-and",
         "inside-a-generator",
         "chained-before-an-untraceable",
+        "number-as-text",
+        "exponent-as-text",
     ],
 )
 def test_a_literal_written_in_the_bound_is_a_floor(source: str, found: list[str]) -> None:
@@ -98,6 +119,27 @@ def test_a_literal_written_in_the_bound_is_a_floor(source: str, found: list[str]
             ["line 2: floor len(x) >= LIMITS[2]"],
         ),
         ("assert len(x) >= (5, 10)[i]\n", ["line 1: floor len(x) >= (5, 10)[i]"]),
+        (
+            "steps = list()\n\ndef test_a():\n    steps = 5\n    assert len(x) >= steps\n",
+            ["line 5: floor len(x) >= steps"],
+        ),
+        (
+            "N = 5\n\ndef test_a():\n    def inner():\n        assert len(x) >= N\n",
+            ["line 5: floor len(x) >= N"],
+        ),
+        ("f = lambda: 5\nassert len(x) >= f()\n", ["line 2: floor len(x) >= f()"]),
+        (
+            "def least():\n    return 5\n\nf = least\nassert len(x) >= f()\n",
+            ["line 5: floor len(x) >= f()"],
+        ),
+        (
+            "class C:\n    def least(self):\n        return 5\n\nassert len(x) >= C().least()\n",
+            ["line 5: floor len(x) >= C().least()"],
+        ),
+        (
+            "def at_least(n):\n    return n\n\nassert len(x) >= at_least(5)\n",
+            ["line 4: floor len(x) >= at_least(5)"],
+        ),
     ],
     ids=[
         "module-constant",
@@ -112,9 +154,72 @@ def test_a_literal_written_in_the_bound_is_a_floor(source: str, found: list[str]
         "loop-over-literals",
         "container-indexed",
         "written-container-indexed",
+        "nearest-scope",
+        "module-name-from-a-nested-function",
+        "stored-lambda",
+        "stored-function",
+        "method",
+        "argument-through-a-parameter",
     ],
 )
 def test_a_name_bound_to_a_literal_is_a_floor(source: str, found: list[str]) -> None:
+    assert findings(source) == found
+
+
+@pytest.mark.parametrize(
+    ("source", "found"),
+    [
+        ("from consts import N\nassert len(x) >= N\n", ["line 2: floor len(x) >= N"]),
+        ("from chained import N\nassert len(x) >= N\n", ["line 2: floor len(x) >= N"]),
+        ("import consts\nassert len(x) >= consts.N\n", ["line 2: floor len(x) >= consts.N"]),
+        (
+            "from pkg import consts\nassert len(x) >= consts.N\n",
+            ["line 2: floor len(x) >= consts.N"],
+        ),
+        (
+            "import pkg.consts\nassert len(x) >= pkg.consts.N\n",
+            ["line 2: floor len(x) >= pkg.consts.N"],
+        ),
+        (
+            "import pkg.consts as c\nassert len(x) >= c.N\n",
+            ["line 2: floor len(x) >= c.N"],
+        ),
+        (
+            "from helpers import minimum\nassert len(x) >= minimum()\n",
+            ["line 2: floor len(x) >= minimum()"],
+        ),
+        (
+            "import helpers\nassert len(x) >= helpers.minimum()\n",
+            ["line 2: floor len(x) >= helpers.minimum()"],
+        ),
+        (
+            "from helpers import minimum\nf = minimum\nassert len(x) >= f()\n",
+            ["line 3: floor len(x) >= f()"],
+        ),
+        (
+            "limits = list()\nassert len(x) >= limits.least()\n",
+            ["line 2: floor len(x) >= limits.least()"],
+        ),
+        (
+            "from helpers import echo\nassert len(x) >= echo(5)\n",
+            ["line 2: floor len(x) >= echo(5)"],
+        ),
+    ],
+    ids=[
+        "imported-constant",
+        "imported-through-another-module",
+        "module-attribute",
+        "submodule-attribute",
+        "dotted-module",
+        "aliased-module",
+        "imported-function",
+        "module-function",
+        "stored-imported-function",
+        "method-by-name",
+        "argument-into-our-helper",
+    ],
+)
+def test_a_number_in_our_other_files_is_followed(source: str, found: list[str]) -> None:
     assert findings(source) == found
 
 
@@ -145,10 +250,6 @@ def test_a_constant_named_for_a_floor_set_to_a_literal_is_a_floor(
             ["line 1: cannot trace d (a loop over values the test made) in d.day <= today"],
         ),
         (
-            "from m import N\nassert len(x) >= N\n",
-            ["line 2: cannot trace N (an import) in len(x) >= N"],
-        ),
-        (
             "def test_a(n):\n    assert len(x) >= n\n",
             ["line 2: cannot trace n (a fixture or helper parameter) in len(x) >= n"],
         ),
@@ -161,22 +262,31 @@ def test_a_constant_named_for_a_floor_set_to_a_literal_is_a_floor(
             ["line 1: cannot trace nowhere (never bound in this file) in len(x) >= nowhere"],
         ),
         (
-            "from m import IDR, Money\nassert Money.zero(IDR) <= take_home\n",
-            ["line 2: cannot trace IDR (an import) in Money.zero(IDR) <= take_home"],
+            "assert len(x) >= nowhere()\n",
+            ["line 1: cannot trace nowhere (never bound in this file) in len(x) >= nowhere()"],
         ),
         (
-            "n = len(make())\nfor n in found:\n    pass\nassert len(x) >= n\n",
+            "from consts import MISSING\nassert len(x) >= MISSING\n",
+            ["line 2: cannot trace MISSING (not in our module consts) in len(x) >= MISSING"],
+        ),
+        (
+            "from helpers import echo\nfor n in found:\n    assert len(x) >= echo(n)\n",
+            ["line 3: cannot trace n (a loop over values the test made) in len(x) >= echo(n)"],
+        ),
+        (
+            "n = len(list())\nfor n in found:\n    pass\nassert len(x) >= n\n",
             ["line 4: cannot trace n (a loop over values the test made) in len(x) >= n"],
         ),
     ],
     ids=[
         "loop",
         "comprehension",
-        "import",
         "fixture",
         "hypothesis",
         "unbound",
-        "imported-argument",
+        "unbound-call",
+        "missing-from-our-module",
+        "loop-through-our-helper",
         "also-bound-by-a-loop",
     ],
 )
@@ -190,20 +300,35 @@ def test_a_bound_the_reader_cannot_trace_is_refused(source: str, found: list[str
         "assert len(x) > 0\n",
         "assert len(x) >= 0\n",
         "N = 0\nassert len(x) >= N\n",
-        "x = make()\nassert len(x) <= 5\n",
-        "x = make()\nassert len(x) < 5\n",
+        "x = list()\nassert len(x) <= 5\n",
+        "x = list()\nassert len(x) < 5\n",
         "assert len(x) == 5\n",
-        "y = make()\nassert len(x) >= len(y)\n",
-        "y = make()\nn = len(y)\nassert len(x) >= n\n",
-        "x = make()\nassert not len(x) > 5\n",
+        "y = list()\nassert len(x) >= len(y)\n",
+        "y = list()\nn = len(y)\nassert len(x) >= n\n",
+        "x = list()\nassert not len(x) > 5\n",
         "x = [1]\nif len(x) < 5:\n    pass\n",
         "from m import fn\ny = []\nassert len(x) >= len(fn(y))\n",
         "def low():\n    return 1\n\nassert x >= low\n",
         "FLOOR_REASON = 'measured'\n",
         "floors = [5]\n",
-        "p = Path().parents[2]\nassert count >= len(p.name)\n",
-        "y = make()\nassert len(x) >= len(y[:2])\n",
-        "y = make()\nfor i in found:\n    assert len(x) >= y[i]\n",
+        "from pathlib import Path\np = Path().parents[2]\nassert count >= len(p.name)\n",
+        "y = list()\nassert len(x) >= len(y[:2])\n",
+        "y = list()\nfor i in found:\n    assert len(x) >= y[i]\n",
+        "from m import N\nassert len(x) >= N\n",
+        "from m import IDR, Money\nassert Money.zero(IDR) <= take_home\n",
+        "import statistics\ny = list()\nassert len(x) >= statistics.median(y)\n",
+        "from helpers import echo\ny = list()\nassert len(x) >= echo(len(y))\n",
+        'assert name >= "abc"\n',
+        "x = list()\nif len(x) > 5:\n    pytest.fail('too many')\n",
+        (
+            "def test_a():\n    steps = [5]\n\n"
+            "def test_b():\n    steps = list()\n    assert len(x) >= len(steps)\n"
+        ),
+        (
+            "def helper(source):\n    return source\n\n"
+            "def test_a():\n    source = list()\n    assert len(x) >= len(source)\n"
+        ),
+        "from pathlib import Path\nROOT = Path(__file__).parent\nassert len(x) >= len(ROOT.name)\n",
     ],
     ids=[
         "non-empty",
@@ -223,20 +348,58 @@ def test_a_bound_the_reader_cannot_trace_is_refused(source: str, found: list[str
         "index-is-no-value",
         "slice-is-no-value",
         "index-name-is-no-value",
+        "library-value",
+        "library-namespace",
+        "library-call",
+        "computed-through-our-helper",
+        "text-that-is-no-number",
+        "ceiling-before-a-fail",
+        "same-name-in-another-function",
+        "parameter-name-in-another-function",
+        "module-global",
     ],
 )
 def test_a_bound_with_no_typed_in_number_is_no_floor(source: str) -> None:
     assert findings(source) == []
 
 
+@pytest.mark.parametrize(
+    ("source", "found"),
+    [
+        ("if len(x) < 5:\n    pytest.fail('few')\n", ["line 1: floor len(x) < 5"]),
+        ("if len(x) < 5:\n    raise AssertionError(x)\n", ["line 1: floor len(x) < 5"]),
+        (
+            "self.assertGreaterEqual(len(x), 5)\n",
+            ["line 1: floor self.assertGreaterEqual(len(x), 5)"],
+        ),
+        ("self.assertGreater(len(x), 5)\n", ["line 1: floor self.assertGreater(len(x), 5)"]),
+        ("self.assertLess(5, len(x))\n", ["line 1: floor self.assertLess(5, len(x))"]),
+        (
+            "self.assertLessEqual(5, len(x))\n",
+            ["line 1: floor self.assertLessEqual(5, len(x))"],
+        ),
+    ],
+    ids=[
+        "if-then-fail",
+        "if-then-raise",
+        "unittest-at-least",
+        "unittest-more-than",
+        "unittest-reversed-less",
+        "unittest-reversed-at-most",
+    ],
+)
+def test_a_check_written_outside_an_assert_is_read_too(source: str, found: list[str]) -> None:
+    assert findings(source) == found
+
+
 def test_the_reader_counts_every_assert_it_judged() -> None:
     source = "def test_a():\n    assert x\n    assert (\n        y\n    )\nassert z, 'msg'\n"
-    assert read(source, "planted.py").asserts == 3
+    assert read(source, "planted.py", OURS).asserts == 3
 
 
 def test_a_file_that_does_not_parse_is_refused_by_name() -> None:
     with pytest.raises(UnreadableSourceError, match=r"^planted\.py: cannot parse it"):
-        read("assert (\n", "planted.py")
+        read("assert (\n", "planted.py", OURS)
 
 
 def test_the_cross_check_counts_assert_keywords_without_comments_or_text() -> None:
