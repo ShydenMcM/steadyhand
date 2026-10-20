@@ -93,6 +93,11 @@ def test_a_literal_written_in_the_bound_is_a_floor(source: str, found: list[str]
         ),
         ("def check(x, floor=5):\n    assert len(x) >= floor\n", ["line 2: floor len(x) >= floor"]),
         ("for floor in (5, 6):\n    assert len(x) >= floor\n", ["line 2: floor len(x) >= floor"]),
+        (
+            "LIMITS = (5, 10, 20)\nassert len(x) >= LIMITS[2]\n",
+            ["line 2: floor len(x) >= LIMITS[2]"],
+        ),
+        ("assert len(x) >= (5, 10)[i]\n", ["line 1: floor len(x) >= (5, 10)[i]"]),
     ],
     ids=[
         "module-constant",
@@ -105,6 +110,8 @@ def test_a_literal_written_in_the_bound_is_a_floor(source: str, found: list[str]
         "parametrized-tuple",
         "default",
         "loop-over-literals",
+        "container-indexed",
+        "written-container-indexed",
     ],
 )
 def test_a_name_bound_to_a_literal_is_a_floor(source: str, found: list[str]) -> None:
@@ -154,8 +161,8 @@ def test_a_constant_named_for_a_floor_set_to_a_literal_is_a_floor(
             ["line 1: cannot trace nowhere (never bound in this file) in len(x) >= nowhere"],
         ),
         (
-            "assert Money.zero(IDR) <= take_home\nfrom m import IDR\n",
-            ["line 1: cannot trace IDR (an import) in Money.zero(IDR) <= take_home"],
+            "from m import IDR, Money\nassert Money.zero(IDR) <= take_home\n",
+            ["line 2: cannot trace IDR (an import) in Money.zero(IDR) <= take_home"],
         ),
         (
             "n = len(make())\nfor n in found:\n    pass\nassert len(x) >= n\n",
@@ -194,6 +201,9 @@ def test_a_bound_the_reader_cannot_trace_is_refused(source: str, found: list[str
         "def low():\n    return 1\n\nassert x >= low\n",
         "FLOOR_REASON = 'measured'\n",
         "floors = [5]\n",
+        "p = Path().parents[2]\nassert count >= len(p.name)\n",
+        "y = make()\nassert len(x) >= len(y[:2])\n",
+        "y = make()\nfor i in found:\n    assert len(x) >= y[i]\n",
     ],
     ids=[
         "non-empty",
@@ -210,6 +220,9 @@ def test_a_bound_the_reader_cannot_trace_is_refused(source: str, found: list[str
         "a-function",
         "floor-named-text",
         "floors-plural-list",
+        "index-is-no-value",
+        "slice-is-no-value",
+        "index-name-is-no-value",
     ],
 )
 def test_a_bound_with_no_typed_in_number_is_no_floor(source: str) -> None:

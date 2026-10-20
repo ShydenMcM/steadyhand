@@ -80,6 +80,20 @@ def _is_number(node: ast.AST) -> bool:
     )
 
 
+def _value_nodes(expression: ast.AST) -> Iterator[ast.AST]:
+    """Every node of *expression* that can give it its value: an index or slice picks a value out of
+    a container but is not one, so it is left out (Shyden, 2026-10-20, on #272: ``parents[2]`` is
+    no floor). The container itself is still read, so ``LIMITS[2]`` reads ``LIMITS``."""
+    yield expression
+    for field, child in ast.iter_fields(expression):
+        if isinstance(expression, ast.Subscript) and field == "slice":
+            continue
+        children = child if isinstance(child, list) else [child]
+        for one in children:
+            if isinstance(one, ast.AST):
+                yield from _value_nodes(one)
+
+
 def _names(target: ast.AST) -> Iterator[str]:
     yield from (node.id for node in ast.walk(target) if isinstance(node, ast.Name))
 
@@ -243,7 +257,7 @@ class _Judge:
     def verdict(self, expression: ast.AST, seen: frozenset[str] = frozenset()) -> Verdict:
         direct, rooted = _called_roots(expression)
         untraceable: tuple[str, str] | None = None
-        for node in ast.walk(expression):
+        for node in _value_nodes(expression):
             if _is_number(node):
                 return TYPED_IN
             if not isinstance(node, ast.Name) or not isinstance(node.ctx, ast.Load):
