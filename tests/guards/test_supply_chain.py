@@ -362,3 +362,228 @@ def test_dependabot_never_moves_types_node_past_the_runtime() -> None:
     assert rule == [
         {"dependency-name": "@types/node", "update-types": ["version-update:semver-major"]}
     ]
+
+
+# A version as a sortable (major, minor, patch), and a range of them as [low, high).
+Triple = tuple[int, int, int]
+EVERY_VERSION: tuple[Triple, Triple] = ((0, 0, 0), (10**9, 0, 0))
+COMPARATOR = re.compile(r"(?P<op>\^|~|>=|<=|>|<|=)?(?P<version>[^-]*)(?P<pre>-[0-9A-Za-z.-]+)?")
+VERSION_PART = re.compile(r"\d+|[xX*]")
+
+
+def _known(version: str) -> list[int]:
+    """The leading numbers of *version* (``8.x`` is ``[8]``); ``v``, build metadata or a hyphen
+    range is refused by name, so no form this does not read is ever judged (#350)."""
+    parts = version.split(".") if version else ["*"]
+    if len(parts) > 3 or not all(VERSION_PART.fullmatch(part) for part in parts):
+        msg = f"cannot read an npm version from {version!r}"
+        raise AssertionError(msg)
+    known: list[int] = []
+    for part in parts:
+        if not part.isdigit():
+            break
+        known.append(int(part))
+    return known
+
+
+def _past(known: list[int], places: int) -> Triple:
+    """The first version after every one sharing *known*'s first *places* numbers."""
+    head = [*known[: places - 1], known[places - 1] + 1]
+    return _floor(head)
+
+
+def _floor(known: list[int]) -> Triple:
+    padded = [*known, 0, 0, 0]
+    return padded[0], padded[1], padded[2]
+
+
+def interval(comparator: str) -> tuple[Triple, Triple]:
+    """The versions one npm comparator admits, as ``[low, high)``, by node-semver's rules."""
+    found = COMPARATOR.fullmatch(comparator)
+    assert found is not None, f"cannot read {comparator!r}"
+    op, known = found["op"] or "=", _known(found["version"])
+    # Only releases are judged, and a pre-release sorts below its release: ``>1.2.3-rc`` admits
+    # 1.2.3 itself and ``=1.2.3-rc`` admits no release at all.
+    assert not found["pre"] or len(known) == 3, f"cannot read {comparator!r}"
+    if not known:
+        assert op == "=", f"cannot read {comparator!r}"
+        return EVERY_VERSION
+    places = len(known)
+    nonzero = [index + 1 for index, number in enumerate(known) if number]
+    low, high = EVERY_VERSION
+    after = _floor(known) if found["pre"] else _past(known, places)
+    bounds = {
+        "^": (_floor(known), _past(known, nonzero[0] if nonzero else places)),
+        "~": (_floor(known), _past(known, min(places, 2))),
+        ">=": (_floor(known), high),
+        ">": (after, high),
+        "<": (low, _floor(known)),
+        "<=": (low, after),
+        "=": (_floor(known), after),
+    }
+    return bounds[op]
+
+
+def admits(npm_range: str, low: Triple, high: Triple) -> bool:
+    """Whether *npm_range* admits any version in ``[low, high)``."""
+    for alternative in npm_range.split("||"):
+        start, end = low, high
+        for comparator in alternative.split() or ["*"]:
+            floor, ceiling = interval(comparator)
+            start, end = max(start, floor), min(end, ceiling)
+        if start < end:
+            return True
+    return False
+
+
+@pytest.mark.parametrize(
+    ("comparator", "admitted"),
+    [
+        ("^1.2.3", ((1, 2, 3), (2, 0, 0))),
+        ("^0.2.3", ((0, 2, 3), (0, 3, 0))),
+        ("^0.0.3", ((0, 0, 3), (0, 0, 4))),
+        ("^0.0", ((0, 0, 0), (0, 1, 0))),
+        ("~1.2.3", ((1, 2, 3), (1, 3, 0))),
+        ("~1", ((1, 0, 0), (2, 0, 0))),
+        (">=4.8.4", ((4, 8, 4), EVERY_VERSION[1])),
+        (">1.2", ((1, 3, 0), EVERY_VERSION[1])),
+        ("<6.1.0", ((0, 0, 0), (6, 1, 0))),
+        ("<=1.2", ((0, 0, 0), (1, 3, 0))),
+        ("5.0.5", ((5, 0, 5), (5, 0, 6))),
+        ("8.x", ((8, 0, 0), (9, 0, 0))),
+        ("*", EVERY_VERSION),
+        ("^5.0.0-beta.5", ((5, 0, 0), (6, 0, 0))),
+        (">1.2.3-rc.1", ((1, 2, 3), EVERY_VERSION[1])),
+        ("<=1.2.3-rc.1", ((0, 0, 0), (1, 2, 3))),
+        ("1.2.3-rc.1", ((1, 2, 3), (1, 2, 3))),
+    ],
+)
+def test_interval_reads_a_comparator_as_npm_does(
+    comparator: str, admitted: tuple[Triple, Triple]
+) -> None:
+    assert interval(comparator) == admitted
+
+
+@pytest.mark.parametrize("comparator", ["1.0-rc.1", "-", "v1", "1.2.3.4", ">=*", "1.2.3+b1"])
+def test_interval_refuses_a_form_it_does_not_read(comparator: str) -> None:
+    with pytest.raises(AssertionError, match="cannot read"):
+        interval(comparator)
+
+
+@pytest.mark.parametrize(
+    ("npm_range", "line"),
+    [
+        (">=4.8.4 <6.1.0", ((6, 0, 0), (7, 0, 0))),
+        ("^8.57.0 || ^9.0.0 || ^10.0.0", ((10, 0, 0), (11, 0, 0))),
+    ],
+)
+def test_admits_a_line_a_range_reaches(npm_range: str, line: tuple[Triple, Triple]) -> None:
+    assert admits(npm_range, *line)
+
+
+@pytest.mark.parametrize(
+    ("npm_range", "line"),
+    [
+        (">=4.8.4 <6.1.0", ((7, 0, 0), (8, 0, 0))),
+        ("^8.57.0 || ^9.0.0 || ^10.0.0", ((11, 0, 0), (12, 0, 0))),
+        ("^0.27.0 || ^0.28.0", ((0, 29, 0), (0, 30, 0))),
+    ],
+)
+def test_refuses_a_line_a_range_does_not_reach(npm_range: str, line: tuple[Triple, Triple]) -> None:
+    assert not admits(npm_range, *line)
+
+
+def locked_packages() -> dict[str, dict[str, Any]]:
+    packages: dict[str, dict[str, Any]] = json.loads(NPM_LOCK.read_text(encoding="utf-8"))[
+        "packages"
+    ]
+    return packages
+
+
+def direct_versions() -> dict[str, str]:
+    """Each direct dependency of the extension workspace and the version the lock installs."""
+    names = {name for name, _ in exact_peers(NPM_LOCK)} | {
+        name
+        for path, entry in locked_packages().items()
+        if not path.startswith("node_modules/")
+        for field in ("dependencies", "devDependencies")
+        for name in entry.get(field, {})
+        if not name.startswith("@steadyhand/")
+    }
+    return {name: locked_packages()[f"node_modules/{name}"]["version"] for name in sorted(names)}
+
+
+def breaking_line(version: str) -> tuple[Triple, Triple]:
+    """The next release line npm's caret counts as breaking after *version*, as [low, high)."""
+    found = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
+    assert found is not None, f"cannot read an installed version from {version!r}"
+    major, minor = int(found[1]), int(found[2])
+    if major:
+        return (major + 1, 0, 0), (major + 2, 0, 0)
+    return (0, minor + 1, 0), (0, minor + 2, 0)
+
+
+def held_back(name: str, version: str) -> dict[str, Any]:
+    """The ignore entry that keeps Dependabot off *name*'s next breaking line. Dependabot reads
+    0.28 to 0.29 as a minor update, so a 0.x line is held back by version, not update type."""
+    low, _ = breaking_line(version)
+    if low[0]:
+        return {"dependency-name": name, "update-types": ["version-update:semver-major"]}
+    return {"dependency-name": name, "versions": [f">=0.{low[1]}.0"]}
+
+
+def ceilings(name: str) -> list[str]:
+    """Each locked package whose peer range refuses *name*'s next breaking line, so a pull request
+    moving to it cannot install (#350). A peer moving with *name* in one group that takes every
+    update type is left out, because Dependabot moves the two together (#349)."""
+    groups: dict[str, dict[str, Any]] = update_for("npm", "/extension")["groups"]
+    direct = direct_versions()
+    line = breaking_line(direct[name])
+    found: list[str] = []
+    for path, entry in locked_packages().items():
+        npm_range = entry.get("peerDependencies", {}).get(name)
+        if npm_range is None or admits(npm_range, *line):
+            continue
+        owner = path.rpartition("node_modules/")[2]
+        held = holders(name, groups)
+        together = owner in direct and len(held) == 1 and holders(owner, groups) == held
+        if together and "update-types" not in groups[held[0]]:
+            continue
+        found.append(f"{owner} ({npm_range})")
+    return found
+
+
+# Ignored for a reason of their own, not a peer's range: @types/node moves with CI's Node (#270).
+OWN_IGNORES = {"@types/node": [held_back("@types/node", "24.0.0")]}
+
+
+def test_the_peer_ceilings_are_the_ones_measured() -> None:
+    # Measured on 2026-10-20 (#350): none of the four next lines is released yet but TypeScript 7.
+    assert [name for name in direct_versions() if ceilings(name)] == [
+        "esbuild",
+        "eslint",
+        "typescript",
+        "vite",
+    ]
+
+
+@pytest.mark.parametrize("name", list(direct_versions()))
+def test_dependabot_holds_back_exactly_the_lines_a_peer_refuses(name: str) -> None:
+    ignored = update_for("npm", "/extension").get("ignore", [])
+    rules = [entry for entry in ignored if entry.get("dependency-name") == name]
+    blockers = ceilings(name)
+    expected = OWN_IGNORES.get(name) or (
+        [held_back(name, direct_versions()[name])] if blockers else []
+    )
+    # A peer that widens its range turns this red: the entry goes, and the update can land.
+    assert rules == expected, blockers
+
+
+def test_every_ignore_names_a_direct_dependency() -> None:
+    ignored = update_for("npm", "/extension").get("ignore", [])
+    stale = [
+        entry["dependency-name"]
+        for entry in ignored
+        if entry["dependency-name"] not in direct_versions()
+    ]
+    assert searched(stale, of=len(ignored), what="npm ignore entries") == []

@@ -41,6 +41,17 @@ updates:
     ignore:
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # Each next breaking line below is refused by a peer range in the lock, so a pull request
+      # moving to it cannot install (#350). The supply-chain guard turns red when the peer widens
+      # its range, and the entry goes. Dependabot reads 0.28 to 0.29 as minor, hence `versions`.
+      - dependency-name: "esbuild" # vite: ^0.27.0 || ^0.28.0
+        versions: [">=0.29.0"]
+      - dependency-name: "eslint" # typescript-eslint: ^8.57.0 || ^9.0.0 || ^10.0.0
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript" # typescript-eslint: >=4.8.4 <6.1.0
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vite" # vitest: ^6.0.0 || ^7.0.0 || ^8.0.0
+        update-types: ["version-update:semver-major"]
     groups:
       # vitest and @vitest/coverage-v8 each pin the other's exact version, so a PR moving one
       # alone cannot install. This group moves them together. Dependabot scores the groups that
