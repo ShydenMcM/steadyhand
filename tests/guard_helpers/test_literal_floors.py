@@ -175,6 +175,18 @@ def test_a_literal_written_in_the_bound_is_a_floor(source: str, found: list[str]
             "def at_least(n):\n    return n\n\nassert len(x) >= at_least(5)\n",
             ["line 4: floor len(x) >= at_least(5)"],
         ),
+        (
+            "c = 0\nfor _ in list():\n    c += 2\nassert len(x) >= c\n",
+            ["line 4: floor len(x) >= c"],
+        ),
+        ("n = sum(2 for _ in list())\nassert len(x) >= n\n", ["line 2: floor len(x) >= n"]),
+        ("n = sum(1 for _ in list()) + 5\nassert len(x) >= n\n", ["line 2: floor len(x) >= n"]),
+        ("n = sum(1 for _ in [5, 6])\nassert len(x) >= n\n", ["line 2: floor len(x) >= n"]),
+        (
+            "c = 5\nfor _ in list():\n    c += 1\nassert len(x) >= c\n",
+            ["line 4: floor len(x) >= c"],
+        ),
+        ("c = 0\nd = c + 1\nassert len(x) >= d\n", ["line 3: floor len(x) >= d"]),
     ],
     ids=[
         "module-constant",
@@ -194,6 +206,12 @@ def test_a_literal_written_in_the_bound_is_a_floor(source: str, found: list[str]
         "stored-lambda",
         "stored-function",
         "argument-through-a-parameter",
+        "counted-by-two",
+        "summed-twos",
+        "count-plus-a-literal",
+        "count-of-literals",
+        "count-from-a-literal",
+        "one-added-to-another-name",
     ],
 )
 def test_a_name_bound_to_a_literal_is_a_floor(source: str, found: list[str]) -> None:
@@ -372,6 +390,10 @@ def test_a_bound_the_reader_cannot_trace_is_refused(source: str, found: list[str
             "from datetime import datetime\n\nclass World:\n    now = datetime(2026, 1, 5)\n\n"
             "x = list()\nassert len(x) >= datetime.now()\n"
         ),
+        "x = list()\nn = sum(1 for _ in x)\nassert len(y) >= n\n",
+        "x = list()\nc = 0\nfor _ in x:\n    c += 1\nassert len(y) >= c\n",
+        "x = list()\nc = 0\nfor _ in x:\n    c = c + 1\nassert len(y) >= c\n",
+        "n = sum([1 for _ in list()])\nassert len(y) >= n\n",
     ],
     ids=[
         "non-empty",
@@ -406,6 +428,10 @@ def test_a_bound_the_reader_cannot_trace_is_refused(source: str, found: list[str
         "library-method-on-an-object",
         "stored-call-returning-a-computed-function",
         "library-method-sharing-a-name-with-our-attribute",
+        "counted-by-sum",
+        "counted-in-a-loop",
+        "counted-by-adding-one",
+        "counted-by-a-list",
     ],
 )
 def test_a_bound_with_no_typed_in_number_is_no_floor(source: str) -> None:

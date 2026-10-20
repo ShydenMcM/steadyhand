@@ -130,17 +130,55 @@ def _is_number(node: ast.AST) -> bool:
     return False
 
 
-def _value_nodes(expression: ast.AST) -> Iterator[ast.AST]:
+def _one(node: ast.AST) -> bool:
+    return isinstance(node, ast.Constant) and type(node.value) is int and node.value == 1
+
+
+def _counting_one(expression: ast.AST) -> ast.AST | None:
+    """The 1 that ``sum(1 for ...)`` adds for each item, if *expression* is that call: a count is
+    measured at run time, not typed in (Shyden, 2026-10-21, on #272: "A count is measured"). The
+    items it counts are still read."""
+    if (
+        isinstance(expression, ast.Call)
+        and isinstance(expression.func, ast.Name)
+        and expression.func.id == "sum"
+        and expression.args
+        and isinstance(expression.args[0], (ast.GeneratorExp, ast.ListComp))
+        and _one(expression.args[0].elt)
+    ):
+        return expression.args[0].elt
+    return None
+
+
+def _counts_by_one(target: ast.expr, value: ast.expr, op: ast.operator | None = None) -> bool:
+    """``c += 1`` (*op* given) or ``c = c + 1``: a count going up by one item, which binds no new
+    number; the count's other bindings, its start among them, are still read."""
+    if op is not None:
+        return isinstance(op, ast.Add) and _one(value)
+    return (
+        isinstance(target, ast.Name)
+        and isinstance(value, ast.BinOp)
+        and isinstance(value.op, ast.Add)
+        and any(
+            isinstance(side, ast.Name) and side.id == target.id and _one(other)
+            for side, other in ((value.left, value.right), (value.right, value.left))
+        )
+    )
+
+
+def _value_nodes(expression: ast.AST, counted: ast.AST | None = None) -> Iterator[ast.AST]:
     """Every node of *expression* that can give it its value: an index or slice picks a value out of
     a container but is not one, so it is left out (Shyden, 2026-10-20, on #272: ``parents[2]`` is
-    no floor). The container itself is still read, so ``LIMITS[2]`` reads ``LIMITS``."""
+    no floor). The container itself is still read, so ``LIMITS[2]`` reads ``LIMITS``. The 1 a
+    ``sum(1 for ...)`` counts by (*counted*, once found) is left out too."""
     yield expression
+    counted = _counting_one(expression) or counted
     for name, child in ast.iter_fields(expression):
         if isinstance(expression, ast.Subscript) and name == "slice":
             continue
         for one in child if isinstance(child, list) else [child]:
-            if isinstance(one, ast.AST):
-                yield from _value_nodes(one)
+            if isinstance(one, ast.AST) and one is not counted:
+                yield from _value_nodes(one, counted)
 
 
 def _names(target: ast.AST) -> Iterator[ast.Name]:
@@ -278,15 +316,8 @@ class _Module:
 
     def _collect(self, node: ast.AST) -> None:
         """The bindings *node* makes by giving a name a value: an assignment, a loop, a ``with``."""
-        if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
-            for target in node.targets if isinstance(node, ast.Assign) else [node.target]:
-                self._attribute(target, node.value)
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                self._assigned(target, node.value)
-        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
-            if node.value is not None:
-                self._assigned(node.target, node.value)
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            self._assignment(node)
         elif isinstance(node, ast.NamedExpr):
             scope = self._function_scope(node)
             binding = Binding(values=(node.value,))
@@ -299,6 +330,20 @@ class _Module:
                     self._assigned(item.optional_vars, item.context_expr)
         else:
             self._declared(node)
+
+    def _assignment(self, node: ast.Assign | ast.AnnAssign | ast.AugAssign) -> None:
+        """What an assignment binds: each name, and each attribute it sets. A count going up by one
+        binds nothing new."""
+        if isinstance(node, ast.AugAssign):
+            if not _counts_by_one(node.target, node.value, node.op):
+                self._assigned(node.target, node.value)
+            return
+        if node.value is None:
+            return
+        for target in node.targets if isinstance(node, ast.Assign) else [node.target]:
+            self._attribute(target, node.value)
+            if not _counts_by_one(target, node.value):
+                self._assigned(target, node.value)
 
     def _looped(self, target: ast.expr, over: ast.expr) -> None:
         """A loop over values written in the file binds its names to them; any other loop binds
