@@ -5,7 +5,6 @@ YAML is parsed, so a comment can never satisfy a rule. The one rule that is abou
 parsed values so that no ``uses`` can hide from it.
 """
 
-import fnmatch
 import json
 import re
 from collections.abc import Iterator
@@ -157,12 +156,67 @@ def exact_peers(lock: Path) -> list[tuple[str, str]]:
     )
 
 
-def group_of(name: str, groups: dict[str, dict[str, Any]]) -> str | None:
-    """The first group whose patterns match *name*, as Dependabot assigns it."""
+GROUP_KEYS = frozenset({"patterns", "exclude-patterns", "update-types"})
+
+
+def wildcard_match(pattern: str, name: str) -> bool:
+    """Dependabot's ``WildcardMatcher``: ``*`` is any run of characters, and case is ignored."""
+    regex = ".*".join(re.escape(part) for part in pattern.lower().split("*"))
+    return re.fullmatch(regex, name.lower()) is not None
+
+
+def holders(name: str, groups: dict[str, dict[str, Any]]) -> list[str]:
+    """Every group that can hold *name*, read as dependabot-core's ``DependencyGroup#contains?``.
+
+    A group with no patterns holds every name it does not exclude. When more than one group holds a
+    name, Dependabot scores them, and a group with no patterns outranks any wildcard pattern (#349),
+    so the order of the groups does not decide where a package goes.
+    """
+    found: list[str] = []
     for group, spec in groups.items():
-        if any(fnmatch.fnmatchcase(name, pattern) for pattern in spec.get("patterns", [])):
-            return group
-    return None
+        unmodelled = sorted(set(spec) - GROUP_KEYS)
+        assert not unmodelled, f"group {group} sets {unmodelled}, which holders() does not model"
+        if any(wildcard_match(pattern, name) for pattern in spec.get("exclude-patterns", [])):
+            continue
+        if "patterns" not in spec or any(wildcard_match(p, name) for p in spec["patterns"]):
+            found.append(group)
+    return found
+
+
+@pytest.mark.parametrize(
+    ("name", "groups", "held"),
+    [
+        (
+            "@vitest/x",
+            {"v": {"patterns": ["@vitest/*"]}, "all": {"update-types": ["patch"]}},
+            ["v", "all"],
+        ),
+        (
+            "@vitest/x",
+            {"v": {"patterns": ["@vitest/*"]}, "all": {"exclude-patterns": ["@vitest/*"]}},
+            ["v"],
+        ),
+        ("Vitest", {"v": {"patterns": ["vitest"]}}, ["v"]),
+        ("vitest-x", {"v": {"patterns": ["vitest"]}}, []),
+        ("axb", {"v": {"patterns": ["a.b"]}}, []),
+    ],
+    ids=[
+        "no-patterns-holds-all",
+        "exclusion-drops",
+        "case-ignored",
+        "exact-is-exact",
+        "dot-is-literal",
+    ],
+)
+def test_holders_reads_groups_as_dependabot_does(
+    name: str, groups: dict[str, dict[str, Any]], held: list[str]
+) -> None:
+    assert holders(name, groups) == held
+
+
+def test_holders_refuses_a_group_rule_it_does_not_model() -> None:
+    with pytest.raises(AssertionError, match=r"group dev sets \['dependency-type'\]"):
+        holders("vitest", {"dev": {"dependency-type": "development"}})
 
 
 NPM_LOCK = ROOT / "extension/package-lock.json"
@@ -179,12 +233,44 @@ def test_the_exact_peer_pairs_are_the_ones_measured() -> None:
 @pytest.mark.parametrize(("name", "peer"), exact_peers(NPM_LOCK))
 def test_packages_pinned_to_each_other_move_in_one_group(name: str, peer: str) -> None:
     groups: dict[str, dict[str, Any]] = update_for("npm", "/extension")["groups"]
-    group = group_of(name, groups)
-    assert group is not None, f"{name} is in no group, so it moves without {peer}"
-    assert group_of(peer, groups) == group
-    # The catch-all comes after: Dependabot puts an update in the first group that matches.
-    catch_all = next(found for found, spec in groups.items() if "update-types" in spec)
-    assert list(groups).index(group) < list(groups).index(catch_all)
+    # Held by one group alone, Dependabot's group scoring has nowhere else to put it (#349).
+    held = holders(name, groups)
+    assert len(held) == 1, f"{name} can go to {held}, so it can move without {peer}"
+    assert holders(peer, groups) == held
+
+
+def pattern_groups() -> list[tuple[str, str, str]]:
+    """``(ecosystem, directory, group)`` for every Dependabot group that names its packages."""
+    return [
+        (update["package-ecosystem"], update["directory"], name)
+        for update in dependabot()["updates"]
+        for name, spec in update.get("groups", {}).items()
+        if "patterns" in spec
+    ]
+
+
+def test_the_pattern_groups_are_the_ones_measured() -> None:
+    # Read from dependabot.yml on 2026-10-20 (#349).
+    assert pattern_groups() == [
+        ("github-actions", "/", "actions-cache"),
+        ("npm", "/extension", "vitest"),
+    ]
+
+
+@pytest.mark.parametrize(("ecosystem", "directory", "group"), pattern_groups())
+def test_no_group_without_patterns_can_take_a_pattern_groups_packages(
+    ecosystem: str, directory: str, group: str
+) -> None:
+    groups: dict[str, dict[str, Any]] = update_for(ecosystem, directory)["groups"]
+    patterns = set(groups[group]["patterns"])
+    # A group with no patterns outranks every wildcard in Dependabot's scoring (#349), so it
+    # excludes the pattern group's packages by the very same patterns.
+    takers = [
+        name
+        for name, spec in groups.items()
+        if "patterns" not in spec and not patterns <= set(spec.get("exclude-patterns", []))
+    ]
+    assert takers == []
 
 
 def test_every_dependabot_update_targets_develop_weekly() -> None:
@@ -210,7 +296,8 @@ def test_sub_path_actions_are_grouped_above_the_patch_group() -> None:
     patch = [name for name in names if "patch" in groups[name].get("update-types", [])]
     assert sub_path, "no group gathers the sub-paths of one action repo"
     assert patch, "no patch group"
-    # Dependabot puts an update in the first group that matches, so order matters.
+    # Above the patch group, as the global rule asks. The order alone does not keep the sub-paths
+    # out of the patch group; its exclusion does (#349).
     assert names.index(sub_path[0]) < names.index(patch[0])
 
 
