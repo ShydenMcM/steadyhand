@@ -1,0 +1,145 @@
+# #349 AC 2: the Dependabot groups proved on planted mutations, predicted before the first run.
+# D1 to D5 plant defects in dependabot.yml; D2 moves the vitest group below the catch-all, which
+# Dependabot's scoring ignores once the catch-all excludes it, so no test may see it. H1 to H4
+# plant defects in the guard's own model of Dependabot, which its stand-in cases must catch.
+
+[[mutation]]
+id = "D1"
+why = "The vitest group is removed, so vitest and @vitest/coverage-v8 have no group that holds them."
+path = ".github/dependabot.yml"
+old = '''
+      vitest:
+        patterns: ["vitest", "@vitest/*"]
+'''
+new = '''
+'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_the_pattern_groups_are_the_ones_measured",
+    "tests/guards/test_supply_chain.py::test_packages_pinned_to_each_other_move_in_one_group[@vitest/coverage-v8-vitest]",
+    "tests/guards/test_supply_chain.py::test_packages_pinned_to_each_other_move_in_one_group[vitest-@vitest/coverage-v8]",
+]
+
+[[mutation]]
+id = "D2"
+why = "The vitest group moves below the catch-all: the same groups, which Dependabot scores, not orders."
+path = ".github/dependabot.yml"
+old = '''
+      vitest:
+        patterns: ["vitest", "@vitest/*"]
+      npm-minor-and-patch:
+        update-types: ["minor", "patch"]
+        exclude-patterns: ["vitest", "@vitest/*"]
+'''
+new = '''
+      npm-minor-and-patch:
+        update-types: ["minor", "patch"]
+        exclude-patterns: ["vitest", "@vitest/*"]
+      vitest:
+        patterns: ["vitest", "@vitest/*"]
+'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "green"
+
+[[mutation]]
+id = "D3"
+why = "The vitest group drops its @vitest/* pattern, so @vitest/coverage-v8 is in no group."
+path = ".github/dependabot.yml"
+old = '''        patterns: ["vitest", "@vitest/*"]'''
+new = '''        patterns: ["vitest"]'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_packages_pinned_to_each_other_move_in_one_group[@vitest/coverage-v8-vitest]",
+    "tests/guards/test_supply_chain.py::test_packages_pinned_to_each_other_move_in_one_group[vitest-@vitest/coverage-v8]",
+]
+
+[[mutation]]
+id = "D4"
+why = "The catch-all stops excluding the vitest packages: the defect #349 found, put back."
+path = ".github/dependabot.yml"
+old = '''
+        exclude-patterns: ["vitest", "@vitest/*"]
+'''
+new = '''
+'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_packages_pinned_to_each_other_move_in_one_group[@vitest/coverage-v8-vitest]",
+    "tests/guards/test_supply_chain.py::test_packages_pinned_to_each_other_move_in_one_group[vitest-@vitest/coverage-v8]",
+    "tests/guards/test_supply_chain.py::test_no_group_without_patterns_can_take_a_pattern_groups_packages[npm-/extension-vitest]",
+]
+
+[[mutation]]
+id = "D5"
+why = "The actions patch group stops excluding actions/cache*, so it outranks the actions-cache group."
+path = ".github/dependabot.yml"
+old = '''
+        exclude-patterns: ["actions/cache*"]
+'''
+new = '''
+'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_no_group_without_patterns_can_take_a_pattern_groups_packages[github-actions-/-actions-cache]",
+]
+
+[[mutation]]
+id = "H1"
+why = "The guard's model ignores exclude-patterns, so it counts a group Dependabot never offers."
+path = "tests/guards/test_supply_chain.py"
+old = '''
+        if any(wildcard_match(pattern, name) for pattern in spec.get("exclude-patterns", [])):
+            continue
+'''
+new = '''
+'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_holders_reads_groups_as_dependabot_does[exclusion-drops]",
+    "tests/guards/test_supply_chain.py::test_packages_pinned_to_each_other_move_in_one_group[@vitest/coverage-v8-vitest]",
+    "tests/guards/test_supply_chain.py::test_packages_pinned_to_each_other_move_in_one_group[vitest-@vitest/coverage-v8]",
+]
+
+[[mutation]]
+id = "H2"
+why = "The guard's matcher minds case, which Dependabot's WildcardMatcher does not."
+path = "tests/guards/test_supply_chain.py"
+old = '''    return re.fullmatch(regex, name.lower()) is not None'''
+new = '''    return re.fullmatch(regex, name) is not None'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = ["tests/guards/test_supply_chain.py::test_holders_reads_groups_as_dependabot_does[case-ignored]"]
+
+[[mutation]]
+id = "H3"
+why = "The guard's matcher reads a pattern as a regular expression, so a dot matches any character."
+path = "tests/guards/test_supply_chain.py"
+old = '''    regex = ".*".join(re.escape(part) for part in pattern.lower().split("*"))'''
+new = '''    regex = ".*".join(part for part in pattern.lower().split("*"))'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = ["tests/guards/test_supply_chain.py::test_holders_reads_groups_as_dependabot_does[dot-is-literal]"]
+
+[[mutation]]
+id = "H4"
+why = "The guard's model accepts dependency-type, a group rule it does not read."
+path = "tests/guards/test_supply_chain.py"
+old = '''GROUP_KEYS = frozenset({"patterns", "exclude-patterns", "update-types"})'''
+new = '''GROUP_KEYS = frozenset({"patterns", "exclude-patterns", "update-types", "dependency-type"})'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = ["tests/guards/test_supply_chain.py::test_holders_refuses_a_group_rule_it_does_not_model"]

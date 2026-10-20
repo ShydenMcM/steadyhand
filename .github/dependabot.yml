@@ -20,12 +20,14 @@ updates:
       prefix: "chore(deps)"
     groups:
       # Dependabot treats actions/cache, actions/cache/restore and actions/cache/save as
-      # separate dependencies. This group moves every sub-path of one repo together. It must
-      # stay above the patch group, because the first matching group wins.
+      # separate dependencies. This group moves every sub-path of one repo together. Dependabot
+      # does not take the first group that matches: it scores them, and a group with no patterns
+      # outranks any wildcard, so the patch group excludes these by the same pattern (#349).
       actions-cache:
         patterns: ["actions/cache*"]
       actions-patch:
         update-types: ["patch"]
+        exclude-patterns: ["actions/cache*"]
 
   - package-ecosystem: "npm"
     directory: "/extension"
@@ -41,9 +43,11 @@ updates:
         update-types: ["version-update:semver-major"]
     groups:
       # vitest and @vitest/coverage-v8 each pin the other's exact version, so a PR moving one
-      # alone cannot install. This group moves them together; it stays above the catch-all,
-      # because the first matching group wins.
+      # alone cannot install. This group moves them together. Dependabot scores the groups that
+      # match rather than taking the first, and a group with no patterns outranks any wildcard,
+      # so the catch-all excludes them by the same patterns (#349).
       vitest:
         patterns: ["vitest", "@vitest/*"]
       npm-minor-and-patch:
         update-types: ["minor", "patch"]
+        exclude-patterns: ["vitest", "@vitest/*"]
