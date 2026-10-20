@@ -1,0 +1,188 @@
+# #287: the Node 26 guards proved on planted mutations, predicted before the first run. N1 and N2
+# plant a wrong .nvmrc; S1 to S3 plant a setup-node step that does not read it, S1 with the old
+# input left in a comment; P1 and P2 take a step away and add one; T1 moves the types back a major.
+# Z1 reorders a step's inputs, which no test may see. The unit tests' mutations (engines in the
+# manifest and the lock, the mutations workflow's step) run on the laptop and are in the PR.
+
+[[mutation]]
+id = "N1"
+why = ".nvmrc names Node 24, so the laptop and CI run the line the global rule retired."
+path = ".nvmrc"
+old = "26"
+new = "24"
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_nvmrc_names_node_26",
+    "tests/guards/test_supply_chain.py::test_types_node_follows_the_node_that_ci_runs",
+]
+
+[[mutation]]
+id = "N2"
+why = ".nvmrc names an alias, so the Node it runs moves with no change in the repository."
+path = ".nvmrc"
+old = "26"
+new = "lts/*"
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_nvmrc_names_node_26",
+    "tests/guards/test_supply_chain.py::test_types_node_follows_the_node_that_ci_runs",
+]
+
+[[mutation]]
+id = "S1"
+why = "deploy-dev names Node 24 itself; the old input is left in a comment, which YAML drops."
+path = ".github/workflows/ci.yml"
+old = '''
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+'''
+new = '''
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24" # node-version-file: .nvmrc
+'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_every_setup_node_step_reads_the_nvmrc",
+]
+
+[[mutation]]
+id = "S2"
+why = "The extension job names a version beside the file; setup-node takes node-version first."
+path = ".github/workflows/ci.yml"
+old = '''
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      # No install script runs: a dependency's postinstall is code nobody reviewed.
+'''
+new = '''
+          node-version-file: .nvmrc
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      # No install script runs: a dependency's postinstall is code nobody reviewed.
+'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py", "tests/guards/test_extension_ci.py"]
+expect = "red"
+red = [
+    "tests/guards/test_extension_ci.py::test_node_comes_from_setup_node_reading_the_nvmrc",
+    "tests/guards/test_supply_chain.py::test_every_setup_node_step_reads_the_nvmrc",
+]
+
+[[mutation]]
+id = "S3"
+why = "The extension job reads another file, so the laptop's .nvmrc no longer decides CI's Node."
+path = ".github/workflows/ci.yml"
+old = '''
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      # No install script runs: a dependency's postinstall is code nobody reviewed.
+'''
+new = '''
+          node-version-file: extension/package.json
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      # No install script runs: a dependency's postinstall is code nobody reviewed.
+'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py", "tests/guards/test_extension_ci.py"]
+expect = "red"
+red = [
+    "tests/guards/test_extension_ci.py::test_node_comes_from_setup_node_reading_the_nvmrc",
+    "tests/guards/test_supply_chain.py::test_every_setup_node_step_reads_the_nvmrc",
+]
+
+[[mutation]]
+id = "P1"
+why = "A setup-node step goes, so its job runs the runner's own Node, unseen by the per-step rule."
+path = ".github/workflows/record-floors.yml"
+old = '''
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+'''
+new = '''
+'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_every_setup_node_step_reads_the_nvmrc",
+]
+
+[[mutation]]
+id = "P2"
+why = "A setup-node step is added, so the measured count of six no longer describes the workflows."
+path = ".github/workflows/record-floors.yml"
+old = '''
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+'''
+new = '''
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_every_setup_node_step_reads_the_nvmrc",
+]
+
+[[mutation]]
+id = "T1"
+why = "@types/node goes back to the 24 line while Node 26 runs, so tsc misses the 26 APIs."
+path = "extension/package.json"
+old = '''"@types/node": "26.6.5"'''
+new = '''"@types/node": "24.19.2"'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_types_node_follows_the_node_that_ci_runs",
+]
+
+[[mutation]]
+id = "Z1"
+why = "Control: the deploy-dev step's inputs in another order, which changes nothing setup-node does."
+path = ".github/workflows/ci.yml"
+old = '''
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+'''
+new = '''
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          cache: npm
+          node-version-file: .nvmrc
+'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "green"
