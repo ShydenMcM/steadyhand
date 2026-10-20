@@ -10,17 +10,13 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from floors import floor_breach
 from population import searched, tracked
 from source_tree import UnreadableSourceError, parse
 
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE = ROOT / "packages/steadyhand/src/steadyhand"
 IDX = ROOT / "packages/steadyhand-idx/src/steadyhand_idx"
-
-# Measured on 2026-10-03 (#178): 36 engine modules and 21 IDX modules. Lower each only by a
-# deliberate edit when the packages shrink.
-ENGINE_FLOOR = 35
-IDX_FLOOR = 20
 
 
 def top_level_imports(source: str, name: str) -> set[str]:
@@ -85,7 +81,6 @@ def test_engine_imports_only_the_standard_library() -> None:
     files = sorted(ENGINE.rglob("*.py"))
     # Independent of the walk: the engine's modules as git lists them.
     assert files == tracked(ENGINE, ".py")
-    assert len(files) >= ENGINE_FLOOR, f"read {len(files)} engine modules"
     imported = {
         path: top_level_imports(path.read_text(encoding="utf-8"), path.relative_to(ROOT).as_posix())
         for path in files
@@ -98,6 +93,7 @@ def test_engine_imports_only_the_standard_library() -> None:
         if names - allowed
     }
     assert searched(foreign, of=len(files), what="engine modules") == {}
+    assert floor_breach("python.dependencies.engine-modules", len(files)) is None
 
 
 def test_private_import_detector() -> None:
@@ -119,7 +115,6 @@ def test_idx_uses_only_the_engine_public_api() -> None:
     files = sorted(IDX.rglob("*.py"))
     # Independent of the walk: the IDX package's modules as git lists them.
     assert files == tracked(IDX, ".py")
-    assert len(files) >= IDX_FLOOR, f"read {len(files)} IDX modules"
     found = {
         path.relative_to(IDX).as_posix(): hits
         for path in files
@@ -130,3 +125,4 @@ def test_idx_uses_only_the_engine_public_api() -> None:
         )
     }
     assert searched(found, of=len(files), what="IDX modules") == {}
+    assert floor_breach("python.dependencies.idx-modules", len(files)) is None

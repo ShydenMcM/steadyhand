@@ -13,6 +13,7 @@ import re
 from pathlib import Path
 
 import pytest
+from floors import floor_breach
 from population import tracked
 from source_tree import UnreadableSourceError, parse
 
@@ -21,10 +22,6 @@ PACKAGES = ROOT / "packages"
 LOOP = ast.For | ast.AsyncFor | ast.While
 RAW_FOR = re.compile(r"^[ \t]*(?:async[ \t]+)?for[ \t].*[ \t]in[ \t].*:[ \t]*(?:#.*)?$", re.M)
 RAW_WHILE = re.compile(r"^[ \t]*while[ \t(].*:[ \t]*(?:#.*)?$", re.M)
-
-# Measured on 2026-10-03 after #179: 180 loops read in 57 files. Lower it only by a deliberate
-# edit when the packages shrink.
-LOOPS_READ_FLOOR = 179
 
 
 def _stored(nodes: list[ast.stmt]) -> set[str]:
@@ -183,7 +180,7 @@ def test_every_loop_in_the_packages_is_read() -> None:
     # Independent of the walk: the packages' modules as git lists them (#178).
     assert names == {rel(path) for path in tracked(PACKAGES, ".py")}
     total = sum(sum(read(path.read_text(encoding="utf-8"), rel(path))[:2]) for path in FILES)
-    assert total >= LOOPS_READ_FLOOR, f"read {total} loops in {len(FILES)} files"
+    assert floor_breach("python.no-retry.loops", total) is None
 
 
 @pytest.mark.parametrize("path", FILES, ids=rel)

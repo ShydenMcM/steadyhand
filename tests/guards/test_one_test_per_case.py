@@ -11,6 +11,7 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
+from floors import floor_breach
 from looped_cases import ALLOW, LoopedCase, read_file, read_tests
 from population import searched, tracked
 from source_tree import UnreadableSourceError
@@ -18,10 +19,6 @@ from source_tree import UnreadableSourceError
 ROOT = Path(__file__).resolve().parents[2]
 TESTS = ROOT / "tests"
 RAW_TEST = re.compile(r"^[ \t]*(?:async[ \t]+)?def[ \t]+test", re.MULTILINE)
-
-# Measured on 2026-10-03 after #178: 1,123 tests read in 87 files. Lower it only by a deliberate
-# edit when the suite shrinks.
-TESTS_READ_FLOOR = 1_122
 
 PLANTED = {
     "for over a constant": (
@@ -172,7 +169,7 @@ def test_every_test_in_the_suite_is_read() -> None:
     # Independent of the walk: the test modules as git lists them (#178).
     assert names == {rel(path) for path in tracked(TESTS, ".py") if path.name.startswith("test_")}
     total = sum(len(read_file(path).tests) for path in FILES)
-    assert total >= TESTS_READ_FLOOR, f"read {total} tests in {len(FILES)} files"
+    assert floor_breach("python.one-test-per-case.tests", total) is None
 
 
 @pytest.mark.parametrize("path", FILES, ids=rel)

@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from floors import floor_breach
 from key_walk import ENGINE, IDX
 from lesson_rules import ADVICE_PHRASES, advice_findings, advice_phrases
 from population import searched, tracked
@@ -38,13 +39,6 @@ IDX_TRAINING_MAY_IMPORT = (
 )
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures/training"
 RAW_IMPORT = re.compile(r"^[ \t]*(?:import[ \t]+[\w.]+|from[ \t]+[\w.]+[ \t]+import\b)", re.M)
-
-# Measured on 2026-10-03 (#178): 57 modules in both packages, 489 import statements outside the
-# modules that may import training, and 21 inside the training packages. Lower each only by a
-# deliberate edit when the packages shrink.
-MODULES_FLOOR = 56
-IMPORTS_FLOOR = 488
-TRAINING_IMPORTS_FLOOR = 20
 
 type Statement = tuple[str, tuple[str, ...]]
 """One import statement: the module it names, and for ``from`` imports the names it takes."""
@@ -215,7 +209,6 @@ def test_only_training_and_the_output_layer_import_training() -> None:
     # Independent of the walk: both packages' modules as git lists them.
     listed = [*tracked(ENGINE, ".py"), *tracked(IDX, ".py")]
     assert sorted(name for name, _, _ in modules) == sorted(module_name(p) for p in listed)
-    assert len(modules) >= MODULES_FLOOR, f"read {len(modules)} modules"
     inside = [name for name, _, _ in modules if _within(name, MAY_IMPORT_TRAINING)]
     assert {"steadyhand.training", "steadyhand_idx.training", OUTPUT_LAYER} <= set(inside)
     judged = [
@@ -224,16 +217,18 @@ def test_only_training_and_the_output_layer_import_training() -> None:
         if not _within(name, MAY_IMPORT_TRAINING)
         for statement in statements(source, name, is_package=is_package)
     ]
-    assert len(judged) >= IMPORTS_FLOOR, f"judged {len(judged)} import statements"
     found = [f"{name}: {base}" for name, (base, names) in judged if imports_training((base, names))]
     assert searched(found, of=len(judged), what="import statements") == []
+    assert floor_breach("python.legal-line.modules", len(modules)) is None
+    assert floor_breach("python.legal-line.imports", len(judged)) is None
 
 
 @pytest.mark.parametrize("module", [name for name, _, _ in sources()])
 def test_the_module_is_read_as_every_import_its_text_holds(module: str) -> None:
-    # Independent of the AST reader: a raw count of the lines that open an import.
+    # Independent of the AST reader: a raw count of the lines that open an import, read exactly
+    # (measured 2026-10-20, #272: equal in 57 of 57 modules).
     ((is_package, source),) = [(p, text) for name, p, text in sources() if name == module]
-    assert len(statements(source, module, is_package=is_package)) >= len(RAW_IMPORT.findall(source))
+    assert len(statements(source, module, is_package=is_package)) == len(RAW_IMPORT.findall(source))
 
 
 def test_the_output_layer_is_the_exception_it_is_listed_as() -> None:
@@ -264,8 +259,8 @@ def test_training_imports_nothing_that_decides() -> None:
                 checked += 1
                 if not allowed(statement, allowlist, own):
                     found.append(f"{name}: {statement[0]}")
-    assert checked >= TRAINING_IMPORTS_FLOOR, f"read {checked} imports of the training modules"
     assert searched(found, of=checked, what="imports of the training modules") == []
+    assert floor_breach("python.legal-line.training-imports", checked) is None
 
 
 @pytest.mark.parametrize("phrase", ADVICE_PHRASES)

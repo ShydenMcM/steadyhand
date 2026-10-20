@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from floors import floor_breach
 from markdown_text import normalised
 from population import searched, tracked
 
@@ -11,11 +12,6 @@ ROOT = Path(__file__).resolve().parents[2]
 # Plans, specs and research notes are for the people building steadyhand, not its users.
 INTERNAL = frozenset({"superpowers", "research"})
 GUIDES = ROOT / "packages/steadyhand/src/steadyhand/strategies/guides"
-
-# Measured on 2026-10-03 (#178): 2 user-facing docs and 3 strategy guides. Lower each only by a
-# deliberate edit when the docs shrink.
-USER_DOCS_FLOOR = 1
-GUIDES_FLOOR = 2
 
 
 def user_docs(docs: Path) -> list[Path]:
@@ -57,10 +53,11 @@ def test_user_docs_skip_only_the_internal_folders(tmp_path: Path) -> None:
 
 
 def test_every_readme_carries_the_disclaimer() -> None:
-    assert len(DISCLAIMER.split()) >= 10  # an empty disclaimer is "in" every file
     readmes = [ROOT / "README.md", *sorted(ROOT.glob("packages/*/README.md"))]
     assert len(readmes) == 3
     assert missing_disclaimer(readmes) == []
+    # An empty disclaimer is "in" every file, so its words are a recorded floor.
+    assert floor_breach("python.disclaimer.words", len(DISCLAIMER.split())) is None
 
 
 def test_every_user_facing_doc_carries_the_disclaimer() -> None:
@@ -73,8 +70,8 @@ def test_every_user_facing_doc_carries_the_disclaimer() -> None:
         for p in tracked(ROOT / "docs", ".md")
         if p.relative_to(ROOT / "docs").parts[0] not in INTERNAL
     ]
-    assert len(docs) >= USER_DOCS_FLOOR
     assert searched(missing_disclaimer(docs), of=len(docs), what="user-facing docs") == []
+    assert floor_breach("python.disclaimer.user-docs", len(docs)) is None
 
 
 def test_every_strategy_guide_carries_the_disclaimer() -> None:
@@ -82,5 +79,5 @@ def test_every_strategy_guide_carries_the_disclaimer() -> None:
     assert "buy-and-hold.md" in [path.name for path in guides]
     # Independent of the walk: the guides as git lists them.
     assert guides == tracked(GUIDES, ".md")
-    assert len(guides) >= GUIDES_FLOOR
     assert searched(missing_disclaimer(guides), of=len(guides), what="strategy guides") == []
+    assert floor_breach("python.disclaimer.guides", len(guides)) is None

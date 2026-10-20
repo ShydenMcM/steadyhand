@@ -31,6 +31,7 @@ from typing import Any
 import pytest
 import yaml
 from config_strings import strings_in
+from floors import floor_breach
 from population import searched, tracked
 from source_tree import UnreadableSourceError, parse
 from suites import suite_of
@@ -41,13 +42,6 @@ WORKFLOWS = ROOT / ".github/workflows"
 LIMITS_HOME = TESTS / "plugins/unit_limits.py"
 CLOCKS = (TESTS / "plugins/load_clock.py", LIMITS_HOME)
 PERF = TESTS / "perf"
-
-# Measured on 2026-10-15 (#323). Lower one only by a deliberate edit when the tree shrinks.
-FILES_READ_FLOOR = 166
-LIMIT_FILES_READ_FLOOR = 165
-UNIT_FILES_READ_FLOOR = 93
-WORKFLOW_STRINGS_READ_FLOOR = 799
-PYPROJECT_STRINGS_READ_FLOOR = 157
 
 
 CLOCK_MODULES = frozenset({"time", "timeit", "resource"})
@@ -445,7 +439,7 @@ UNIT_FILES = [path for path in FILES if suite_of(path) == "unit"]
 def test_the_files_judged_are_the_ones_git_lists() -> None:
     assert [rel(path) for path in FILES] == [rel(path) for path in tracked(TESTS, ".py")]
     assert LIMITS_HOME in FILES
-    assert len(FILES) >= FILES_READ_FLOOR
+    assert floor_breach("python.no-raised-limit.files", len(FILES)) is None
 
 
 def test_no_test_or_helper_sets_a_limit_outside_the_one_place() -> None:
@@ -458,7 +452,7 @@ def test_no_test_or_helper_sets_a_limit_outside_the_one_place() -> None:
     assert searched(found, of=len(judged), what="test files") == [], (
         "a unit test's limit is set in tests/plugins/unit_limits.py alone, and never raised (#323)"
     )
-    assert len(judged) >= LIMIT_FILES_READ_FLOOR
+    assert floor_breach("python.no-raised-limit.limit-files", len(judged)) is None
 
 
 def test_no_unit_file_reads_a_clock_outside_the_clocks_and_perf() -> None:
@@ -471,7 +465,7 @@ def test_no_unit_file_reads_a_clock_outside_the_clocks_and_perf() -> None:
     assert searched(found, of=len(judged), what="unit files") == [], (
         "a unit test holds no time budget of its own: the limits are the runner's (#323)"
     )
-    assert len(judged) >= UNIT_FILES_READ_FLOOR
+    assert floor_breach("python.no-raised-limit.unit-files", len(judged)) is None
 
 
 def test_no_workflow_sets_a_limit() -> None:
@@ -479,7 +473,7 @@ def test_no_workflow_sets_a_limit() -> None:
     read = [text for path in every for text in strings_in(yaml.safe_load(path.read_text()))]
     found = [flag for text in read for flag in flags(text)]
     assert searched(found, of=len(read), what="workflow keys and values") == []
-    assert len(read) >= WORKFLOW_STRINGS_READ_FLOOR
+    assert floor_breach("python.no-raised-limit.workflow-strings", len(read)) is None
 
 
 def test_pyproject_sets_no_limit() -> None:
@@ -487,7 +481,7 @@ def test_pyproject_sets_no_limit() -> None:
     read = list(strings_in(pyproject))
     found = [flag for text in read for flag in flags(text)] + ini_limits(pyproject)
     assert searched(found, of=len(read), what="pyproject keys and values") == []
-    assert len(read) >= PYPROJECT_STRINGS_READ_FLOOR
+    assert floor_breach("python.no-raised-limit.pyproject-strings", len(read)) is None
 
 
 # Independent of the parse tree: the token stream counts what the readers judge, file by file.

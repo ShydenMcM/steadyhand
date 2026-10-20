@@ -8,14 +8,11 @@ the 100%, so this guard fails on it. It reads comments on purpose: the pragma is
 import tomllib
 from pathlib import Path
 
+from floors import floor_breach
 from population import tracked
 
 ROOT = Path(__file__).resolve().parents[2]
 PRAGMA = "pragma: no cover"
-
-# Measured on 2026-10-03 (#178): 57 Python files under packages/. Lower it only by a deliberate edit
-# when the packages shrink.
-FILES_FLOOR = 56
 
 
 def python_files(root: Path) -> list[Path]:
@@ -41,11 +38,11 @@ def test_only_the_yahoo_download_is_excluded() -> None:
     files = python_files(ROOT / "packages")
     # Independent of the walk: the packages' Python files as git lists them.
     assert files == tracked(ROOT / "packages", ".py")
-    assert len(files) >= FILES_FLOOR, f"read {len(files)} files"
     found = pragma_lines(ROOT / "packages")
     assert len(found) == 1, found
     assert found[0].startswith("steadyhand-idx/src/steadyhand_idx/yahoo.py:")
     assert "def download_history(" in found[0]
+    assert floor_breach("python.coverage-exclusions.files", len(files)) is None
 
 
 def test_the_only_other_exclusion_is_a_protocol_body() -> None:

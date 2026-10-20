@@ -10,15 +10,12 @@ import ast
 from pathlib import Path
 
 import pytest
+from floors import floor_breach
 from population import searched, tracked
 from source_tree import UnreadableSourceError, parse
 
 TESTS = Path(__file__).resolve().parents[1]
 PROFILE = TESTS / "properties" / "hypothesis_profile.py"
-
-# Measured on 2026-10-13 (#290): 147 Python files under tests/ besides the profile. Lower it only
-# by a deliberate edit when the suite shrinks.
-FILES_FLOOR = 147
 
 
 def deadline_keywords(source: str, name: str) -> list[int]:
@@ -56,7 +53,6 @@ def test_no_test_sets_its_own_deadline() -> None:
     files = [p for p in sorted(TESTS.rglob("*.py")) if p != PROFILE]
     # Independent of the walk: the test files as git lists them.
     assert files == [p for p in tracked(TESTS, ".py") if p != PROFILE]
-    assert len(files) >= FILES_FLOOR, f"read {len(files)} files under {TESTS}"
     offenders = {
         str(p.relative_to(TESTS)): lines
         for p in files
@@ -65,3 +61,4 @@ def test_no_test_sets_its_own_deadline() -> None:
     assert searched(offenders, of=len(files), what="test files") == {}, (
         f"set the deadline in the properties profile only: {offenders}"
     )
+    assert floor_breach("python.hypothesis-profiles.files", len(files)) is None

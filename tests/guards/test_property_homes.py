@@ -15,6 +15,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from floors import floor_breach
 from population import searched, tracked
 from source_tree import UnreadableSourceError, parse
 from suites import PROPERTIES, suite_of
@@ -23,11 +24,6 @@ ROOT = Path(__file__).resolve().parents[2]
 TESTS = ROOT / "tests"
 RAW_GIVEN = re.compile(r"^[ \t]*@(?:hypothesis\.)?given\b", re.MULTILINE)
 FUNCTION = ast.FunctionDef | ast.AsyncFunctionDef
-
-# Measured on 2026-10-13 (#290): 95 Python files in the unit suite's folders, and 30 properties
-# in tests/properties. Lower each only by a deliberate edit when the suite shrinks.
-UNIT_FILES_FLOOR = 95
-PROPERTIES_FLOOR = 30
 
 
 def _names(node: ast.expr) -> bool:
@@ -219,7 +215,6 @@ def test_no_unit_test_file_imports_hypothesis() -> None:
     walked = sorted(p for p in TESTS.rglob("*.py") if suite_of(p) == "unit")
     # Independent of the walk: the files as git lists them.
     assert walked == [p for p in tracked(TESTS, ".py") if suite_of(p) == "unit"]
-    assert len(walked) >= UNIT_FILES_FLOOR, f"read {len(walked)} unit files"
     offenders = {
         str(p.relative_to(TESTS)): lines
         for p in walked
@@ -228,6 +223,7 @@ def test_no_unit_test_file_imports_hypothesis() -> None:
     assert searched(offenders, of=len(walked), what="unit test files") == {}, (
         f"a property and its strategies belong in tests/properties (#290): {offenders}"
     )
+    assert floor_breach("python.property-homes.unit-files", len(walked)) is None
 
 
 def test_every_property_calls_a_unit_stand_in_of_its_name() -> None:
@@ -240,7 +236,6 @@ def test_every_property_calls_a_unit_stand_in_of_its_name() -> None:
     ]
     # Independent of the parse: the @given lines as the text holds them.
     assert len(found) == sum(len(RAW_GIVEN.findall(path.read_text())) for path in files)
-    assert len(found) >= PROPERTIES_FLOOR, f"found {len(found)} properties"
     missing = []
     for path, prop in found:  # runtime population: the properties found in tests/properties
         home = unit_home(path)
@@ -252,3 +247,4 @@ def test_every_property_calls_a_unit_stand_in_of_its_name() -> None:
         elif not calls_its_stand_in(prop):
             missing.append(f"{where}: never calls its stand-in")
     assert searched(missing, of=len(found), what="properties") == []
+    assert floor_breach("python.property-homes.properties", len(found)) is None

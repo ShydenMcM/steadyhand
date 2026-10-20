@@ -9,15 +9,12 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from floors import floor_breach
 from population import searched, tracked
 from source_tree import UnreadableSourceError, parse
 
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE = ROOT / "packages/steadyhand/src/steadyhand"
-
-# Measured on 2026-10-03 (#178): 36 engine modules. Lower it only by a deliberate edit when the
-# engine shrinks.
-MODULES_FLOOR = 35
 
 
 def guarded_files() -> list[Path]:
@@ -88,10 +85,10 @@ def test_guarded_engine_modules_contain_no_float() -> None:
     files = guarded_files()
     # Independent of the walk: the engine's modules as git lists them.
     assert files == tracked(ENGINE, ".py")
-    assert len(files) >= MODULES_FLOOR, f"read {len(files)} engine modules"
     findings = {
         path.relative_to(ENGINE).as_posix(): uses
         for path in files
         if (uses := float_uses(path.read_text(encoding="utf-8"), path.relative_to(ROOT).as_posix()))
     }
     assert searched(findings, of=len(files), what="engine modules") == {}
+    assert floor_breach("python.no-float.modules", len(files)) is None

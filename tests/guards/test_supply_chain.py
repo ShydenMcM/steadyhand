@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 import yaml
+from floors import floor_breach
 from population import searched, tracked
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -23,10 +24,6 @@ PINNED = re.compile(r"[\w.-]+/[\w.-]+(?:/[\w./-]+)?@[0-9a-f]{40}")
 USES_LINE = re.compile(r"^\s*(?:-\s+)?uses:\s*(?P<value>\S+)(?P<tail>.*)$")
 VERSION_COMMENT = re.compile(r"\s+# v\d+\.\d+\.\d+\s*")
 SUB_PATH_PATTERN = re.compile(r"[\w.-]+/[\w.-]+\*")
-
-# Measured on 2026-10-03 (#178): 13 `uses` in 2 workflow files. Lower it only by a deliberate edit
-# when the workflows shrink.
-USES_FLOOR = 12
 
 
 def workflow_files() -> list[Path]:
@@ -82,7 +79,7 @@ def test_the_workflows_read_are_the_ones_git_lists() -> None:
     # Independent of the walk: the workflow files as git lists them.
     listed = sorted([*tracked(WORKFLOWS, ".yml"), *tracked(WORKFLOWS, ".yaml")])
     assert workflow_files() == listed
-    assert len(listed) >= 1
+    assert floor_breach("python.supply-chain.workflows", len(listed)) is None
 
 
 def test_every_action_is_pinned_to_a_full_commit_sha() -> None:
@@ -91,9 +88,9 @@ def test_every_action_is_pinned_to_a_full_commit_sha() -> None:
         for path in workflow_files()
         for value in uses_values(yaml.safe_load(path.read_text(encoding="utf-8")))
     ]
-    assert len(values) >= USES_FLOOR, values
     unpinned = [v for v in values if not v.startswith("./") and PINNED.fullmatch(v) is None]
     assert searched(unpinned, of=len(values), what="uses") == []
+    assert floor_breach("python.supply-chain.uses", len(values)) is None
 
 
 def test_every_pin_carries_its_release_version_as_a_comment() -> None:
@@ -106,7 +103,6 @@ def test_every_pin_carries_its_release_version_as_a_comment() -> None:
             match = USES_LINE.match(line)
             if match is not None:
                 raw.append((match["value"], match["tail"]))
-    assert len(parsed) >= USES_FLOOR, parsed
     # Every parsed `uses` was seen on a line of its own, so none escapes the comment check.
     assert sorted(value for value, _ in raw) == sorted(parsed)
     missing = [
@@ -115,6 +111,7 @@ def test_every_pin_carries_its_release_version_as_a_comment() -> None:
         if not value.startswith("./") and VERSION_COMMENT.fullmatch(tail) is None
     ]
     assert searched(missing, of=len(raw), what="uses lines") == []
+    assert floor_breach("python.supply-chain.uses-lines", len(raw)) is None
 
 
 def test_dependabot_covers_every_ecosystem_in_the_repo() -> None:
@@ -275,13 +272,13 @@ def test_no_group_without_patterns_can_take_a_pattern_groups_packages(
 
 def test_every_dependabot_update_targets_develop_weekly() -> None:
     updates = dependabot()["updates"]
-    assert len(updates) >= 3
     wrong = [
         (u["package-ecosystem"], u.get("target-branch"), u.get("schedule", {}).get("interval"))
         for u in updates
         if u.get("target-branch") != "develop" or u.get("schedule", {}).get("interval") != "weekly"
     ]
     assert wrong == []
+    assert floor_breach("python.supply-chain.dependabot-updates", len(updates)) is None
 
 
 def test_sub_path_actions_are_grouped_above_the_patch_group() -> None:

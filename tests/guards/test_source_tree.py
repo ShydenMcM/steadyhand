@@ -10,6 +10,7 @@ import ast
 from pathlib import Path
 
 import pytest
+from floors import floor_breach
 from population import searched, tracked
 from source_tree import UnreadableSourceError, parse
 
@@ -17,9 +18,6 @@ TESTS = Path(__file__).resolve().parents[1]
 HOME = Path(__file__).with_name("source_tree.py")
 AST_MODULE = "ast"
 ONLY_AST = "PyCF_ONLY_AST"
-# Measured on 2026-10-04 (#190): 97 Python files under tests/. Lower it only by a deliberate edit
-# when the suite shrinks.
-FILES_FLOOR = 96
 DIRECT_FORMS = {
     "attribute": ("import ast\nast.parse(text)\n", "line 2: ast.parse"),
     "alias": ("import ast as syntax\nsyntax.parse(text)\n", "line 2: syntax.parse"),
@@ -117,7 +115,6 @@ def test_no_other_file_under_tests_parses_python_itself() -> None:
     files = sorted(TESTS.rglob("*.py"))
     # Independent of the walk: the Python files under tests/ as git lists them.
     assert files == tracked(TESTS, ".py")
-    assert len(files) >= FILES_FLOOR, f"read {len(files)} files under {TESTS}"
     offenders = {
         str(path.relative_to(TESTS)): found
         for path in files
@@ -126,3 +123,4 @@ def test_no_other_file_under_tests_parses_python_itself() -> None:
     assert searched(offenders, of=len(files), what="Python files under tests/") == {}, (
         f"parse through source_tree.parse, which names the file: {offenders}"
     )
+    assert floor_breach("python.source-tree.files", len(files)) is None
