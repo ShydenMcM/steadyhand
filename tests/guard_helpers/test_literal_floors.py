@@ -25,6 +25,7 @@ OURS = Project(
         ),
         "pkg": "",
         "pkg.consts": "N = 5\n",
+        "shapes": "class Limits:\n    LEAST = 5\n",
     }
 )
 
@@ -329,6 +330,14 @@ def test_a_bound_the_reader_cannot_trace_is_refused(source: str, found: list[str
             "def test_a():\n    source = list()\n    assert len(x) >= len(source)\n"
         ),
         "from pathlib import Path\nROOT = Path(__file__).parent\nassert len(x) >= len(ROOT.name)\n",
+        "x = list()\nassert len(x) in range(10)\n",
+        "x = list()\nassert len(x) not in range(5, 10)\n",
+        "x = list()\ny = list()\nassert max(x, y) == x\n",
+        (
+            "class Box:\n    def __init__(self, n):\n        self.least = n\n\n"
+            "box = Box(list())\nassert len(x) >= box.least\n"
+        ),
+        "y = list()\nobj = list()\nassert len(x) >= obj.count(y)\n",
     ],
     ids=[
         "non-empty",
@@ -357,6 +366,11 @@ def test_a_bound_the_reader_cannot_trace_is_refused(source: str, found: list[str
         "same-name-in-another-function",
         "parameter-name-in-another-function",
         "module-global",
+        "range-from-zero",
+        "not-in-a-range",
+        "max-of-computed-values",
+        "attribute-from-a-constructor-argument",
+        "library-method-on-an-object",
     ],
 )
 def test_a_bound_with_no_typed_in_number_is_no_floor(source: str) -> None:
@@ -389,6 +403,63 @@ def test_a_bound_with_no_typed_in_number_is_no_floor(source: str) -> None:
     ],
 )
 def test_a_check_written_outside_an_assert_is_read_too(source: str, found: list[str]) -> None:
+    assert findings(source) == found
+
+
+@pytest.mark.parametrize(
+    ("source", "found"),
+    [
+        ("assert x in range(5, 10)\n", ["line 1: floor x in range(5, 10)"]),
+        ("assert x in range(5, 10, 2)\n", ["line 1: floor x in range(5, 10, 2)"]),
+        ("assert max(x, 5) == x\n", ["line 1: floor max(x, 5) == x"]),
+        ("assert x == max(x, 5)\n", ["line 1: floor x == max(x, 5)"]),
+        ("assert min(x, 5) == 5\n", ["line 1: floor min(x, 5) == 5"]),
+        (
+            "class Limits:\n    LEAST = 5\n\nassert len(x) >= Limits.LEAST\n",
+            ["line 4: floor len(x) >= Limits.LEAST"],
+        ),
+        (
+            "from shapes import Limits\nassert len(x) >= Limits.LEAST\n",
+            ["line 2: floor len(x) >= Limits.LEAST"],
+        ),
+        (
+            "import shapes\nassert len(x) >= shapes.Limits.LEAST\n",
+            ["line 2: floor len(x) >= shapes.Limits.LEAST"],
+        ),
+        (
+            (
+                "class Box:\n    def __init__(self):\n        self.least = 5\n\n"
+                "box = Box()\nassert len(x) >= box.least\n"
+            ),
+            ["line 6: floor len(x) >= box.least"],
+        ),
+        (
+            (
+                "@dataclass\nclass Box:\n    least: int = 5\n\n"
+                "box = Box()\nassert len(x) >= box.least\n"
+            ),
+            ["line 6: floor len(x) >= box.least"],
+        ),
+        (
+            "def handlers():\n    return [lambda: 5]\n\nassert len(x) >= handlers()[0]()\n",
+            ["line 4: floor len(x) >= handlers()[0]()"],
+        ),
+    ],
+    ids=[
+        "range",
+        "range-with-a-step",
+        "max-equals",
+        "equals-max",
+        "min-equals",
+        "class-constant",
+        "imported-class-constant",
+        "module-class-constant",
+        "attribute-set-in-a-method",
+        "dataclass-default",
+        "call-of-an-item",
+    ],
+)
+def test_a_minimum_spelled_another_way_is_a_floor(source: str, found: list[str]) -> None:
     assert findings(source) == found
 
 

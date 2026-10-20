@@ -212,6 +212,7 @@ class _Module:
         self.bindings: dict[int, dict[str, list[Binding]]] = {}
         self.globals: dict[int, set[str]] = {}
         self.methods: dict[str, list[Function]] = {}
+        self.attributes: dict[str, list[ast.expr]] = {}
         self._place(tree, tree)
         for node in ast.walk(tree):
             self._collect(node)
@@ -262,8 +263,19 @@ class _Module:
         for name in _names(target):
             self.add(name, name.id, Binding(values=(value,)))
 
+    def _attribute(self, target: ast.expr, value: ast.expr) -> None:
+        """An attribute given a value, by its name: ``x.least = 5``, or ``least = 5`` (and a
+        dataclass's ``least: int = 5``) in a class body."""
+        if isinstance(target, ast.Attribute):
+            self.attributes.setdefault(target.attr, []).append(value)
+        elif isinstance(target, ast.Name) and isinstance(self.scope_of[id(target)], ast.ClassDef):
+            self.attributes.setdefault(target.id, []).append(value)
+
     def _collect(self, node: ast.AST) -> None:
         """The bindings *node* makes by giving a name a value: an assignment, a loop, a ``with``."""
+        if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
+            for target in node.targets if isinstance(node, ast.Assign) else [node.target]:
+                self._attribute(target, node.value)
         if isinstance(node, ast.Assign):
             for target in node.targets:
                 self._assigned(target, node.value)
@@ -384,6 +396,16 @@ class Project:
                 raise UnreadableSourceError(msg) from error
             self._modules[name] = _Module(name, tree)
         return self._modules[name]
+
+    def attributes(self, name: str) -> list[tuple[_Module, ast.expr]]:
+        """Every value our code gives an attribute named *name*: followed by its name, since the
+        reader cannot tell which object an attribute is read from."""
+        found = []
+        for module_name in self.sources:
+            module = self.module(module_name)
+            if module is not None:
+                found += [(module, value) for value in module.attributes.get(name, [])]
+        return found
 
     def methods(self, name: str) -> list[tuple[_Module, Function]]:
         """Every method named *name* in our code: a method is followed by its name, since the
@@ -520,19 +542,40 @@ class _Judge:
         head = remaining[0]
         if found.lookup(head, found.tree) is None:
             return Verdict(False, (head, f"not in our module {found.name}"))
-        return self.name(head, found.tree, _Context(found), seen)
+        named = self.name(head, found.tree, _Context(found), seen)
+        if len(remaining) == 1:
+            return named
+        return _merge(iter([named, self._attribute(remaining[-1], _Context(found), seen)]))
 
     def _chain(
         self, root: ast.Name, attributes: list[str], context: _Context, seen: frozenset[object]
     ) -> Verdict:
         """A name read through attributes (``consts.N``, ``fund.price``): through a module of ours
-        the attribute is followed; through anything else, the name itself is judged."""
+        the attribute is followed; through anything else, the name itself is judged, and the
+        attribute read is followed by its name."""
         found = self._bindings(root.id, root, context)
         if isinstance(found, _Found):
             imported = [b.imported for b in found.bindings if b.imported is not None]
             if imported:
                 return _merge(self._imported(*one, attributes, seen) for one in imported)
-        return self.name(root.id, root, context, seen)
+        named = self.name(root.id, root, context, seen)
+        if not attributes:  # a called chain: the call follows the method
+            return named
+        return _merge(iter([named, self._attribute(attributes[-1], context, seen)]))
+
+    def _attribute(self, name: str, context: _Context, seen: frozenset[object]) -> Verdict:
+        """Every value our code gives an attribute called *name*. Only a typed-in number counts:
+        a value that cannot be traced (``self.n = n`` in a constructor) is answered for by the
+        object it is read from, which is judged where it was made."""
+        key = ("attribute", name)
+        if key in seen:
+            return COMPUTED
+        values = [(context.module, value) for value in context.module.attributes.get(name, [])]
+        values += [one for one in self.project.attributes(name) if one[0] is not context.module]
+        found = _merge(
+            self.verdict(value, _Context(module), seen | {key}) for module, value in values
+        )
+        return found if found.typed_in else COMPUTED
 
     def _called(self, call: ast.Call, context: _Context, seen: frozenset[object]) -> Verdict:
         """A call: into our code it is followed to what it returns; an outside library's result
@@ -679,13 +722,29 @@ def _chains(expression: ast.AST) -> dict[int, list[str]]:
     return found
 
 
+def _calls(node: ast.expr, name: str) -> bool:
+    return isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == name
+
+
 def _compare_bounds(node: ast.Compare, *, negated: bool) -> Iterator[tuple[ast.AST, ast.expr]]:
+    """Each side of *node* that bounds another from below: ``a >= b`` and ``b <= a`` bound ``a`` by
+    ``b``; ``x in range(5, 10)`` bounds ``x`` by 5; ``max(x, 5) == x`` bounds ``x`` by every
+    argument of ``max``; ``min(x, 5) == 5`` bounds ``x`` by the other side."""
     left = node.left
     for operator, right in zip(node.ops, node.comparators, strict=True):
         if isinstance(operator, LOWER):
             yield node, left if negated else right
         elif isinstance(operator, UPPER):
             yield node, right if negated else left
+        elif isinstance(operator, (ast.In, ast.NotIn)) and isinstance(operator, ast.In) != negated:
+            if isinstance(right, ast.Call) and _calls(right, "range") and len(right.args) > 1:
+                yield node, right.args[0]
+        elif isinstance(operator, (ast.Eq, ast.NotEq)) and isinstance(operator, ast.Eq) != negated:
+            for side, other in ((left, right), (right, left)):
+                if isinstance(side, ast.Call) and _calls(side, "max"):
+                    yield from ((node, argument) for argument in side.args)
+                elif _calls(side, "min"):
+                    yield node, other
         left = right
 
 
