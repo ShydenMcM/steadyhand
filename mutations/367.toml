@@ -1,0 +1,157 @@
+# #367 AC 4: the scratch-ref recorder proved on planted mutations, predicted before the first run.
+# W1 puts back the pull request label trigger; W2 and W3 plant a write permission at the workflow
+# and the job; W4 interpolates the input into the shell; W5 widens the refusal to any ref; W6 and
+# W8 change what the checkout fetches or keeps; W7 drops the commit lines from the artifact. The
+# unit tests' mutations (the commit lines in tests/lib/floors.ts) run on the laptop and are in the PR.
+
+[[mutation]]
+id = "W1"
+why = "The recorder runs on a pull request label again, so its branch is pushed before its figures exist."
+path = ".github/workflows/record-floors.yml"
+old = '''
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "The scratch ref to measure: refs/floors/<branch>"
+        required: true
+        type: string
+'''
+new = '''
+on:
+  pull_request:
+    types: [labeled]
+'''
+suite = "guards"
+tests = ["tests/guards/test_extension_ci.py"]
+expect = "red"
+red = [
+    "tests/guards/test_extension_ci.py::test_the_recorder_is_dispatched_with_a_scratch_ref_as_its_only_input",
+]
+
+[[mutation]]
+id = "W2"
+why = "The workflow's token may write contents, so the recorder could push to a branch."
+path = ".github/workflows/record-floors.yml"
+old = '''
+permissions:
+  contents: read
+'''
+new = '''
+permissions:
+  contents: write
+'''
+suite = "guards"
+tests = ["tests/guards/test_extension_ci.py"]
+expect = "red"
+red = [
+    "tests/guards/test_extension_ci.py::test_the_recorder_holds_no_key_that_could_push",
+]
+
+[[mutation]]
+id = "W3"
+why = "The record job raises its own token to write contents, under a read-only workflow."
+path = ".github/workflows/record-floors.yml"
+old = '''
+    runs-on: ubuntu-24.04
+'''
+new = '''
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+'''
+suite = "guards"
+tests = ["tests/guards/test_extension_ci.py"]
+expect = "red"
+red = [
+    "tests/guards/test_extension_ci.py::test_the_recorder_holds_no_key_that_could_push",
+]
+
+[[mutation]]
+id = "W4"
+why = "The dispatch input is interpolated into the shell, so a crafted ref runs as a command."
+path = ".github/workflows/record-floors.yml"
+old = '''
+          case "$REF" in
+'''
+new = '''
+          case "${{ inputs.ref }}" in
+'''
+suite = "guards"
+tests = ["tests/guards/test_extension_ci.py"]
+expect = "red"
+red = [
+    "tests/guards/test_extension_ci.py::test_the_recorder_refuses_a_ref_outside_the_scratch_namespace_before_checking_out",
+    "tests/guards/test_extension_ci.py::test_the_recorder_records_then_uploads_the_floors_and_commit_lines_for_the_laptop",
+]
+
+[[mutation]]
+id = "W5"
+why = "The refusal lets any ref through, so the recorder measures a branch or a tag."
+path = ".github/workflows/record-floors.yml"
+old = '''
+            refs/floors/?*) ;;
+'''
+new = '''
+            refs/*) ;;
+'''
+suite = "guards"
+tests = ["tests/guards/test_extension_ci.py"]
+expect = "red"
+red = [
+    "tests/guards/test_extension_ci.py::test_the_recorder_refuses_a_ref_outside_the_scratch_namespace_before_checking_out",
+    "tests/guards/test_extension_ci.py::test_the_recorder_records_then_uploads_the_floors_and_commit_lines_for_the_laptop",
+]
+
+[[mutation]]
+id = "W6"
+why = "The checkout loses its ref, so the recorder measures develop instead of the scratch ref."
+path = ".github/workflows/record-floors.yml"
+old = '''
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+'''
+new = '''
+          persist-credentials: false
+'''
+suite = "guards"
+tests = ["tests/guards/test_extension_ci.py"]
+expect = "red"
+red = [
+    "tests/guards/test_extension_ci.py::test_the_recorder_holds_no_key_that_could_push",
+]
+
+[[mutation]]
+id = "W7"
+why = "The commit lines leave the artifact, so the laptop folds floors with no record of what moved."
+path = ".github/workflows/record-floors.yml"
+old = '''
+            extension/tests/floors.json
+            extension/tests/floors-commit-lines.txt
+'''
+new = '''
+            extension/tests/floors.json
+'''
+suite = "guards"
+tests = ["tests/guards/test_extension_ci.py"]
+expect = "red"
+red = [
+    "tests/guards/test_extension_ci.py::test_the_recorder_records_then_uploads_the_floors_and_commit_lines_for_the_laptop",
+]
+
+[[mutation]]
+id = "W8"
+why = "The checkout keeps its token in the git config, where a recorded step could push with it."
+path = ".github/workflows/record-floors.yml"
+old = '''
+          persist-credentials: false
+'''
+new = '''
+          persist-credentials: true
+'''
+suite = "guards"
+tests = ["tests/guards/test_extension_ci.py"]
+expect = "red"
+red = [
+    "tests/guards/test_extension_ci.py::test_the_recorder_holds_no_key_that_could_push",
+]

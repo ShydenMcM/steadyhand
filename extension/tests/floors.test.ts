@@ -1,8 +1,9 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 import {
+  commitLinesPath,
   FLOORS_PATH,
   floorBreach,
   type Measurement,
@@ -70,7 +71,8 @@ test("a measurement equal to its record breaks nothing", () => {
 test("growth breaks the floor until it is recorded, naming the delta", () => {
   expect(floorBreach("a.files", 4, {}, floorsFile({ "a.files": 3 }))).toBe(
     "floor a.files: measured 4, recorded 3 (+1); read the growth against the diff, then " +
-      "label the pull request record-floors, then npm run floors:fetch <run id>",
+      "push the unpushed commit to refs/floors/<branch>, run gh workflow run record-floors.yml " +
+      "--ref develop -f ref=refs/floors/<branch>, then npm run floors:fetch <run id>",
   );
 });
 
@@ -83,7 +85,9 @@ test("a loss breaks the floor and says a reader may have gone blind", () => {
 
 test("an id with no record breaks the floor, naming the recorder", () => {
   expect(floorBreach("a.files", 3, {}, floorsFile({}))).toBe(
-    "floor a.files: none recorded, measured 3; label the pull request record-floors, then npm run floors:fetch <run id>",
+    "floor a.files: none recorded, measured 3; push the unpushed commit to refs/floors/<branch>, " +
+      "run gh workflow run record-floors.yml --ref develop -f ref=refs/floors/<branch>, then " +
+      "npm run floors:fetch <run id>",
   );
 });
 
@@ -225,6 +229,12 @@ test("a recording writes the raised floors and prints each one that moved", () =
   expect(recordFloors(path, fakeSuite([at("t1", "a.files", 4)]), (l) => lines.push(l))).toBe(0);
   expect(readFileSync(path, "utf8")).toBe('{\n  "a.files": 4\n}\n');
   expect(lines).toEqual(["a.files: 3 → 4 (+1)"]);
+  expect(readFileSync(commitLinesPath(path), "utf8")).toBe("a.files: 3 → 4 (+1)\n");
+});
+
+test("the commit lines sit beside the floors file they describe", () => {
+  expect(commitLinesPath(join("x", "floors.json"))).toBe(join("x", "floors-commit-lines.txt"));
+  expect(commitLinesPath(FLOORS_PATH)).toBe(join(dirname(FLOORS_PATH), "floors-commit-lines.txt"));
 });
 
 test("a recording where nothing moved says so", () => {
@@ -232,6 +242,7 @@ test("a recording where nothing moved says so", () => {
   const lines: string[] = [];
   expect(recordFloors(path, fakeSuite([at("t1", "a.files", 3)]), (l) => lines.push(l))).toBe(0);
   expect(lines).toEqual(["no floor moved"]);
+  expect(readFileSync(commitLinesPath(path), "utf8")).toBe("no floor moved\n");
 });
 
 test("a recording whose suite failed writes nothing", () => {
@@ -240,6 +251,7 @@ test("a recording whose suite failed writes nothing", () => {
   expect(recordFloors(path, fakeSuite([at("t1", "a.files", 9)], 1), (l) => lines.push(l))).toBe(1);
   expect(readFloors(path)).toEqual({ "a.files": 3 });
   expect(lines).toEqual(["the suite exited 1: nothing recorded"]);
+  expect(existsSync(commitLinesPath(path))).toBe(false);
 });
 
 test("a recording with a refusal prints it and writes nothing", () => {
@@ -252,4 +264,5 @@ test("a recording with a refusal prints it and writes nothing", () => {
       "Lower it by a deliberate edit if the population really shrank",
     "nothing recorded",
   ]);
+  expect(existsSync(commitLinesPath(path))).toBe(false);
 });
