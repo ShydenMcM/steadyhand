@@ -15,7 +15,10 @@ WORKFLOWS = ROOT / ".github/workflows"
 # PyYAML reads the bare key `on` as the boolean True, so a key may be a bool.
 CI = ci()
 JOBS: dict[str, dict[str, Any]] = CI["jobs"]
-GATED = sorted(name for name, job in JOBS.items() if "environment" not in job)
+# The coverage job reads every other job, the deploy too, so the deploy does not wait for it.
+GATED = sorted(
+    name for name, job in JOBS.items() if "environment" not in job and name != "coverage"
+)
 
 
 def deploy() -> dict[str, Any]:
@@ -31,8 +34,12 @@ def step(name: str) -> dict[str, Any]:
     return found[0]
 
 
-def test_the_deploy_runs_on_a_push_to_develop_after_every_gated_job() -> None:
-    assert deploy()["if"] == "github.event_name == 'push' && github.ref == 'refs/heads/develop'"
+def test_the_deploy_runs_on_a_push_to_develop_and_rehearses_on_every_pull_request() -> None:
+    """#384, Shyden 2026-10-22: "Run them on the PR commit", so every line of it is measured."""
+    assert deploy()["if"] == (
+        "github.event_name == 'pull_request'"
+        " || (github.event_name == 'push' && github.ref == 'refs/heads/develop')"
+    )
     assert sorted(deploy()["needs"]) == GATED
     assert "extension" in GATED
 
@@ -53,7 +60,9 @@ def test_the_deploy_builds_the_zip_from_a_clean_install() -> None:
     assert 'zip -X -r -q "${ZIP}" .' in zipped["run"]
 
 
-def test_the_zip_is_attested_then_verified_as_this_workflow_on_develop() -> None:
+def test_the_zip_is_attested_then_verified_as_this_workflow_on_the_runs_own_ref() -> None:
+    """On develop that is refs/heads/develop; a rehearsal's is its pull request's own ref, so no
+    rehearsal's attestation can pass for a develop build (#384, "Attest PR builds too")."""
     names = [s.get("name") for s in deploy()["steps"]]
     attest = step("Attest the zip's build provenance")
     assert attest["uses"].startswith("actions/attest@")
@@ -71,7 +80,7 @@ def test_the_zip_is_attested_then_verified_as_this_workflow_on_develop() -> None
         "--signer-workflow",
         "${GITHUB_REPOSITORY}/.github/workflows/ci.yml",
         "--source-ref",
-        "refs/heads/develop",
+        "${GITHUB_REF}",
         "--format",
         "json",
         ">",

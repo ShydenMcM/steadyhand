@@ -29,6 +29,11 @@ LOCK = {
 # later steps number 53, the lock included. Lower each only by a deliberate edit when the
 # workflow shrinks.
 GATED_FLOOR = 10
+# Every job ends by keeping its steps' traces, docs-only or not (#384): the step reads only the
+# runner's temp folder, never a fast-path file, and it is pinned in test_workflow_trace_ci.py.
+TRACE_UPLOAD = "Keep the workflow trace"
+# The one job-level condition allowed: it never skips the job, so its check always reports.
+NEVER_SKIPPED = "${{ !cancelled() }}"
 SKIPPED_STEPS_FLOOR = 53
 
 # PyYAML reads the bare key `on` as the boolean True, so a key may be a bool.
@@ -144,8 +149,10 @@ def test_a_gated_job_runs_no_container_as_root(name: str) -> None:
 @pytest.mark.parametrize("name", GATED)
 def test_a_gated_job_reports_and_skips_every_later_step(name: str) -> None:
     job = JOBS[name]
-    assert "if" not in job, "a job-level condition would leave its required check skipped"
-    later = job["steps"][2:]
+    assert job.get("if", NEVER_SKIPPED) == NEVER_SKIPPED, (
+        "a job-level condition would leave its required check skipped"
+    )
+    later = later_steps(name)
     unguarded = [
         step.get("name", step.get("run", step.get("uses")))
         for step in later
@@ -154,8 +161,18 @@ def test_a_gated_job_reports_and_skips_every_later_step(name: str) -> None:
     assert searched(unguarded, of=len(later), what=f"later steps of {name}") == []
 
 
+def later_steps(name: str) -> list[dict[str, Any]]:
+    """The steps after the checkout and the scope step, the trace upload that ends every job but
+    the coverage job left out."""
+    steps: list[dict[str, Any]] = JOBS[name]["steps"]
+    if name == "coverage":
+        return steps[2:]
+    assert steps[-1].get("name") == TRACE_UPLOAD, name
+    return steps[2:-1]
+
+
 def test_the_skip_covers_every_later_step_of_every_gated_job() -> None:
-    later = [step for name in GATED for step in JOBS[name]["steps"][2:]]
+    later = [step for name in GATED for step in later_steps(name)]
     assert len(later) >= SKIPPED_STEPS_FLOOR
     assert sum(step.get("if") == SKIP for step in later) == len(later)
 

@@ -1,0 +1,73 @@
+# #384: the workflows' tracing shell proved by a real bash (tests/integration/scripts/
+# test_workflow_trace_bash.py) on planted mutations of TRACING_SHELL, predicted before the first
+# run. T1 makes the trap write more than a line number, so every trace is refused; T2 drops
+# pipefail, so a failing pipeline no longer fails its step; T3 writes `set -T` as its long form,
+# which nothing can see. G1 proves the record-floors guard this story moved to the step before
+# the trace upload still reads the floors upload.
+
+[[mutation]]
+id = "T1"
+why = "The DEBUG trap writes text after the line number, so no trace reads as line numbers."
+path = "scripts/workflow_coverage.py"
+old = '''then echo \\"$LINENO\\" >>'''
+new = '''then echo \\"$LINENO x\\" >>'''
+suite = "integration"
+tests = ["tests/integration/scripts/test_workflow_trace_bash.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[arithmetic]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[assignments]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[c-for]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[case]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[continued]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[double-bracket]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[export]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[for]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[function]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[heredoc]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[if]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[mapfile]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[pipeline]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[read-process]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[simple]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[subshell]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_every_command_of_a_script_that_runs_them_all_is_traced[while]",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_the_arm_not_taken_is_not_traced",
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_a_failing_command_still_fails_the_step_and_leaves_its_trace",
+]
+
+[[mutation]]
+id = "T2"
+why = "The shell drops pipefail, so a pipeline whose first command fails still passes."
+path = "scripts/workflow_coverage.py"
+old = '"bash --noprofile --norc -eo pipefail -c "'
+new = '"bash --noprofile --norc -e -c "'
+suite = "integration"
+tests = ["tests/integration/scripts/test_workflow_trace_bash.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_workflow_trace_bash.py::test_a_pipeline_failure_still_fails_the_step",
+]
+
+[[mutation]]
+id = "T3"
+why = "set -T written as set -o functrace: the same option, so nothing changes."
+path = "scripts/workflow_coverage.py"
+old = '"set -T; "'
+new = '"set -o functrace; "'
+suite = "integration"
+tests = ["tests/integration/scripts/test_workflow_trace_bash.py"]
+expect = "green"
+
+[[mutation]]
+id = "G1"
+why = "The recorder keeps its floors under another name, so floors:fetch finds nothing to fold in."
+path = ".github/workflows/record-floors.yml"
+old = "name: floors\n"
+new = "name: floor\n"
+suite = "guards"
+tests = ["tests/guards/test_extension_ci.py"]
+expect = "red"
+red = [
+    "tests/guards/test_extension_ci.py::test_the_recorder_records_then_uploads_the_floors_and_commit_lines_for_the_laptop",
+]
