@@ -6,7 +6,7 @@
 
 ## Branches and heads
 - `develop`: read with `git rev-parse origin/develop` (74656ec when written). Merge green PRs into `develop` without asking; never `main`.
-- **`272/python-floors`** (#272, In Progress, 13): worktree `../steadyhand-272`, head **2d97f12** (local, two commits past the pushed 1c9db9d: 596d098 and 2d97f12, both at a green local gate: 2,666 unit tests, both Pythons). Never push this branch again: the green chain goes to a NEW branch name with a normal push, and this one is listed for deletion (no force-push).
+- **`272/python-floors`** (#272, In Progress, 13): worktree `../steadyhand-272`, head **e6426b2** (local, three commits past the pushed 1c9db9d: 596d098, 2d97f12, e6426b2, each at a green local gate; 2,672 unit tests, both Pythons). Never push this branch again: the green chain goes to a NEW branch name with a normal push, and this one is listed for deletion (no force-push).
 - **Uncommitted there, on purpose:** `tests/guards/test_no_literal_floor.py` (lands last); copy in `.superpowers/sdd/272/test_no_literal_floor-20261020a.py`.
 - **To delete when Shyden agrees:** local and remote `367/scratch-ref-recorder` (#369), and `272/python-floors` once its new branch lands.
 - Kept by choice: `203/spec-amendment-wip`, `ext/s3b-guards` (#222 WIP).
@@ -30,6 +30,7 @@
 
 ## Waiting on Shyden
 - **#308's read-only key** (branch-protection read).
+- **To put to him (an older reader limit):** a `setattr` write from outside a class (`setattr(box, "least", 5)`) is never read; 3 calls use a non-constant name (`portfolio.py:166`, `:422`, `no_process.py:109`), so it needs his ruling.
 
 ## Next on the clean-up queue (all before #222)
 - **#365** (5, blocks #272), **#366** (2), **#374** (5), **#348** (5, P1, waits on repo-template#27), **#308** (2, waits on the key), **#315** (2, no Priority field; blocked by repo-template#6), **#317** (5), **#320** (2), **#337** (3), **#336** (5, before #245), **#341** (2), **#359** (3), **#362** (2).
@@ -37,8 +38,6 @@
 ## Lessons this session
 - A handover's prediction is not a measurement: "the 4 perf findings clear" held for 3; line 85 reached `SNAPSHOT_VERSION` (`snapprobe.py` measured it before building).
 - A more precise reader can expose a blind spot the coarse one hid (`test_income_projection.py:373` lost its floor until `append` was followed).
-- `progress.py` failed once with gh's error swallowed; the rerun worked, cause not found. If it recurs, print the call's stderr.
-
 ## Progress (2026-10-21, `uv run --locked python .superpowers/sdd/estimates/progress.py`; `post-launch` left out)
 - **Measured:** EXT first release 4 of 28 stories closed (21 of 184 points), none in the last 7 days. Board open: 39 tickets, 219 points across 38 scored (epic #214 unscored). Closed 2026-10-14 to 2026-10-21: 9 tickets, 38 points.
 - **By tickets: 14% complete (4 of 28 stories). ETA 2026-11-20, low confidence:** 38 open scored tickets at 1.3 a day is about 30 days.
