@@ -42,6 +42,7 @@ known-first-party = [
     "lock_fast_path",
     "workflow_coverage",
     "workflow_runs",
+    "coverage_gate",
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -89,6 +90,7 @@ source_pkgs = [
     "run_mutations",
     "workflow_coverage",
     "workflow_runs",
+    "coverage_gate",
 ]
 
 [tool.coverage.report]
