@@ -108,3 +108,19 @@ def test_a_symlink_loop_is_placed_by_its_spelling_on_every_python(root: Path) ->
     recorder = Recorder(root)
     recorder("open", (str(root / "a/x.md"), "r", 0))
     assert (recorder.opened, recorder.unread) == (frozenset({"a/x.md"}), ())
+
+
+def test_installing_twice_adds_one_audit_hook(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A second install adds no second hook (Python cannot take one away). The hook itself is
+    stood in: a real one would watch every later unit test's file reads."""
+    import sys  # noqa: PLC0415 - the module whose hook is stood in, named where it is
+
+    import file_reads  # noqa: PLC0415 - its shared recorder is stood in for this test
+
+    added: list[object] = []
+    monkeypatch.setattr(sys, "addaudithook", added.append)
+    fresh = Recorder(Path("/repo"))
+    monkeypatch.setattr(file_reads, "RECORDER", fresh)
+    assert file_reads.install() is fresh
+    assert file_reads.install() is fresh
+    assert added == [fresh]

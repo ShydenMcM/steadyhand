@@ -105,6 +105,20 @@ def calls_its_stand_in(function: ast.FunctionDef | ast.AsyncFunctionDef) -> bool
     )
 
 
+def home_problem(
+    path: Path, prop: ast.FunctionDef | ast.AsyncFunctionDef, home: Path, tests: Path
+) -> str | None:
+    """Why the property *prop* in *path* lacks its unit home *home*, or None when it has one."""
+    where = f"{path.relative_to(tests)}::{prop.name}"
+    if not home.is_file():
+        return f"{where}: no unit file {home.relative_to(tests)}"
+    if prop.name not in stand_ins(home.read_text(), str(home.relative_to(tests))):
+        return f"{where}: no stand-in of its name in {home.relative_to(tests)}"
+    if not calls_its_stand_in(prop):
+        return f"{where}: never calls its stand-in"
+    return None
+
+
 def unit_home(path: Path) -> Path:
     """The unit file a properties file's name points to: ``test_<folder>_<rest>.py`` in
     tests/properties holds the properties of ``tests/<folder>/test_<rest>.py``."""
@@ -241,14 +255,58 @@ def test_every_property_calls_a_unit_stand_in_of_its_name() -> None:
     # Independent of the parse: the @given lines as the text holds them.
     assert len(found) == sum(len(RAW_GIVEN.findall(path.read_text())) for path in files)
     assert len(found) >= PROPERTIES_FLOOR, f"found {len(found)} properties"
-    missing = []
-    for path, prop in found:  # runtime population: the properties found in tests/properties
-        home = unit_home(path)
-        where = f"{path.relative_to(TESTS)}::{prop.name}"
-        if not home.is_file():
-            missing.append(f"{where}: no unit file {home.relative_to(TESTS)}")
-        elif prop.name not in stand_ins(home.read_text(), str(home.relative_to(TESTS))):
-            missing.append(f"{where}: no stand-in of its name in {home.relative_to(TESTS)}")
-        elif not calls_its_stand_in(prop):
-            missing.append(f"{where}: never calls its stand-in")
+    problems = [home_problem(path, prop, unit_home(path), TESTS) for path, prop in found]
+    missing = [problem for problem in problems if problem is not None]
     assert searched(missing, of=len(found), what="properties") == []
+
+
+PLANTED_PROPERTY = """
+from hypothesis import given
+@given(st.integers())
+def test_adds(n):
+    unit.test_adds(n)
+"""
+
+
+def planted_property(tests: Path, body: str = PLANTED_PROPERTY) -> tuple[Path, ast.FunctionDef]:
+    path = tests / "properties" / "test_sums.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(body, encoding="utf-8")
+    found = properties(body, "test_sums.py")
+    assert len(found) == 1
+    prop = found[0]
+    assert isinstance(prop, ast.FunctionDef)
+    return path, prop
+
+
+@pytest.mark.parametrize(
+    ("home_text", "body", "problem"),
+    [
+        (
+            None,
+            PLANTED_PROPERTY,
+            "properties/test_sums.py::test_adds: no unit file engine/test_sums.py",
+        ),
+        (
+            "def test_other():\n    pass\n",
+            PLANTED_PROPERTY,
+            "properties/test_sums.py::test_adds: no stand-in of its name in engine/test_sums.py",
+        ),
+        (
+            "def test_adds():\n    pass\n",
+            PLANTED_PROPERTY.replace("unit.test_adds(n)", "assert n"),
+            "properties/test_sums.py::test_adds: never calls its stand-in",
+        ),
+        ("def test_adds():\n    pass\n", PLANTED_PROPERTY, None),
+    ],
+    ids=["no-home", "no-stand-in", "never-calls", "at-home"],
+)
+def test_each_problem_of_a_propertys_home_is_named(
+    tmp_path: Path, home_text: str | None, body: str, problem: str | None
+) -> None:
+    path, prop = planted_property(tmp_path, body)
+    home = tmp_path / "engine" / "test_sums.py"
+    if home_text is not None:
+        home.parent.mkdir(parents=True)
+        home.write_text(home_text, encoding="utf-8")
+    assert home_problem(path, prop, home, tmp_path) == problem

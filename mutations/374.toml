@@ -60,3 +60,40 @@ suite = "integration"
 tests = ["tests/integration/scripts/test_cli_seed_rebuilt.py"]
 expect = "red"
 red = ["tests/integration/scripts/test_cli_seed_rebuilt.py::test_the_recorder_rebuilds_the_committed_seed_byte_for_byte"]
+
+[[mutation]]
+id = "PH1"
+why = "A property with no unit home is reported under the wrong words, so the reader looks elsewhere."
+path = "tests/guards/test_property_homes.py"
+old = 'return f"{where}: no unit file {home.relative_to(tests)}"'
+new = 'return f"{where}: no home file {home.relative_to(tests)}"'
+suite = "guards"
+tests = ["tests/guards/test_property_homes.py"]
+expect = "red"
+red = ["tests/guards/test_property_homes.py::test_each_problem_of_a_propertys_home_is_named[no-home]"]
+
+[[mutation]]
+id = "SC1"
+why = "An unreadable setup-node version is refused in other words than the check promises."
+path = "tests/guards/test_supply_chain.py"
+old = 'msg = f"{where}: cannot read a major version from {version!r}"'
+new = 'msg = f"{where}: cannot parse a major version from {version!r}"'
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_an_unreadable_node_version_is_refused_by_name[lts]",
+    "tests/guards/test_supply_chain.py::test_an_unreadable_node_version_is_refused_by_name[range]",
+    "tests/guards/test_supply_chain.py::test_an_unreadable_node_version_is_refused_by_name[none]",
+]
+
+[[mutation]]
+id = "LL1"
+why = "A training module's forbidden import is reported without what it imports."
+path = "tests/guards/test_legal_line.py"
+old = '                    found.append(f"{name}: {statement[0]}")'
+new = '                    found.append(name)'
+suite = "guards"
+tests = ["tests/guards/test_legal_line.py"]
+expect = "red"
+red = ["tests/guards/test_legal_line.py::test_a_training_module_importing_what_decides_is_named"]
