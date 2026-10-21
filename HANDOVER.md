@@ -23,8 +23,8 @@
 
 ## #374 state (draft PR #389, stacked on #387; worktree `../steadyhand-374`, gate `.superpowers/sdd/374/gate.sh`, mutations `mutations/374.toml`)
 - Built: integration suite measured (child programs via the subprocess patch; the planted unit-limits child untraced), properties measured twice and joined once with each run (wobble = a verdict differing between joins; none seen), reports expected by name (`--reports`), Protocol `...` bodies are their docstrings (`exclude_also` gone), the Yahoo download tested with yfinance stood in (pragma gone), every stand-in's members and tripwires run, the recorders' entry points run and the CLI seed rebuilt byte for byte (integration).
-- CI green on 84175e8 (the last fold): 99.19% statements, 98.54% arms; record 26 files, 207 statements, 46 arms, 31 unmeasured TS/JS. Fold the record from the gate's print after each push that moves it (`.superpowers/sdd/374/gate-log*.txt` shows the extraction).
-- Left: TYPE_CHECKING blocks (question 2), perf (question 4), test_yahoo_live (runs only in yahoo-shape: same question as perf), TS test/setup/config files (question 3), the Python guards' failure branches (plant each, CI-only suite), plugins' untraced-only paths (unit_limits, load_clock: they run only without coverage, a measurement limit to put to Shyden), the shell (16 lines).
+- CI green on 2fb8220 (the last fold): 99.25% statements, 98.76% arms; record 19 files, 192 statements, 39 arms, 31 unmeasured TS/JS. Also run tonight: each guard's failing branch on a plant, the recorders' entry points, every stand-in's members.
+- Left: TYPE_CHECKING blocks (question 2), perf (question 4), test_yahoo_live (runs only in yahoo-shape: same question as perf), TS test/setup/config files (question 3), plugins' untraced-only paths (unit_limits, load_clock: they run only without coverage, a measurement limit to put to Shyden), the shell (16 lines).
 
 ## Waiting on Shyden (parked questions; ask with AskUserQuestion, recommendations first)
 1. **Where the record is measured** (#381): today CI prints its measured record on a difference and the laptop folds it (one extra PR run per count change, working on #387 and #389). His ruling named the record-floors scratch-ref run, which cannot measure ci.yml's own lines. Recommend: keep "CI prints, laptop folds".
@@ -34,10 +34,10 @@
 5. #272: confirm a constant-name `setattr` is read like `x.name = value`. #308's read-only key.
 
 ## Next on the clean-up queue (all before #222)
-#381 (13, draft PR #387), #374 (13), #382 (5), #365 (5, blocks #272), #366 (2), #377 (2), #378 (3), #348 (5, waits on repo-template#27), #308 (2, waits on the key), #315 (2), #317 (5), #320 (2), #337 (3), #336 (5), #341 (2), #359 (3), #362 (2).
+#381 (13, draft PR #387), #374 (13, draft PR #389), #391 (2, a unit test's CPU under load), #382 (5), #365 (5, blocks #272), #366 (2), #377 (2), #378 (3), #348 (5, waits on repo-template#27), #308 (2, waits on the key), #315 (2), #317 (5), #320 (2), #337 (3), #336 (5), #341 (2), #359 (3), #362 (2).
 
 ## Progress (2026-10-22, `uv run --locked python .superpowers/sdd/estimates/progress.py`; `post-launch` left out)
-- **Measured:** EXT first release 4 of 28 stories closed (21 of 184 points), none in 7 days. Board open: 43 tickets, 250 points across 42 scored (epic #214 unscored). Closed 2026-10-16 to 2026-10-22: 9 tickets, 38 points (#384 among them).
-- **By tickets: 14% complete (4 of 28 stories). ETA 2026-11-24, low confidence:** 42 open scored tickets at 1.29 a day is about 33 days.
-- **By effort: 250 points remaining across 42 scored open tickets. ETA 2026-12-07, low confidence:** 5.4 points a day is about 46 days.
-- **Assumed:** last week's pace holds through coverage work. **Outside waits:** a broker account (#242), Chrome Web Store review, repo-template#6 (#315), repo-template#27 (#348), Shyden's key (#308).
+- **Measured:** EXT first release 4 of 28 stories closed (21 of 184 points), none in 7 days. Board open: 44 tickets, 252 points across 43 scored (epic #214 unscored). Closed 2026-10-16 to 2026-10-22: 9 tickets, 38 points.
+- **By tickets: 14% complete (4 of 28 stories). ETA 2026-11-24, low confidence:** 43 open scored tickets at 1.29 a day is about 33 days.
+- **By effort: 252 points remaining across 43 scored open tickets. ETA 2026-12-08, low confidence:** 5.4 points a day is about 46 days.
+- **Assumed:** last week's pace holds. **Outside waits:** a broker account (#242), Chrome Web Store review, repo-template#6 (#315), Shyden's key (#308), his rulings on the parked questions.
