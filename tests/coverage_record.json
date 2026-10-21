@@ -8,40 +8,12 @@
    11,
    0
   ],
-  "packages/steadyhand-idx/src/steadyhand_idx/cache.py": [
-   5,
-   0
-  ],
   "packages/steadyhand-idx/src/steadyhand_idx/cli.py": [
    2,
    0
   ],
   "packages/steadyhand-idx/src/steadyhand_idx/yahoo.py": [
-   24,
-   0
-  ],
-  "packages/steadyhand/src/steadyhand/broker/protocol.py": [
-   4,
-   0
-  ],
-  "packages/steadyhand/src/steadyhand/data.py": [
-   6,
-   0
-  ],
-  "packages/steadyhand/src/steadyhand/market.py": [
-   27,
-   0
-  ],
-  "packages/steadyhand/src/steadyhand/sizing.py": [
-   3,
-   0
-  ],
-  "packages/steadyhand/src/steadyhand/strategies/protocol.py": [
-   4,
-   0
-  ],
-  "packages/steadyhand/src/steadyhand/universe.py": [
-   8,
+   2,
    0
   ],
   "scripts/record_cli_seed.py": [
@@ -163,10 +135,6 @@
   "tests/plugins/no_process.py": [
    1,
    1
-  ],
-  "tests/plugins/suites.py": [
-   8,
-   0
   ],
   "tests/plugins/test_no_process.py": [
    2,
