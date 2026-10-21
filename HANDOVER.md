@@ -4,10 +4,7 @@
 
 **Direction (#214):** steadyhand becomes a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. EXT stories #222-#245 follow the clean-up queue below.
 
-## Coverage rulings of 2026-10-22 (global; full text: last two paragraphs of `~/.claude/global-rules/reference/reference-engineering-standards.md`)
-- Code = every `.py`, `.ts`, `.js` (tests, configs) AND workflow files. Skipped lines (`pragma: no cover`, `exclude_also`) count as unrun.
-- Workflow lines are measured from a run on the same commit, shell traced; never-on-PR code runs on the PR's commit (deploy-dev rehearsal; hand-started workflows on a scratch branch `coverage/<branch>`).
-- The ratchet is per-file UNTESTED counts (statements, branch arms), record EQUAL to measured, recorded in the record-floors run.
+**Coverage rulings (2026-10-21/22, global):** last three paragraphs of `~/.claude/global-rules/reference/reference-engineering-standards.md` (code = .py/.ts/.js + workflows; skipped lines unrun; workflow lines traced; per-file untested counts EQUAL to measured).
 
 ## Branches and heads
 - `develop`: read with `git rev-parse origin/develop` (4e282cc when written). Merge green PRs into `develop` without asking; never `main`.
@@ -15,11 +12,8 @@
 - `272/python-floors` (#272, paused until #381 and #374): worktree `../steadyhand-272`, local head e6426b2; never push this branch again. Uncommitted on purpose there: `tests/guards/test_no_literal_floor.py` (copy `.superpowers/sdd/272/test_no_literal_floor-20261020a.py`).
 - To delete when Shyden agrees: `367/scratch-ref-recorder` (#369), `272/python-floors` once its new branch lands. Kept: `203/spec-amendment-wip`, `ext/s3b-guards`.
 
-## #381 state (design `.superpowers/sdd/381/design.md`; local gate `.superpowers/sdd/381/gate.sh`, mutations `mutate.py`)
-- Built: `scripts/coverage_gate.py` (joins Python unit + guards on both Pythons, extension unit + guards, workflow reports; record EQUAL to measured; PR record held to develop's: no rise, no newly unmeasured, renames kept; changed lines run; ignore hints refused; prints the measured record on a difference), `scripts/run_tool.py`, every tracked Python file measured, `fail_under` gone, reports kept by each job, the gate in the coverage job's last step (reader && gate on one line).
-- Record (`tests/coverage_record.json`) folded from CI's own print on c426800: 87 files, 1717 untested statements, 98 arms, 31 unmeasured TS/JS (#374). Whole project 92.86% statements, 96.87% arms.
-- Wobble: none in 3 local unit runs per Python, none in 3 extension unit runs; the fold's run is the first CI read.
-- Found on CI and fixed: vitest's implicit-else arm has empty start/end; TYPE_CHECKING imports and the Python guards suite unmeasured; a record re-made to match a worse measurement would have passed (now held to develop's).
+## #381 state (draft PR #387, green; design `.superpowers/sdd/381/design.md`)
+- `scripts/coverage_gate.py` in the coverage job's last step (reader && gate on one line): every suite's report joined, the record (`tests/coverage_record.json`) EQUAL to measured, a PR's record held to develop's, changed lines run, ignore hints refused; prints CI's measured record on a difference (folded by the laptop).
 
 ## Resume steps
 1. Run `ListAgents`; none were started.
@@ -27,11 +21,17 @@
 3. Ask Shyden (AskUserQuestion) the parked questions below; then finish #381 per his answer, mark the PR ready, merge when green, read the job back as required (`required_status_checks.contexts`, add `coverage`).
 4. Then **#374** (13), then #272 resumes. Global "No holes": `Gaps checked:` in every commit.
 
-## Waiting on Shyden (parked questions)
-- **Where the record is measured** (#381): today the gate prints CI's measured record on a difference and the laptop folds it (one extra PR run per count change); his ruling named "the same CI record run as the floors" (record-floors on a scratch ref), which cannot measure ci.yml's own lines. Options and costs in `.superpowers/sdd/381/design.md`.
-- **Skipped kinds he was not shown**: "Count them as unrun" also counts `if TYPE_CHECKING:` blocks (14 lines, 7 files) and one-line Protocol stubs and properties (13 lines), beside the 52 bare `...` lines and 24 pragma lines he was shown. Confirm, or rule otherwise.
-- #272: confirm my reading that a `setattr` with a constant name is read like `x.name = value`.
-- #308's read-only key.
+## #374 state (draft PR #389, stacked on #387; worktree `../steadyhand-374`, gate `.superpowers/sdd/374/gate.sh`, mutations `mutations/374.toml`)
+- Built: integration suite measured (child programs via the subprocess patch; the planted unit-limits child untraced), properties measured twice and joined once with each run (wobble = a verdict differing between joins; none seen), reports expected by name (`--reports`), Protocol `...` bodies are their docstrings (`exclude_also` gone), the Yahoo download tested with yfinance stood in (pragma gone), every stand-in's members and tripwires run, the recorders' entry points run and the CLI seed rebuilt byte for byte (integration).
+- CI green on 84175e8 (the last fold): 99.19% statements, 98.54% arms; record 26 files, 207 statements, 46 arms, 31 unmeasured TS/JS. Fold the record from the gate's print after each push that moves it (`.superpowers/sdd/374/gate-log*.txt` shows the extraction).
+- Left: TYPE_CHECKING blocks (question 2), perf (question 4), test_yahoo_live (runs only in yahoo-shape: same question as perf), TS test/setup/config files (question 3), the Python guards' failure branches (plant each, CI-only suite), plugins' untraced-only paths (unit_limits, load_clock: they run only without coverage, a measurement limit to put to Shyden), the shell (16 lines).
+
+## Waiting on Shyden (parked questions; ask with AskUserQuestion, recommendations first)
+1. **Where the record is measured** (#381): today CI prints its measured record on a difference and the laptop folds it (one extra PR run per count change, working on #387 and #389). His ruling named the record-floors scratch-ref run, which cannot measure ci.yml's own lines. Recommend: keep "CI prints, laptop folds".
+2. **Skipped kinds he was not shown**: "Count them as unrun" also counts `if TYPE_CHECKING:` imports (14 lines, 7 files: they never run, so they must become runtime imports). Recommend: count them, rewrite as runtime imports.
+3. **Vitest cannot measure test files, setup files or its own config** (hard-coded, "cannot be overridden"): 18 test files + 3 setup files + vitest.config.ts. Recommend: a new story measuring them with Node's raw V8 coverage (NODE_V8_COVERAGE) converted to istanbul (est. 5-8, unmeasured).
+4. **Perf suite under coverage**: its time checks would time the tracer. Recommend: a measured run that judges no time (the limited run judges it), as the unit job does.
+5. #272: confirm a constant-name `setattr` is read like `x.name = value`. #308's read-only key.
 
 ## Next on the clean-up queue (all before #222)
 #381 (13, draft PR #387), #374 (13), #382 (5), #365 (5, blocks #272), #366 (2), #377 (2), #378 (3), #348 (5, waits on repo-template#27), #308 (2, waits on the key), #315 (2), #317 (5), #320 (2), #337 (3), #336 (5), #341 (2), #359 (3), #362 (2).
