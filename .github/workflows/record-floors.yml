@@ -1,13 +1,25 @@
 name: record-floors
 
 # The floors recorder (#285). Shyden's rulings, every project: "A CI job records" (2026-10-09) and
-# "CI records, laptop commits" (2026-10-12). Labelling a pull request `record-floors` runs every
-# extension suite in record mode on it and uploads the raised `floors.json`; on the laptop,
-# `npm run floors:fetch <run id>` writes it for review and a commit. It is never one of the
-# checks the floors feed, and it holds no key that could push.
+# "CI records, laptop commits" (2026-10-12), and "a CI bot never pushes to a branch: it measures
+# a scratch ref and returns an artifact" (2026-10-21, #367). The flow:
+#   1. commit locally and do not push the branch;
+#   2. git push origin HEAD:refs/floors/<branch>   (a scratch ref: no PR, push or deploy run);
+#   3. gh workflow run record-floors.yml --ref develop -f ref=refs/floors/<branch>
+#      (GitHub starts no run on a push to that ref and its dispatch API refuses it, measured
+#      2026-10-21, so the ref is this workflow's input and the job checks it out);
+#   4. npm run floors:fetch <run id> writes the raised floors.json and prints the commit lines;
+#   5. fold them into the unpushed commit, push the branch once normally, then
+#      git push origin --delete refs/floors/<branch>.
+# It runs every extension suite in record mode. It is never one of the checks the floors feed, it
+# holds no key that could push, and it pushes nothing.
 on:
-  pull_request:
-    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "The scratch ref to measure: refs/floors/<branch>"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -15,12 +27,20 @@ permissions:
 jobs:
   record:
     name: record
-    if: github.event.label.name == 'record-floors'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
+      - name: Measure only a scratch ref
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          case "$REF" in
+            refs/floors/?*) ;;
+            *) echo "::error::record-floors measures only a scratch ref refs/floors/<branch>, not '$REF'"; exit 1 ;;
+          esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -35,5 +55,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: floors
-          path: extension/tests/floors.json
+          path: |
+            extension/tests/floors.json
+            extension/tests/floors-commit-lines.txt
           if-no-files-found: error

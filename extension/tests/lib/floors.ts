@@ -6,11 +6,12 @@
  * floor typed into a test drifts the day after it is measured, so every figure lives in
  * `tests/floors.json`, written only by `npm run floors:record`, which raises a figure and never
  * lowers one, and runs only in the `record-floors` workflow; `npm run floors:fetch` brings its
- * record to the laptop for a commit (#285).
+ * record to the laptop for a commit (#285). That workflow measures a scratch ref the session
+ * pushes, so the figures fold into a commit that is not yet pushed (#367).
  */
 import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { type RunnerTestCase, TestRunner } from "vitest";
 
 export const FLOORS_PATH = join(import.meta.dirname, "..", "floors.json");
@@ -64,9 +65,10 @@ const currentTest = (): string => {
  * `expect(floorBreach(id, population.length)).toBeUndefined()`, in the test whose search judged
  * that population.
  */
-/** How a floor gets recorded (#285: CI records, the laptop commits). */
+/** How a floor gets recorded (#285: CI records, the laptop commits; #367: on a scratch ref). */
 export const RECORD_ADVICE =
-  "label the pull request record-floors, then npm run floors:fetch <run id>";
+  "push the unpushed commit to refs/floors/<branch>, run gh workflow run record-floors.yml " +
+  "--ref develop -f ref=refs/floors/<branch>, then npm run floors:fetch <run id>";
 
 export const floorBreach = (
   id: string,
@@ -182,6 +184,10 @@ export const parseMeasurements = (text: string): Measurement[] =>
  * runs in CI, so its own test passes a run that writes measurements instead of the real suite.
  * Returns the recorder's exit status.
  */
+/** Where a recording writes the lines that moved, for the commit that folds its floors in (#367). */
+export const commitLinesPath = (floorsPath: string): string =>
+  join(dirname(floorsPath), "floors-commit-lines.txt");
+
 export const recordFloors = (
   floorsPath: string,
   run: (measurementsPath: string) => number,
@@ -208,7 +214,9 @@ export const recordFloors = (
       return 1;
     }
     writeFileSync(floorsPath, `${JSON.stringify(merged.floors, null, 2)}\n`);
-    (merged.moved.length > 0 ? merged.moved : ["no floor moved"]).forEach((line) => {
+    const moved = merged.moved.length > 0 ? merged.moved : ["no floor moved"];
+    writeFileSync(commitLinesPath(floorsPath), moved.map((line) => `${line}\n`).join(""));
+    moved.forEach((line) => {
       log(line);
     });
     return 0;

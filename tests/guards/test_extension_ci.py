@@ -131,11 +131,41 @@ def recorder_workflow() -> dict[str | bool, Any]:
     return found
 
 
-def test_the_recorder_runs_only_on_a_pull_request_labelled_record_floors() -> None:
+# The scratch ref the recorder measures (#367). GitHub starts no run on a push to it and its
+# dispatch API refuses it (measured 2026-10-21), so the recorder is dispatched from develop with the
+# ref as its input, refuses any other namespace, and checks the ref out. Every shell line is pinned
+# whole, so none can interpolate the input.
+SCRATCH_INPUT = "${{ inputs.ref }}"
+REFUSE_OTHER_REFS = (
+    'case "$REF" in\n'
+    "  refs/floors/?*) ;;\n"
+    '  *) echo "::error::record-floors measures only a scratch ref refs/floors/<branch>,'
+    " not '$REF'\"; exit 1 ;;\n"
+    "esac\n"
+)
+
+
+def test_the_recorder_is_dispatched_with_a_scratch_ref_as_its_only_input() -> None:
     workflow = recorder_workflow()
-    assert workflow[True] == {"pull_request": {"types": ["labeled"]}}
+    assert workflow[True] == {
+        "workflow_dispatch": {
+            "inputs": {
+                "ref": {
+                    "description": "The scratch ref to measure: refs/floors/<branch>",
+                    "required": True,
+                    "type": "string",
+                }
+            }
+        }
+    }
     assert list(workflow["jobs"]) == ["record"]
-    assert workflow["jobs"]["record"]["if"] == "github.event.label.name == 'record-floors'"
+    assert "if" not in workflow["jobs"]["record"]
+
+
+def test_the_recorder_refuses_a_ref_outside_the_scratch_namespace_before_checking_out() -> None:
+    refuse = recorder_workflow()["jobs"]["record"]["steps"][0]
+    assert refuse["env"] == {"REF": SCRATCH_INPUT}
+    assert refuse["run"] == REFUSE_OTHER_REFS
 
 
 def test_the_recorder_holds_no_key_that_could_push() -> None:
@@ -143,20 +173,20 @@ def test_the_recorder_holds_no_key_that_could_push() -> None:
     assert workflow["permissions"] == {"contents": "read"}
     assert "permissions" not in workflow["jobs"]["record"]
     assert "environment" not in workflow["jobs"]["record"]
-    checkout = workflow["jobs"]["record"]["steps"][0]
+    checkout = workflow["jobs"]["record"]["steps"][1]
     assert str(checkout["uses"]).startswith("actions/checkout@")
-    assert checkout["with"] == {"persist-credentials": False}
+    assert checkout["with"] == {"ref": SCRATCH_INPUT, "persist-credentials": False}
 
 
-def test_the_recorder_records_then_uploads_the_floors_file_for_the_laptop() -> None:
+def test_the_recorder_records_then_uploads_the_floors_and_commit_lines_for_the_laptop() -> None:
     steps = recorder_workflow()["jobs"]["record"]["steps"]
     runs = [step.get("run") for step in steps if "run" in step]
-    assert runs == ["npm ci --ignore-scripts", "npm run floors:record"]
+    assert runs == [REFUSE_OTHER_REFS, "npm ci --ignore-scripts", "npm run floors:record"]
     upload = steps[-1]
     assert str(upload["uses"]).startswith("actions/upload-artifact@")
     assert upload["with"] == {
         "name": "floors",
-        "path": "extension/tests/floors.json",
+        "path": "extension/tests/floors.json\nextension/tests/floors-commit-lines.txt\n",
         "if-no-files-found": "error",
     }
     assert manifest()["scripts"]["floors:fetch"] == "node tests/fetch-floors.ts"
