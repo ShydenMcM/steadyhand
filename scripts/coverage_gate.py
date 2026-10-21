@@ -26,10 +26,10 @@ IGNORE_HINT = re.compile(r"\b(?:v8|c8|istanbul)\s+ignore\b")
 RECORD = "tests/coverage_record.json"
 # Every suite that measures coverage, by the folder its CI job keeps (#381, #374): each must be
 # there, and no other, or the gate fails closed. coverage.py JSON, then istanbul (vitest). The
-# properties suite joins once its run-to-run wobble (fresh random cases) is measured on CI.
+# properties suite's report is its second of two measured runs that agreed (coverage_wobble.py).
 PYTHON_REPORTS = tuple(
     f"coverage-python-{suite}{python}"
-    for suite in ("", "guards-", "integration-")
+    for suite in ("", "guards-", "integration-", "properties-")
     for python in ("3.12", "3.13")
 )
 ISTANBUL_REPORTS = ("coverage-extension-unit", "coverage-extension-guards")
