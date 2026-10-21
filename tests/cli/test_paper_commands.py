@@ -26,7 +26,7 @@ from cli_world import (
     trading_days,
 )
 from record_golden import START
-from short_world import SHORT_CONFIG, library_run, short_cli
+from short_world import SHORT_CONFIG, cached, library_run, short_cli
 from short_world import START as SHORT_START
 from short_world import WEEK_END as SHORT_WEEK_END
 from short_world import trading_days as short_trading_days
@@ -53,6 +53,7 @@ from steadyhand import (
     RiskLimits,
     UnitValue,
 )
+from steadyhand_idx import CachedDataSource
 from steadyhand_idx.cli import World, main
 from steadyhand_idx.notes import PAPER_ORDER_SKIPPED, PAPER_RESUMED, PAPER_STRATEGY_SWITCHED
 from steadyhand_idx.paper import HaltCausePresentError, check_resume
@@ -757,3 +758,11 @@ def test_resume_is_refused_while_the_drawdown_is_still_past_its_limit(tmp_path: 
         assert account is not None
         assert account.state.halt is None
         assert store.audit()[-1].note.key == PAPER_RESUMED
+
+
+def test_the_short_worlds_cached_source_opens_its_cache_in_the_folder(tmp_path: Path) -> None:
+    """The made-up answers through the real cache, built (and its cache file made) without a
+    read: every member of the short world runs in some test (#374)."""
+    with cached(tmp_path) as source:
+        assert isinstance(source, CachedDataSource)
+    assert (tmp_path / "cache.sqlite").is_file()

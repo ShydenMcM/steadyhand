@@ -1326,3 +1326,9 @@ def test_the_look_back_is_a_whole_number_of_years() -> None:
         BacktestSettings(rp(1), lookback_years=-1)
     with pytest.raises(TypeError, match=r"^lookback_years must be an int, got bool$"):
         BacktestSettings(rp(1), lookback_years=True)
+
+
+def test_the_stand_in_universe_refuses_a_day_before_its_first_list() -> None:
+    """Its members start on its first listed date; before that it must fail, not answer (#374)."""
+    with pytest.raises(LookupError, match="no members on 2021-01-01"):
+        _Universe([(date(2021, 1, 4), frozenset())]).members_on(date(2021, 1, 1))
