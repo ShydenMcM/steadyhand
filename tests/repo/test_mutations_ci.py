@@ -60,13 +60,18 @@ def test_it_holds_no_key_that_could_push() -> None:
     assert job()["steps"][0]["with"]["persist-credentials"] is False
 
 
-def test_every_expression_it_reads_is_one_of_the_four_it_needs() -> None:
+def test_every_expression_it_reads_is_one_it_needs() -> None:
+    """Its own four, and the trace upload's four, which every job ends with (#384)."""
     found = re.findall(r"\$\{\{(.*?)\}\}", WORKFLOW.read_text(encoding="utf-8"))
     assert sorted({expression.strip() for expression in found}) == [
+        "!cancelled()",
         f"!cancelled() && {PLANNED}",
         "env.UV_VERSION",
         "github.event_name",
+        "github.job",
         "inputs.file",
+        "runner.temp",
+        "strategy.job-index",
     ]
 
 
@@ -81,7 +86,9 @@ def test_the_plan_runs_first_on_the_runner_s_own_python_with_the_input_in_the_en
 
 
 def test_every_step_after_the_plan_runs_only_when_it_planned_a_run() -> None:
-    later = job()["steps"][2:]
+    # The last step keeps the workflow trace whatever ran (#384, test_workflow_trace_ci.py).
+    assert job()["steps"][-1]["name"] == "Keep the workflow trace"
+    later = job()["steps"][2:-1]
     assert [found.get("if") for found in later[:-1]] == [PLANNED] * (len(later) - 1)
     assert later[-1]["if"] == f"${{{{ !cancelled() && {PLANNED} }}}}"
 
@@ -97,7 +104,7 @@ def test_the_runner_runs_the_planned_files_with_the_one_limit() -> None:
 
 
 def test_the_report_is_kept_even_when_a_mutation_is_not_as_predicted() -> None:
-    upload = job()["steps"][-1]
+    upload = job()["steps"][-2]
     assert upload["uses"].startswith("actions/upload-artifact@")
     assert upload["with"] == {
         "name": "mutations-report",
