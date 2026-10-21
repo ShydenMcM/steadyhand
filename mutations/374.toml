@@ -1,0 +1,17 @@
+# #374: the planted unit-limits run this story changed (it starts its child untraced, so the
+# suite's measured run still proves how a run without coverage is judged), proved on a planted
+# mutation predicted before the first run. U1 renames the plugin's CPU-limit report, which the
+# first planted test reads and the second asserts is absent.
+
+[[mutation]]
+id = "U1"
+why = "A test over its CPU limit is reported under another label, so nobody reading the run finds it."
+path = "tests/plugins/unit_limits.py"
+old = 'f"CPU LIMIT: {one.nodeid} took'
+new = 'f"CPU OVER: {one.nodeid} took'
+suite = "integration"
+tests = ["tests/integration/plugins/test_unit_limits_planted.py"]
+expect = "red"
+red = [
+    "tests/integration/plugins/test_unit_limits_planted.py::test_a_spinning_test_is_named_and_a_waiting_one_fails_on_the_wall",
+]

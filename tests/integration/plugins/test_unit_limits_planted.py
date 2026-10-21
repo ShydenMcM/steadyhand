@@ -32,7 +32,11 @@ markers =
 def run(folder: Path, *extra: str) -> subprocess.CompletedProcess[str]:
     (folder / "test_planted.py").write_text(PLANTED, encoding="utf-8")
     (folder / "pytest.ini").write_text(INI, encoding="utf-8")
-    env = {**os.environ, "PYTHONPATH": str(PLUGINS)}
+    # Started untraced even in the suite's measured run (#374): what this proves is how a run
+    # without coverage is judged, and coverage's subprocess patch, which reaches a child through
+    # COVERAGE_PROCESS_CONFIG, would make the plugin stand down as it must under a tracer.
+    env = {k: v for k, v in os.environ.items() if k != "COVERAGE_PROCESS_CONFIG"}
+    env["PYTHONPATH"] = str(PLUGINS)
     return subprocess.run(  # noqa: S603 - this interpreter, running pytest on the planted tests
         [
             sys.executable,
