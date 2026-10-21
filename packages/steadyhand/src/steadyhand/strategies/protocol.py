@@ -70,8 +70,6 @@ class Strategy(Protocol):
     @property
     def name(self) -> str:
         """The name the configuration and the guide use, such as ``buy-and-hold``."""
-        ...
 
     def decide(self, view: MarketView, portfolio: PortfolioView, memory: Memory) -> Decision:
         """Today's target weights, given the market up to today and yesterday's memory."""
-        ...

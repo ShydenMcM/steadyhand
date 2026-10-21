@@ -1,7 +1,8 @@
 # #374: the planted unit-limits run this story changed (it starts its child untraced, so the
 # suite's measured run still proves how a run without coverage is judged), proved on a planted
 # mutation predicted before the first run. U1 renames the plugin's CPU-limit report, which the
-# first planted test reads and the second asserts is absent.
+# first planted test reads and the second asserts is absent. X1 tells coverage to skip a kind of
+# line again, which the exclusions guard refuses.
 
 [[mutation]]
 id = "U1"
@@ -15,3 +16,14 @@ expect = "red"
 red = [
     "tests/integration/plugins/test_unit_limits_planted.py::test_a_spinning_test_is_named_and_a_waiting_one_fails_on_the_wall",
 ]
+
+[[mutation]]
+id = "X1"
+why = "Coverage is told to skip a kind of line again, hiding it from the record."
+path = "pyproject.toml"
+old = "[tool.coverage.report]\n"
+new = "[tool.coverage.report]\nexclude_also = ['^x$']\n"
+suite = "guards"
+tests = ["tests/guards/test_coverage_exclusions.py"]
+expect = "red"
+red = ["tests/guards/test_coverage_exclusions.py::test_the_configuration_excludes_nothing"]

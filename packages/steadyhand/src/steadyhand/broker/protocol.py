@@ -19,8 +19,6 @@ class Broker(Protocol):
 
     def submit(self, orders: Sequence[Order], on: date) -> Sequence[OrderAck]:
         """Queue *orders* placed on *on*. Returns one acknowledgement per order, in order."""
-        ...
 
     def fills(self, on: date) -> Sequence[Fill]:
         """Everything that filled on *on*."""
-        ...

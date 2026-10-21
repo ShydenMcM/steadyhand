@@ -142,7 +142,8 @@ class RestoringSource(DataSource, Protocol):
 
     def restorations(
         self, instrument: Instrument, start: date, end: date
-    ) -> Sequence[Restoration]: ...
+    ) -> Sequence[Restoration]:
+        """The runs of *instrument*'s history from *start* to *end* this source restored."""
 
 
 type _BarRow = tuple[int, int, int, int, int]

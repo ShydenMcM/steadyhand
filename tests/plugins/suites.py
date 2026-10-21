@@ -34,12 +34,14 @@ FOLDERS = {"guards": GUARDS, "integration": INTEGRATION, "properties": PROPERTIE
 
 class Located(Protocol):
     @property
-    def path(self) -> Path: ...
+    def path(self) -> Path:
+        """Where the item's file is."""
 
 
 class Collected(Protocol):
     @property
-    def nodeid(self) -> str: ...
+    def nodeid(self) -> str:
+        """The item's pytest node id."""
 
 
 def suite_of(path: Path) -> str:

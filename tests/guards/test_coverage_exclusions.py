@@ -48,8 +48,10 @@ def test_only_the_yahoo_download_is_excluded() -> None:
     assert "def download_history(" in found[0]
 
 
-def test_the_only_other_exclusion_is_a_protocol_body() -> None:
+def test_the_configuration_excludes_nothing() -> None:
+    """A Protocol method's body is its docstring, which coverage never counts, so no line is
+    excluded by configuration (#374; Shyden 2026-10-22, "Count them as unrun")."""
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     report = pyproject["tool"]["coverage"]["report"]
-    assert report["exclude_also"] == [r"^\s*\.\.\.$"]
+    assert "exclude_also" not in report
     assert "exclude_lines" not in report

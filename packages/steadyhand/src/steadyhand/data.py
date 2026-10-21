@@ -55,17 +55,14 @@ class DataSource(Protocol):
 
     def bars(self, instrument: Instrument, start: date, end: date) -> Sequence[Bar]:
         """Unadjusted OHLCV bars, one per trading day with data."""
-        ...
 
     def corporate_actions(
         self, instrument: Instrument, start: date, end: date
     ) -> Sequence[CorporateAction]:
         """Splits, cash dividends and other actions with an ex-date in the range."""
-        ...
 
     def data_notes(
         self, instruments: Sequence[Instrument], start: date, end: date
     ) -> Sequence[Note]:
         """Notes on the data supplied for *instruments* from *start* to *end*, for a backtest's
         warnings: a source that changed nothing it supplied returns none."""
-        ...

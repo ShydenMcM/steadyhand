@@ -97,9 +97,6 @@ patch = ["subprocess"]
 include_namespace_packages = true
 show_missing = true
 skip_covered = true
-# coverage.py's own report leaves out a bare `...` (a Protocol method body); the coverage job
-# counts it as an untested statement all the same (Shyden 2026-10-22, "Count them as unrun").
-exclude_also = ['^\s*\.\.\.$']
 
 [dependency-groups]
 dev = [
