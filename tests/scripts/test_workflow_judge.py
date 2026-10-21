@@ -290,3 +290,25 @@ def test_a_run_job_whose_name_fits_two_workflow_jobs_is_refused() -> None:
     job = JobResult(name="test (x)", status="completed", conclusion="success", steps=())
     with pytest.raises(RunError, match="matches 2 jobs"):
         judge(twins, [job], (), SHA)
+
+
+def queued_post_results() -> JobResult:
+    """The lint job as the API shows it while its last step runs but is still listed queued."""
+    job = lint_job()
+    steps = list(job.steps)
+    steps[5] = StepResult(name="Post results", status="queued", conclusion=None)
+    return JobResult(name=job.name, status="in_progress", conclusion=None, steps=tuple(steps))
+
+
+def test_the_reading_jobs_own_trace_proves_a_step_the_api_still_lists_queued() -> None:
+    verdict = judge(
+        flow(), [queued_post_results(), SKIPPED_DEPLOY], ALL_TRACES, SHA, reading_job="lint"
+    )
+    assert 17 in verdict.executed
+
+
+def test_another_jobs_trace_for_a_step_listed_queued_is_still_refused() -> None:
+    with pytest.raises(TraceError, match="did not start"):
+        judge(
+            flow(), [queued_post_results(), SKIPPED_DEPLOY], ALL_TRACES, SHA, reading_job="deploy"
+        )

@@ -96,7 +96,8 @@ def test_the_jobs_own_traces_are_read_from_runner_temp(tmp_path: Path) -> None:
     own = tmp_path / "temp/workflow-trace/a"
     own.mkdir(parents=True)
     (own / "__run").write_text(f"sha {SHA}\nlines 2\n2\n", encoding="utf-8")
-    assert main([*argv, "--own-traces"], {"RUNNER_TEMP": str(tmp_path / "temp")}) == 0
+    environ = {"RUNNER_TEMP": str(tmp_path / "temp"), "GITHUB_JOB": "a"}
+    assert main([*argv, "--own-traces"], environ) == 0
     report = json.loads((tmp_path / "out/report.json").read_text(encoding="utf-8"))
     assert report["files"][str(tmp_path / "w.yml")]["missing_lines"] == []
 
@@ -104,5 +105,13 @@ def test_the_jobs_own_traces_are_read_from_runner_temp(tmp_path: Path) -> None:
 def test_own_traces_without_runner_temp_are_refused(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert main([*inputs(tmp_path), "--own-traces"], {}) == 1
+    assert main([*inputs(tmp_path), "--own-traces"], {"GITHUB_JOB": "a"}) == 1
     assert "RUNNER_TEMP is not set" in capsys.readouterr().err
+
+
+def test_own_traces_without_github_job_are_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    environ = {"RUNNER_TEMP": str(tmp_path / "temp")}
+    assert main([*inputs(tmp_path), "--own-traces"], environ) == 1
+    assert "GITHUB_JOB is not set" in capsys.readouterr().err

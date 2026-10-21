@@ -542,8 +542,20 @@ def _traced(flow: Workflow, traces: Iterable[Trace], sha: str) -> dict[tuple[str
     return traced
 
 
-def judge(flow: Workflow, jobs: Sequence[JobResult], traces: Sequence[Trace], sha: str) -> Verdict:
-    """Which of *flow*'s code lines the run's *jobs* and *traces*, on commit *sha*, took."""
+def judge(
+    flow: Workflow,
+    jobs: Sequence[JobResult],
+    traces: Sequence[Trace],
+    sha: str,
+    *,
+    reading_job: str | None = None,
+) -> Verdict:
+    """Which of *flow*'s code lines the run's *jobs* and *traces*, on commit *sha*, took.
+
+    *reading_job* names the job doing this reading, still running: the API's view of its own
+    steps lags (PR #385's third run listed the reading step as not started while it ran), so in
+    that job a run step whose trace its tracing shell wrote has started. Every other job has
+    finished, and the API speaks for it."""
     results: dict[str, list[JobResult]] = {key: [] for key in flow.jobs}
     for result in jobs:
         results[_job_key(flow, result.name)].append(result)
@@ -560,15 +572,7 @@ def judge(flow: Workflow, jobs: Sequence[JobResult], traces: Sequence[Trace], sh
             for index, started in enumerate(_aligned(key, flow.jobs[key], result)):
                 step_started[key, index] = step_started.get((key, index), False) or started
     traced = _traced(flow, traces, sha)
-    for key, index in traced:
-        if not step_started[key, index]:
-            msg = f"job {key} has a trace for step {index + 1}, which the run did not start"
-            raise TraceError(msg)
-    for key, job in flow.jobs.items():
-        for index, step in enumerate(job.steps):
-            if step.run is not None and step_started[key, index] and (key, index) not in traced:
-                msg = f"job {key}, step {index + 1} ran, but no trace of it was kept"
-                raise TraceError(msg)
+    _check_traces(flow, step_started, traced, reading_job)
     took = _Took(job_ran=job_ran, step_started=step_started, traced=traced)
     executed: list[int] = []
     missing: list[int] = []
@@ -578,6 +582,27 @@ def judge(flow: Workflow, jobs: Sequence[JobResult], traces: Sequence[Trace], sh
             continue
         (executed if ran else missing).append(line)
     return Verdict(executed=executed, missing=missing)
+
+
+def _check_traces(
+    flow: Workflow,
+    step_started: dict[tuple[str, int], bool],
+    traced: dict[tuple[str, int], set[int]],
+    reading_job: str | None,
+) -> None:
+    """Every trace belongs to a step that started, and every run step that started left one. In
+    the reading job a trace is what shows its step started (see judge), so it marks it so."""
+    for key, index in traced:
+        if key == reading_job:
+            step_started[key, index] = True
+        if not step_started[key, index]:
+            msg = f"job {key} has a trace for step {index + 1}, which the run did not start"
+            raise TraceError(msg)
+    for key, job in flow.jobs.items():
+        for index, step in enumerate(job.steps):
+            if step.run is not None and step_started[key, index] and (key, index) not in traced:
+                msg = f"job {key}, step {index + 1} ran, but no trace of it was kept"
+                raise TraceError(msg)
 
 
 @dataclass(frozen=True)
@@ -643,6 +668,15 @@ def own_traces(environ: Mapping[str, str]) -> Path:
     return Path(temp) / "workflow-trace"
 
 
+def reading(environ: Mapping[str, str]) -> str:
+    """The job doing this reading: its own traces are the ones under RUNNER_TEMP."""
+    job = environ.get("GITHUB_JOB")
+    if not job:
+        msg = "GITHUB_JOB is not set, so the job reading its own traces is not known"
+        raise TraceError(msg)
+    return job
+
+
 def main(argv: Sequence[str], environ: Mapping[str, str]) -> int:
     parser = argparse.ArgumentParser(prog="workflow_coverage.py")
     parser.add_argument("--workflow", type=Path, required=True)
@@ -659,8 +693,9 @@ def main(argv: Sequence[str], environ: Mapping[str, str]) -> int:
         require_traced(text)
         flow = layout(text)
         jobs = results_from(json.loads(args.jobs.read_text(encoding="utf-8")))
+        reading_job = reading(environ) if args.own_traces else None
         roots = [*args.traces, *([own_traces(environ)] if args.own_traces else [])]
-        verdict = judge(flow, jobs, traces_in(roots), args.sha)
+        verdict = judge(flow, jobs, traces_in(roots), args.sha, reading_job=reading_job)
     except (WorkflowError, TraceError, RunError) as error:
         print(f"workflow coverage: {error}", file=sys.stderr)
         return 1
