@@ -9,15 +9,28 @@ and branch arms no test runs may never rise, and the record equals what is measu
 
 from __future__ import annotations
 
+import argparse
+import json
 import re
+import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from run_tool import ToolError, run_tool
+
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Mapping, Sequence
 
 HUNK = re.compile(r"@@ -[0-9]+(?:,[0-9]+)? \+([0-9]+)(?:,([0-9]+))? @@")
 IGNORE_HINT = re.compile(r"\b(?:v8|c8|istanbul)\s+ignore\b")
+# The committed record the measured counts must equal.
+RECORD = "tests/coverage_record.json"
+# Code: every Python, TypeScript and JavaScript file, and every workflow ("all. so 1 and 2").
+CODE_SUFFIXES = (".py", ".ts", ".js")
+WORKFLOWS = ".github/workflows/"
+# The workflow whose own run holds the gate; every other one is started by hand (#384).
+OWN_WORKFLOW = ".github/workflows/ci.yml"
 
 
 class GateError(Exception):
@@ -165,11 +178,11 @@ def counts(coverage: FileCoverage) -> Counts:
 def measured_record(
     measured: Mapping[str, FileCoverage],
     code_files: Iterable[str],
-    carried: Mapping[str, tuple[int, int]],
+    carried: Mapping[str, tuple[int, int] | None],
 ) -> Record:
     """The record as measured: each measured file's untested counts (zero left out), each
     *carried* file's recorded counts (a hand-started workflow not run on this commit), and every
-    code file no report holds."""
+    code file no report holds. A carried file recorded as unmeasured (None) stays so."""
     listed = set(code_files)
     gone = sorted(set(carried) - listed)
     if gone:
@@ -180,8 +193,11 @@ def measured_record(
         found = counts(coverage)
         if found.untested_statements or found.untested_arms:
             files[path] = (found.untested_statements, found.untested_arms)
-    files.update({path: entry for path, entry in carried.items() if any(entry)})
-    unmeasured = tuple(sorted(listed - set(measured) - set(carried)))
+    files.update(
+        {path: entry for path, entry in carried.items() if entry is not None and any(entry)}
+    )
+    still = {path for path, entry in carried.items() if entry is None}
+    unmeasured = tuple(sorted((listed - set(measured) - set(carried)) | still))
     return Record(files=dict(sorted(files.items())), unmeasured=unmeasured)
 
 
@@ -294,3 +310,172 @@ def ignore_hints(texts: Mapping[str, str]) -> list[str]:
         for number, line in enumerate(text.splitlines(), start=1)
         if IGNORE_HINT.search(line)
     ]
+
+
+def is_code(path: str) -> bool:
+    return path.endswith(CODE_SUFFIXES) or (
+        path.startswith(WORKFLOWS) and path.endswith((".yml", ".yaml"))
+    )
+
+
+def dump_record(record: Record) -> str:
+    """*record* as committed: paths sorted, one count pair per file."""
+    shaped = {
+        "files": {path: list(record.files[path]) for path in sorted(record.files)},
+        "unmeasured": sorted(record.unmeasured),
+    }
+    return json.dumps(shaped, indent=1) + "\n"
+
+
+def _count(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def load_record(text: str) -> Record:
+    """The committed record, refused unless it reads exactly as ``dump_record`` writes one."""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as error:
+        msg = f"the record is not JSON: {error}"
+        raise GateError(msg) from error
+    if not isinstance(data, dict) or set(data) != {"files", "unmeasured"}:
+        msg = "the record must hold exactly files and unmeasured"
+        raise GateError(msg)
+    files, unmeasured = data["files"], data["unmeasured"]
+    for path, entry in files.items():
+        if not (isinstance(entry, list) and len(entry) == 2 and all(_count(n) for n in entry)):  # noqa: PLR2004 - (statements, branch arms)
+            msg = f"the record's entry for {path} is not two counts"
+            raise GateError(msg)
+        if not any(entry):
+            msg = f"the record names {path} at zero: a file at zero is left out"
+            raise GateError(msg)
+    if not all(isinstance(path, str) for path in unmeasured) or unmeasured != sorted(
+        set(unmeasured)
+    ):
+        msg = "the record's unmeasured files must be paths, sorted, each once"
+        raise GateError(msg)
+    return Record(
+        files={path: (entry[0], entry[1]) for path, entry in files.items()},
+        unmeasured=tuple(unmeasured),
+    )
+
+
+def _read_json(path: Path) -> Any:  # noqa: ANN401 - a report's JSON is untyped
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        msg = f"cannot read {path}: {error}"
+        raise GateError(msg) from error
+
+
+def _same_commit(name: object, sha: object, allowed: set[str]) -> None:
+    if sha not in allowed:
+        msg = f"the report {name} is from commit {sha}, not {' or '.join(sorted(allowed))}"
+        raise GateError(msg)
+
+
+def _from_folder(folder: Path, report: str, sha: str) -> Any:  # noqa: ANN401 - untyped JSON
+    try:
+        written = (folder / "sha.txt").read_text(encoding="utf-8").strip()
+    except OSError as error:
+        msg = f"the report in {folder} names no commit: {error}"
+        raise GateError(msg) from error
+    _same_commit(folder / report, written, {sha})
+    return _read_json(folder / report)
+
+
+def _measure(args: argparse.Namespace, root: Path) -> dict[str, FileCoverage]:
+    parts: list[Mapping[str, FileCoverage]] = []
+    parts += [from_python(_from_folder(f, "coverage.json", args.sha)) for f in args.python]
+    parts += [
+        from_istanbul(_from_folder(f, "coverage-final.json", args.sha), str(root))
+        for f in args.istanbul
+    ]
+    for folder in args.workflow:
+        for path in sorted(folder.glob("*.json")):
+            report = _read_json(path)
+            # ci.yml's own run is on the merge commit; a hand-started one on the head (#384).
+            _same_commit(path, report.get("meta", {}).get("sha"), {args.sha, args.head_sha})
+            parts.append(from_workflow(report))
+    return join(parts)
+
+
+def _carried(
+    measured: Mapping[str, FileCoverage], code_files: list[str], record: Record
+) -> dict[str, tuple[int, int] | None]:
+    """Each hand-started workflow with no report on this commit, as the record holds it."""
+    hand_started = [p for p in code_files if p.startswith(WORKFLOWS) and p != OWN_WORKFLOW]
+    return {
+        path: None if path in record.unmeasured else record.files.get(path, (0, 0))
+        for path in hand_started
+        if path not in measured
+    }
+
+
+def _failures(
+    args: argparse.Namespace,
+    root: Path,
+    measured: Mapping[str, FileCoverage],
+    code_files: list[str],
+    carried: set[str],
+) -> list[str]:
+    scripts = [p for p in code_files if p.endswith((".ts", ".js"))]
+    said = ignore_hints({p: (root / p).read_text(encoding="utf-8") for p in scripts})
+    if args.event == "pull_request":
+        # A pull request's checkout is its merge commit, whose first parent is the base.
+        diff = run_tool(
+            root, "git", "diff", "-U0", "--no-color", "--no-ext-diff", "-M", "HEAD^1", "HEAD"
+        )
+        changed = changed_lines(diff.decode("utf-8"))
+        unmeasured = {p for p in changed if p in code_files and (p not in measured or p in carried)}
+        texts = {p: (root / p).read_text(encoding="utf-8") for p in unmeasured}
+        said += failures_on_changed_lines(measured, code_files, changed, texts, carried)
+    return said
+
+
+def _code_files(root: Path, measured: Mapping[str, FileCoverage]) -> list[str]:
+    """Every code file git lists; a report measuring a file git does not list is refused."""
+    listing = run_tool(root, "git", "ls-files", "-z").decode("utf-8")
+    code_files = sorted(p for p in listing.split("\0") if p and is_code(p))
+    strays = sorted(set(measured) - set(code_files))
+    if strays:
+        msg = f"the reports measure files git does not list: {strays}"
+        raise GateError(msg)
+    return code_files
+
+
+def main(argv: Sequence[str], root: Path) -> int:
+    parser = argparse.ArgumentParser(prog="coverage_gate.py")
+    parser.add_argument("--event", required=True)
+    parser.add_argument("--sha", required=True)
+    parser.add_argument("--head-sha", required=True)
+    parser.add_argument("--python", type=Path, action="append", default=[])
+    parser.add_argument("--istanbul", type=Path, action="append", default=[])
+    parser.add_argument("--workflow", type=Path, action="append", default=[])
+    parser.add_argument("--write-record", type=Path)
+    args = parser.parse_args(argv)
+    try:
+        measured = _measure(args, root)
+        code_files = _code_files(root, measured)
+        record = load_record((root / RECORD).read_text(encoding="utf-8"))
+        carried = _carried(measured, code_files, record)
+        now = measured_record(measured, code_files, carried)
+        differences = compare(record, now)
+        print(percentages(measured))
+        if args.write_record is not None:
+            args.write_record.write_text(dump_record(now), encoding="utf-8")
+            print("\n".join(differences) or "the record is unchanged")
+            return 0
+        failures = differences + _failures(args, root, measured, code_files, set(carried))
+    except (GateError, ToolError, OSError) as error:
+        print(f"coverage gate: {error}", file=sys.stderr)
+        return 1
+    for failure in failures:
+        print(f"coverage gate: {failure}", file=sys.stderr)
+    if not failures:
+        print("every file matches the record and every changed line ran")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:], Path.cwd()))

@@ -405,3 +405,9 @@ def test_a_changed_line_past_the_files_end_is_refused() -> None:
         failures_on_changed_lines(
             measured(), ["c.ts"], {"c.ts": {9}}, {"c.ts": "a\n"}, carried=set()
         )
+
+
+def test_a_carried_file_recorded_as_unmeasured_stays_unmeasured() -> None:
+    measured = coverage_of(**{"a.py": {"executed": [1]}})
+    record = measured_record(measured, code_files=["a.py", "w.yml"], carried={"w.yml": None})
+    assert record == Record(files={}, unmeasured=("w.yml",))

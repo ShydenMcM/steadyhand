@@ -43,6 +43,7 @@ known-first-party = [
     "workflow_coverage",
     "workflow_runs",
     "coverage_gate",
+    "run_tool",
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -91,6 +92,7 @@ source_pkgs = [
     "workflow_coverage",
     "workflow_runs",
     "coverage_gate",
+    "run_tool",
 ]
 
 [tool.coverage.report]
