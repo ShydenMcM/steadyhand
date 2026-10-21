@@ -260,12 +260,17 @@ def test_every_property_calls_a_unit_stand_in_of_its_name() -> None:
     assert searched(missing, of=len(found), what="properties") == []
 
 
-PLANTED_PROPERTY = """
-from hypothesis import given
-@given(st.integers())
-def test_adds(n):
-    unit.test_adds(n)
-"""
+# Joined, not a triple-quoted block: a line of this file beginning `def test` would be counted
+# as a test of this file by test_one_test_per_case's raw cross-check.
+PLANTED_PROPERTY = "\n".join(
+    [
+        "from hypothesis import given",
+        "@given(st.integers())",
+        "def test_adds(n):",
+        "    unit.test_adds(n)",
+        "",
+    ]
+)
 
 
 def planted_property(tests: Path, body: str = PLANTED_PROPERTY) -> tuple[Path, ast.FunctionDef]:
