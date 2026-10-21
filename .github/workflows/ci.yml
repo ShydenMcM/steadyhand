@@ -602,23 +602,30 @@ jobs:
         timeout-minutes: 2
         run: uv run --locked pytest -W error --suite properties -p no:cacheprovider
       # The suite twice more under coverage (#374), unlimited so no limit times the tracer: it
-      # draws fresh random cases each run, so the two measurements must agree or the step fails
-      # naming each line one run took (Shyden 2026-10-22: wobble measured, a wobbling line fixed).
+      # draws fresh random cases each run, so the coverage job joins every report once with each
+      # run and fails on a line whose verdict differs (Shyden 2026-10-22: wobble measured).
       - name: The properties suite, measured twice
         if: steps.scope.outputs.docs_only != 'true'
         run: |
-          mkdir -p "${RUNNER_TEMP}/coverage-report"
-          uv run --locked pytest -W error --suite properties -p no:cacheprovider --cov --cov-report="json:${RUNNER_TEMP}/first.json"
+          mkdir -p "${RUNNER_TEMP}/coverage-report" "${RUNNER_TEMP}/coverage-report-again"
           uv run --locked pytest -W error --suite properties -p no:cacheprovider --cov --cov-report="json:${RUNNER_TEMP}/coverage-report/coverage.json"
-          uv run --locked python scripts/coverage_wobble.py "${RUNNER_TEMP}/first.json" "${RUNNER_TEMP}/coverage-report/coverage.json"
-          git rev-parse HEAD > "${RUNNER_TEMP}/coverage-report/sha.txt"
-      # The coverage job joins every suite's report (#381); this one names the commit it measured.
+          uv run --locked pytest -W error --suite properties -p no:cacheprovider --cov --cov-report="json:${RUNNER_TEMP}/coverage-report-again/coverage.json"
+          git rev-parse HEAD | tee "${RUNNER_TEMP}/coverage-report/sha.txt" > "${RUNNER_TEMP}/coverage-report-again/sha.txt"
+      # The coverage job joins every suite's report (#381); these name the commit they measured.
       - name: Keep the coverage report
         if: steps.scope.outputs.docs_only != 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-python-properties-${{ matrix.python }}
           path: ${{ runner.temp }}/coverage-report
+          if-no-files-found: error
+          retention-days: 7
+      - name: Keep the second coverage report
+        if: steps.scope.outputs.docs_only != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-python-properties-again-${{ matrix.python }}
+          path: ${{ runner.temp }}/coverage-report-again
           if-no-files-found: error
           retention-days: 7
       # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.

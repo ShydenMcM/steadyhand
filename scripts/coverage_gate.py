@@ -26,12 +26,18 @@ IGNORE_HINT = re.compile(r"\b(?:v8|c8|istanbul)\s+ignore\b")
 RECORD = "tests/coverage_record.json"
 # Every suite that measures coverage, by the folder its CI job keeps (#381, #374): each must be
 # there, and no other, or the gate fails closed. coverage.py JSON, then istanbul (vitest). The
-# properties suite's report is its second of two measured runs that agreed (coverage_wobble.py).
+# properties suite draws fresh random cases each run, so it is measured twice ("-again").
 PYTHON_REPORTS = tuple(
     f"coverage-python-{suite}{python}"
-    for suite in ("", "guards-", "integration-", "properties-")
+    for suite in ("", "guards-", "integration-", "properties-", "properties-again-")
     for python in ("3.12", "3.13")
 )
+# Each second run, and the first it is compared with (wobble_between): every report is joined
+# once with each of the two runs, and a verdict that differs between the joins wobbles.
+REPEATS = {
+    f"coverage-python-properties-again-{v}": f"coverage-python-properties-{v}"
+    for v in ("3.12", "3.13")
+}
 ISTANBUL_REPORTS = ("coverage-extension-unit", "coverage-extension-guards")
 # Code: every Python, TypeScript and JavaScript file, and every workflow ("all. so 1 and 2").
 CODE_SUFFIXES = (".py", ".ts", ".js")
@@ -364,6 +370,32 @@ def renames_in(listing: str) -> dict[str, str]:
     return renames
 
 
+def wobble_between(one: Mapping[str, FileCoverage], two: Mapping[str, FileCoverage]) -> list[str]:
+    """Each file, statement and branch arm whose verdict differs between two joins of the same
+    commit's reports, one with each of a suite's two runs (Shyden 2026-10-22: wobble measured,
+    a wobbling line fixed). A line another suite always runs cannot differ, so it is not named."""
+    said: list[str] = []
+    for path in sorted(set(one) | set(two)):
+        if path not in one or path not in two:
+            said.append(f"{path}: measured in one of two runs")
+            continue
+        for kind, units_one, units_two in (
+            ("statement", one[path].statements, two[path].statements),
+            ("branch arm", one[path].arms, two[path].arms),
+        ):
+            for key in sorted(set(units_one) | set(units_two), key=_natural):
+                hit_one = key in units_one and units_one[key].hit
+                hit_two = key in units_two and units_two[key].hit
+                if hit_one != hit_two:
+                    said.append(f"{path}: {kind} {key} ran in one of two runs")
+    return said
+
+
+def _natural(key: str) -> tuple[int, ...]:
+    """A unit key ("12", "11>12", "3.1") in number order."""
+    return tuple(int(part) for part in re.split(r"[>.]", key))
+
+
 def is_code(path: str) -> bool:
     return path.endswith(CODE_SUFFIXES) or (
         path.startswith(WORKFLOWS) and path.endswith((".yml", ".yaml"))
@@ -436,7 +468,8 @@ def _from_folder(folder: Path, report: str, sha: str) -> Any:  # noqa: ANN401 - 
     return _read_json(folder / report)
 
 
-def _measure(args: argparse.Namespace, root: Path) -> dict[str, FileCoverage]:
+def _measure(args: argparse.Namespace, root: Path) -> tuple[dict[str, FileCoverage], list[str]]:
+    """Every report joined, and each place the join differs between a suite's two runs."""
     found = (
         sorted(p.name for p in args.reports.iterdir() if p.is_dir())
         if args.reports.is_dir()
@@ -450,24 +483,27 @@ def _measure(args: argparse.Namespace, root: Path) -> dict[str, FileCoverage]:
     if missing:
         msg = f"no report from {', '.join(missing)}"
         raise GateError(msg)
-    parts: list[Mapping[str, FileCoverage]] = [
-        from_python(_from_folder(args.reports / name, "coverage.json", args.sha))
+    named: dict[str, Mapping[str, FileCoverage]] = {
+        name: from_python(_from_folder(args.reports / name, "coverage.json", args.sha))
         for name in PYTHON_REPORTS
-    ]
-    parts += [
-        from_istanbul(
+    }
+    named |= {
+        name: from_istanbul(
             _from_folder(args.reports / name, "coverage-final.json", args.sha),
             args.report_root or str(root),
         )
         for name in ISTANBUL_REPORTS
-    ]
+    }
+    parts: list[Mapping[str, FileCoverage]] = []
     for folder in args.workflow:
         for path in sorted(folder.glob("*.json")):
             report = _read_json(path)
             # ci.yml's own run is on the merge commit; a hand-started one on the head (#384).
             _same_commit(path, report.get("meta", {}).get("sha"), {args.sha, args.head_sha})
             parts.append(from_workflow(report))
-    return join(parts)
+    first = join([*parts, *(c for n, c in named.items() if n not in REPEATS)])
+    second = join([*parts, *(c for n, c in named.items() if n not in REPEATS.values())])
+    return join([*parts, *named.values()]), wobble_between(first, second)
 
 
 def _carried(
@@ -547,7 +583,7 @@ def main(argv: Sequence[str], root: Path) -> int:
     parser.add_argument("--report-root")
     args = parser.parse_args(argv)
     try:
-        measured = _measure(args, root)
+        measured, wobble = _measure(args, root)
         code_files = _code_files(root, measured)
         record = load_record((root / RECORD).read_text(encoding="utf-8"))
         carried = _carried(measured, code_files, record)
@@ -556,10 +592,13 @@ def main(argv: Sequence[str], root: Path) -> int:
         print(percentages(measured))
         if args.write_record is not None:
             args.write_record.write_text(dump_record(now), encoding="utf-8")
-            print("\n".join(differences) or "the record is unchanged")
+            print(
+                "\n".join([*differences, *(f"wobble: {w}" for w in wobble)])
+                or "the record is unchanged"
+            )
             return 0
         run = _Run(measured=measured, code_files=code_files, carried=set(carried), now=now)
-        failures = differences + _failures(args, root, run)
+        failures = differences + [f"wobble: {w}" for w in wobble] + _failures(args, root, run)
     except (GateError, ToolError, OSError) as error:
         print(f"coverage gate: {error}", file=sys.stderr)
         return 1

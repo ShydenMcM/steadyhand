@@ -28,6 +28,7 @@ from coverage_gate import (
     percentages,
     ratchet,
     renames_in,
+    wobble_between,
 )
 
 ROOT = "/work/repo"
@@ -509,3 +510,34 @@ def test_a_listing_with_nothing_after_its_last_entry_reads(
     listing: str, renames: dict[str, str]
 ) -> None:
     assert renames_in(listing) == renames
+
+
+# --- wobble between two joins -------------------------------------------------------------------
+
+
+def test_two_joins_that_agree_do_not_wobble() -> None:
+    both = coverage_of(**{"a.py": {"executed": [1, 2], "arms_run": [[1, 2]]}})
+    assert wobble_between(both, both) == []
+
+
+def test_a_line_only_one_join_ran_wobbles() -> None:
+    one = coverage_of(**{"a.py": {"executed": [1, 2], "arms_run": [[1, 2]]}})
+    two = coverage_of(**{"a.py": {"executed": [1], "missing": [2], "arms_missed": [[1, 2]]}})
+    assert wobble_between(one, two) == [
+        "a.py: statement 2 ran in one of two runs",
+        "a.py: branch arm 1>2 ran in one of two runs",
+    ]
+
+
+def test_a_line_another_suite_always_runs_does_not_wobble() -> None:
+    """The properties suite alone ran portfolio.py:375 in one run of two (CI run 39676830860),
+    but unit runs it every time: joined, nothing moves, so nothing is reported."""
+    unit = coverage_of(**{"a.py": {"executed": [1, 2]}})
+    first = coverage_of(**{"a.py": {"executed": [1, 2]}})
+    second = coverage_of(**{"a.py": {"executed": [1], "missing": [2]}})
+    assert wobble_between(join([unit, first]), join([unit, second])) == []
+
+
+def test_a_file_only_one_join_measured_wobbles() -> None:
+    one = coverage_of(**{"a.py": {"executed": [1]}})
+    assert wobble_between(one, {}) == ["a.py: measured in one of two runs"]

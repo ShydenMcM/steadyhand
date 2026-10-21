@@ -7,14 +7,14 @@ from typing import Any
 from ci_workflow import ci
 
 PROPERTIES_RUN = "uv run --locked pytest -W error --suite properties -p no:cacheprovider"
-# Measured twice, unlimited, the two runs compared for wobble (#374).
+# Measured twice, unlimited; the coverage job compares the two runs for wobble (#374).
 PROPERTIES_MEASURED_TWICE = (
-    'mkdir -p "${RUNNER_TEMP}/coverage-report"\n'
-    f'{PROPERTIES_RUN} --cov --cov-report="json:${{RUNNER_TEMP}}/first.json"\n'
+    'mkdir -p "${RUNNER_TEMP}/coverage-report" "${RUNNER_TEMP}/coverage-report-again"\n'
     f'{PROPERTIES_RUN} --cov --cov-report="json:${{RUNNER_TEMP}}/coverage-report/coverage.json"\n'
-    'uv run --locked python scripts/coverage_wobble.py "${RUNNER_TEMP}/first.json"'
-    ' "${RUNNER_TEMP}/coverage-report/coverage.json"\n'
-    'git rev-parse HEAD > "${RUNNER_TEMP}/coverage-report/sha.txt"\n'
+    f"{PROPERTIES_RUN} --cov"
+    ' --cov-report="json:${RUNNER_TEMP}/coverage-report-again/coverage.json"\n'
+    'git rev-parse HEAD | tee "${RUNNER_TEMP}/coverage-report/sha.txt"'
+    ' > "${RUNNER_TEMP}/coverage-report-again/sha.txt"\n'
 )
 
 

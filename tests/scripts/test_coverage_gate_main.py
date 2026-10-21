@@ -417,3 +417,26 @@ def test_no_reports_folder_at_all_fails_closed(
     argv[argv.index("--reports") + 1] = str(tmp_path / "nowhere")
     assert main(["--event", "push", *argv], root) == 1
     assert f"no report from {PYTHON_REPORTS[0]}" in capsys.readouterr().err
+
+
+def test_a_suites_second_run_that_differs_where_no_other_runs_fails(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The properties suite is measured twice: a line only one of its runs took, where no other
+    suite runs it, wobbles (Shyden 2026-10-22: a wobbling line gets a fixed test)."""
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path)
+    wobbly = python_report()
+    wobbly["files"]["scripts/a.py"]["executed_lines"] = [1, 2, 3]
+    wobbly["files"]["scripts/a.py"]["missing_lines"] = []
+    write(
+        tmp_path / "reports/coverage/coverage-python-properties-again-3.13/coverage.json",
+        json.dumps(wobbly),
+    )
+    assert main(["--event", "push", *argv], root) == 1
+    assert "wobble: scripts/a.py: statement 3 ran in one of two runs" in capsys.readouterr().err
+
+
+def test_the_suite_run_twice_is_named_in_the_report_list() -> None:
+    assert "coverage-python-properties-again-3.12" in PYTHON_REPORTS
+    assert "coverage-python-properties-again-3.13" in PYTHON_REPORTS
