@@ -479,3 +479,33 @@ def test_the_renames_are_read_from_a_name_status_listing() -> None:
 def test_a_name_status_listing_that_does_not_parse_is_refused() -> None:
     with pytest.raises(GateError, match="name-status"):
         renames_in("R087\0only-one\0")
+
+
+def test_an_implicit_else_arm_is_placed_on_its_branch() -> None:
+    """vitest writes an ``if`` without ``else`` as an arm with empty start and end (CI run
+    39670347641: 88 such arms), placed on the ``if`` itself."""
+    entry = istanbul_file("a.ts", [(1, 1, 1)], [[(33, 1), (40, 0)]])
+    entry["branchMap"]["0"]["locations"][1] = {"start": {}, "end": {}}
+    found = from_istanbul({entry["path"]: entry}, ROOT)["a.ts"]
+    assert sorted((unit.first, unit.hit) for unit in found.arms.values()) == [
+        (33, False),
+        (33, True),
+    ]
+
+
+def test_a_statement_with_no_end_ends_where_it_starts() -> None:
+    entry = istanbul_file("a.ts", [(4, 9, 1)], [])
+    entry["statementMap"]["0"] = {"start": {"line": 4, "column": 0}}
+    found = from_istanbul({entry["path"]: entry}, ROOT)["a.ts"]
+    assert [(unit.first, unit.last) for unit in found.statements.values()] == [(4, 4)]
+
+
+@pytest.mark.parametrize(
+    ("listing", "renames"),
+    [("", {}), ("R100\0a.py\0b.py", {"a.py": "b.py"})],
+    ids=["empty", "no-trailing-nul"],
+)
+def test_a_listing_with_nothing_after_its_last_entry_reads(
+    listing: str, renames: dict[str, str]
+) -> None:
+    assert renames_in(listing) == renames

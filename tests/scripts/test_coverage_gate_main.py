@@ -349,3 +349,18 @@ def test_a_rename_keeps_the_bases_counts(tmp_path: Path, stood_in: dict[str, Com
     stood_in["c"] = git(base=base, renames="R090\0scripts/old.py\0scripts/a.py\0")
     root, argv = tree(tmp_path)
     assert main(["--event", "pull_request", *argv], root) == 0
+
+
+def test_reports_written_under_another_checkout_are_read_from_its_root(
+    tmp_path: Path, stood_in: dict[str, Commands]
+) -> None:
+    """The laptop reads CI's own reports, whose paths start with the runner's checkout."""
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path)
+    runner = "/home/runner/work/steadyhand/steadyhand"
+    report = {
+        key.replace(str(root), runner): entry | {"path": entry["path"].replace(str(root), runner)}
+        for key, entry in istanbul_report(root).items()
+    }
+    write(tmp_path / "reports/unit/coverage-final.json", json.dumps(report))
+    assert main(["--event", "push", *argv, "--report-root", runner], root) == 0

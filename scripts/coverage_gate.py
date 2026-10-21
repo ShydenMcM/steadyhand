@@ -13,14 +13,12 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from run_tool import ToolError, run_tool
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
 
 HUNK = re.compile(r"@@ -[0-9]+(?:,[0-9]+)? \+([0-9]+)(?:,([0-9]+))? @@")
 IGNORE_HINT = re.compile(r"\b(?:v8|c8|istanbul)\s+ignore\b")
@@ -96,9 +94,13 @@ def from_python(report: Mapping[str, Any]) -> dict[str, FileCoverage]:
 
 
 def _lines(location: Mapping[str, Any]) -> tuple[int, int] | None:
-    if "start" not in location:
+    """A location's first and last line, or None when it has none: vitest writes an ``if``
+    without ``else`` as an arm whose start and end are empty (seen on CI, run 39670347641)."""
+    start = location.get("start") or {}
+    if "line" not in start:
         return None
-    return int(location["start"]["line"]), int(location["end"]["line"])
+    first = int(start["line"])
+    return first, int((location.get("end") or {}).get("line", first))
 
 
 def from_istanbul(report: Mapping[str, Any], root: str) -> dict[str, FileCoverage]:
@@ -429,7 +431,9 @@ def _measure(args: argparse.Namespace, root: Path) -> dict[str, FileCoverage]:
     parts: list[Mapping[str, FileCoverage]] = []
     parts += [from_python(_from_folder(f, "coverage.json", args.sha)) for f in args.python]
     parts += [
-        from_istanbul(_from_folder(f, "coverage-final.json", args.sha), str(root))
+        from_istanbul(
+            _from_folder(f, "coverage-final.json", args.sha), args.report_root or str(root)
+        )
         for f in args.istanbul
     ]
     for folder in args.workflow:
@@ -513,6 +517,9 @@ def main(argv: Sequence[str], root: Path) -> int:
     parser.add_argument("--istanbul", type=Path, action="append", default=[])
     parser.add_argument("--workflow", type=Path, action="append", default=[])
     parser.add_argument("--write-record", type=Path)
+    # Where the istanbul reports' absolute paths start, when they were written in another
+    # checkout (the laptop reading CI's own reports); this checkout by default.
+    parser.add_argument("--report-root")
     args = parser.parse_args(argv)
     try:
         measured = _measure(args, root)

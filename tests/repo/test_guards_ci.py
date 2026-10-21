@@ -22,8 +22,17 @@ def test_the_guards_run_on_the_pythons_the_unit_suite_runs_on() -> None:
     assert job("guards")["name"] == "guards (py${{ matrix.python }})"
 
 
-def test_the_guards_job_runs_the_guards_suite_with_one_limit_and_no_coverage() -> None:
-    assert [run for run in runs("guards") if "pytest" in run] == [GUARDS_RUN]
+GUARDS_MEASURED = (
+    'mkdir -p "${RUNNER_TEMP}/coverage-report"\n'
+    f'{GUARDS_RUN} --cov --cov-report="json:${{RUNNER_TEMP}}/coverage-report/coverage.json"\n'
+    'git rev-parse HEAD > "${RUNNER_TEMP}/coverage-report/sha.txt"\n'
+)
+
+
+def test_the_guards_job_runs_the_guards_once_limited_and_once_measured() -> None:
+    """The limit times the suite alone; the coverage run (#381) has no limit of its own, as the
+    unit job's has none, so the tracer is never timed."""
+    assert [run for run in runs("guards") if "pytest" in run] == [GUARDS_RUN, GUARDS_MEASURED]
     limited = [step for step in job("guards")["steps"] if "timeout-minutes" in step]
     assert [step["run"] for step in limited] == [GUARDS_RUN]
     # Measured on CI on 2026-10-12 (run 38273371897): 6 s on each Python. A step limit is whole

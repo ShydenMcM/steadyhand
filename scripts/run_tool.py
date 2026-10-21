@@ -5,10 +5,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from pathlib import Path
 
 
 class ToolError(Exception):
