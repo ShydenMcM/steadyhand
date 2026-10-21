@@ -10,7 +10,8 @@
 - `develop`: read with `git rev-parse origin/develop` (4e282cc when written). Merge green PRs into `develop` without asking; never `main`.
 - **`381/coverage-gate`** (#381, In Progress, 13): worktree `../steadyhand-381`, **draft PR #387**, head = the record fold (read `git rev-parse HEAD` there). **Not to merge before Shyden rules on where the record is measured** (question below).
 - `272/python-floors` (#272, paused until #381 and #374): worktree `../steadyhand-272`, local head e6426b2; never push this branch again. Uncommitted on purpose there: `tests/guards/test_no_literal_floor.py` (copy `.superpowers/sdd/272/test_no_literal_floor-20261020a.py`).
-- To delete when Shyden agrees: `367/scratch-ref-recorder` (#369), `272/python-floors` once its new branch lands. Kept: `203/spec-amendment-wip`, `ext/s3b-guards`.
+- `391/cut-thirty-days` (#391): worktree `../steadyhand-391` holds an uncommitted attempt that does not cut the CPU (findings on #391); discarding it is Shyden's call.
+- To delete when Shyden agrees: `367/scratch-ref-recorder` (#369), `272/python-floors` once its new branch lands. Keep `203/spec-amendment-wip`, `ext/s3b-guards`.
 
 ## #381 state (draft PR #387, green; design `.superpowers/sdd/381/design.md`)
 - `scripts/coverage_gate.py` in the coverage job's last step (reader && gate on one line): every suite's report joined, the record (`tests/coverage_record.json`) EQUAL to measured, a PR's record held to develop's, changed lines run, ignore hints refused; prints CI's measured record on a difference (folded by the laptop).
@@ -19,7 +20,7 @@
 1. Run `ListAgents`; none were started.
 2. PR #387 is green on the record fold: it passed on 20fb25d (measured == record, the first CI read of wobble: none).
 3. Ask Shyden (AskUserQuestion) the parked questions below; then finish #381 per his answer, mark the PR ready, merge when green, read the job back as required (`required_status_checks.contexts`, add `coverage`).
-4. Then **#374** (13), then #272 resumes. Global "No holes": `Gaps checked:` in every commit.
+4. Then **#374** (13), then #272 resumes.
 
 ## #374 state (draft PR #389, stacked on #387; worktree `../steadyhand-374`, gate `.superpowers/sdd/374/gate.sh`, mutations `mutations/374.toml`)
 - Built: integration suite measured (child programs via the subprocess patch; the planted unit-limits child untraced), properties measured twice and joined once with each run (wobble = a verdict differing between joins; none seen), reports expected by name (`--reports`), Protocol `...` bodies are their docstrings (`exclude_also` gone), the Yahoo download tested with yfinance stood in (pragma gone), every stand-in's members and tripwires run, the recorders' entry points run and the CLI seed rebuilt byte for byte (integration).
@@ -37,7 +38,7 @@
 #381 (13, draft PR #387), #374 (13, draft PR #389), #391 (2, a unit test's CPU under load), #382 (5), #365 (5, blocks #272), #366 (2), #377 (2), #378 (3), #348 (5, waits on repo-template#27), #308 (2, waits on the key), #315 (2), #317 (5), #320 (2), #337 (3), #336 (5), #341 (2), #359 (3), #362 (2).
 
 ## Progress (2026-10-22, `uv run --locked python .superpowers/sdd/estimates/progress.py`; `post-launch` left out)
-- **Measured:** EXT first release 4 of 28 stories closed (21 of 184 points), none in 7 days. Board open: 44 tickets, 252 points across 43 scored (epic #214 unscored). Closed 2026-10-16 to 2026-10-22: 9 tickets, 38 points.
+- **Measured:** EXT 4 of 28 stories closed (21 of 184 points). Board open: 44 tickets, 252 points across 43 scored (epic #214 unscored). Closed 2026-10-16 to 2026-10-22: 9 tickets, 38 points.
 - **By tickets: 14% complete (4 of 28 stories). ETA 2026-11-24, low confidence:** 43 open scored tickets at 1.29 a day is about 33 days.
 - **By effort: 252 points remaining across 43 scored open tickets. ETA 2026-12-08, low confidence:** 5.4 points a day is about 46 days.
-- **Assumed:** last week's pace holds. **Outside waits:** a broker account (#242), Chrome Web Store review, repo-template#6 (#315), Shyden's key (#308), his rulings on the parked questions.
+- **Assumed:** last week's pace holds. **Outside waits:** broker account (#242), Web Store review, repo-template#6 (#315), the key (#308), the parked rulings.
