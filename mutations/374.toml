@@ -49,3 +49,14 @@ suite = "integration"
 tests = ["tests/integration/idx/test_yfinance_loads.py"]
 expect = "red"
 red = ["tests/integration/idx/test_yfinance_loads.py::test_the_real_yfinance_loads_with_what_the_download_uses"]
+
+[[mutation]]
+id = "S1"
+why = "The seed's transaction is never committed, so a CLI test would start from an empty cache."
+path = "scripts/record_cli_seed.py"
+old = '    return ["BEGIN;", *rows, "COMMIT;"]'
+new = '    return ["BEGIN;", *rows]'
+suite = "integration"
+tests = ["tests/integration/scripts/test_cli_seed_rebuilt.py"]
+expect = "red"
+red = ["tests/integration/scripts/test_cli_seed_rebuilt.py::test_the_recorder_rebuilds_the_committed_seed_byte_for_byte"]
