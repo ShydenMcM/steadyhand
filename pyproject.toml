@@ -83,23 +83,19 @@ empty_parameter_set_mark = "fail_at_collect"
 
 [tool.coverage.run]
 branch = true
-source_pkgs = [
-    "steadyhand",
-    "steadyhand_idx",
-    "ci_scope",
-    "lock_fast_path",
-    "run_mutations",
-    "workflow_coverage",
-    "workflow_runs",
-    "coverage_gate",
-    "run_tool",
-]
+# Every tracked Python file (#381, Shyden 2026-10-22: "Move it, re-score"): the packages, the CI
+# scripts and every test, helper and plugin. A file no test imports is reported, never run, and
+# a folder without __init__.py too (below). No total is judged here: the coverage job holds each
+# file's untested statements and branch arms to tests/coverage_record.json (scripts/coverage_gate.py).
+source = ["packages/steadyhand/src", "packages/steadyhand-idx/src", "scripts", "tests"]
 
 [tool.coverage.report]
-fail_under = 100
+# Report never-imported files in folders without __init__.py too (tests/ has several).
+include_namespace_packages = true
 show_missing = true
 skip_covered = true
-# A Protocol method body is a bare `...` that never runs; it is not untested code.
+# coverage.py's own report leaves out a bare `...` (a Protocol method body); the coverage job
+# counts it as an untested statement all the same (Shyden 2026-10-22, "Count them as unrun").
 exclude_also = ['^\s*\.\.\.$']
 
 [dependency-groups]

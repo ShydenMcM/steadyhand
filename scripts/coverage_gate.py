@@ -312,6 +312,47 @@ def ignore_hints(texts: Mapping[str, str]) -> list[str]:
     ]
 
 
+def ratchet(base: Record, new: Record, renames: Mapping[str, str]) -> list[str]:
+    """Each way the pull request's record would let a file's untested count rise above the base
+    branch's record, or a file become unmeasured. Without this a record re-made to match a worse
+    measurement would pass (the equality alone holds either way). A renamed file keeps its
+    base's counts under its new name."""
+    files = {renames.get(path, path): entry for path, entry in base.files.items()}
+    unmeasured = {renames.get(path, path) for path in base.unmeasured}
+    said: list[str] = []
+    for path in sorted(new.files):
+        before, after = files.get(path, (0, 0)), new.files[path]
+        for what, old, now in (
+            ("statements", before[0], after[0]),
+            ("branch arms", before[1], after[1]),
+        ):
+            if now > old:
+                said.append(f"{path}: untested {what} would rise from {old} to {now}")
+    said += [
+        f"{path}: would become unmeasured" for path in sorted(set(new.unmeasured) - unmeasured)
+    ]
+    return said
+
+
+def renames_in(listing: str) -> dict[str, str]:
+    """Each renamed file's old and new path, from ``git diff --name-status -M -z``."""
+    words = listing.split("\0")
+    if words and not words[-1]:
+        words.pop()
+    renames: dict[str, str] = {}
+    index = 0
+    while index < len(words):
+        status = words[index]
+        taken = 3 if status[:1] in {"R", "C"} else 2
+        if index + taken > len(words):
+            msg = f"a name-status listing that ends inside an entry: {words[index:]}"
+            raise GateError(msg)
+        if status.startswith("R"):
+            renames[words[index + 1]] = words[index + 2]
+        index += taken
+    return renames
+
+
 def is_code(path: str) -> bool:
     return path.endswith(CODE_SUFFIXES) or (
         path.startswith(WORKFLOWS) and path.endswith((".yml", ".yaml"))
@@ -412,13 +453,19 @@ def _carried(
     }
 
 
-def _failures(
-    args: argparse.Namespace,
-    root: Path,
-    measured: Mapping[str, FileCoverage],
-    code_files: list[str],
-    carried: set[str],
-) -> list[str]:
+@dataclass(frozen=True)
+class _Run:
+    """What one run measured: its files' coverage, the code files git lists, the hand-started
+    workflows carried from the record, and the record as measured."""
+
+    measured: Mapping[str, FileCoverage]
+    code_files: list[str]
+    carried: set[str]
+    now: Record
+
+
+def _failures(args: argparse.Namespace, root: Path, run: _Run) -> list[str]:
+    measured, code_files, carried, now = run.measured, run.code_files, run.carried, run.now
     scripts = [p for p in code_files if p.endswith((".ts", ".js"))]
     said = ignore_hints({p: (root / p).read_text(encoding="utf-8") for p in scripts})
     if args.event == "pull_request":
@@ -430,7 +477,20 @@ def _failures(
         unmeasured = {p for p in changed if p in code_files and (p not in measured or p in carried)}
         texts = {p: (root / p).read_text(encoding="utf-8") for p in unmeasured}
         said += failures_on_changed_lines(measured, code_files, changed, texts, carried)
+        said += _against_base(root, now)
     return said
+
+
+def _against_base(root: Path, now: Record) -> list[str]:
+    """The pull request's record held to the base branch's: no count above it, no file newly
+    unmeasured (``ratchet``). Only the record's first pull request finds no base record."""
+    present = run_tool(root, "git", "ls-tree", "--name-only", "HEAD^1", "--", RECORD)
+    if not present.strip():
+        print(f"the base has no {RECORD} yet, so this, its first pull request, has none to keep to")
+        return []
+    base = load_record(run_tool(root, "git", "show", f"HEAD^1:{RECORD}").decode("utf-8"))
+    listing = run_tool(root, "git", "diff", "--name-status", "-M", "-z", "HEAD^1", "HEAD")
+    return ratchet(base, now, renames_in(listing.decode("utf-8")))
 
 
 def _code_files(root: Path, measured: Mapping[str, FileCoverage]) -> list[str]:
@@ -466,12 +526,16 @@ def main(argv: Sequence[str], root: Path) -> int:
             args.write_record.write_text(dump_record(now), encoding="utf-8")
             print("\n".join(differences) or "the record is unchanged")
             return 0
-        failures = differences + _failures(args, root, measured, code_files, set(carried))
+        run = _Run(measured=measured, code_files=code_files, carried=set(carried), now=now)
+        failures = differences + _failures(args, root, run)
     except (GateError, ToolError, OSError) as error:
         print(f"coverage gate: {error}", file=sys.stderr)
         return 1
     for failure in failures:
         print(f"coverage gate: {failure}", file=sys.stderr)
+    if differences:
+        # The job keeps nothing after its last step, so the laptop folds this measurement in.
+        print(f"the measured record, to fold into {RECORD}:\n{dump_record(now)}", end="")
     if not failures:
         print("every file matches the record and every changed line ran")
     return 1 if failures else 0

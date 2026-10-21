@@ -25,13 +25,20 @@ WORKFLOWS = ROOT / ".github/workflows"
 RECORDER = ("floors:record", "record-floors", "STEADYHAND_FLOORS_RECORD")
 RECORDER_WORKFLOW = WORKFLOWS / "record-floors.yml"
 
+# Each coverage run also writes the istanbul report and the commit it measured, for the coverage
+# job to join (#381).
+KEEP_REPORT = (
+    " -- --coverage.reporter=text --coverage.reporter=json"
+    ' --coverage.reportsDirectory="${RUNNER_TEMP}/coverage-report"\n'
+    'git rev-parse HEAD > "${RUNNER_TEMP}/coverage-report/sha.txt"\n'
+)
 # The npm commands the job runs, in order, and the tool behind each script (AC4).
 COMMANDS = [
     "npm ci --ignore-scripts",
     "npm run lint",
     "npm run format:check",
     "npm run typecheck",
-    "npm test",
+    "npm test" + KEEP_REPORT,
     "npm run test:limits",
     "npm run build",
 ]
@@ -202,7 +209,10 @@ def guards_job() -> dict[str, Any]:
 
 def test_the_guards_job_installs_then_runs_the_guards_alone_with_one_limit() -> None:
     steps = [step for step in guards_job()["steps"] if str(step.get("run", "")).startswith("npm ")]
-    assert [step["run"] for step in steps] == ["npm ci --ignore-scripts", "npm run test:guards"]
+    assert [step["run"] for step in steps] == [
+        "npm ci --ignore-scripts",
+        "npm run test:guards" + KEEP_REPORT,
+    ]
     assert [step.get("working-directory") for step in steps] == ["extension", "extension"]
     limited = [step for step in guards_job()["steps"] if "timeout-minutes" in step]
     assert limited == [steps[-1]]

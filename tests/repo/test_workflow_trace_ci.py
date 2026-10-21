@@ -46,11 +46,17 @@ def test_the_coverage_job_waits_for_every_other_job_and_keeps_no_trace_of_its_ow
     assert coverage["permissions"] == {"contents": "read", "actions": "read"}
 
 
-def test_the_coverage_jobs_last_step_reads_this_run_with_its_own_traces() -> None:
+def test_the_coverage_jobs_last_step_reads_this_run_then_judges_it_on_one_line() -> None:
+    """The step's own trace reaches only the line it is on when the reader reads it, so the
+    reader and the gate (#381) begin on one line, and nothing follows (#384)."""
     last = ci()["jobs"]["coverage"]["steps"][-1]
-    assert last["name"] == "Which lines of this workflow this run took"
+    assert last["name"] == "Every file matches the coverage record and every changed line ran"
     lines = last["run"].splitlines()
     assert len(lines) == 2
     assert "/attempts/${GITHUB_RUN_ATTEMPT}/jobs?per_page=100" in lines[0]
-    assert "--own-traces" in lines[1]
-    assert '--traces "${RUNNER_TEMP}/traces"' in lines[1]
+    reader, gate = lines[1].split(" && ")
+    assert reader.startswith("uv run --locked python scripts/workflow_coverage.py ")
+    assert "--own-traces" in reader
+    assert '--traces "${RUNNER_TEMP}/traces"' in reader
+    assert gate.startswith("uv run --locked python scripts/coverage_gate.py ")
+    assert '--workflow "${RUNNER_TEMP}/workflow-coverage"' in gate

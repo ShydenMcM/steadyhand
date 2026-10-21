@@ -26,6 +26,8 @@ from coverage_gate import (
     join,
     measured_record,
     percentages,
+    ratchet,
+    renames_in,
 )
 
 ROOT = "/work/repo"
@@ -411,3 +413,69 @@ def test_a_carried_file_recorded_as_unmeasured_stays_unmeasured() -> None:
     measured = coverage_of(**{"a.py": {"executed": [1]}})
     record = measured_record(measured, code_files=["a.py", "w.yml"], carried={"w.yml": None})
     assert record == Record(files={}, unmeasured=("w.yml",))
+
+
+# --- the ratchet against the base -------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("base", "new", "said"),
+    [
+        (Record({"a.py": (2, 1)}, ()), Record({"a.py": (2, 1)}, ()), []),
+        (Record({"a.py": (2, 1)}, ()), Record({"a.py": (1, 0)}, ()), []),
+        (
+            Record({"a.py": (2, 1)}, ()),
+            Record({"a.py": (3, 1)}, ()),
+            ["a.py: untested statements would rise from 2 to 3"],
+        ),
+        (
+            Record({"a.py": (2, 1)}, ()),
+            Record({"a.py": (2, 2)}, ()),
+            ["a.py: untested branch arms would rise from 1 to 2"],
+        ),
+        (
+            Record({}, ()),
+            Record({"n.py": (1, 0)}, ()),
+            ["n.py: untested statements would rise from 0 to 1"],
+        ),
+        (Record({}, ()), Record({}, ("c.ts",)), ["c.ts: would become unmeasured"]),
+        (Record({}, ("c.ts",)), Record({}, ("c.ts",)), []),
+        (Record({}, ("c.ts",)), Record({}, ()), []),
+    ],
+    ids=[
+        "equal",
+        "fall",
+        "statements-rise",
+        "arms-rise",
+        "new-file",
+        "newly-unmeasured",
+        "still-unmeasured",
+        "now-measured",
+    ],
+)
+def test_no_files_count_rises_above_the_bases(base: Record, new: Record, said: list[str]) -> None:
+    assert ratchet(base, new, renames={}) == said
+
+
+def test_a_renamed_file_keeps_its_bases_counts() -> None:
+    base = Record({"old.py": (2, 0)}, ("old.ts",))
+    new = Record({"new.py": (2, 0)}, ("new.ts",))
+    assert ratchet(base, new, renames={"old.py": "new.py", "old.ts": "new.ts"}) == []
+
+
+def test_a_renamed_file_may_not_rise_either() -> None:
+    base = Record({"old.py": (2, 0)}, ())
+    new = Record({"new.py": (3, 0)}, ())
+    assert ratchet(base, new, renames={"old.py": "new.py"}) == [
+        "new.py: untested statements would rise from 2 to 3"
+    ]
+
+
+def test_the_renames_are_read_from_a_name_status_listing() -> None:
+    listing = "R087\0old.py\0new.py\0M\0a.py\0C100\0x.ts\0y.ts\0D\0gone.py\0"
+    assert renames_in(listing) == {"old.py": "new.py"}
+
+
+def test_a_name_status_listing_that_does_not_parse_is_refused() -> None:
+    with pytest.raises(GateError, match="name-status"):
+        renames_in("R087\0only-one\0")

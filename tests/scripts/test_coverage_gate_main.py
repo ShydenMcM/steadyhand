@@ -79,9 +79,19 @@ def tree(tmp_path: Path, record: Record = CLEAN_RECORD, sha: str = SHA) -> tuple
     return root, argv
 
 
-def git(diff: str = "") -> Commands:
+def git(diff: str = "", base: Record | None = CLEAN_RECORD, renames: str = "") -> Commands:
+    """git as the coverage job meets it: the tracked files, the merge commit's diff, the base
+    branch's record (None: the base has none) and the renames."""
     listing = "".join(f"{path}\0" for path in [*TRACKED, RECORD]).encode()
-    return Commands(answers={("git", "ls-files"): listing, ("git", "diff"): diff.encode()})
+    answers = {
+        ("git", "ls-files"): listing,
+        ("git", "diff", "-U0"): diff.encode(),
+        ("git", "diff", "--name-status"): renames.encode(),
+        ("git", "ls-tree"): b"" if base is None else f"{RECORD}\n".encode(),
+    }
+    if base is not None:
+        answers["git", "show"] = dump_record(base).encode()
+    return Commands(answers=answers)
 
 
 @pytest.fixture
@@ -300,3 +310,42 @@ def test_a_report_naming_no_commit_fails_closed(
     (tmp_path / "reports/py312/sha.txt").unlink()
     assert main(["--event", "push", *argv], root) == 1
     assert "names no commit" in capsys.readouterr().err
+
+
+def test_a_difference_prints_the_measured_record_to_fold_in(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The coverage job keeps nothing after its last step, so CI's measured record is printed
+    for the laptop to fold into the commit ("CI records, laptop commits")."""
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path, Record(files={}, unmeasured=()))
+    assert main(["--event", "push", *argv], root) == 1
+    out = capsys.readouterr().out
+    printed = out.split("the measured record, to fold into tests/coverage_record.json:\n", 1)[1]
+    assert load_record(printed) == CLEAN_RECORD
+
+
+def test_a_pull_request_whose_record_rises_above_the_bases_fails(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Re-making the record to match a worse measurement does not get past the base's."""
+    stood_in["c"] = git(base=Record(files={}, unmeasured=("extension/c.ts",)))
+    root, argv = tree(tmp_path)
+    assert main(["--event", "pull_request", *argv], root) == 1
+    assert "scripts/a.py: untested statements would rise from 0 to 1" in capsys.readouterr().err
+
+
+def test_the_records_first_pull_request_has_no_base_to_keep_to(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    stood_in["c"] = git(base=None)
+    root, argv = tree(tmp_path)
+    assert main(["--event", "pull_request", *argv], root) == 0
+    assert "the base has no tests/coverage_record.json yet" in capsys.readouterr().out
+
+
+def test_a_rename_keeps_the_bases_counts(tmp_path: Path, stood_in: dict[str, Commands]) -> None:
+    base = Record(files={"scripts/old.py": (1, 0)}, unmeasured=("extension/c.ts",))
+    stood_in["c"] = git(base=base, renames="R090\0scripts/old.py\0scripts/a.py\0")
+    root, argv = tree(tmp_path)
+    assert main(["--event", "pull_request", *argv], root) == 0
