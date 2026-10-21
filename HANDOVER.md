@@ -1,44 +1,40 @@
 # Handover: steadyhand
 
-**Updated:** 2026-10-21 (UTC date). Current state only. The long history (M3 to M7, T1, research notes) is at `git show 932167c:HANDOVER.md`.
+**Updated:** 2026-10-22 (UTC). Current state only. Older history: `git show 932167c:HANDOVER.md`.
 
-**Direction (#214):** steadyhand becomes a Chrome extension in TypeScript that reads the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. EXT stories #222-#245 follow the clean-up queue below.
+**Direction (#214):** steadyhand becomes a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. EXT stories #222-#245 follow the clean-up queue below.
+
+## Coverage rulings of 2026-10-22 (global; full text: last two paragraphs of `~/.claude/global-rules/reference/reference-engineering-standards.md`)
+- Code = every `.py`, `.ts`, `.js` (tests, configs) AND workflow files. Skipped lines (`pragma: no cover`, `exclude_also`) count as unrun.
+- Workflow lines are measured from a run on the same commit, shell traced; never-on-PR code runs on the PR's commit (deploy-dev rehearsal; hand-started workflows on a scratch branch `coverage/<branch>`).
+- The ratchet is per-file UNTESTED counts (statements, branch arms), record EQUAL to measured, recorded in the record-floors run.
 
 ## Branches and heads
-- `develop`: read with `git rev-parse origin/develop` (871e5ce when written). Merge green PRs into `develop` without asking; never `main`.
-- **`272/python-floors`** (#272, **paused** by Shyden 2026-10-21 until #381 and #374 land; Todo, 13): worktree `../steadyhand-272`, head **e6426b2** (local, three commits past the pushed 1c9db9d, each at a green local gate). Never push this branch again: the green chain goes to a NEW branch name with a normal push, and this one is listed for deletion (no force-push).
-- **Uncommitted there, on purpose:** `tests/guards/test_no_literal_floor.py` (lands last); copy in `.superpowers/sdd/272/test_no_literal_floor-20261020a.py`.
-- **To delete when Shyden agrees:** local and remote `367/scratch-ref-recorder` (#369), and `272/python-floors` once its new branch lands.
-- Kept by choice: `203/spec-amendment-wip`, `ext/s3b-guards` (#222 WIP).
-- **Recording floors (#367):** steps in the header of `.github/workflows/record-floors.yml` (scratch ref, dispatch from develop, `npm run floors:fetch`, amend, normal push).
+- `develop`: read with `git rev-parse origin/develop` (e555f4e when written, #384 merged). Merge green PRs into `develop` without asking; never `main`.
+- `272/python-floors` (#272, paused until #381 and #374): worktree `../steadyhand-272`, local head e6426b2; never push this branch again (new branch name, normal push). Uncommitted on purpose there: `tests/guards/test_no_literal_floor.py` (copy `.superpowers/sdd/272/test_no_literal_floor-20261020a.py`).
+- To delete when Shyden agrees: `367/scratch-ref-recorder` (#369), `272/python-floors` once its new branch lands. Kept: `203/spec-amendment-wip`, `ext/s3b-guards`.
 
-## #272 state (design and every ruling: `.superpowers/sdd/272/design.md`; rulings also on #272's body)
-- Built this session, Shyden's rulings 2026-10-21: "Reader follows by position" (tuples split by position, fixture parameters read as the file's fixture, attributes from the constructor argument that set them); "A size is measured" (len() does not read what it counts; a written list or text, or a name bound to one in the file, is typed in); "Keep it" (a called stored lambda reads with the call's inputs; made unasked, raised by a side agent). Closed under approved rules: generators read by their yields, properties followed, containers filled by append and its kin.
-- Tree (`posdiff.py`, mypy types): 76 findings at 1c9db9d, **70** at 2d97f12; all 4 perf findings cleared, tests unchanged. Left: 42 (#365) + 22 counts + 6 order checks (recount with `split.py`).
-- **Reader coverage gap (this story's):** under unit, `tests/guards/literal_floors.py` is at 91%: 62 lines, 47 branches never run (`.superpowers/sdd/272/helper-cov.txt`; `misses.py` labels them). Coverage never measured it (`source_pkgs`); the wider gap is **#374** (8).
+## Workflow coverage, as built in #384 (design `.superpowers/sdd/384/design.md`)
+- Every workflow sets the tracing shell; every job's last step uploads its traces; ci.yml's `coverage` job (needs all, `!cancelled()`) reads its own run (`--own-traces`) and, on a PR, `scripts/workflow_runs.py` reads each changed hand-started workflow from its runs on `coverage/<branch>` at the PR head.
+- **A PR that changes yahoo-shape, record-floors or mutations** must first push its head to `refs/heads/coverage/<branch>` (and `refs/floors/<branch>` for record-floors), start each there (`gh workflow run <file> --ref coverage/<branch>`, record-floors `-f ref=refs/floors/<branch>`, mutations `-f file=mutations/<n>.toml`), wait (`.superpowers/sdd/384/cycle.sh` shows the shape), then push the PR branch by hand. Every new head repeats it.
+- Measured unrun today: `record-floors.yml:58` (refusal arm), `yahoo-shape.yml:65-76` (failure-only issue step); ci.yml 625/625.
+- Limits: line granularity; a heredoc fed to bash/python3 is one unit.
 
 ## Resume steps
 1. Run `ListAgents`; none were started.
 2. If this file's PR is open: merge it when green (docs fast path).
-3. **Coverage first** (Shyden 2026-10-21, "Ratchet to 100%, unmeasured fails now"): **#381** the gate, then **#374**. Then #272 resumes in `../steadyhand-272`, test first, plants then mutations:
-   a. Close the reader's 62 lines and 47 branches with plants (starred construction, dataclass with bases, imported class, an argument standing for an object, `self.x` in a tuple target, dict and f-string sizes, ...), then `--cov=tests/guards` at 100% for `literal_floors.py` under unit (`of_files`/`module` run in the guards suite).
-   b. "Read both": the population adds scripts/ and packages/; helper-returned comparisons judged.
-   c. The counts become `floor_breach`. `test_fast_path_reads` first: OPENED was 236 on py3.12 and 235 on py3.13; find why before converting. `test_yahoo_live`'s count moves to a non-live test.
-   d. The order checks: declare the YAML data's types so mypy knows them.
-   e. After #365 merges: guard commit, a new branch name, record floors, then `mutations/272.toml` (two per converted floor), then close-out. A change that grows a TS guard's population grows its floor: record before the first push.
-4. Global rule "No holes" (2026-10-21): check gaps BEFORE and AFTER every change (`~/.claude/global-rules/no-holes-check-before-and-after.md`); every commit message needs its `Gaps checked:` section (hook-enforced; only-.md commits exempt). Before ANY decision question: a limits audit.
+3. **#381** (13, next): the gate, in ci.yml's `coverage` job. ACs on its body: Python unit (both Pythons) and the extension's unit and guards write machine-readable reports; one record of per-file untested counts (statements, branch arms) plus the unmeasured tracked code files, EQUAL to measured, recorded in the record-floors scratch-ref run; changed-line check against `origin/develop` over Python, TypeScript and the workflow reports (#384's coverage.py-shaped JSON); all Python under `tests/` and `scripts/` added to coverage; `fail_under = 100` replaced by the record; v8/c8/istanbul ignore hints refused; wobble measured before the first record. Plan it, review to zero, build test first. Then **#374** (13), then #272 resumes.
+4. Global "No holes": `Gaps checked:` in every commit (hook-enforced).
 
 ## Waiting on Shyden
-- **#308's read-only key** (branch-protection read).
-- **To put to him (an older reader limit):** a `setattr` write from outside a class (`setattr(box, "least", 5)`) is never read; 3 calls use a non-constant name (`portfolio.py:166`, `:422`, `no_process.py:109`), so it needs his ruling.
+- #308's read-only key (branch-protection read).
+- #272: confirm my reading that a `setattr` with a constant name is read like `x.name = value` ("Fail closed" covered the non-constant form).
 
 ## Next on the clean-up queue (all before #222)
-- **#381** (8, first), **#374** (8, second), **#382** (5, versions, after coverage), **#365** (5, blocks #272), **#366** (2), **#377** (2, no git hooks here at all), **#378** (3, gap check in git + CI; blocked by #377), **#348** (5, P1, waits on repo-template#27), **#308** (2, waits on the key), **#315** (2, no Priority field; blocked by repo-template#6), **#317** (5), **#320** (2), **#337** (3), **#336** (5, before #245), **#341** (2), **#359** (3), **#362** (2).
+#381 (13, now), #374 (13), #382 (5), #365 (5, blocks #272), #366 (2), #377 (2), #378 (3), #348 (5, waits on repo-template#27), #308 (2, waits on the key), #315 (2), #317 (5), #320 (2), #337 (3), #336 (5), #341 (2), #359 (3), #362 (2).
 
-## Lessons this session
-- A more precise reader can expose a blind spot the coarse one hid (`test_income_projection.py:373` lost its floor until `append` was followed).
-## Progress (2026-10-21, `uv run --locked python .superpowers/sdd/estimates/progress.py`; `post-launch` left out)
-- **Measured:** EXT first release 4 of 28 stories closed (21 of 184 points), none in the last 7 days. Board open: 43 tickets, 240 points across 42 scored (epic #214 unscored). Closed 2026-10-15 to 2026-10-21: 8 tickets, 30 points.
-- **By tickets: 14% complete (4 of 28 stories). ETA 2026-11-27, low confidence:** 42 open scored tickets at 1.14 a day is about 37 days.
-- **By effort: 240 points remaining across 42 scored open tickets. ETA 2026-12-16, low confidence:** 4.3 points a day is about 56 days.
-- **Assumed:** this week's pace holds, coverage work included. **Outside waits:** a broker account (#242), Chrome Web Store review, repo-template#6 (#315), repo-template#27 (#348), Shyden's key (#308).
+## Progress (2026-10-22, `uv run --locked python .superpowers/sdd/estimates/progress.py`; `post-launch` left out)
+- **Measured:** EXT first release 4 of 28 stories closed (21 of 184 points), none in 7 days. Board open: 43 tickets, 250 points across 42 scored (epic #214 unscored). Closed 2026-10-16 to 2026-10-22: 9 tickets, 38 points (#384 among them).
+- **By tickets: 14% complete (4 of 28 stories). ETA 2026-11-24, low confidence:** 42 open scored tickets at 1.29 a day is about 33 days.
+- **By effort: 250 points remaining across 42 scored open tickets. ETA 2026-12-07, low confidence:** 5.4 points a day is about 46 days.
+- **Assumed:** last week's pace holds through coverage work. **Outside waits:** a broker account (#242), Chrome Web Store review, repo-template#6 (#315), repo-template#27 (#348), Shyden's key (#308).
