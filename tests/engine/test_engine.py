@@ -5,6 +5,7 @@ from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from functools import cache
+from typing import cast
 
 import pytest
 
@@ -619,3 +620,26 @@ def test_day_inputs_hold_an_action_history() -> None:
     assert DayInputs(D1, steady()).past_actions.incomplete == frozenset()
     with pytest.raises(TypeError, match=r"^past_actions must be an ActionHistory, got tuple$"):
         DayInputs(D1, steady(), past_actions=())  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("strategy", "name"),
+    [
+        (_Fixed({}), "fixed"),
+        (_Untouchable(), "untouchable"),
+        (_Says(Note(RISK_HALT_DAILY_LOSS, "test")), "says"),
+        (_Looks(), "looks"),
+    ],
+    ids=["fixed", "untouchable", "says", "looks"],
+)
+def test_each_stand_in_strategy_names_itself(
+    strategy: _Fixed | _Untouchable | _Says | _Looks, name: str
+) -> None:
+    """Every stand-in's members run in some test (#374), its name among them."""
+    assert strategy.name == name
+
+
+def test_the_untouchable_strategy_trips_when_asked() -> None:
+    """The halted-run tests rely on it never being asked; asked, it must fail, not pass quietly."""
+    with pytest.raises(AssertionError, match="a halted run asked its strategy to decide"):
+        _Untouchable().decide(cast(MarketView, None), cast(PortfolioView, None), cast(Memory, None))

@@ -5,7 +5,7 @@ typed as the protocol makes ``mypy --strict`` check every signature; ``isinstanc
 runtime view that plug-in loading will use.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import date, timedelta
 
 import pytest
@@ -156,3 +156,40 @@ def test_a_minimal_class_satisfies_universe() -> None:
     universe: Universe = _MinimalUniverse()
     assert isinstance(universe, Universe)
     assert not isinstance(_MinimalSource(), Universe)
+
+
+DAY = date(2024, 3, 1)
+SHARE = Instrument("BBRI", "IDX", IDR)
+PRICE = Money(1000, IDR)
+ANSWERS: dict[str, tuple[Callable[[], object], object]] = {
+    "currency": (lambda: _MinimalRules().currency, IDR),
+    "verified_from": (lambda: _MinimalRules().verified_from, date(2021, 1, 1)),
+    "require_supported": (lambda: _MinimalRules().require_supported(DAY), None),
+    "lot_size": (lambda: _MinimalRules().lot_size(SHARE, DAY), 100),
+    "round_to_tick": (lambda: _MinimalRules().round_to_tick(SHARE, PRICE, Side.BUY, DAY), PRICE),
+    "price_band": (lambda: _MinimalRules().price_band(SHARE, PRICE, DAY), (PRICE, PRICE)),
+    "costs": (lambda: _MinimalRules().costs(Side.BUY, PRICE, DAY), Costs.zero(IDR)),
+    "daily_costs": (lambda: _MinimalRules().daily_costs(PRICE, DAY), Money.zero(IDR)),
+    "settlement_date": (lambda: _MinimalRules().settlement_date(DAY), date(2024, 3, 3)),
+    "dividend_tax": (lambda: _MinimalRules().dividend_tax(PRICE, on=DAY), Money.zero(IDR)),
+    "reinvestment_deadline": (lambda: _MinimalRules().reinvestment_deadline(DAY), None),
+    "protection_end": (lambda: _MinimalRules().protection_end(DAY), DAY),
+    "is_trading_day": (lambda: _MinimalRules().is_trading_day(DAY), True),
+    "bars": (lambda: _MinimalSource().bars(SHARE, DAY, DAY), ()),
+    "corporate_actions": (lambda: _MinimalSource().corporate_actions(SHARE, DAY, DAY), ()),
+    "data_notes": (lambda: _MinimalSource().data_notes([SHARE], DAY, DAY), ()),
+    "fills": (lambda: _MinimalBroker().fills(DAY), ()),
+    "submit": (lambda: _MinimalBroker().submit([], DAY), []),
+    "members_on": (lambda: _MinimalUniverse().members_on(DAY), frozenset({SHARE})),
+    "excluded_on": (lambda: _MinimalUniverse().excluded_on(DAY), {}),
+    "first_day": (lambda: _MinimalUniverse().first_day(), date(2021, 1, 4)),
+    "survivorship_warnings": (lambda: _MinimalUniverse().survivorship_warnings(DAY, DAY), ()),
+    "lot_size without tax": (lambda: _RulesWithoutTax().lot_size(SHARE, DAY), 100),
+}
+
+
+@pytest.mark.parametrize("member", sorted(ANSWERS))
+def test_each_minimal_member_answers_as_written(member: str) -> None:
+    """The minimal implementations are run too, so none is code no test reaches (#374)."""
+    call, expected = ANSWERS[member]
+    assert call() == expected

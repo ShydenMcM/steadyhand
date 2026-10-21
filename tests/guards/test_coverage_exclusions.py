@@ -34,8 +34,11 @@ def pragma_lines(root: Path) -> list[str]:
 
 
 def test_the_detector_sees_a_pragma(tmp_path: Path) -> None:
-    (tmp_path / "a.py").write_text("x = 1\ny = 2  # pragma: no cover\n", encoding="utf-8")
-    assert pragma_lines(tmp_path) == ["a.py:2: y = 2  # pragma: no cover"]
+    # The planted comment is built from PRAGMA: written out, coverage.py would read it in this
+    # file's own source and skip these lines, which the coverage gate counts as unrun.
+    planted = f"y = 2  # {PRAGMA}"
+    (tmp_path / "a.py").write_text(f"x = 1\n{planted}\n", encoding="utf-8")
+    assert pragma_lines(tmp_path) == [f"a.py:2: {planted}"]
 
 
 def test_no_shipped_line_is_excluded() -> None:
