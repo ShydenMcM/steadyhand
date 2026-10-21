@@ -24,6 +24,15 @@ HUNK = re.compile(r"@@ -[0-9]+(?:,[0-9]+)? \+([0-9]+)(?:,([0-9]+))? @@")
 IGNORE_HINT = re.compile(r"\b(?:v8|c8|istanbul)\s+ignore\b")
 # The committed record the measured counts must equal.
 RECORD = "tests/coverage_record.json"
+# Every suite that measures coverage, by the folder its CI job keeps (#381, #374): each must be
+# there, and no other, or the gate fails closed. coverage.py JSON, then istanbul (vitest). The
+# properties suite joins once its run-to-run wobble (fresh random cases) is measured on CI.
+PYTHON_REPORTS = tuple(
+    f"coverage-python-{suite}{python}"
+    for suite in ("", "guards-", "integration-")
+    for python in ("3.12", "3.13")
+)
+ISTANBUL_REPORTS = ("coverage-extension-unit", "coverage-extension-guards")
 # Code: every Python, TypeScript and JavaScript file, and every workflow ("all. so 1 and 2").
 CODE_SUFFIXES = (".py", ".ts", ".js")
 WORKFLOWS = ".github/workflows/"
@@ -428,13 +437,29 @@ def _from_folder(folder: Path, report: str, sha: str) -> Any:  # noqa: ANN401 - 
 
 
 def _measure(args: argparse.Namespace, root: Path) -> dict[str, FileCoverage]:
-    parts: list[Mapping[str, FileCoverage]] = []
-    parts += [from_python(_from_folder(f, "coverage.json", args.sha)) for f in args.python]
+    found = (
+        sorted(p.name for p in args.reports.iterdir() if p.is_dir())
+        if args.reports.is_dir()
+        else []
+    )
+    unknown = sorted(set(found) - {*PYTHON_REPORTS, *ISTANBUL_REPORTS})
+    if unknown:
+        msg = f"reports from no suite the gate joins: {unknown}"
+        raise GateError(msg)
+    missing = [name for name in (*PYTHON_REPORTS, *ISTANBUL_REPORTS) if name not in found]
+    if missing:
+        msg = f"no report from {', '.join(missing)}"
+        raise GateError(msg)
+    parts: list[Mapping[str, FileCoverage]] = [
+        from_python(_from_folder(args.reports / name, "coverage.json", args.sha))
+        for name in PYTHON_REPORTS
+    ]
     parts += [
         from_istanbul(
-            _from_folder(f, "coverage-final.json", args.sha), args.report_root or str(root)
+            _from_folder(args.reports / name, "coverage-final.json", args.sha),
+            args.report_root or str(root),
         )
-        for f in args.istanbul
+        for name in ISTANBUL_REPORTS
     ]
     for folder in args.workflow:
         for path in sorted(folder.glob("*.json")):
@@ -513,8 +538,8 @@ def main(argv: Sequence[str], root: Path) -> int:
     parser.add_argument("--event", required=True)
     parser.add_argument("--sha", required=True)
     parser.add_argument("--head-sha", required=True)
-    parser.add_argument("--python", type=Path, action="append", default=[])
-    parser.add_argument("--istanbul", type=Path, action="append", default=[])
+    # The folder holding every suite's report, one folder each (PYTHON_REPORTS, ISTANBUL_REPORTS).
+    parser.add_argument("--reports", type=Path, required=True)
     parser.add_argument("--workflow", type=Path, action="append", default=[])
     parser.add_argument("--write-record", type=Path)
     # Where the istanbul reports' absolute paths start, when they were written in another

@@ -11,7 +11,16 @@ from typing import Any
 import pytest
 from stood_in_commands import Commands, stand_in
 
-from coverage_gate import RECORD, GateError, Record, dump_record, load_record, main
+from coverage_gate import (
+    ISTANBUL_REPORTS,
+    PYTHON_REPORTS,
+    RECORD,
+    GateError,
+    Record,
+    dump_record,
+    load_record,
+    main,
+)
 
 SHA = "a" * 40
 HEAD = "b" * 40
@@ -59,20 +68,27 @@ def tree(tmp_path: Path, record: Record = CLEAN_RECORD, sha: str = SHA) -> tuple
         write(root / path, "x = 1\ny = 2\nz = 3\n")
     write(root / RECORD, dump_record(record))
     reports = tmp_path / "reports"
-    write(reports / "py312/coverage.json", json.dumps(python_report()))
-    write(reports / "py312/sha.txt", f"{sha}\n")
-    write(reports / "unit/coverage-final.json", json.dumps(istanbul_report(root)))
-    write(reports / "unit/sha.txt", f"{SHA}\n")
+    # Every suite's folder, as the coverage job downloads them; one of each kind holds data.
+    empty_python = {"meta": {"format": 3, "branch_coverage": True}, "files": {}}
+    for name in PYTHON_REPORTS:
+        data = python_report() if name == "coverage-python-3.12" else empty_python
+        write(reports / "coverage" / name / "coverage.json", json.dumps(data))
+        write(
+            reports / "coverage" / name / "sha.txt",
+            f"{sha if name == 'coverage-python-3.12' else SHA}\n",
+        )
+    for name in ISTANBUL_REPORTS:
+        data = istanbul_report(root) if name == "coverage-extension-unit" else {}
+        write(reports / "coverage" / name / "coverage-final.json", json.dumps(data))
+        write(reports / "coverage" / name / "sha.txt", f"{SHA}\n")
     write(reports / "workflows/ci.json", json.dumps(workflow_report()))
     argv = [
         "--sha",
         SHA,
         "--head-sha",
         HEAD,
-        "--python",
-        str(reports / "py312"),
-        "--istanbul",
-        str(reports / "unit"),
+        "--reports",
+        str(reports / "coverage"),
         "--workflow",
         str(reports / "workflows"),
     ]
@@ -144,7 +160,7 @@ def test_a_missing_report_fails_closed(
 ) -> None:
     stood_in["c"] = git()
     root, argv = tree(tmp_path)
-    (tmp_path / "reports/unit/coverage-final.json").unlink()
+    (tmp_path / "reports/coverage/coverage-extension-unit/coverage-final.json").unlink()
     assert main(["--event", "push", *argv], root) == 1
     assert "coverage-final.json" in capsys.readouterr().err
 
@@ -250,7 +266,7 @@ def test_a_measured_file_git_does_not_list_is_refused(
         "executed_branches": [],
         "missing_branches": [],
     }
-    write(tmp_path / "reports/py312/coverage.json", json.dumps(report))
+    write(tmp_path / "reports/coverage/coverage-python-3.12/coverage.json", json.dumps(report))
     assert main(["--event", "push", *argv], root) == 1
     assert "measure files git does not list: ['scripts/stray.py']" in capsys.readouterr().err
 
@@ -307,7 +323,7 @@ def test_a_report_naming_no_commit_fails_closed(
 ) -> None:
     stood_in["c"] = git()
     root, argv = tree(tmp_path)
-    (tmp_path / "reports/py312/sha.txt").unlink()
+    (tmp_path / "reports/coverage/coverage-python-3.12/sha.txt").unlink()
     assert main(["--event", "push", *argv], root) == 1
     assert "names no commit" in capsys.readouterr().err
 
@@ -362,5 +378,42 @@ def test_reports_written_under_another_checkout_are_read_from_its_root(
         key.replace(str(root), runner): entry | {"path": entry["path"].replace(str(root), runner)}
         for key, entry in istanbul_report(root).items()
     }
-    write(tmp_path / "reports/unit/coverage-final.json", json.dumps(report))
+    write(
+        tmp_path / "reports/coverage/coverage-extension-unit/coverage-final.json",
+        json.dumps(report),
+    )
     assert main(["--event", "push", *argv, "--report-root", runner], root) == 0
+
+
+def test_a_suite_whose_report_is_missing_fails_closed(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path)
+    folder = tmp_path / "reports/coverage" / PYTHON_REPORTS[-1]
+    for path in folder.iterdir():
+        path.unlink()
+    folder.rmdir()
+    assert main(["--event", "push", *argv], root) == 1
+    assert f"no report from {PYTHON_REPORTS[-1]}" in capsys.readouterr().err
+
+
+def test_a_report_from_no_known_suite_fails_closed(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A suite's report the gate does not join would leave its measurement out unseen."""
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path)
+    write(tmp_path / "reports/coverage/coverage-python-stray/coverage.json", "{}")
+    assert main(["--event", "push", *argv], root) == 1
+    assert "coverage-python-stray" in capsys.readouterr().err
+
+
+def test_no_reports_folder_at_all_fails_closed(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path)
+    argv[argv.index("--reports") + 1] = str(tmp_path / "nowhere")
+    assert main(["--event", "push", *argv], root) == 1
+    assert f"no report from {PYTHON_REPORTS[0]}" in capsys.readouterr().err
