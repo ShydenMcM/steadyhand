@@ -44,21 +44,9 @@
    3,
    0
   ],
-  "tests/guards/file_reads.py": [
-   0,
-   1
-  ],
-  "tests/guards/test_legal_line.py": [
-   1,
-   1
-  ],
-  "tests/guards/test_property_homes.py": [
-   3,
-   3
-  ],
   "tests/guards/test_supply_chain.py": [
-   2,
-   4
+   0,
+   3
   ],
   "tests/idx/test_yahoo.py": [
    2,
