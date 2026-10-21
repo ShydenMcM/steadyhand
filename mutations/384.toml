@@ -2,7 +2,8 @@
 # test_workflow_trace_bash.py) on planted mutations of TRACING_SHELL, predicted before the first
 # run. T1 makes the trap write more than a line number, so every trace is refused; T2 drops
 # pipefail, so a failing pipeline no longer fails its step; T3 writes `set -T` as its long form,
-# which nothing can see.
+# which nothing can see. G1 proves the record-floors guard this story moved to the step before
+# the trace upload still reads the floors upload.
 
 [[mutation]]
 id = "T1"
@@ -57,3 +58,16 @@ new = '"set -o functrace; "'
 suite = "integration"
 tests = ["tests/integration/scripts/test_workflow_trace_bash.py"]
 expect = "green"
+
+[[mutation]]
+id = "G1"
+why = "The recorder keeps its floors under another name, so floors:fetch finds nothing to fold in."
+path = ".github/workflows/record-floors.yml"
+old = "name: floors\n"
+new = "name: floor\n"
+suite = "guards"
+tests = ["tests/guards/test_extension_ci.py"]
+expect = "red"
+red = [
+    "tests/guards/test_extension_ci.py::test_the_recorder_records_then_uploads_the_floors_and_commit_lines_for_the_laptop",
+]
