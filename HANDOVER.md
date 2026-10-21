@@ -10,28 +10,31 @@
 - The ratchet is per-file UNTESTED counts (statements, branch arms), record EQUAL to measured, recorded in the record-floors run.
 
 ## Branches and heads
-- `develop`: read with `git rev-parse origin/develop` (e555f4e when written, #384 merged). Merge green PRs into `develop` without asking; never `main`.
-- `272/python-floors` (#272, paused until #381 and #374): worktree `../steadyhand-272`, local head e6426b2; never push this branch again (new branch name, normal push). Uncommitted on purpose there: `tests/guards/test_no_literal_floor.py` (copy `.superpowers/sdd/272/test_no_literal_floor-20261020a.py`).
+- `develop`: read with `git rev-parse origin/develop` (4e282cc when written). Merge green PRs into `develop` without asking; never `main`.
+- **`381/coverage-gate`** (#381, In Progress, 13): worktree `../steadyhand-381`, **draft PR #387**, head = the record fold (read `git rev-parse HEAD` there). **Not to merge before Shyden rules on where the record is measured** (question below).
+- `272/python-floors` (#272, paused until #381 and #374): worktree `../steadyhand-272`, local head e6426b2; never push this branch again. Uncommitted on purpose there: `tests/guards/test_no_literal_floor.py` (copy `.superpowers/sdd/272/test_no_literal_floor-20261020a.py`).
 - To delete when Shyden agrees: `367/scratch-ref-recorder` (#369), `272/python-floors` once its new branch lands. Kept: `203/spec-amendment-wip`, `ext/s3b-guards`.
 
-## Workflow coverage, as built in #384 (design `.superpowers/sdd/384/design.md`)
-- Every workflow sets the tracing shell; every job's last step uploads its traces; ci.yml's `coverage` job (needs all, `!cancelled()`) reads its own run (`--own-traces`) and, on a PR, `scripts/workflow_runs.py` reads each changed hand-started workflow from its runs on `coverage/<branch>` at the PR head.
-- **A PR that changes yahoo-shape, record-floors or mutations** must first push its head to `refs/heads/coverage/<branch>` (and `refs/floors/<branch>` for record-floors), start each there (`gh workflow run <file> --ref coverage/<branch>`, record-floors `-f ref=refs/floors/<branch>`, mutations `-f file=mutations/<n>.toml`), wait (`.superpowers/sdd/384/cycle.sh` shows the shape), then push the PR branch by hand. Every new head repeats it.
-- Measured unrun today: `record-floors.yml:58` (refusal arm), `yahoo-shape.yml:65-76` (failure-only issue step); ci.yml 625/625.
-- Limits: line granularity; a heredoc fed to bash/python3 is one unit.
+## #381 state (design `.superpowers/sdd/381/design.md`; local gate `.superpowers/sdd/381/gate.sh`, mutations `mutate.py`)
+- Built: `scripts/coverage_gate.py` (joins Python unit + guards on both Pythons, extension unit + guards, workflow reports; record EQUAL to measured; PR record held to develop's: no rise, no newly unmeasured, renames kept; changed lines run; ignore hints refused; prints the measured record on a difference), `scripts/run_tool.py`, every tracked Python file measured, `fail_under` gone, reports kept by each job, the gate in the coverage job's last step (reader && gate on one line).
+- Record (`tests/coverage_record.json`) folded from CI's own print on c426800: 87 files, 1717 untested statements, 98 arms, 31 unmeasured TS/JS (#374). Whole project 92.86% statements, 96.87% arms.
+- Wobble: none in 3 local unit runs per Python, none in 3 extension unit runs; the fold's run is the first CI read.
+- Found on CI and fixed: vitest's implicit-else arm has empty start/end; TYPE_CHECKING imports and the Python guards suite unmeasured; a record re-made to match a worse measurement would have passed (now held to develop's).
 
 ## Resume steps
 1. Run `ListAgents`; none were started.
-2. If this file's PR is open: merge it when green (docs fast path).
-3. **#381** (13, next): the gate, in ci.yml's `coverage` job. ACs on its body: Python unit (both Pythons) and the extension's unit and guards write machine-readable reports; one record of per-file untested counts (statements, branch arms) plus the unmeasured tracked code files, EQUAL to measured, recorded in the record-floors scratch-ref run; changed-line check against `origin/develop` over Python, TypeScript and the workflow reports (#384's coverage.py-shaped JSON); all Python under `tests/` and `scripts/` added to coverage; `fail_under = 100` replaced by the record; v8/c8/istanbul ignore hints refused; wobble measured before the first record. Plan it, review to zero, build test first. Then **#374** (13), then #272 resumes.
-4. Global "No holes": `Gaps checked:` in every commit (hook-enforced).
+2. PR #387 is green on the record fold: it passed on 20fb25d (measured == record, the first CI read of wobble: none).
+3. Ask Shyden (AskUserQuestion) the parked questions below; then finish #381 per his answer, mark the PR ready, merge when green, read the job back as required (`required_status_checks.contexts`, add `coverage`).
+4. Then **#374** (13), then #272 resumes. Global "No holes": `Gaps checked:` in every commit.
 
-## Waiting on Shyden
-- #308's read-only key (branch-protection read).
-- #272: confirm my reading that a `setattr` with a constant name is read like `x.name = value` ("Fail closed" covered the non-constant form).
+## Waiting on Shyden (parked questions)
+- **Where the record is measured** (#381): today the gate prints CI's measured record on a difference and the laptop folds it (one extra PR run per count change); his ruling named "the same CI record run as the floors" (record-floors on a scratch ref), which cannot measure ci.yml's own lines. Options and costs in `.superpowers/sdd/381/design.md`.
+- **Skipped kinds he was not shown**: "Count them as unrun" also counts `if TYPE_CHECKING:` blocks (14 lines, 7 files) and one-line Protocol stubs and properties (13 lines), beside the 52 bare `...` lines and 24 pragma lines he was shown. Confirm, or rule otherwise.
+- #272: confirm my reading that a `setattr` with a constant name is read like `x.name = value`.
+- #308's read-only key.
 
 ## Next on the clean-up queue (all before #222)
-#381 (13, now), #374 (13), #382 (5), #365 (5, blocks #272), #366 (2), #377 (2), #378 (3), #348 (5, waits on repo-template#27), #308 (2, waits on the key), #315 (2), #317 (5), #320 (2), #337 (3), #336 (5), #341 (2), #359 (3), #362 (2).
+#381 (13, draft PR #387), #374 (13), #382 (5), #365 (5, blocks #272), #366 (2), #377 (2), #378 (3), #348 (5, waits on repo-template#27), #308 (2, waits on the key), #315 (2), #317 (5), #320 (2), #337 (3), #336 (5), #341 (2), #359 (3), #362 (2).
 
 ## Progress (2026-10-22, `uv run --locked python .superpowers/sdd/estimates/progress.py`; `post-launch` left out)
 - **Measured:** EXT first release 4 of 28 stories closed (21 of 184 points), none in 7 days. Board open: 43 tickets, 250 points across 42 scored (epic #214 unscored). Closed 2026-10-16 to 2026-10-22: 9 tickets, 38 points (#384 among them).
