@@ -26,14 +26,14 @@
    c. The counts become `floor_breach`. `test_fast_path_reads` first: OPENED was 236 on py3.12 and 235 on py3.13; find why before converting. `test_yahoo_live`'s count moves to a non-live test.
    d. The order checks: declare the YAML data's types so mypy knows them.
    e. After #365 merges: guard commit, a new branch name, record floors, then `mutations/272.toml` (two per converted floor), then close-out. A change that grows a TS guard's population grows its floor: record before the first push.
-4. Before ANY decision question: a limits audit. Before ANY commit of a reader change: list every verdict it can turn into a pass and put each one not already ruled to Shyden first (memory `feedback-ask-before-editing-a-ticket-s-rule`).
+4. Global rule "No holes" (2026-10-21): check gaps BEFORE and AFTER every change (`~/.claude/global-rules/no-holes-check-before-and-after.md`); every commit message needs its `Gaps checked:` section (hook-enforced; only-.md commits exempt). Before ANY decision question: a limits audit.
 
 ## Waiting on Shyden
 - **#308's read-only key** (branch-protection read).
 - **To put to him (an older reader limit):** a `setattr` write from outside a class (`setattr(box, "least", 5)`) is never read; 3 calls use a non-constant name (`portfolio.py:166`, `:422`, `no_process.py:109`), so it needs his ruling.
 
 ## Next on the clean-up queue (all before #222)
-- **#365** (5, blocks #272), **#366** (2), **#374** (5), **#348** (5, P1, waits on repo-template#27), **#308** (2, waits on the key), **#315** (2, no Priority field; blocked by repo-template#6), **#317** (5), **#320** (2), **#337** (3), **#336** (5, before #245), **#341** (2), **#359** (3), **#362** (2).
+- **#365** (5, blocks #272), **#366** (2), **#374** (5), **#377** (2, no git hooks here at all), **#378** (3, gap check in git + CI; blocked by #377), **#348** (5, P1, waits on repo-template#27), **#308** (2, waits on the key), **#315** (2, no Priority field; blocked by repo-template#6), **#317** (5), **#320** (2), **#337** (3), **#336** (5, before #245), **#341** (2), **#359** (3), **#362** (2).
 
 ## Lessons this session
 - A handover's prediction is not a measurement: "the 4 perf findings clear" held for 3; line 85 reached `SNAPSHOT_VERSION` (`snapprobe.py` measured it before building).
