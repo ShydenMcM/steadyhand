@@ -80,10 +80,6 @@
    3,
    0
   ],
-  "tests/conftest.py": [
-   1,
-   1
-  ],
   "tests/engine/test_backtest.py": [
    2,
    1
@@ -179,102 +175,6 @@
   "tests/plugins/unit_limits.py": [
    10,
    11
-  ],
-  "tests/properties/hypothesis_profile.py": [
-   2,
-   0
-  ],
-  "tests/properties/test_engine_buy_and_hold.py": [
-   7,
-   0
-  ],
-  "tests/properties/test_engine_dividend_growth.py": [
-   7,
-   0
-  ],
-  "tests/properties/test_engine_engine.py": [
-   7,
-   0
-  ],
-  "tests/properties/test_engine_exemption.py": [
-   6,
-   0
-  ],
-  "tests/properties/test_engine_income_projection.py": [
-   22,
-   0
-  ],
-  "tests/properties/test_engine_income_received.py": [
-   6,
-   0
-  ],
-  "tests/properties/test_engine_income_run_rate.py": [
-   13,
-   0
-  ],
-  "tests/properties/test_engine_ledger_booking.py": [
-   7,
-   0
-  ],
-  "tests/properties/test_engine_metrics.py": [
-   7,
-   0
-  ],
-  "tests/properties/test_engine_money.py": [
-   7,
-   0
-  ],
-  "tests/properties/test_engine_monthly_savings.py": [
-   6,
-   0
-  ],
-  "tests/properties/test_engine_portfolio_actions.py": [
-   6,
-   0
-  ],
-  "tests/properties/test_engine_portfolio_properties.py": [
-   16,
-   0
-  ],
-  "tests/properties/test_engine_risk.py": [
-   6,
-   0
-  ],
-  "tests/properties/test_engine_simulated_broker.py": [
-   15,
-   0
-  ],
-  "tests/properties/test_engine_sizing.py": [
-   6,
-   0
-  ],
-  "tests/properties/test_engine_snapshot.py": [
-   67,
-   4
-  ],
-  "tests/properties/test_engine_view.py": [
-   15,
-   0
-  ],
-  "tests/properties/test_idx_factor.py": [
-   22,
-   2
-  ],
-  "tests/properties/test_idx_fees.py": [
-   7,
-   0
-  ],
-  "tests/properties/test_idx_rules.py": [
-   7,
-   0
-  ],
-  "tests/properties/test_idx_ticks.py": [
-   6,
-   0
-  ],
-  "tests/properties/test_profile.py": [
-   12,
-   0
   ],
   "tests/training/test_terms.py": [
    3,
