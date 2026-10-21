@@ -27,3 +27,25 @@ suite = "guards"
 tests = ["tests/guards/test_coverage_exclusions.py"]
 expect = "red"
 red = ["tests/guards/test_coverage_exclusions.py::test_the_configuration_excludes_nothing"]
+
+[[mutation]]
+id = "X2"
+why = "The Yahoo download is excluded from coverage again, so its lines hide from the record."
+path = "packages/steadyhand-idx/src/steadyhand_idx/yahoo.py"
+old = "    module = yahoo()\n"
+new = "    module = yahoo()  # pragma: no cover\n"
+suite = "guards"
+tests = ["tests/guards/test_coverage_exclusions.py"]
+expect = "red"
+red = ["tests/guards/test_coverage_exclusions.py::test_no_shipped_line_is_excluded"]
+
+[[mutation]]
+id = "Y1"
+why = "The download's factory hands back another module, so every real fetch fails."
+path = "packages/steadyhand-idx/src/steadyhand_idx/yahoo.py"
+old = "    return yfinance\n"
+new = "    return json\n"
+suite = "integration"
+tests = ["tests/integration/idx/test_yfinance_loads.py"]
+expect = "red"
+red = ["tests/integration/idx/test_yfinance_loads.py::test_the_real_yfinance_loads_with_what_the_download_uses"]

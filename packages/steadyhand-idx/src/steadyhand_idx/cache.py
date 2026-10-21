@@ -140,9 +140,7 @@ class RefusedGapsError(UnavailableDaysError):
 class RestoringSource(DataSource, Protocol):
     """A data source that also says which runs of a stock's history it restored."""
 
-    def restorations(
-        self, instrument: Instrument, start: date, end: date
-    ) -> Sequence[Restoration]:
+    def restorations(self, instrument: Instrument, start: date, end: date) -> Sequence[Restoration]:
         """The runs of *instrument*'s history from *start* to *end* this source restored."""
 
 

@@ -34,7 +34,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from steadyhand import (
     IDR,
@@ -527,18 +527,28 @@ def failure_of(ticker: str, error: Exception) -> DataUnavailableError:
     return DataUnavailableError(msg)
 
 
-def download_history(ticker: str, start: date, end: date) -> YahooHistory:  # pragma: no cover
-    """Ask Yahoo for one ticker's history (network; run by hand by the yahoo-shape workflow).
-
-    This is the only function that talks to Yahoo, and the only code excluded from coverage:
-    ``tests/guards/test_coverage_exclusions.py`` holds it to that. Everything it returns goes
-    through ``history_from_frames``, which the tests run on real recorded data.
-    """
+def _yfinance() -> Any:  # noqa: ANN401 - yfinance ships no type information
+    """yfinance, imported only when data is really fetched: a heavy import. The integration
+    suite imports it for real (``tests/integration/idx/test_yfinance_loads.py``)."""
     import yfinance  # noqa: PLC0415 - a heavy import, paid only when data is really fetched
 
-    yfinance.config.debug.hide_exceptions = False  # raise a failure instead of logging it
+    return yfinance
+
+
+def download_history(
+    ticker: str, start: date, end: date, *, yahoo: Callable[[], Any] = _yfinance
+) -> YahooHistory:
+    """Ask Yahoo for one ticker's history (network; run by hand by the yahoo-shape workflow).
+
+    This is the only function that talks to Yahoo. *yahoo* gives the yfinance module; the unit
+    tests stand it in (``tests/idx/test_yahoo_download.py``), so no line is left unmeasured.
+    Everything it returns goes through ``history_from_frames``, which the tests run on real
+    recorded data.
+    """
+    module = yahoo()
+    module.config.debug.hide_exceptions = False  # raise a failure instead of logging it
     try:
-        handle = yfinance.Ticker(ticker)
+        handle = module.Ticker(ticker)
         frame = handle.history(
             start=start.isoformat(),
             end=(end + timedelta(days=1)).isoformat(),  # yfinance's end is exclusive
