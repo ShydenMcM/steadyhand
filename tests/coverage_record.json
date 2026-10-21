@@ -24,25 +24,9 @@
    2,
    0
   ],
-  "tests/cli/short_world.py": [
-   2,
-   0
-  ],
   "tests/cli/test_paper_commands.py": [
    0,
    2
-  ],
-  "tests/engine/test_backtest.py": [
-   2,
-   1
-  ],
-  "tests/engine/test_ledger_booking.py": [
-   2,
-   0
-  ],
-  "tests/engine/test_registry.py": [
-   3,
-   0
   ],
   "tests/guards/test_supply_chain.py": [
    0,
