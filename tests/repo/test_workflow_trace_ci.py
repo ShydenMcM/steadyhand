@@ -42,7 +42,7 @@ def test_the_coverage_job_waits_for_every_other_job_and_keeps_no_trace_of_its_ow
     coverage = jobs["coverage"]
     assert sorted(coverage["needs"]) == sorted(key for key in jobs if key != "coverage")
     assert coverage["if"] == "${{ !cancelled() }}"
-    assert all(step.get("name") != UPLOAD["name"] for step in coverage["steps"])
+    assert UPLOAD["name"] not in [step.get("name") for step in coverage["steps"]]
     assert coverage["permissions"] == {"contents": "read", "actions": "read"}
 
 
@@ -52,5 +52,5 @@ def test_the_coverage_jobs_last_step_reads_this_run_with_its_own_traces() -> Non
     lines = last["run"].splitlines()
     assert len(lines) == 2
     assert "/attempts/${GITHUB_RUN_ATTEMPT}/jobs?per_page=100" in lines[0]
-    assert '--traces "${RUNNER_TEMP}/workflow-trace"' in lines[1]
+    assert "--own-traces" in lines[1]
     assert '--traces "${RUNNER_TEMP}/traces"' in lines[1]

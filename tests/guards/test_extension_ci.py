@@ -182,7 +182,9 @@ def test_the_recorder_records_then_uploads_the_floors_and_commit_lines_for_the_l
     steps = recorder_workflow()["jobs"]["record"]["steps"]
     runs = [step.get("run") for step in steps if "run" in step]
     assert runs == [REFUSE_OTHER_REFS, "npm ci --ignore-scripts", "npm run floors:record"]
-    upload = steps[-1]
+    # The last step keeps the workflow trace, as every job's does (#384, test_workflow_trace_ci).
+    assert steps[-1]["name"] == "Keep the workflow trace"
+    upload = steps[-2]
     assert str(upload["uses"]).startswith("actions/upload-artifact@")
     assert upload["with"] == {
         "name": "floors",

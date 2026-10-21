@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass
@@ -32,7 +33,7 @@ import yaml
 from tree_sitter import Language, Parser
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
 
     from tree_sitter import Node
 
@@ -633,12 +634,24 @@ def traces_in(roots: Iterable[Path]) -> list[Trace]:
     ]
 
 
-def main(argv: Sequence[str]) -> int:
+def own_traces(environ: Mapping[str, str]) -> Path:
+    """The folder the tracing shell writes this job's traces to."""
+    temp = environ.get("RUNNER_TEMP")
+    if not temp:
+        msg = "RUNNER_TEMP is not set, so this job's own traces cannot be found"
+        raise TraceError(msg)
+    return Path(temp) / "workflow-trace"
+
+
+def main(argv: Sequence[str], environ: Mapping[str, str]) -> int:
     parser = argparse.ArgumentParser(prog="workflow_coverage.py")
     parser.add_argument("--workflow", type=Path, required=True)
     parser.add_argument("--jobs", type=Path, required=True)
     parser.add_argument("--sha", required=True)
     parser.add_argument("--traces", type=Path, action="append", required=True)
+    # This job's own traces, where its tracing shell wrote them: named here, never in a step's
+    # shell, which may not name the trace folder (FORGERIES).
+    parser.add_argument("--own-traces", action="store_true")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
@@ -646,7 +659,8 @@ def main(argv: Sequence[str]) -> int:
         require_traced(text)
         flow = layout(text)
         jobs = results_from(json.loads(args.jobs.read_text(encoding="utf-8")))
-        verdict = judge(flow, jobs, traces_in(args.traces), args.sha)
+        roots = [*args.traces, *([own_traces(environ)] if args.own_traces else [])]
+        verdict = judge(flow, jobs, traces_in(roots), args.sha)
     except (WorkflowError, TraceError, RunError) as error:
         print(f"workflow coverage: {error}", file=sys.stderr)
         return 1
@@ -663,4 +677,4 @@ def main(argv: Sequence[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main(sys.argv[1:], os.environ))

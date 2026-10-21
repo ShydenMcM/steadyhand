@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from workflow_coverage import TRACING_SHELL, WorkflowError, require_traced, runner_argv
+from workflow_coverage import TRACING_SHELL, WorkflowError, layout, require_traced, runner_argv
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = sorted((ROOT / ".github/workflows").glob("*.yml"))
@@ -23,6 +23,14 @@ def traced(shell: str) -> str:
 @pytest.mark.parametrize("path", WORKFLOWS, ids=[path.name for path in WORKFLOWS])
 def test_every_workflow_sets_the_tracing_shell(path: Path) -> None:
     require_traced(path.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=[path.name for path in WORKFLOWS])
+def test_the_reader_reads_every_workflow(path: Path) -> None:
+    """Every real workflow is one the reader can judge: no refusal (found by PR #385's first
+    run, where the coverage job's own step named the trace folder)."""
+    flow = layout(path.read_text(encoding="utf-8"))
+    assert flow.jobs
 
 
 def test_the_workflows_are_the_four_measured_on_2026_10_22() -> None:

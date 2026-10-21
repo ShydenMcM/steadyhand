@@ -102,11 +102,11 @@ def test_a_run_that_took_one_arm_of_an_if_leaves_the_other_unrun() -> None:
     ]
 
 
-def test_keyword_lines_are_neither_run_nor_unrun() -> None:
+@pytest.mark.parametrize("keyword_line", [12, 14], ids=["else", "fi"])
+def test_keyword_lines_are_neither_run_nor_unrun(keyword_line: int) -> None:
     verdict = judge(flow(), [lint_job(), SKIPPED_DEPLOY], ALL_TRACES, SHA)
-    for keyword_line in (12, 14):
-        assert keyword_line not in verdict.executed
-        assert keyword_line not in verdict.missing
+    assert keyword_line not in verdict.executed
+    assert keyword_line not in verdict.missing
 
 
 def test_a_skipped_step_leaves_its_lines_and_its_shell_unrun() -> None:
@@ -145,7 +145,7 @@ def test_a_failed_step_still_ran() -> None:
 
 def test_a_skipped_job_leaves_every_line_of_it_unrun() -> None:
     verdict = judge(flow(), [lint_job(), SKIPPED_DEPLOY], ALL_TRACES, SHA)
-    assert all(line in verdict.missing for line in DEPLOY_LINES)
+    assert [line for line in verdict.missing if line >= DEPLOY_LINES[0]] == DEPLOY_LINES
 
 
 def test_a_workflow_no_job_of_which_ran_is_unrun_from_its_first_line() -> None:

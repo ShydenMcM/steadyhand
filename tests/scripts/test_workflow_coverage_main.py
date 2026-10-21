@@ -61,7 +61,7 @@ def inputs(tmp_path: Path, workflow: str = WORKFLOW) -> list[str]:
 def test_it_writes_which_lines_ran_and_prints_what_did_not(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert main(inputs(tmp_path)) == 0
+    assert main(inputs(tmp_path), {}) == 0
     report = json.loads((tmp_path / "out/report.json").read_text(encoding="utf-8"))
     path = str(tmp_path / "w.yml")
     assert report == {
@@ -75,7 +75,7 @@ def test_a_workflow_without_the_tracing_shell_is_refused_and_nothing_is_written(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     untraced = "name: w\njobs:\n  a:\n    steps:\n      - run: echo one\n"
-    assert main(inputs(tmp_path, untraced)) == 1
+    assert main(inputs(tmp_path, untraced), {}) == 1
     assert "does not set the tracing shell" in capsys.readouterr().err
     assert not (tmp_path / "out").exists()
 
@@ -88,3 +88,21 @@ def test_it_runs_as_a_script(
         runpy.run_path(str(SCRIPT), run_name="__main__")
     assert exited.value.code == 0
     assert "9 of 10 lines ran" in capsys.readouterr().out
+
+
+def test_the_jobs_own_traces_are_read_from_runner_temp(tmp_path: Path) -> None:
+    """The coverage job's own steps' traces, found without any step's shell naming the folder."""
+    argv = inputs(tmp_path)
+    own = tmp_path / "temp/workflow-trace/a"
+    own.mkdir(parents=True)
+    (own / "__run").write_text(f"sha {SHA}\nlines 2\n2\n", encoding="utf-8")
+    assert main([*argv, "--own-traces"], {"RUNNER_TEMP": str(tmp_path / "temp")}) == 0
+    report = json.loads((tmp_path / "out/report.json").read_text(encoding="utf-8"))
+    assert report["files"][str(tmp_path / "w.yml")]["missing_lines"] == []
+
+
+def test_own_traces_without_runner_temp_are_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main([*inputs(tmp_path), "--own-traces"], {}) == 1
+    assert "RUNNER_TEMP is not set" in capsys.readouterr().err
