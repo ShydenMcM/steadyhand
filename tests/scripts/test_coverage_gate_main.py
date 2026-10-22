@@ -27,8 +27,10 @@ HEAD = "b" * 40
 OTHER = "c" * 40
 WORKFLOW = ".github/workflows/ci.yml"
 SHAPE = ".github/workflows/yahoo-shape.yml"
-TRACKED = ["scripts/a.py", "extension/b.ts", "extension/c.ts", WORKFLOW, SHAPE, "README.md"]
-CLEAN_RECORD = Record(files={"scripts/a.py": (1, 0)}, unmeasured=("extension/c.ts",))
+# A code file of each language that no suite measures.
+UNMEASURED = ("extension/c.ts", "tools/d.py")
+TRACKED = ["scripts/a.py", "extension/b.ts", *UNMEASURED, WORKFLOW, SHAPE, "README.md"]
+CLEAN_RECORD = Record(files={"scripts/a.py": (1, 0)}, unmeasured=UNMEASURED)
 
 
 def python_report() -> dict[str, Any]:
@@ -130,7 +132,7 @@ def test_a_rise_fails_naming_it(
     tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
 ) -> None:
     stood_in["c"] = git()
-    root, argv = tree(tmp_path, Record(files={}, unmeasured=("extension/c.ts",)))
+    root, argv = tree(tmp_path, Record(files={}, unmeasured=UNMEASURED))
     assert main(["--event", "push", *argv], root) == 1
     assert "scripts/a.py: untested statements rose from 0 to 1" in capsys.readouterr().err
 
@@ -206,13 +208,17 @@ def test_a_pull_request_reads_the_merge_commits_own_diff(
     assert diff[1:] == ["diff", "-U0", "--no-color", "--no-ext-diff", "-M", "HEAD^1", "HEAD"]
 
 
+@pytest.mark.parametrize("path", UNMEASURED)
 def test_a_changed_line_in_an_unmeasured_file_fails(
-    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+    path: str,
+    tmp_path: Path,
+    stood_in: dict[str, Commands],
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    stood_in["c"] = git("--- a/extension/c.ts\n+++ b/extension/c.ts\n@@ -1 +1 @@\n-o\n+x = 1\n")
+    stood_in["c"] = git(f"--- a/{path}\n+++ b/{path}\n@@ -1 +1 @@\n-o\n+x = 1\n")
     root, argv = tree(tmp_path)
     assert main(["--event", "pull_request", *argv], root) == 1
-    assert "extension/c.ts:1: changed in a file no suite measures" in capsys.readouterr().err
+    assert f"{path}:1: changed in a file no suite measures" in capsys.readouterr().err
 
 
 def test_a_changed_line_in_a_hand_started_workflow_with_no_report_fails(
@@ -228,7 +234,7 @@ def test_a_hand_started_workflow_with_no_report_carries_its_record(
     tmp_path: Path, stood_in: dict[str, Commands]
 ) -> None:
     stood_in["c"] = git()
-    carried = Record(files={"scripts/a.py": (1, 0), SHAPE: (11, 0)}, unmeasured=("extension/c.ts",))
+    carried = Record(files={"scripts/a.py": (1, 0), SHAPE: (11, 0)}, unmeasured=UNMEASURED)
     root, argv = tree(tmp_path, carried)
     assert main(["--event", "push", *argv], root) == 0
 
@@ -237,7 +243,7 @@ def test_a_hand_started_workflow_recorded_unmeasured_stays_so(
     tmp_path: Path, stood_in: dict[str, Commands]
 ) -> None:
     stood_in["c"] = git()
-    carried = Record(files={"scripts/a.py": (1, 0)}, unmeasured=("extension/c.ts", SHAPE))
+    carried = Record(files={"scripts/a.py": (1, 0)}, unmeasured=(*UNMEASURED, SHAPE))
     root, argv = tree(tmp_path, carried)
     assert main(["--event", "push", *argv], root) == 0
 
@@ -345,7 +351,7 @@ def test_a_pull_request_whose_record_rises_above_the_bases_fails(
     tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Re-making the record to match a worse measurement does not get past the base's."""
-    stood_in["c"] = git(base=Record(files={}, unmeasured=("extension/c.ts",)))
+    stood_in["c"] = git(base=Record(files={}, unmeasured=UNMEASURED))
     root, argv = tree(tmp_path)
     assert main(["--event", "pull_request", *argv], root) == 1
     assert "scripts/a.py: untested statements would rise from 0 to 1" in capsys.readouterr().err
@@ -361,7 +367,7 @@ def test_the_records_first_pull_request_has_no_base_to_keep_to(
 
 
 def test_a_rename_keeps_the_bases_counts(tmp_path: Path, stood_in: dict[str, Commands]) -> None:
-    base = Record(files={"scripts/old.py": (1, 0)}, unmeasured=("extension/c.ts",))
+    base = Record(files={"scripts/old.py": (1, 0)}, unmeasured=UNMEASURED)
     stood_in["c"] = git(base=base, renames="R090\0scripts/old.py\0scripts/a.py\0")
     root, argv = tree(tmp_path)
     assert main(["--event", "pull_request", *argv], root) == 0
