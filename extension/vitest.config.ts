@@ -1,7 +1,10 @@
 import { configDefaults, defineConfig } from "vitest/config";
 import { limitsFor } from "./tests/lib/test-clock.ts";
 
-/** The packages held to 100% coverage (spec §14.1); the shell is proved by browser tests. */
+/** The packages held to 100% coverage (spec §14.1). The shell's side panel is measured in unit with
+ * its document stood in (#374 AC5); its content script and service worker are `export {};`
+ * placeholders with nothing to count, unmeasured until EXT S14a writes them (Shyden, 2026-10-23:
+ * "Leave until S14a"), so the coverage gate fails any change to them until then. */
 export const COVERED = ["core", "readers", "history"] as const;
 
 /** The whole-repo guards (#285): they read the tracked tree to check a rule across the code, so
@@ -19,6 +22,7 @@ export const INTEGRATION = "tests/integration/**/*.test.ts";
  * in-process with their tools stood in (#374 AC6: `tests/build.test.ts`, `tests/tool-configs.test.ts`). */
 export const UNIT_COVERED = [
   ...COVERED.map((name) => `packages/${name}/src/**/*.ts`),
+  "packages/shell/src/side-panel.ts",
   "build.ts",
   "eslint.config.js",
   "playwright.config.ts",
