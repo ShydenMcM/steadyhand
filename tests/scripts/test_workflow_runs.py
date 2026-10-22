@@ -7,12 +7,11 @@ A unit test starts no process, so every ``gh`` and ``git`` call is answered here
 
 import json
 import runpy
-import subprocess
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
+from stood_in_commands import Commands, stand_in
 
 from workflow_coverage import TRACING_SHELL
 from workflow_runs import main
@@ -33,38 +32,6 @@ def jobs_payload(conclusion: str = "success") -> bytes:
     setup = {"name": "Set up job", "status": "completed", "conclusion": "success"}
     job = {"name": "shape", "status": "completed", "conclusion": "success", "steps": [setup, step]}
     return json.dumps({"total_count": 1, "jobs": [job]}).encode()
-
-
-@dataclass
-class Commands:
-    """``subprocess.run`` stood in: answers each call by its leading arguments."""
-
-    answers: dict[tuple[str, ...], bytes]
-    downloads: dict[str, dict[str, str]] = field(default_factory=dict)
-    failing: tuple[str, ...] = ()
-    calls: list[list[str]] = field(default_factory=list)
-
-    def run(self, args: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
-        self.calls.append(list(args))
-        assert kwargs == {"cwd": kwargs["cwd"], "capture_output": True, "check": False}
-        words = (Path(args[0]).name, *args[1:])
-        if self.failing and words[: len(self.failing)] == self.failing:
-            return subprocess.CompletedProcess(args, 1, b"", b"HTTP 404")
-        if words[:3] == ("gh", "run", "download"):
-            target = Path(args[args.index("--dir") + 1])
-            for relative, text in self.downloads.get(args[3], {}).items():
-                path = target / relative
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(text, encoding="utf-8")
-            return subprocess.CompletedProcess(args, 0, b"", b"")
-        for prefix, answer in self.answers.items():
-            # The last word is matched as a prefix, so a URL's query need not be spelled out.
-            head, last = prefix[:-1], prefix[-1]
-            matched = len(words) >= len(prefix) and words[: len(head)] == head
-            if matched and words[len(head)].startswith(last):
-                return subprocess.CompletedProcess(args, 0, answer, b"")
-        msg = f"unexpected call {args}"
-        raise AssertionError(msg)
 
 
 def runs_listing(*ids: int) -> bytes:
@@ -92,14 +59,7 @@ def standard(changed: bytes = SHAPE.encode() + b"\0", head_text: str = SHAPE_TEX
 
 @pytest.fixture
 def stood_in(monkeypatch: pytest.MonkeyPatch) -> dict[str, Commands]:
-    holder: dict[str, Commands] = {}
-
-    def run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
-        return holder["c"].run(args, **kwargs)
-
-    monkeypatch.setattr(subprocess, "run", run)
-    monkeypatch.setattr("shutil.which", lambda name: f"/stood-in/{name}")
-    return holder
+    return stand_in(monkeypatch)
 
 
 def run_main(repo: Path, out: Path) -> int:
