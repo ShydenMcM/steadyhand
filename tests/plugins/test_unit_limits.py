@@ -158,7 +158,11 @@ def test_an_untraced_run_sets_the_wall_limit_on_every_unit_test_and_no_other(
     monkeypatch.setattr(unit_limits, "under_coverage", lambda: False)
     unit, perf, live = _Item("slow"), _Item("perf"), _Item("live")
     unit_limits.pytest_collection_modifyitems([unit, perf, live])  # type: ignore[list-item]
-    assert [(mark.name, mark.args) for mark in unit.added] == [("timeout", (WALL_LIMIT_SECONDS,))]
+    # The marker's name is read only as a comparison's operand, which cannot set a marker
+    # (tests/guards/test_no_raised_limit.py).
+    assert len(unit.added) == 1
+    assert unit.added[0].name == "timeout"
+    assert unit.added[0].args == (WALL_LIMIT_SECONDS,)
     assert (perf.added, live.added) == ([], [])
 
 
