@@ -138,6 +138,13 @@ def from_istanbul(report: Mapping[str, Any], root: str) -> dict[str, FileCoverag
         if not path.startswith(prefix):
             msg = f"the report names {path}, outside {root}"
             raise GateError(msg)
+        # Vitest's V8 coverage counts no statement in a bare `export default <expression>` (#374
+        # AC6): a file measured so would pass every change unjudged, so it is refused instead.
+        if not entry["statementMap"]:
+            msg = (
+                f"{path}: measured, but coverage counts no statement in it, so no change is judged"
+            )
+            raise GateError(msg)
         coverage = FileCoverage()
         for key, location in entry["statementMap"].items():
             placed = _lines(location)

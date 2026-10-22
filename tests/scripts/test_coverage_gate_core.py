@@ -541,3 +541,17 @@ def test_a_line_another_suite_always_runs_does_not_wobble() -> None:
 def test_a_file_only_one_join_measured_wobbles() -> None:
     one = coverage_of(**{"a.py": {"executed": [1]}})
     assert wobble_between(one, {}) == ["a.py: measured in one of two runs"]
+
+
+def test_a_script_file_in_which_coverage_counts_no_statement_is_refused() -> None:
+    """Vitest's V8 coverage counts no statement in ``export default defineConfig(...)`` (measured
+    on eslint.config.js, #374 AC6): measured so, no change to the file would ever be judged,
+    while an unmeasured file fails every changed line."""
+    entry = istanbul_file("a.ts", [], [])
+    with pytest.raises(GateError, match=r"a\.ts: measured, but coverage counts no statement in it"):
+        from_istanbul({entry["path"]: entry}, ROOT)
+
+
+def test_a_script_file_with_one_statement_is_measured() -> None:
+    entry = istanbul_file("a.ts", [(1, 1, 0)], [])
+    assert list(from_istanbul({entry["path"]: entry}, ROOT)) == ["a.ts"]

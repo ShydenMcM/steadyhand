@@ -15,9 +15,13 @@ export const INTEGRATION = "tests/integration/**/*.test.ts";
 
 /** What each suite holds to 100% coverage: every helper in `tests/lib` is in exactly one list,
  * the list of the suite whose tests cover it (measured 2026-10-12, #285). A guards run is
- * `--mode guards`; any other mode is a unit run. */
+ * `--mode guards`; any other mode is a unit run. The build and the tool configurations are loaded
+ * in-process with their tools stood in (#374 AC6: `tests/build.test.ts`, `tests/tool-configs.test.ts`). */
 export const UNIT_COVERED = [
   ...COVERED.map((name) => `packages/${name}/src/**/*.ts`),
+  "build.ts",
+  "eslint.config.js",
+  "playwright.config.ts",
   "tests/lib/floors.ts",
   "tests/lib/load-clock.ts",
   "tests/lib/no-process.ts",

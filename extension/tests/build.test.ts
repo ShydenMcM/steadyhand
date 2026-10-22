@@ -11,7 +11,10 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 const bundled = vi.hoisted(() => vi.fn<(options: unknown) => Promise<unknown>>());
 vi.mock("esbuild", () => ({ build: bundled }));
 
-const { build, ENTRY_POINTS, manifest } = await import("../build.ts");
+const { build, ENTRY_POINTS, main, manifest } = await import("../build.ts");
+// Loading the file runs its last line, `main(import.meta.main, …)`, as a module, not a program, so
+// nothing is built; read before any test's beforeEach resets the mock.
+const builtOnLoad = bundled.mock.calls.length;
 
 let outdir = "";
 
@@ -82,4 +85,22 @@ test("the manifest is Manifest V3 at the given version, asking for no permission
     description: "d",
     background: { service_worker: "service-worker.js" },
   });
+});
+
+test("loaded as a module, not run as a program, it builds nothing", () => {
+  expect(builtOnLoad).toBe(0);
+});
+
+test("run as a program, it builds into the folder it is given", async () => {
+  await main(true, outdir);
+  expect(bundled.mock.calls.map(([options]) => (options as { outdir: string }).outdir)).toEqual([
+    outdir,
+  ]);
+  expect(await readdir(outdir)).toEqual(["manifest.json"]);
+});
+
+test("not run as a program, it builds nothing", async () => {
+  await main(false, outdir);
+  expect(bundled.mock.calls).toEqual([]);
+  expect(await readdir(outdir)).toEqual([]);
 });

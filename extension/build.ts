@@ -49,6 +49,12 @@ export async function build(outdir: string): Promise<void> {
   await writeFile(join(outdir, "manifest.json"), `${JSON.stringify(manifest(pkg), null, 2)}\n`);
 }
 
-if (import.meta.main) {
-  await build(join(ROOT, "dist"));
+/** Build into *outdir* when Node runs this file as its program (`npm run build`), and do nothing
+ * when it is imported: a unit test runs both arms in-process (#374 AC6). */
+export async function main(isProgram: boolean | undefined, outdir: string): Promise<void> {
+  if (isProgram) {
+    await build(outdir);
+  }
 }
+
+await main(import.meta.main, join(ROOT, "dist"));
