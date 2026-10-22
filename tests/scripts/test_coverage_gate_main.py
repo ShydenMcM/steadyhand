@@ -446,3 +446,21 @@ def test_a_suites_second_run_that_differs_where_no_other_runs_fails(
 def test_the_suite_run_twice_is_named_in_the_report_list() -> None:
     assert "coverage-python-properties-again-3.12" in PYTHON_REPORTS
     assert "coverage-python-properties-again-3.13" in PYTHON_REPORTS
+
+
+def test_every_python_report_the_gate_waits_for_is_named() -> None:
+    """Each a ci.yml upload; the measured perf run (#374 AC9) feeds the record too."""
+    assert PYTHON_REPORTS == (
+        "coverage-python-3.12",
+        "coverage-python-3.13",
+        "coverage-python-guards-3.12",
+        "coverage-python-guards-3.13",
+        "coverage-python-integration-3.12",
+        "coverage-python-integration-3.13",
+        "coverage-python-perf-3.12",
+        "coverage-python-perf-3.13",
+        "coverage-python-properties-3.12",
+        "coverage-python-properties-3.13",
+        "coverage-python-properties-again-3.12",
+        "coverage-python-properties-again-3.13",
+    )

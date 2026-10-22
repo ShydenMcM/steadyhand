@@ -133,6 +133,25 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         timeout-minutes: 2
         run: uv run --locked pytest -W error -m perf -p no:cacheprovider
+      # The same tests again under coverage (#374 AC9, Shyden 2026-10-22: "Two runs, one judges
+      # time"): --perf-measured judges no time and refuses a run coverage does not trace, and the
+      # step above refuses one it does (tests/plugins/perf_budget.py). No limit of its own, as the
+      # unit job's measured run has none, so the tracer is never timed.
+      - name: Performance, measured
+        if: steps.scope.outputs.docs_only != 'true'
+        run: |
+          mkdir -p "${RUNNER_TEMP}/coverage-perf"
+          uv run --locked pytest -W error -m perf -p no:cacheprovider --perf-measured --cov --cov-report="json:${RUNNER_TEMP}/coverage-perf/coverage.json"
+          git rev-parse HEAD > "${RUNNER_TEMP}/coverage-perf/sha.txt"
+      # The coverage job joins every suite's report (#381); this one names the commit it measured.
+      - name: Keep the performance coverage report
+        if: steps.scope.outputs.docs_only != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-python-perf-${{ matrix.python }}
+          path: ${{ runner.temp }}/coverage-perf
+          if-no-files-found: error
+          retention-days: 7
       # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
       - name: Keep the workflow trace
         if: ${{ !cancelled() }}

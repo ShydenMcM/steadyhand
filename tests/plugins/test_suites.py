@@ -143,12 +143,17 @@ def test_a_run_of_its_own_suite_alone_passes(chosen: str, own: str) -> None:
     refuse_strays(chosen, items(own, own))
 
 
-@pytest.mark.parametrize(
-    "hook", ["pytest_addoption", "pytest_ignore_collect", "pytest_itemcollected"]
-)
+@pytest.mark.parametrize("hook", ["pytest_ignore_collect", "pytest_itemcollected"])
 def test_this_run_calls_the_suite_hooks(request: pytest.FixtureRequest, hook: str) -> None:
     caller = getattr(request.config.pluginmanager.hook, hook)
     assert getattr(suites, hook) in [impl.function for impl in caller.get_hookimpls()]
+
+
+def test_this_run_has_the_suite_option_and_the_perf_one(request: pytest.FixtureRequest) -> None:
+    """tests/conftest.py adds both through one hook (#374): a pytest_addoption imported from
+    each module would bind one name twice. getoption refuses a name never added."""
+    assert request.config.getoption("suite") == "unit"
+    assert request.config.getoption("perf_measured") is False
 
 
 def test_this_run_is_a_unit_run_by_default(request: pytest.FixtureRequest) -> None:

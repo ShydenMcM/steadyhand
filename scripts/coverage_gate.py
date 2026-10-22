@@ -29,7 +29,7 @@ RECORD = "tests/coverage_record.json"
 # properties suite draws fresh random cases each run, so it is measured twice ("-again").
 PYTHON_REPORTS = tuple(
     f"coverage-python-{suite}{python}"
-    for suite in ("", "guards-", "integration-", "properties-", "properties-again-")
+    for suite in ("", "guards-", "integration-", "perf-", "properties-", "properties-again-")
     for python in ("3.12", "3.13")
 )
 # Each second run, and the first it is compared with (wobble_between): every report is joined

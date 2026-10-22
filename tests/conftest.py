@@ -6,21 +6,30 @@ from pathlib import Path
 import file_reads
 import hypothesis_profile
 import no_process
+import perf_budget
 import pytest
+import suites
 import unit_limits
 from cli_world import Cli
 from load_clock import pytest_make_collect_report, pytest_sessionfinish, pytest_terminal_summary
+from perf_budget import within_budget
 from stood_in_git import FakeGit, stand_in
-from suites import pytest_addoption, pytest_ignore_collect, pytest_itemcollected
+from suites import pytest_ignore_collect, pytest_itemcollected
 
 __all__ = [
-    "pytest_addoption",
     "pytest_ignore_collect",
     "pytest_itemcollected",
     "pytest_make_collect_report",
     "pytest_sessionfinish",
     "pytest_terminal_summary",
+    "within_budget",
 ]
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """The suite to run (#285), and whether a perf run is the one coverage measures (#374)."""
+    suites.pytest_addoption(parser)
+    perf_budget.pytest_addoption(parser)
 
 
 def pytest_configure(config: pytest.Config) -> None:

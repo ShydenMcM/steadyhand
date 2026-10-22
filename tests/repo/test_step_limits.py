@@ -12,6 +12,14 @@ from typing import Any
 from ci_workflow import ROOT, ci, parse
 
 PERF_RUN = "uv run --locked pytest -W error -m perf -p no:cacheprovider"
+# The same tests again under coverage, judging no time (#374 AC9, perf_budget.py): its own
+# report folder, since the unit report's is the test job's too.
+PERF_MEASURED = (
+    'mkdir -p "${RUNNER_TEMP}/coverage-perf"\n'
+    f"{PERF_RUN} --perf-measured --cov "
+    '--cov-report="json:${RUNNER_TEMP}/coverage-perf/coverage.json"\n'
+    'git rev-parse HEAD > "${RUNNER_TEMP}/coverage-perf/sha.txt"\n'
+)
 LIVE_RUN = (
     "uv run --locked pytest -W error -m live -p no:cacheprovider tests/idx/test_yahoo_live.py"
 )
@@ -22,8 +30,11 @@ def steps_running(steps: list[dict[str, Any]], marker: str) -> list[dict[str, An
 
 
 def test_the_performance_step_has_one_limit_of_two_minutes() -> None:
+    """Once limited and judged, once measured with no limit of its own, as the guards job runs
+    its suite (#374 AC9): the tracer is never timed."""
     steps = ci()["jobs"]["test"]["steps"]
-    perf = steps_running(steps, "perf")
+    assert [step["run"] for step in steps_running(steps, "perf")] == [PERF_RUN, PERF_MEASURED]
+    perf = [step for step in steps_running(steps, "perf") if "timeout-minutes" in step]
     assert [step["run"] for step in perf] == [PERF_RUN]
     # Measured on CI, 2026-10-15: 13-29 s over 18 job runs (9 develop runs, py3.12 and py3.13,
     # 38288047404 to 38507014020). Two minutes is about four times the slowest; the test's own

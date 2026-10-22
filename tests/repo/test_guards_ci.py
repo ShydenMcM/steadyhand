@@ -45,7 +45,7 @@ LIMITS_RUN = "uv run --locked pytest -W error -p no:cacheprovider"
 
 def test_the_unit_job_runs_the_default_suite_never_the_guards() -> None:
     tests = [run for run in runs("test") if "pytest" in run]
-    assert len(tests) == 3
+    assert len(tests) == 4
     assert [run for run in tests if "--suite" in run] == []
 
 
