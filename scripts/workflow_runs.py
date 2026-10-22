@@ -22,6 +22,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from coverage_gate import MEASURED_ONLY_BY, python_folder
 from run_tool import ToolError, run_tool
 from workflow_coverage import (
     RunError,
@@ -42,12 +43,28 @@ class RunsError(Exception):
     """A changed workflow that cannot be read from a run on the commit."""
 
 
-def changed_workflows(repo: Path) -> list[str]:
-    """The workflows other than ci.yml the pull request's merge commit adds or changes."""
-    span = ("--diff-filter=d", "-z", "HEAD^1", "HEAD", "--", WORKFLOWS)
+def to_read(repo: Path) -> list[str]:
+    """The workflows other than ci.yml the pull request's merge commit adds or changes, and each
+    workflow that alone measures a file it adds or changes (#374 AC9: "Same as workflows")."""
+    only_by = [path for files in MEASURED_ONLY_BY.values() for path in files]
+    span = ("--diff-filter=d", "-z", "HEAD^1", "HEAD", "--", WORKFLOWS, *only_by)
     raw = run_tool(repo, "git", "diff", "--name-only", *span)
     names = [name for name in raw.decode("utf-8").split("\0") if name]
-    return [name for name in names if name != OWN and name.endswith((".yml", ".yaml"))]
+    changed = [
+        name
+        for name in names
+        if name.startswith(WORKFLOWS) and name != OWN and name.endswith((".yml", ".yaml"))
+    ]
+    owners = [w for w, files in MEASURED_ONLY_BY.items() if set(files) & set(names)]
+    return sorted({*changed, *owners})
+
+
+def _keep_coverage(repo: Path, slug: str, workflow: str, run_ids: list[int], out: Path) -> None:
+    """Each run's coverage report of the files only *workflow* measures, a folder per run."""
+    for run_id in run_ids:
+        target = out / python_folder(workflow) / str(run_id)
+        name = ("--name", f"coverage-python-{Path(workflow).stem}", "--dir", str(target))
+        run_tool(repo, "gh", "run", "download", str(run_id), "--repo", slug, *name)
 
 
 def _json(raw: bytes) -> dict[str, Any]:
@@ -68,7 +85,8 @@ def _runs(repo: Path, slug: str, workflow: str, branch: str, sha: str) -> list[i
         raise RunsError(msg)
     if not runs:
         msg = (
-            f"{workflow} changed, but there is no completed run of {workflow} on {branch} at {sha}."
+            f"{workflow} or a file only it measures changed, but there is no completed run of"
+            f" {workflow} on {branch} at {sha}."
             f" Push the commit and start it, then wait for it:\n"
             f"  git push origin HEAD:refs/heads/{branch}\n"
             f"  gh workflow run {name} --ref {branch}"
@@ -121,8 +139,10 @@ def main(argv: Sequence[str], repo: Path) -> int:
         print(f"{args.event}: no pull request, so no hand-started workflow to read")
         return 0
     try:
-        for workflow in changed_workflows(repo):
+        for workflow in to_read(repo):
             report = _report(repo, args.slug, workflow, args.branch, args.sha)
+            if workflow in MEASURED_ONLY_BY:
+                _keep_coverage(repo, args.slug, workflow, report["meta"]["runs"], args.out)
             args.out.mkdir(parents=True, exist_ok=True)
             path = args.out / f"{Path(workflow).stem}.json"
             path.write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")

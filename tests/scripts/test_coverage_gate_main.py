@@ -13,6 +13,7 @@ from stood_in_commands import Commands, stand_in
 
 from coverage_gate import (
     ISTANBUL_REPORTS,
+    MEASURED_ONLY_BY,
     PYTHON_REPORTS,
     RECORD,
     GateError,
@@ -27,9 +28,11 @@ HEAD = "b" * 40
 OTHER = "c" * 40
 WORKFLOW = ".github/workflows/ci.yml"
 SHAPE = ".github/workflows/yahoo-shape.yml"
+# The file only yahoo-shape's own run measures (MEASURED_ONLY_BY, #374 AC9).
+LIVE = "tests/idx/test_yahoo_live.py"
 # A code file of each language that no suite measures.
 UNMEASURED = ("extension/c.ts", "tools/d.py")
-TRACKED = ["scripts/a.py", "extension/b.ts", *UNMEASURED, WORKFLOW, SHAPE, "README.md"]
+TRACKED = ["scripts/a.py", "extension/b.ts", *UNMEASURED, WORKFLOW, SHAPE, LIVE, "README.md"]
 CLEAN_RECORD = Record(files={"scripts/a.py": (1, 0)}, unmeasured=UNMEASURED)
 
 
@@ -464,3 +467,196 @@ def test_every_python_report_the_gate_waits_for_is_named() -> None:
         "coverage-python-properties-again-3.12",
         "coverage-python-properties-again-3.13",
     )
+
+
+def lines(executed: list[int], missing: list[int]) -> dict[str, Any]:
+    return {
+        "executed_lines": executed,
+        "missing_lines": missing,
+        "excluded_lines": [],
+        "executed_branches": [],
+        "missing_branches": [],
+    }
+
+
+def measured_in_unit(tmp_path: Path, path: str, data: dict[str, Any]) -> None:
+    """The unit report measures *path* too: a test module's import lines run when collected."""
+    report = tmp_path / "reports/coverage/coverage-python-3.12/coverage.json"
+    whole = json.loads(report.read_text(encoding="utf-8"))
+    whole["files"][path] = data
+    write(report, json.dumps(whole))
+
+
+def live_run(
+    tmp_path: Path,
+    files: dict[str, dict[str, Any]],
+    *,
+    sha: str = HEAD,
+    run: str = "7",
+    trace: bool = True,
+) -> None:
+    """yahoo-shape read from its run on the head, as workflow_runs.py writes it: its trace report
+    and, one folder per run, its coverage report of the live check."""
+    folder = tmp_path / "reports/workflows/yahoo-shape-python" / run
+    meta = {"format": 3, "branch_coverage": True}
+    write(folder / "coverage.json", json.dumps({"meta": meta, "files": files}))
+    write(folder / "sha.txt", f"{sha}\n")
+    if trace:
+        shape = {SHAPE: {"executed_lines": [1, 2, 3], "missing_lines": []}}
+        report = {"meta": {"sha": HEAD, "workflow": SHAPE}, "files": shape}
+        write(tmp_path / "reports/workflows/yahoo-shape.json", json.dumps(report))
+
+
+def with_live(counts: tuple[int, int] | None) -> Record:
+    files = {"scripts/a.py": (1, 0)} | ({} if counts is None else {LIVE: counts})
+    return Record(files=files, unmeasured=UNMEASURED)
+
+
+def test_the_live_check_is_the_one_file_only_a_hand_started_workflow_measures() -> None:
+    assert MEASURED_ONLY_BY == {SHAPE: (LIVE,)}
+
+
+@pytest.mark.parametrize("recorded", [(14, 0), None])
+def test_with_no_live_report_the_live_checks_recorded_counts_are_carried(
+    tmp_path: Path, stood_in: dict[str, Commands], recorded: tuple[int, int] | None
+) -> None:
+    """The unit report runs its import lines only; what counts is the record, even a record of
+    nothing untested, which must not let the unit report's count through (G17)."""
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path, with_live(recorded))
+    measured_in_unit(tmp_path, LIVE, lines([1, 2], [3]))
+    assert main(["--event", "push", *argv], root) == 0
+
+
+def test_with_no_live_report_a_live_check_recorded_unmeasured_stays_so(
+    tmp_path: Path, stood_in: dict[str, Commands]
+) -> None:
+    stood_in["c"] = git()
+    root, argv = tree(
+        tmp_path, Record(files={"scripts/a.py": (1, 0)}, unmeasured=(*UNMEASURED, LIVE))
+    )
+    measured_in_unit(tmp_path, LIVE, lines([1, 2, 3], []))
+    assert main(["--event", "push", *argv], root) == 0
+
+
+def test_a_changed_line_in_the_live_check_with_no_live_report_fails(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Even a line the unit report ran: only a run of yahoo-shape on the commit counts (G19)."""
+    stood_in["c"] = git(f"--- a/{LIVE}\n+++ b/{LIVE}\n@@ -1 +1 @@\n-o\n+x = 1\n")
+    root, argv = tree(tmp_path)
+    measured_in_unit(tmp_path, LIVE, lines([1, 2, 3], []))
+    assert main(["--event", "pull_request", *argv], root) == 1
+    assert f"{LIVE}:1: changed in a file no suite measures" in capsys.readouterr().err
+
+
+def test_a_live_report_joins_the_unit_report_for_the_live_check(
+    tmp_path: Path, stood_in: dict[str, Commands]
+) -> None:
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path)
+    measured_in_unit(tmp_path, LIVE, lines([1], [2, 3]))
+    live_run(tmp_path, {LIVE: lines([2, 3], [1])})
+    assert main(["--event", "push", *argv], root) == 0
+
+
+def test_a_live_report_that_runs_more_asks_for_it_to_be_recorded(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path, with_live((14, 0)))
+    live_run(tmp_path, {LIVE: lines([1, 2, 3], [])})
+    assert main(["--event", "push", *argv], root) == 1
+    assert f"{LIVE}: untested statements fell from 14 to 0: record it" in capsys.readouterr().err
+
+
+def test_a_changed_line_the_live_report_ran_passes(
+    tmp_path: Path, stood_in: dict[str, Commands]
+) -> None:
+    stood_in["c"] = git(f"--- a/{LIVE}\n+++ b/{LIVE}\n@@ -1 +1 @@\n-o\n+x = 1\n")
+    root, argv = tree(tmp_path)
+    live_run(tmp_path, {LIVE: lines([1, 2, 3], [])})
+    assert main(["--event", "pull_request", *argv], root) == 0
+
+
+def test_a_live_report_speaks_for_the_live_check_alone(
+    tmp_path: Path, stood_in: dict[str, Commands]
+) -> None:
+    """It runs a line of scripts/a.py no pull request's suite runs: counted, that file's record
+    would swing between commits that ran yahoo-shape and commits that did not (G14)."""
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path)
+    live_run(tmp_path, {LIVE: lines([1, 2, 3], []), "scripts/a.py": lines([1, 2, 3], [])})
+    assert main(["--event", "push", *argv], root) == 0
+
+
+def test_a_live_report_that_does_not_measure_the_live_check_fails_closed(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path)
+    live_run(tmp_path, {"scripts/a.py": lines([1, 2, 3], [])})
+    assert main(["--event", "push", *argv], root) == 1
+    assert f"does not measure {LIVE}" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("sha", [SHA, OTHER])
+def test_a_live_report_from_any_commit_but_the_head_fails_closed(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str], sha: str
+) -> None:
+    """yahoo-shape runs on the pull request's head, never its merge commit (G13)."""
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path)
+    live_run(tmp_path, {LIVE: lines([1, 2, 3], [])}, sha=sha)
+    assert main(["--event", "push", *argv], root) == 1
+    assert f"is from commit {sha}" in capsys.readouterr().err
+
+
+def test_a_folder_of_no_workflow_beside_the_workflow_reports_fails_closed(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path)
+    (tmp_path / "reports/workflows/stray").mkdir()
+    assert main(["--event", "push", *argv], root) == 1
+    assert "folders of no workflow that measures files of its own: ['stray']" in (
+        capsys.readouterr().err
+    )
+
+
+def test_a_live_folder_holding_no_runs_report_fails_closed(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path)
+    live_run(tmp_path, {LIVE: lines([1, 2, 3], [])})
+    for path in (tmp_path / "reports/workflows/yahoo-shape-python/7").iterdir():
+        path.unlink()
+    (tmp_path / "reports/workflows/yahoo-shape-python/7").rmdir()
+    assert main(["--event", "push", *argv], root) == 1
+    assert "yahoo-shape-python holds no run's report" in capsys.readouterr().err
+
+
+def test_yahoo_shape_read_without_its_coverage_report_fails_closed(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """workflow_runs.py writes both or fails: half of them is a broken input (G18)."""
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path)
+    live_run(tmp_path, {LIVE: lines([1, 2, 3], [])})
+    for path in (tmp_path / "reports/workflows/yahoo-shape-python/7").iterdir():
+        path.unlink()
+    for folder in ("yahoo-shape-python/7", "yahoo-shape-python"):
+        (tmp_path / "reports/workflows" / folder).rmdir()
+    assert main(["--event", "push", *argv], root) == 1
+    assert f"{SHAPE} was read from its run without its coverage report" in capsys.readouterr().err
+
+
+def test_a_coverage_report_of_yahoo_shape_without_its_run_read_fails_closed(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path)
+    live_run(tmp_path, {LIVE: lines([1, 2, 3], [])}, trace=False)
+    assert main(["--event", "push", *argv], root) == 1
+    assert f"a coverage report of {SHAPE} without its run read" in capsys.readouterr().err

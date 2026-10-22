@@ -12,7 +12,7 @@ import suites
 import unit_limits
 from cli_world import Cli
 from load_clock import pytest_make_collect_report, pytest_sessionfinish, pytest_terminal_summary
-from perf_budget import within_budget
+from perf_budget import pytest_runtest_setup, within_budget
 from stood_in_git import FakeGit, stand_in
 from suites import pytest_ignore_collect, pytest_itemcollected
 
@@ -20,6 +20,7 @@ __all__ = [
     "pytest_ignore_collect",
     "pytest_itemcollected",
     "pytest_make_collect_report",
+    "pytest_runtest_setup",
     "pytest_sessionfinish",
     "pytest_terminal_summary",
     "within_budget",
@@ -27,7 +28,8 @@ __all__ = [
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
-    """The suite to run (#285), and whether a perf run is the one coverage measures (#374)."""
+    """The suite to run (#285), and whether a perf or live run is the one coverage measures
+    (#374)."""
     suites.pytest_addoption(parser)
     perf_budget.pytest_addoption(parser)
 
