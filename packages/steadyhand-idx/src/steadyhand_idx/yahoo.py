@@ -28,13 +28,13 @@ from __future__ import annotations
 import json
 import math
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Hashable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, Protocol, cast
 
 from steadyhand import (
     IDR,
@@ -61,9 +61,6 @@ from steadyhand_idx.factor import (
     restore_dividend,
     restore_prices,
 )
-
-if TYPE_CHECKING:
-    import pandas as pd
 
 SUFFIX = ".JK"
 PRICE_COLUMNS = ("Open", "High", "Low", "Close")
@@ -136,7 +133,68 @@ def _decimal(value: object) -> Decimal:
     return Decimal(repr(float(cast("float", value))))
 
 
-def history_from_frames(ticker: str, frame: pd.DataFrame, splits: pd.Series) -> YahooHistory:
+class YahooStamp(Protocol):
+    """A row's timestamp, as pandas gives it: only its calendar day is read."""
+
+    def date(self) -> date:
+        """The timestamp's calendar day."""
+
+
+class YahooRecord(Protocol):
+    """One row of ``Ticker.history``'s frame: a number per column name."""
+
+    def __getitem__(self, column: str, /) -> float:
+        """The row's value in *column*."""
+
+
+class YahooIndex(Protocol):
+    """A frame's or series' index: its length is read, and its zone through ``tz``."""
+
+    def __len__(self) -> int:
+        """How many rows the index holds."""
+
+
+class YahooColumns(Protocol):
+    """A frame's column names: only membership is read."""
+
+    def __contains__(self, column: str, /) -> bool:
+        """Whether the frame has *column*."""
+
+
+class YahooFrame(Protocol):
+    """``Ticker.history(auto_adjust=False, actions=True)``'s frame, as the conversion reads it.
+
+    Named by its shape rather than as a pandas ``DataFrame``: importing pandas costs more than a
+    unit test file may spend loading, and this module loads with the package (#374)."""
+
+    @property
+    def columns(self) -> YahooColumns:
+        """The frame's column names."""
+
+    @property
+    def empty(self) -> bool:
+        """Whether the frame has no rows."""
+
+    @property
+    def index(self) -> YahooIndex:
+        """The rows' timestamps."""
+
+    def iterrows(self) -> Iterable[tuple[Hashable, YahooRecord]]:
+        """Each row with its timestamp, in order."""
+
+
+class YahooSplits(Protocol):
+    """``Ticker.splits``, as the conversion reads it: ratios by timestamp."""
+
+    @property
+    def index(self) -> YahooIndex:
+        """The splits' timestamps."""
+
+    def items(self) -> Iterable[tuple[Hashable, float]]:
+        """Each ratio with its timestamp, in order."""
+
+
+def history_from_frames(ticker: str, frame: YahooFrame, splits: YahooSplits) -> YahooHistory:
     """Convert ``Ticker.history(auto_adjust=False, actions=True)`` and ``Ticker.splits``."""
     missing = [column for column in REQUIRED_COLUMNS if column not in frame.columns]
     if missing:
@@ -161,15 +219,15 @@ def history_from_frames(ticker: str, frame: pd.DataFrame, splits: pd.Series) -> 
             dividend=_decimal(record["Dividends"]),
         )
         for stamp, record in frame.iterrows()
-        if _priced(ticker, day := cast("pd.Timestamp", stamp).date(), record)
+        if _priced(ticker, day := cast("YahooStamp", stamp).date(), record)
     )
     split_rows = tuple(
-        (cast("pd.Timestamp", stamp).date(), _decimal(ratio)) for stamp, ratio in splits.items()
+        (cast("YahooStamp", stamp).date(), _decimal(ratio)) for stamp, ratio in splits.items()
     )
     return YahooHistory(ticker, rows, split_rows)
 
 
-def _priced(ticker: str, day: date, record: pd.Series) -> bool:
+def _priced(ticker: str, day: date, record: YahooRecord) -> bool:
     """Whether Yahoo gives *record* its prices and volume. A row without them is a day Yahoo has
     no prices for, such as its unfinished day: no bar, like a day it leaves out. A dividend on such
     a row would be lost with it, so that row is refused instead (fail closed)."""

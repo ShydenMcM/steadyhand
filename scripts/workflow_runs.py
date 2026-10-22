@@ -18,8 +18,9 @@ import argparse
 import json
 import sys
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from run_tool import ToolError, run_tool
 from workflow_coverage import (
@@ -32,9 +33,6 @@ from workflow_coverage import (
     results_from,
     traces_in,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 WORKFLOWS = ".github/workflows/"
 OWN = ".github/workflows/ci.yml"
