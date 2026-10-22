@@ -22,10 +22,14 @@ export const UNIT_COVERED = [
   "build.ts",
   "eslint.config.js",
   "playwright.config.ts",
+  "tests/fetch-floors.ts",
+  "tests/load-report.ts",
+  "tests/record-floors.ts",
   "tests/lib/floors.ts",
   "tests/lib/load-clock.ts",
   "tests/lib/no-process.ts",
   "tests/lib/population.ts",
+  "tests/lib/program.ts",
   "tests/lib/test-clock.ts",
 ];
 export const GUARDS_COVERED = [

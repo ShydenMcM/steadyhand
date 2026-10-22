@@ -10,24 +10,40 @@
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { FLOORS_PATH, RECORD_ADVICE, RECORD_ENV, recordFloors } from "./lib/floors.ts";
+import { asProgram } from "./lib/program.ts";
 
 const VITEST = join(import.meta.dirname, "..", "node_modules", "vitest", "vitest.mjs");
 
-if (process.env.GITHUB_ACTIONS === "true") {
-  process.exitCode = recordFloors(
+/** What starts the suite run, as this script calls `spawnSync`. */
+export type Spawn = (
+  command: string,
+  args: string[],
+  options: { stdio: "inherit"; env: NodeJS.ProcessEnv },
+) => { status: number | null };
+
+/** The program's work, given its environment, process launcher and output, so a unit test stands
+ * them in (#374 AC6): its exit status. */
+export function recordProgram(
+  env: NodeJS.ProcessEnv,
+  spawn: Spawn,
+  log: (line: string) => void,
+  error: (line: string) => void,
+): number {
+  if (env.GITHUB_ACTIONS !== "true") {
+    error(
+      `floors:record runs only in CI: ${RECORD_ADVICE} (#285, CI records and the laptop commits)`,
+    );
+    return 1;
+  }
+  return recordFloors(
     FLOORS_PATH,
     (measurementsPath) =>
-      spawnSync(process.execPath, [VITEST, "run"], {
+      spawn(process.execPath, [VITEST, "run"], {
         stdio: "inherit",
-        env: { ...process.env, [RECORD_ENV]: measurementsPath },
+        env: { ...env, [RECORD_ENV]: measurementsPath },
       }).status ?? 1,
-    (line) => {
-      console.log(line);
-    },
+    log,
   );
-} else {
-  console.error(
-    `floors:record runs only in CI: ${RECORD_ADVICE} (#285, CI records and the laptop commits)`,
-  );
-  process.exitCode = 1;
 }
+
+asProgram(import.meta.main, recordProgram, process.env, spawnSync, console.log, console.error);
