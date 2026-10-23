@@ -76,18 +76,18 @@ export function projectFiles(
 ): ProjectFiles[] {
   const entries = projects as readonly ProjectEntry[];
   return names.map((name) => {
-    const test = entries.find((entry) => entry.test?.name === name)?.test;
-    if (test === undefined) {
+    const found = entries.find((entry) => entry.test?.name === name)?.test;
+    if (found === undefined) {
       throw new NodeCoverageError(`the config holds no project named ${name}`);
     }
-    if (test.include === undefined) {
+    if (found.include === undefined) {
       throw new NodeCoverageError(`the config's project ${name} names no include`);
     }
     return {
       name,
-      include: [...test.include],
-      exclude: [...(test.exclude ?? defaultExclude)],
-      setupFiles: [test.setupFiles ?? []].flat(),
+      include: [...found.include],
+      exclude: [...(found.exclude ?? defaultExclude)],
+      setupFiles: [found.setupFiles ?? []].flat(),
     };
   });
 }

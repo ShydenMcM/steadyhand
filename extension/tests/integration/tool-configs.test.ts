@@ -89,10 +89,15 @@ test.each([
   expect(project("unit")?.exclude).toContain(glob);
 });
 
-test("a unit run refuses processes first, clocks each test, and clocks loads last", () => {
+test("a unit run writes Node's coverage first, refuses processes, clocks each test, and clocks loads last", () => {
   expect(project("unit")?.setupFiles).toEqual([
+    "tests/flush-node-coverage.ts",
     "tests/no-process.ts",
     "tests/test-clock.ts",
     "tests/load-clock.ts",
   ]);
+});
+
+test.each(["guards", "integration"])("a %s run writes Node's coverage of each worker", (name) => {
+  expect(project(name)?.setupFiles).toEqual(["tests/flush-node-coverage.ts"]);
 });
