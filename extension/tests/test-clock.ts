@@ -35,4 +35,6 @@ afterEach(({ task }) => {
 });
 
 // AC4 plant (#394), removed once CI reads it: a setup file's branch arm no run takes.
-export const AC4_PLANT = process.env.STEADYHAND_AC4_PLANT === "never" ? "taken" : "untaken";
+if (process.env.STEADYHAND_AC4_PLANT === "never") {
+  judge("planted", "1");
+}
