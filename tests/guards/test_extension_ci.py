@@ -237,5 +237,6 @@ def test_the_guards_job_installs_then_runs_the_guards_alone_with_one_limit() -> 
     limited = [step for step in guards_job()["steps"] if "timeout-minutes" in step]
     assert limited == steps[1:]
     # Measured on CI on 2026-10-12 (run 38273371897): 5 s. A step limit is whole minutes, so the
-    # least it can be is 1; the native run (#394) is held to the same.
+    # least it can be is 1; the native run (#394), measured on CI on 2026-10-23 (run 39931521186)
+    # at 10 s, is held to the same.
     assert [step["timeout-minutes"] for step in limited] == [1, 1]
