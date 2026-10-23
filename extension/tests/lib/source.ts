@@ -184,3 +184,20 @@ export const typeChecked = (
   });
   return { checker: program.getTypeChecker(), files, program };
 };
+
+/** How `node`, a name `ts`, reaches the compiler: a member (`ts.X`), a type's name (`ts.X`), an
+ * import by its own name (`import`), or another way (renamed, held, passed), which hides what it
+ * reads from a guard. */
+export const compilerUse = (node: ts.Identifier): string => {
+  const { parent } = node;
+  if (ts.isPropertyAccessExpression(parent) && parent.expression === node) {
+    return `ts.${parent.name.text}`;
+  }
+  if (ts.isQualifiedName(parent) && parent.left === node) {
+    return `ts.${parent.right.text}`;
+  }
+  if (ts.isImportSpecifier(parent) && parent.propertyName === undefined) {
+    return "import";
+  }
+  return "another way";
+};

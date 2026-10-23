@@ -1,10 +1,10 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, expect, test } from "vitest";
+import { afterAll, assert, beforeAll, expect, test } from "vitest";
 import { browserGlobals, numberTypes, numberWords, typedDeclarations } from "../lib/core-rules.ts";
 import { floorBreach } from "../lib/floors.ts";
-import { searched } from "../lib/population.ts";
+import { foundIn, searched } from "../lib/population.ts";
 import {
   nodes,
   parse,
@@ -141,6 +141,11 @@ const TYPED: readonly (readonly [string, string, readonly string[]])[] = [
     ["line 1: i: number"],
   ],
   ["a bigint", "export const fee = 100n;", []],
+  [
+    "a function expression's bigint result",
+    "export const fee = function () {\n  return 100n;\n};",
+    [],
+  ],
   ["a comparator's result", "export const s = [2n, 1n].toSorted((a, b) => (a < b ? -1 : 1));", []],
   ["a string", 'export const s = "100";', []],
   ["an inline index", "export const first = [1n][0];", []],
@@ -167,10 +172,10 @@ afterAll(() => {
 test.each(TYPED.map((row, index) => [...row, index] as const))(
   "the type pass judges %s",
   (_, __, found, index) => {
-    const file = checked?.files[index];
-    expect(
-      file === undefined || checked === undefined ? undefined : numberTypes(checked.checker, file),
-    ).toEqual(found);
+    assert.isDefined(checked);
+    const file = checked.files[index];
+    assert.isDefined(file);
+    expect(numberTypes(checked.checker, file)).toEqual(found);
   },
 );
 
@@ -182,7 +187,11 @@ test("core's files are the ones git lists, and as many as recorded", () => {
 test("core reaches no browser global", () => {
   const read = CORE.map((path) => ({ path, file: readSource(path) }));
   const identifiers = read.flatMap(({ file }) => nodes(file).filter(ts.isIdentifier));
-  const found = read.flatMap(({ path, file }) => browserGlobals(file).map((f) => `${path} ${f}`));
+  const found = foundIn(
+    read,
+    ({ path }) => path,
+    ({ file }) => browserGlobals(file),
+  );
   expect(searched(found, { of: identifiers.length, what: "identifiers in core" })).toEqual([]);
   expect(floorBreach("browser-globals.identifiers", identifiers.length)).toBeUndefined();
 });
@@ -190,7 +199,11 @@ test("core reaches no browser global", () => {
 test("core writes no number", () => {
   const read = CORE.map((path) => ({ path, file: readSource(path) }));
   const judged = read.flatMap(({ file }) => nodes(file));
-  const found = read.flatMap(({ path, file }) => numberWords(file).map((f) => `${path} ${f}`));
+  const found = foundIn(
+    read,
+    ({ path }) => path,
+    ({ file }) => numberWords(file),
+  );
   expect(searched(found, { of: judged.length, what: "nodes in core" })).toEqual([]);
   expect(floorBreach("number-words.nodes", judged.length)).toBeUndefined();
 });
@@ -198,8 +211,10 @@ test("core writes no number", () => {
 test("no value in core has a number type, written or inferred", () => {
   const { checker, files } = typeChecked(CORE);
   const judged = files.flatMap((file) => typedDeclarations(file));
-  const found = files.flatMap((file) =>
-    numberTypes(checker, file).map((f) => `${file.fileName} ${f}`),
+  const found = foundIn(
+    files,
+    (file) => file.fileName,
+    (file) => numberTypes(checker, file),
   );
   expect(searched(found, { of: judged.length, what: "typed values in core" })).toEqual([]);
   expect(floorBreach("number-types.values", judged.length)).toBeUndefined();

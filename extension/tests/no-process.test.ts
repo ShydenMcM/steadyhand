@@ -14,10 +14,11 @@ import { lookup as namedLookup } from "node:dns/promises";
 import { connect as namedConnect } from "node:net";
 import http from "node:http";
 import net from "node:net";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import {
   armed,
   install,
+  raiseSwallowed,
   REFUSES,
   refusing,
   swallowedMessage,
@@ -59,31 +60,31 @@ test("node:dns/promises is the same object as dns.promises, so one wrapper cover
   expect(dnsPromises).toBe(dns.promises);
 });
 
-/** Fail before a plant runs unless every entry point is wrapped, so that taking a wrapper out
- * (a mutation) can never let a plant start a real process or reach the network. */
-const everyEntryPointWrapped = (): void => {
-  if (!armed()) throw new Error("the refusal is not armed, so no plant runs");
-  // net.connect is not wrapped itself: it reaches the wrapped Socket.prototype.connect inside.
-  const named: readonly (readonly [string, unknown])[] = [
-    ["child_process.spawn", namedSpawn],
-    ["child_process.execFileSync", namedExecFileSync],
-    ["dns.promises.lookup", namedLookup],
-  ];
-  const stale = named.filter(
-    ([label, binding]) => (binding as Record<symbol, unknown>)[REFUSES] !== label,
-  );
-  if (stale.length > 0) {
-    throw new Error(
-      `named imports not wrapped, so no plant runs: ${stale.map(([l]) => l).join(", ")}`,
-    );
-  }
-  const unwrapped = ENTRY_POINTS.filter(([label, owner, name]) => refuses(owner, name) !== label);
-  if (unwrapped.length > 0) {
-    throw new Error(`not wrapped, so no plant runs: ${unwrapped.map(([l]) => l).join(", ")}`);
-  }
-};
+// net.connect is not wrapped itself: it reaches the wrapped Socket.prototype.connect inside.
+const NAMED: readonly (readonly [string, unknown])[] = [
+  ["child_process.spawn", namedSpawn],
+  ["child_process.execFileSync", namedExecFileSync],
+  ["dns.promises.lookup", namedLookup],
+];
 
-const ignore = (): void => undefined;
+/** What must hold before a plant runs, each with whether it does: the refusal armed, every named
+ * import and every entry point wrapped. A plant test first expects none to fail, so taking a
+ * wrapper out (a mutation) can never let a plant start a real process or reach the network. */
+const unwrapped = (): (readonly [string, boolean])[] =>
+  [
+    ["the refusal is armed", armed()] as const,
+    ...NAMED.map(
+      ([label, binding]) =>
+        [
+          `${label}, imported by name`,
+          (binding as Record<symbol, unknown>)[REFUSES] === label,
+        ] as const,
+    ),
+    ...ENTRY_POINTS.map(([label, owner, name]) => [label, refuses(owner, name) === label] as const),
+  ].filter(([, holds]) => !holds);
+
+// A callback the refused call never reaches; a mock, so no line of ours waits on it.
+const ignore = vi.fn();
 
 const PLANTS: readonly (readonly [string, string, () => unknown])[] = [
   ["spawn", "child_process.spawn", () => childProcess.spawn("true")],
@@ -165,20 +166,20 @@ const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\
 test.each([...PLANTS, ...NAMED_PLANTS])(
   "a planted %s call is refused by name",
   (_id, label, plant) => {
-    everyEntryPointWrapped();
+    expect(unwrapped()).toEqual([]);
     expect(plant).toThrow(new RegExp(`^${escape(label)} was called: `));
     expect(takeRefused()).toEqual([label]);
   },
 );
 
 test("a planted fetch is refused at its socket, and the refusal is kept though fetch hides it", async () => {
-  everyEntryPointWrapped();
+  expect(unwrapped()).toEqual([]);
   await expect(fetch("http://x.test/")).rejects.toThrow("fetch failed");
   expect(takeRefused()).toEqual(["net.Socket.connect"]);
 });
 
 test("the refusal says what to do instead", () => {
-  everyEntryPointWrapped();
+  expect(unwrapped()).toEqual([]);
   let refused: unknown;
   try {
     childProcess.execSync("true");
@@ -217,12 +218,10 @@ test("unarmed, a wrapper calls through with its receiver and arguments", () => {
 
 test("armed, a wrapper records its label in its own gate and never calls through", () => {
   const gate = { armed: true, refused: [] };
-  let called = false;
-  const original = (): void => {
-    called = true;
-  };
+  const original = vi.fn();
   expect(() => refusing("plant", original, gate).call(undefined)).toThrow(UnitRuleError);
-  expect([gate.refused, called]).toEqual([["plant"], false]);
+  expect(gate.refused).toEqual(["plant"]);
+  expect(original).not.toHaveBeenCalled();
 });
 
 test.each(ENTRY_POINTS)(
@@ -233,3 +232,15 @@ test.each(ENTRY_POINTS)(
     expect(Reflect.get(owner, name)).toBe(before);
   },
 );
+
+test("a swallowed refusal is raised after the words it is given", () => {
+  expect(() => {
+    raiseSwallowed(["child_process.spawn"], "loading the file: ");
+  }).toThrow(new Error(`loading the file: ${String(swallowedMessage(["child_process.spawn"]))}`));
+});
+
+test("with nothing refused, nothing is raised", () => {
+  expect(() => {
+    raiseSwallowed([], "loading the file: ");
+  }).not.toThrow();
+});

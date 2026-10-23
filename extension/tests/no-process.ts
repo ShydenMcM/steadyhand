@@ -3,16 +3,14 @@
  * before the test file is imported, and fails a file or test that swallowed a refusal.
  */
 import { afterEach, beforeAll } from "vitest";
-import { install, swallowedMessage, takeRefused } from "./lib/no-process.ts";
+import { install, raiseSwallowed, takeRefused } from "./lib/no-process.ts";
 
 install();
 
 beforeAll(() => {
-  const swallowed = swallowedMessage(takeRefused());
-  if (swallowed !== undefined) throw new Error(`loading the file: ${swallowed}`);
+  raiseSwallowed(takeRefused(), "loading the file: ");
 });
 
 afterEach(() => {
-  const swallowed = swallowedMessage(takeRefused());
-  if (swallowed !== undefined) throw new Error(swallowed);
+  raiseSwallowed(takeRefused(), "");
 });

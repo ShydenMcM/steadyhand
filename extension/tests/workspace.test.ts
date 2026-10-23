@@ -50,14 +50,14 @@ test("the lock records the manifest's engines range", () => {
 });
 
 test.each(Object.entries(LAYERS))("%s is built on %j and on no other package", (name, below) => {
-  const deps = Object.keys(manifest(`packages/${name}/package.json`).dependencies ?? {});
+  const deps = Object.keys(manifest(`packages/${name}/package.json`).dependencies as object);
   expect(deps.filter((dep) => dep.startsWith("@steadyhand/")).sort()).toEqual(
     below.map((layer) => `@steadyhand/${layer}`),
   );
 });
 
 test("core's only runtime dependency is decimal.js", () => {
-  expect(Object.keys(manifest("packages/core/package.json").dependencies ?? {})).toEqual([
+  expect(Object.keys(manifest("packages/core/package.json").dependencies as object)).toEqual([
     "decimal.js",
   ]);
 });
@@ -82,7 +82,7 @@ test("every locked package comes from the npm registry with a sha512 integrity",
       !entry.resolved?.startsWith("https://registry.npmjs.org/") ||
       !entry.integrity?.startsWith("sha512-"),
   );
-  expect(loose.map(([path]) => path)).toEqual([]);
+  expect(loose).toEqual([]);
 });
 
 test("TypeScript runs strict, with checked indexes and exact optional properties", () => {

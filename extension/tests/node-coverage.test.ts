@@ -24,6 +24,19 @@ import {
 
 let root = "";
 
+/** Where `report` prints: each line kept by where it went. One pair of printers serves every
+ * test, so each runs in the tests that print to it. */
+const printing = (): {
+  log: string[];
+  error: string[];
+  toLog: (line: string) => void;
+  toError: (line: string) => void;
+} => {
+  const log: string[] = [];
+  const error: string[] = [];
+  return { log, error, toLog: (line) => log.push(line), toError: (line) => error.push(line) };
+};
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "steadyhand-node-coverage-"));
 });
@@ -290,17 +303,9 @@ test("the report of the files measured is written for the gate, and each file's 
   const setup = await file("tests/setup.ts", "const b = 2;\nconst c = 3;\n");
   const spec = await file("tests/a.test.ts", "const d = 4;\n");
   await rawReport([config, setup, spec]);
-  const log: string[] = [];
-  const error: string[] = [];
+  const { log, error, toLog, toError } = printing();
   const argv = ["--raw", join(root, "raw"), "--out", join(root, "out"), "--project", "unit"];
-  expect(
-    await report(
-      argv,
-      settings(),
-      (line) => log.push(line),
-      (line) => error.push(line),
-    ),
-  ).toBe(0);
+  expect(await report(argv, settings(), toLog, toError)).toBe(0);
   const written = JSON.parse(
     await readFile(join(root, "out", "coverage-final.json"), "utf8"),
   ) as Record<string, { s: Record<string, number> }>;
@@ -320,15 +325,9 @@ test.each([
   ["--out", ["--raw", "r", "--project", "unit"]],
   ["--project", ["--raw", "r", "--out", "o"]],
 ])("a run without %s is refused with the usage, and status 1", async (_missing, argv) => {
-  const error: string[] = [];
-  expect(
-    await report(
-      argv,
-      settings(),
-      () => undefined,
-      (line) => error.push(line),
-    ),
-  ).toBe(1);
+  const { log, error, toLog, toError } = printing();
+  expect(await report(argv, settings(), toLog, toError)).toBe(1);
+  expect(log).toEqual([]);
   expect(error).toEqual([
     "node coverage: usage: node-coverage-report.ts --raw <folder> --out <folder> --project <name>...",
   ]);
@@ -338,16 +337,10 @@ test("a refusal is printed and the status is 1, with no report written", async (
   await file("vitest.config.ts", "const a = 1;\n");
   const raw = join(root, "raw");
   await mkdir(raw);
-  const error: string[] = [];
+  const { log, error, toLog, toError } = printing();
   const argv = ["--raw", raw, "--out", join(root, "out"), "--project", "unit"];
-  expect(
-    await report(
-      argv,
-      settings(),
-      () => undefined,
-      (line) => error.push(line),
-    ),
-  ).toBe(1);
+  expect(await report(argv, settings(), toLog, toError)).toBe(1);
+  expect(log).toEqual([]);
   expect(error).toEqual([`node coverage: ${raw} holds no raw coverage report (coverage-*.json)`]);
   await expect(readFile(join(root, "out", "coverage-final.json"), "utf8")).rejects.toThrow(
     "ENOENT",

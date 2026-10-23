@@ -69,7 +69,7 @@ test.each([
 interface Project {
   test?: { name?: string; include?: string[]; exclude?: string[]; setupFiles?: string[] };
 }
-const projects = (unit.test?.projects ?? []) as Project[];
+const projects = unit.test?.projects as Project[];
 const project = (name: string): Project["test"] =>
   projects.find((candidate) => candidate.test?.name === name)?.test;
 

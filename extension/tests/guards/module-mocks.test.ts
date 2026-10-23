@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { floorBreach } from "../lib/floors.ts";
 import { holderNames, moduleMocks } from "../lib/module-mocks.ts";
 import { codeText, parse, readSource, ts, UnreadableSourceError } from "../lib/source.ts";
-import { searched } from "../lib/population.ts";
+import { foundIn, searched } from "../lib/population.ts";
 import { filesUnder, gitListed } from "../lib/walk.ts";
 
 const SUFFIXES = [".ts", ".mts", ".cts", ".js", ".mjs", ".cjs"] as const;
@@ -152,7 +152,11 @@ test("the extension's files are the ones git lists, and as many as recorded", ()
 test("no extension file mocks a module", () => {
   const read = FILES.map((path) => ({ path, file: readSource(path) }));
   const names = read.flatMap(({ file }) => holderNames(file));
-  const found = read.flatMap(({ path, file }) => moduleMocks(file).map((f) => `${path} ${f}`));
+  const found = foundIn(
+    read,
+    ({ path }) => path,
+    ({ file }) => moduleMocks(file),
+  );
   expect(
     searched(found, { of: names.length, what: "vi and vitest names in the extension" }),
   ).toEqual([]);

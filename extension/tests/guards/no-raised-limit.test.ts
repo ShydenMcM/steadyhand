@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { expect, test } from "vitest";
 import { GUARDS, INTEGRATION } from "../../vitest.config.ts";
 import { floorBreach } from "../lib/floors.ts";
-import { searched } from "../lib/population.ts";
+import { foundIn, searched } from "../lib/population.ts";
 import {
   CLOCK_FILES,
   clockReads,
@@ -300,14 +300,22 @@ test("the files judged are the ones git lists, and as many as recorded", () => {
 test("no test, helper or config raises, sets or hides a limit, outside the one place", () => {
   const judged = FILES.filter((path) => path !== LIMITS_HOME);
   const calls = judged.flatMap((path) => declaringCalls(readSource(path)));
-  const found = judged.flatMap((path) => raisedLimits(readSource(path)).map((f) => `${path} ${f}`));
+  const found = foundIn(
+    judged,
+    (path) => path,
+    (path) => raisedLimits(readSource(path)),
+  );
   expect(searched(found, { of: calls.length, what: "test and hook declarations" })).toEqual([]);
   expect(floorBreach("raised-limits.calls", calls.length)).toBeUndefined();
 });
 
 test("no unit file reads a clock, outside the two clocks", () => {
   const judged = UNIT_FILES.filter((path) => !CLOCK_FILES.includes(path));
-  const found = judged.flatMap((path) => clockReads(readSource(path)).map((f) => `${path} ${f}`));
+  const found = foundIn(
+    judged,
+    (path) => path,
+    (path) => clockReads(readSource(path)),
+  );
   expect(searched(found, { of: judged.length, what: "unit files" })).toEqual([]);
   expect(floorBreach("raised-limits.unit-files", judged.length)).toBeUndefined();
 });
@@ -323,7 +331,11 @@ test("no npm script sets a limit", () => {
       ).scripts ?? {},
     ),
   );
-  const found = scripts.flatMap((script) => limitFlags(script).map((f) => `${f} in "${script}"`));
+  const found = foundIn(
+    scripts,
+    (script) => script,
+    (script) => limitFlags(script),
+  );
   expect(searched(found, { of: scripts.length, what: "npm scripts" })).toEqual([]);
   expect(floorBreach("raised-limits.scripts", scripts.length)).toBeUndefined();
 });

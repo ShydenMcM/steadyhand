@@ -85,3 +85,11 @@ export const swallowedMessage = (refused: readonly string[]): string | undefined
   refused.length === 0
     ? undefined
     : `refused, and the test carried on as if nothing happened: ${refused.join(", ")} (${RULE}, #286)`;
+
+/** Throw when *refused* holds refusals the code under test swallowed, the message after *words*. */
+export const raiseSwallowed = (refused: readonly string[], words: string): void => {
+  const swallowed = swallowedMessage(refused);
+  if (swallowed !== undefined) {
+    throw new Error(`${words}${swallowed}`);
+  }
+};

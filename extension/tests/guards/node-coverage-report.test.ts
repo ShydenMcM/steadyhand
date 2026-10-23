@@ -44,7 +44,7 @@ test("run as a program, its status is the report's, and its refusal printed", as
 });
 
 test.each([false, undefined])("imported (main is %s), it does nothing", async (isProgram) => {
-  const printed = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  const printed = vi.spyOn(console, "error");
   await main(isProgram, []);
   expect(process.exitCode).toBeUndefined();
   expect(printed).not.toHaveBeenCalled();

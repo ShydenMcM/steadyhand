@@ -1,11 +1,12 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeAll, expect, test } from "vitest";
+import { assert, beforeAll, expect, test } from "vitest";
 import { floorBreach } from "../lib/floors.ts";
 import { searched } from "../lib/population.ts";
 import {
   codeText,
+  compilerUse,
   lineOf,
   nodes,
   parse,
@@ -92,7 +93,8 @@ test("JavaScript is read as JavaScript", () => {
 test("a node's line is counted from 1", () => {
   const file = parse("\n\nwindow;\n", "sample.ts");
   const [found] = nodes(file).filter(ts.isIdentifier);
-  expect(found === undefined ? 0 : lineOf(file, found)).toBe(3);
+  assert.isDefined(found);
+  expect(lineOf(file, found)).toBe(3);
 });
 
 /** Write `files` into a fresh directory, run `check` on their paths and the directory, then remove it. */
@@ -245,30 +247,32 @@ const READERS = new Set([
 ]);
 
 /** How `node`, an identifier named `ts`, is used: `ts.<name>`, a plain import, or another way. */
-const useOf = (node: ts.Identifier): string => {
-  const { parent } = node;
-  if (ts.isPropertyAccessExpression(parent) && parent.expression === node) {
-    return `ts.${parent.name.text}`;
-  }
-  if (ts.isQualifiedName(parent) && parent.left === node) {
-    return `ts.${parent.right.text}`;
-  }
-  if (ts.isImportSpecifier(parent) && parent.propertyName === undefined) {
-    return "import";
-  }
-  return "another way";
-};
+/** Each way a file can reach the compiler's `ts`, with what `compilerUse` calls it. */
+test.each([
+  ["a member", "ts.isIdentifier(node);", "ts.isIdentifier"],
+  ["a type's name", "type T = ts.Node;", "ts.Node"],
+  ["an import by name", 'import { ts } from "./source.ts";', "import"],
+  ["an import renamed", 'import { ts as t } from "./source.ts";', "another way"],
+  ["ts held", "const t = ts;", "another way"],
+  ["ts passed", "f(ts);", "another way"],
+])("%s is read as %s", (_kind, code, use) => {
+  const [name] = nodes(parse(code, "sample.ts")).filter(
+    (node): node is ts.Identifier => ts.isIdentifier(node) && node.text === "ts",
+  );
+  assert.isDefined(name);
+  expect(compilerUse(name)).toBe(use);
+});
 
 test("only tests/lib/source.ts calls the compiler's readers, and ts is reached only as ts.X", () => {
   const uses = FILES.filter((path) => path !== "tests/lib/source.ts").flatMap((path) => {
     const file = readSource(path);
     return nodes(file)
       .filter((node): node is ts.Identifier => ts.isIdentifier(node) && node.text === "ts")
-      .map((node) => ({ path, line: lineOf(file, node), use: useOf(node) }));
+      .map((node) => ({ path, line: lineOf(file, node), use: compilerUse(node) }));
   });
-  const found = uses
-    .filter(({ use }) => use === "another way" || READERS.has(use.slice("ts.".length)))
-    .map(({ path, line, use }) => `${path} line ${String(line)}: ${use}`);
+  const found = uses.filter(
+    ({ use }) => use === "another way" || READERS.has(use.slice("ts.".length)),
+  );
   expect(searched(found, { of: uses.length, what: "uses of ts" })).toEqual([]);
   expect(floorBreach("compiler-home.uses", uses.length)).toBeUndefined();
 });

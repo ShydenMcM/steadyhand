@@ -9,7 +9,7 @@ import { copyFile, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/pro
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { afterAll, beforeAll, expect, test } from "vitest";
+import { afterAll, assert, beforeAll, expect, test } from "vitest";
 import {
   type FileCoverageData,
   readRawReports,
@@ -71,21 +71,21 @@ const node = async (args: string[], raw: string): Promise<void> => {
 };
 
 /** Each line's count, for the lines a statement starts on (the greatest, where two do). */
-const lines = (data: FileCoverageData | undefined): Record<number, number> => {
+const lines = (data: FileCoverageData): Record<number, number> => {
   const counts: Record<number, number> = {};
-  for (const [key, where] of Object.entries(data?.statementMap ?? {})) {
+  for (const [key, where] of Object.entries(data.statementMap)) {
     const { line } = (where as { start: { line: number } }).start;
-    counts[line] = Math.max(counts[line] ?? 0, data?.s[key] ?? 0);
+    counts[line] = Math.max(counts[line] ?? 0, data.s[key] as number);
   }
   return counts;
 };
 
 /** Each named function's count. */
-const functions = (data: FileCoverageData | undefined): Record<string, number> =>
+const functions = (data: FileCoverageData): Record<string, number> =>
   Object.fromEntries(
-    Object.entries(data?.fnMap ?? {}).map(([key, fn]) => [
+    Object.entries(data.fnMap).map(([key, fn]) => [
       (fn as { name: string }).name,
-      data?.f[key] ?? 0,
+      data.f[key] as number,
     ]),
   );
 
@@ -94,17 +94,18 @@ test("a TypeScript file Node ran converts at its own positions, an uncalled func
   await node(["typed.ts"], raw);
   const path = join(folder, "typed.ts");
   const converted = (await toIstanbul(readRawReports(raw), [path]))[path];
+  assert.isDefined(converted);
   expect(lines(converted)).toEqual({ 1: 1, 3: 1, 6: 0, 8: 1 });
   expect(functions(converted)).toEqual({ used: 1, unused: 0 });
-  expect(Object.values(converted?.b ?? {})).toEqual([[1, 0]]);
+  expect(Object.values(converted.b)).toEqual([[1, 0]]);
 });
 
 /** The planted project run by Vitest natively, as `npm run test:native` runs, into *raw*. */
 const runPlanted = async (raw: string): Promise<void> => {
   const pkg = JSON.parse(await readFile(join(EXTENSION, "package.json"), "utf8")) as {
-    scripts: Record<string, string>;
+    scripts: { "test:native": string };
   };
-  const flags = (pkg.scripts["test:native"] ?? "").split(" ").slice(1);
+  const flags = pkg.scripts["test:native"].split(" ").slice(1);
   await node([VITEST, ...flags], raw);
 };
 
@@ -137,16 +138,20 @@ test("a native Vitest run measures its test file, its setup file and its config"
     string,
     FileCoverageData
   >;
-  const at = (name: string): FileCoverageData | undefined => written[join(folder, name)];
+  const at = (name: string): FileCoverageData => {
+    const found = written[join(folder, name)];
+    assert.isDefined(found, name);
+    return found;
+  };
   expect(Object.keys(written).sort()).toEqual(
     ["flush.ts", "planted.test.ts", "vitest.config.ts"].map((name) => join(folder, name)),
   );
   // An import is no statement, and an arrow function has no name of its own (measured).
   expect(lines(at("planted.test.ts"))).toEqual({ 3: 1, 5: 1, 6: 1 });
   expect(functions(at("planted.test.ts"))).toEqual({ "(anonymous_0)": 1, "(anonymous_1)": 1 });
-  expect(Object.values(at("planted.test.ts")?.b ?? {})).toEqual([[1, 0]]);
+  expect(Object.values(at("planted.test.ts").b)).toEqual([[1, 0]]);
   expect(functions(at("flush.ts"))).toEqual({ "(anonymous_0)": 1 });
-  expect(Object.values(at("flush.ts")?.s ?? {})).toEqual([1, 1]);
+  expect(Object.values(at("flush.ts").s)).toEqual([1, 1]);
   expect(lines(at("vitest.config.ts"))).toEqual({ 1: 1 });
 });
 
