@@ -36,7 +36,8 @@ afterEach(() => {
 function gh(status: number | null, files: Record<string, string>): Spawn {
   return (command, args) => {
     started.push([command, ...args]);
-    const into = args[args.indexOf("--dir") + 1] ?? "";
+    // A missing --dir reads as the folder "undefined", which no write can find: the test fails.
+    const into = String(args[args.indexOf("--dir") + 1]);
     for (const [name, text] of Object.entries(files)) writeFileSync(join(into, name), text);
     return { status };
   };
@@ -105,7 +106,9 @@ test.each(['{"a": -1}', '{"a": 1.5}', '{"a": "3"}', "null", "7"])(
 
 test("the artifact is downloaded into a fresh folder of its own, never beside the floors", () => {
   fetch(["node", "fetch-floors.ts", "42"], gh(0, ARTIFACT));
-  const into = started[0]?.[started[0].indexOf("--dir") + 1] ?? "";
+  expect(started).toHaveLength(1);
+  const call = started.flat();
+  const into = String(call[call.indexOf("--dir") + 1]);
   expect(into.startsWith(join(tmpdir(), "floors-"))).toBe(true);
   expect(existsSync(join(into, "floors.json"))).toBe(true);
 });

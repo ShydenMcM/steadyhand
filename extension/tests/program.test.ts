@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 test("run as a program, its work runs with its arguments and sets the exit status", () => {
-  const work = vi.fn((name: string, count: number) => (name === "x" && count === 2 ? 3 : 0));
+  const work = vi.fn((name: string, count: number) => name.length + count);
   asProgram(true, work, "x", 2);
   const code = process.exitCode;
   process.exitCode = undefined;
@@ -26,7 +26,7 @@ test("run as a program, its work runs with its arguments and sets the exit statu
 });
 
 test.each([false, undefined])("imported (main is %s), its work never runs", (isProgram) => {
-  const work = vi.fn(() => 1);
+  const work = vi.fn<() => number>();
   asProgram(isProgram, work);
   expect(work).not.toHaveBeenCalled();
   expect(process.exitCode).toBeUndefined();
