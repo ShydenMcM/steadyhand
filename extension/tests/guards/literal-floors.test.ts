@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import { floorBreach } from "../lib/floors.ts";
 import { assertionsOf, floorConstants, literalFloors, variablesOf } from "../lib/literal-floors.ts";
-import { searched } from "../lib/population.ts";
+import { foundIn, searched } from "../lib/population.ts";
 import { codeText, parse, readSource, tokens, ts, UnreadableSourceError } from "../lib/source.ts";
 import { filesUnder, gitListed } from "../lib/walk.ts";
 
@@ -118,7 +118,11 @@ test.each(TESTS)("%s: the tree reader finds the variables the token walk names",
 test("no test bounds an assertion by a literal floor", () => {
   const read = TESTS.map((path) => ({ path, file: readSource(path) }));
   const assertions = read.flatMap(({ file }) => assertionsOf(file));
-  const found = read.flatMap(({ path, file }) => literalFloors(file).map((f) => `${path} ${f}`));
+  const found = foundIn(
+    read,
+    ({ path }) => path,
+    ({ file }) => literalFloors(file),
+  );
   expect(searched(found, { of: assertions.length, what: "assertions in the tests" })).toEqual([]);
   expect(floorBreach("literal-floors.assertions", assertions.length)).toBeUndefined();
 });
@@ -126,7 +130,11 @@ test("no test bounds an assertion by a literal floor", () => {
 test("no test keeps a floor in a constant", () => {
   const read = TESTS.map((path) => ({ path, file: readSource(path) }));
   const variables = read.flatMap(({ file }) => variablesOf(file));
-  const found = read.flatMap(({ path, file }) => floorConstants(file).map((f) => `${path} ${f}`));
+  const found = foundIn(
+    read,
+    ({ path }) => path,
+    ({ file }) => floorConstants(file),
+  );
   expect(searched(found, { of: variables.length, what: "variables in the tests" })).toEqual([]);
   expect(floorBreach("literal-floors.variables", variables.length)).toBeUndefined();
 });

@@ -1,5 +1,11 @@
 import { expect, test } from "vitest";
-import { LOAD_CPU_LIMIT_MICROSECONDS, loadOf, loadRefusal, report } from "./lib/load-clock.ts";
+import {
+  judge,
+  LOAD_CPU_LIMIT_MICROSECONDS,
+  loadOf,
+  loadRefusal,
+  report,
+} from "./lib/load-clock.ts";
 
 const load = (path: string, cpu: number, wall = cpu + 5) => ({
   path,
@@ -44,4 +50,20 @@ test("this file's own load was recorded on its meta", ({ task }) => {
   expect(recorded?.path).toBe("tests/load-clock.test.ts");
   expect(recorded?.cpuMicroseconds).toBeGreaterThan(0);
   expect(recorded?.wallMicroseconds).toBeGreaterThan(0);
+});
+
+test("a judged run throws the refusal it is given", () => {
+  expect(() => {
+    judge("over the limit", "1");
+  }).toThrow(new Error("over the limit"));
+});
+
+test.each([
+  ["a judged run with no refusal", undefined, "1"],
+  ["a reporting run with a refusal", "over the limit", ""],
+  ["a run with the judge unset", "over the limit", undefined],
+])("%s throws nothing", (_kind, refusal, judging) => {
+  expect(() => {
+    judge(refusal, judging);
+  }).not.toThrow();
 });

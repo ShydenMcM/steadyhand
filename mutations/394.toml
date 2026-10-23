@@ -1,0 +1,230 @@
+# #394: Node's own coverage of the extension's test, setup and config files, and the guard that no
+# test mocks a module, proved on planted mutations predicted before the first run. G1-G6 plant
+# holes in the module-mock guard and the report program; I1-I4 in the native run, the converter,
+# the build and the config; C1-C2 in the CI steps (a report naming another commit, a native run of
+# every project); G0 is a control that changes nothing.
+
+[[mutation]]
+id = "G1"
+why = "The guard forgets vi.doMock, so a test could mock a module through it."
+path = "extension/tests/lib/module-mocks.ts"
+old = "  \"doMock\",\n"
+new = ""
+suite = "extension-guards"
+tests = ["extension/tests/guards/module-mocks.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/guards/module-mocks.test.ts::a test reaching vi.doMock is refused",
+  "extension/tests/guards/module-mocks.test.ts::a test reaching an optional chain is refused",
+  "extension/tests/guards/module-mocks.test.ts::a test reaching a template key is refused",
+]
+
+[[mutation]]
+id = "G2"
+why = "vi read as another object's member (a re-exporting module's) is no longer a holder."
+path = "extension/tests/lib/module-mocks.ts"
+old = "      ? node.name.text\n"
+new = "      ? undefined\n"
+suite = "extension-guards"
+tests = ["extension/tests/guards/module-mocks.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/guards/module-mocks.test.ts::a test reaching vitest read from a module is refused",
+  "extension/tests/guards/module-mocks.test.ts::a test reaching vi read from globalThis is refused",
+  "extension/tests/guards/module-mocks.test.ts::a test reaching globalThis's vi held is refused",
+]
+
+[[mutation]]
+id = "G3"
+why = "vi held, passed or spread is allowed, so its members are read where the guard cannot see."
+path = "extension/tests/lib/module-mocks.ts"
+old = "    holder !== undefined &&\n    !isMemberRoot(node) &&"
+new = "    holder === \"never\" &&\n    !isMemberRoot(node) &&"
+suite = "extension-guards"
+tests = ["extension/tests/guards/module-mocks.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/guards/module-mocks.test.ts::a test reaching vi held is refused",
+  "extension/tests/guards/module-mocks.test.ts::a test reaching vi passed is refused",
+  "extension/tests/guards/module-mocks.test.ts::a test reaching vi spread is refused",
+]
+
+[[mutation]]
+id = "G4"
+why = "A computed key into vi is skipped instead of refused."
+path = "extension/tests/lib/module-mocks.ts"
+old = "      if (!ts.isStringLiteralLike(key)) {\n        throw new UnreadableSourceError("
+new = "      if (!ts.isStringLiteralLike(key)) {\n        return undefined;\n        throw new UnreadableSourceError("
+suite = "extension-guards"
+tests = ["extension/tests/guards/module-mocks.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/guards/module-mocks.test.ts::a computed key into vi cannot be judged, and is refused by name",
+]
+
+[[mutation]]
+id = "G5"
+why = "The independent text count goes blind to vitest's own name."
+path = "extension/tests/guards/module-mocks.test.ts"
+old = '(?:vi|vitest)(?![\w$])/gu'
+new = '(?:vi)(?![\w$])/gu'
+suite = "extension-guards"
+tests = ["extension/tests/guards/module-mocks.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/guards/module-mocks.test.ts::the text count reads two names and a string as the parse tree does",
+  "extension/tests/guards/module-mocks.test.ts::the text count reads a name in a comment and a template as the parse tree does",
+]
+
+[[mutation]]
+id = "G6"
+why = "The report program runs when it is only imported with no main flag."
+path = "extension/tests/node-coverage-report.ts"
+old = "  if (isProgram) {\n"
+new = "  if (isProgram !== false) {\n"
+suite = "extension-guards"
+tests = ["extension/tests/guards/node-coverage-report.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/guards/node-coverage-report.test.ts::imported (main is undefined), it does nothing",
+]
+
+[[mutation]]
+id = "G0"
+why = "The refused members listed in another order: the same set."
+path = "extension/tests/lib/module-mocks.ts"
+old = "  \"mock\",\n  \"unmock\",\n"
+new = "  \"unmock\",\n  \"mock\",\n"
+suite = "extension-guards"
+tests = ["extension/tests/guards/module-mocks.test.ts"]
+expect = "green"
+
+[[mutation]]
+id = "I1"
+why = "The setup file no longer writes the worker's coverage, so a native run reports nothing."
+path = "extension/tests/flush-node-coverage.ts"
+old = "  takeCoverage();\n"
+new = "  void takeCoverage;\n"
+suite = "extension-integration"
+tests = ["extension/tests/integration/node-coverage.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/integration/node-coverage.test.ts::a native Vitest run measures its test file, its setup file and its config",
+]
+
+[[mutation]]
+id = "I2"
+why = "The converter stops comparing lengths, so a file changed since the run converts unrefused."
+path = "extension/tests/lib/node-coverage.ts"
+old = "  if (end !== code.length) {\n"
+new = "  if (end !== code.length && false) {\n"
+suite = "extension-integration"
+tests = ["extension/tests/integration/node-coverage.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/integration/node-coverage.test.ts::a file changed after the run is refused: it ran as other code than it now holds",
+]
+
+[[mutation]]
+id = "I3"
+why = "The bundler passed in is asked for module syntax Chrome cannot load as a classic script."
+path = "extension/build.ts"
+old = "    format: \"iife\",\n"
+new = "    format: \"esm\",\n"
+suite = "extension-integration"
+tests = ["extension/tests/integration/build.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/integration/build.test.ts::content-script is one self-contained script, no module syntax left",
+]
+
+[[mutation]]
+id = "I4"
+why = "The guards project loses the setup file that writes each worker's coverage."
+path = "extension/vitest.config.ts"
+old = "        test: { name: \"guards\", include: [GUARDS], setupFiles: [FLUSH_NODE_COVERAGE] },\n"
+new = "        test: { name: \"guards\", include: [GUARDS] },\n"
+suite = "extension-integration"
+tests = ["extension/tests/integration/tool-configs.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/integration/tool-configs.test.ts::a guards run writes Node's coverage of each worker",
+]
+
+[[mutation]]
+id = "C1"
+why = "The guards' Node report names the commit before the one measured."
+path = ".github/workflows/ci.yml"
+old = "--project guards\n          git rev-parse HEAD > \"${RUNNER_TEMP}/node-coverage-report/sha.txt\""
+new = "--project guards\n          git rev-parse HEAD~1 > \"${RUNNER_TEMP}/node-coverage-report/sha.txt\""
+suite = "guards"
+tests = ["tests/guards/test_extension_ci.py"]
+expect = "red"
+red = [
+  "tests/guards/test_extension_ci.py::test_the_guards_job_installs_then_runs_the_guards_alone_with_one_limit",
+]
+
+[[mutation]]
+id = "C2"
+why = "The unit job's native run runs every project, guards and integration included."
+path = ".github/workflows/ci.yml"
+old = "npm run test:native -- --project unit\n"
+new = "npm run test:native\n"
+suite = "guards"
+tests = ["tests/guards/test_extension_ci.py"]
+expect = "red"
+red = ["tests/guards/test_extension_ci.py::test_the_job_runs_the_workspace_checks_in_order"]
+
+[[mutation]]
+id = "F1"
+why = "foundIn keeps the items with no findings, so every absence search reports every file."
+path = "extension/tests/lib/population.ts"
+old = "    .filter(({ found }) => found.length > 0);"
+new = "    .filter(({ found }) => found.length >= 0);"
+suite = "extension-guards"
+tests = [
+  "extension/tests/guards/core-rules.test.ts",
+  "extension/tests/guards/literal-floors.test.ts",
+  "extension/tests/guards/no-raised-limit.test.ts",
+  "extension/tests/guards/module-mocks.test.ts",
+]
+expect = "red"
+red = [
+  "extension/tests/guards/core-rules.test.ts::core reaches no browser global",
+  "extension/tests/guards/literal-floors.test.ts::no test bounds an assertion by a literal floor",
+  "extension/tests/guards/no-raised-limit.test.ts::no test, helper or config raises, sets or hides a limit, outside the one place",
+  "extension/tests/guards/module-mocks.test.ts::no extension file mocks a module",
+]
+
+[[mutation]]
+id = "S1"
+why = "A renamed import of ts reads as a plain import, so what it reaches is hidden from the guard."
+path = "extension/tests/lib/source.ts"
+old = "  if (ts.isImportSpecifier(parent) && parent.propertyName === undefined) {"
+new = "  if (ts.isImportSpecifier(parent)) {"
+suite = "extension-guards"
+tests = ["extension/tests/guards/source.test.ts"]
+expect = "red"
+red = ["extension/tests/guards/source.test.ts::an import renamed is read as another way"]
+
+[[mutation]]
+id = "D1"
+why = "The compiler's home is misnamed, so the one file allowed to import the compiler is reported."
+path = "extension/tests/guards/import-direction.test.ts"
+old = "  const found = compiler.filter(({ path }) => path !== \"tests/lib/source.ts\");"
+new = "  const found = compiler.filter(({ path }) => path !== \"tests/lib/sources.ts\");"
+suite = "extension-guards"
+tests = ["extension/tests/guards/import-direction.test.ts"]
+expect = "red"
+red = ["extension/tests/guards/import-direction.test.ts::only tests/lib/source.ts imports the TypeScript compiler"]
+
+[[mutation]]
+id = "P1"
+why = "Dependabot no longer holds back acorn's next major, which acorn-jsx (under eslint) refuses."
+path = ".github/dependabot.yml"
+old = "      - dependency-name: \"acorn\" # acorn-jsx: ^6.0.0 || ^7.0.0 || ^8.0.0\n        update-types: [\"version-update:semver-major\"]\n"
+new = ""
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = ["tests/guards/test_supply_chain.py::test_dependabot_holds_back_exactly_the_lines_a_peer_refuses[acorn]"]

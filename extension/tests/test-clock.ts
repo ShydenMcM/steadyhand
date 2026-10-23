@@ -7,7 +7,7 @@
  */
 import { relative } from "node:path";
 import { afterEach, beforeEach } from "vitest";
-import { JUDGE_ENV } from "./lib/load-clock.ts";
+import { JUDGE_ENV, judge } from "./lib/load-clock.ts";
 import { type Spent, testRefusal } from "./lib/test-clock.ts";
 
 const ROOT = new URL("..", import.meta.url).pathname;
@@ -31,5 +31,5 @@ afterEach(({ task }) => {
   };
   (task.meta as { spent?: Spent }).spent = spent;
   const refusal = testRefusal(spent);
-  if (process.env[JUDGE_ENV] === "1" && refusal !== undefined) throw new Error(refusal);
+  judge(refusal, process.env[JUDGE_ENV]);
 });

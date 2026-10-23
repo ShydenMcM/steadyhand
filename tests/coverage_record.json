@@ -78,36 +78,13 @@
   ]
  },
  "unmeasured": [
-  "extension/build.ts",
   "extension/eslint.config.js",
-  "extension/packages/core/test/index.test.ts",
-  "extension/packages/history/test/index.test.ts",
-  "extension/packages/readers/test/index.test.ts",
   "extension/packages/shell/src/content-script.ts",
   "extension/packages/shell/src/service-worker.ts",
   "extension/packages/shell/src/side-panel.ts",
   "extension/playwright.config.ts",
-  "extension/tests/build.test.ts",
   "extension/tests/fetch-floors.ts",
-  "extension/tests/floors.test.ts",
-  "extension/tests/guards/core-rules.test.ts",
-  "extension/tests/guards/import-direction.test.ts",
-  "extension/tests/guards/literal-floors.test.ts",
-  "extension/tests/guards/no-raised-limit.test.ts",
-  "extension/tests/guards/source.test.ts",
-  "extension/tests/integration/build.test.ts",
-  "extension/tests/integration/test-clock.test.ts",
-  "extension/tests/integration/tool-configs.test.ts",
-  "extension/tests/load-clock.test.ts",
-  "extension/tests/load-clock.ts",
   "extension/tests/load-report.ts",
-  "extension/tests/no-process.test.ts",
-  "extension/tests/no-process.ts",
-  "extension/tests/population.test.ts",
-  "extension/tests/record-floors.ts",
-  "extension/tests/test-clock.test.ts",
-  "extension/tests/test-clock.ts",
-  "extension/tests/workspace.test.ts",
-  "extension/vitest.config.ts"
+  "extension/tests/record-floors.ts"
  ]
 }

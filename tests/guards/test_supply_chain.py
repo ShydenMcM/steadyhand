@@ -566,7 +566,10 @@ OWN_IGNORES = {"@types/node": [held_back("@types/node", "26.0.0")]}
 
 def test_the_peer_ceilings_are_the_ones_measured() -> None:
     # Measured on 2026-10-20 (#350): none of the four next lines is released yet but TypeScript 7.
+    # acorn joined on 2026-10-23 (#394, the coverage converter's parser): acorn-jsx, under eslint,
+    # admits acorn up to 8.
     assert [name for name in direct_versions() if ceilings(name)] == [
+        "acorn",
         "esbuild",
         "eslint",
         "typescript",

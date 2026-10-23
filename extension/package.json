@@ -22,6 +22,7 @@
     "test:limits": "vitest run --project unit --mode limits",
     "test:guards": "vitest run --project guards --mode guards --coverage",
     "test:integration": "vitest run --project integration",
+    "test:native": "vitest run --experimental.viteModuleRunner=false --experimental.nodeLoader=false --configLoader native",
     "build": "node build.ts",
     "floors:record": "node tests/record-floors.ts",
     "floors:fetch": "node tests/fetch-floors.ts"
@@ -31,6 +32,9 @@
     "@playwright/test": "1.64.1",
     "@types/node": "26.6.5",
     "@vitest/coverage-v8": "5.0.5",
+    "acorn": "8.19.0",
+    "amaro": "1.1.11",
+    "ast-v8-to-istanbul": "1.0.7",
     "esbuild": "0.28.2",
     "eslint": "10.13.0",
     "prettier": "3.9.10",

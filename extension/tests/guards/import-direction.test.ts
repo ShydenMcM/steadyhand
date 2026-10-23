@@ -130,9 +130,7 @@ test("only tests/lib/source.ts imports the TypeScript compiler", () => {
   );
   const compiler = imports.filter(({ specifier }) => specifier === "typescript");
   expect(compiler.map(({ path }) => path)).toContain("tests/lib/source.ts");
-  const found = compiler
-    .filter(({ path }) => path !== "tests/lib/source.ts")
-    .map(({ path, line }) => `${path} line ${String(line)}: imports typescript`);
+  const found = compiler.filter(({ path }) => path !== "tests/lib/source.ts");
   expect(searched(found, { of: imports.length, what: "imports in the workspace" })).toEqual([]);
   expect(floorBreach("compiler-home.imports", imports.length)).toBeUndefined();
 });

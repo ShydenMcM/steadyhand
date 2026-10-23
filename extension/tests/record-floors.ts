@@ -21,11 +21,15 @@ export type Spawn = (
   options: { stdio: "inherit"; env: NodeJS.ProcessEnv },
 ) => { status: number | null };
 
-/** The program's work, given its environment, process launcher and output, so a unit test stands
- * them in (#374 AC6): its exit status. */
+/** What records the floors, as this script calls `recordFloors`. */
+export type RecordFloors = typeof recordFloors;
+
+/** The program's work, given its environment, process launcher, recorder and output, so a unit
+ * test stands them in as arguments (#374 AC6; no module mock, #394): its exit status. */
 export function recordProgram(
   env: NodeJS.ProcessEnv,
   spawn: Spawn,
+  record: RecordFloors,
   log: (line: string) => void,
   error: (line: string) => void,
 ): number {
@@ -35,7 +39,7 @@ export function recordProgram(
     );
     return 1;
   }
-  return recordFloors(
+  return record(
     FLOORS_PATH,
     (measurementsPath) =>
       spawn(process.execPath, [VITEST, "run"], {
@@ -46,4 +50,12 @@ export function recordProgram(
   );
 }
 
-asProgram(import.meta.main, recordProgram, process.env, spawnSync, console.log, console.error);
+asProgram(
+  import.meta.main,
+  recordProgram,
+  process.env,
+  spawnSync,
+  recordFloors,
+  console.log,
+  console.error,
+);

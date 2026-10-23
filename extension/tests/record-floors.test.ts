@@ -1,25 +1,20 @@
 /**
- * `npm run floors:record` with its process, environment and output stood in (#374 AC6): it records
- * only in CI, where it runs every suite in record mode through `recordFloors`, and refuses anywhere
- * else. `recordFloors` itself is tested in `tests/floors.test.ts`; here it is a mock that runs the
- * suite runner it is handed, so the command that runner starts is seen.
+ * `npm run floors:record` with its process, environment, recorder and output stood in (#374 AC6):
+ * it records only in CI, where it runs every suite in record mode through the recorder, and refuses
+ * anywhere else. `recordFloors` itself is tested in `tests/floors.test.ts`; here the recorder is a
+ * stand-in passed as an argument (no module mock, #394) that runs the suite runner it is handed, so
+ * the command that runner starts is seen.
  */
 import { expect, test, vi } from "vitest";
-import type { Spawn } from "./record-floors.ts";
+import { FLOORS_PATH, RECORD_ADVICE } from "./lib/floors.ts";
+import { type RecordFloors, recordProgram, type Spawn } from "./record-floors.ts";
 
-const recorded = vi.hoisted(() =>
-  vi.fn((path: string, run: (measurementsPath: string) => number, log: (line: string) => void) => {
+function recorder(): ReturnType<typeof vi.fn<RecordFloors>> {
+  return vi.fn<RecordFloors>((path, run, log) => {
     log(`recording ${path}`);
     return run("/scratch/measurements.json") + 40;
-  }),
-);
-vi.mock("./lib/floors.ts", async (real) => ({
-  ...(await real<typeof import("./lib/floors.ts")>()),
-  recordFloors: recorded,
-}));
-
-const { FLOORS_PATH, RECORD_ADVICE } = await import("./lib/floors.ts");
-const { recordProgram } = await import("./record-floors.ts");
+  });
+}
 
 interface Started {
   command: string;
@@ -38,10 +33,12 @@ function spawned(status: number | null): { spawn: Spawn; started: Started[] } {
 
 test("in CI it records the floors, running every suite in record mode", () => {
   const { spawn, started } = spawned(2);
+  const recorded = recorder();
   const lines: string[] = [];
   const code = recordProgram(
     { GITHUB_ACTIONS: "true", KEPT: "k" },
     spawn,
+    recorded,
     (line) => lines.push(line),
     () => {},
   );
@@ -62,12 +59,12 @@ test("in CI it records the floors, running every suite in record mode", () => {
 });
 
 test("a suite run with no exit status counts as failed", () => {
-  recorded.mockClear();
   const { spawn } = spawned(null);
   expect(
     recordProgram(
       { GITHUB_ACTIONS: "true" },
       spawn,
+      recorder(),
       () => {},
       () => {},
     ),
@@ -77,13 +74,14 @@ test("a suite run with no exit status counts as failed", () => {
 test.each([{}, { GITHUB_ACTIONS: "false" }, { GITHUB_ACTIONS: "1" }])(
   "outside CI (%j) it refuses, records nothing and starts nothing",
   (env) => {
-    recorded.mockClear();
     const { spawn, started } = spawned(0);
+    const recorded = recorder();
     const errors: string[] = [];
     expect(
       recordProgram(
         env,
         spawn,
+        recorded,
         () => {},
         (line) => errors.push(line),
       ),

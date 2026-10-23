@@ -1,42 +1,34 @@
 # Handover: steadyhand
 
-**Updated:** 2026-10-22 (UTC). Current state only. Older history: `git show 932167c:HANDOVER.md`.
+**Updated:** 2026-10-23 (UTC). Current state only. Older history: `git show ff266fc:HANDOVER.md`.
 
-**Direction (#214):** steadyhand becomes a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. EXT stories #222-#245 follow the clean-up queue below.
-
-**Coverage rulings (2026-10-21/22, global):** the last five paragraphs of `~/.claude/global-rules/reference/reference-engineering-standards.md`. Today's: the record is measured by the PR's coverage job and folded on the laptop ("CI prints, laptop folds"); `TYPE_CHECKING` blocks count as unrun and are fixed by why they were hidden ("Check why, then fix by cause": a heavy library gets our own `Protocol` shape types); Vitest's unmeasurable test/setup/config files go to #394 via Node's own V8 coverage; timed tests run twice ("Two runs, one judges time").
+**Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. EXT stories #222-#245 follow the clean-up queue.
 
 ## Branches and heads
-- `develop`: read with `git rev-parse origin/develop` (c20a25d when written). Merge green PRs into `develop` without asking; never `main`.
-- **`374/helper-coverage`** (#374, In Progress, 13): worktree `../steadyhand-374`, draft PR #389, **local head 5211f50 not pushed** (read `git rev-parse HEAD` there). It already holds develop: `31f5bc5` merged #381's last head, `92d122d` recorded develop's squash with `-s ours` (trees equal, af7ee6b). PR #389's base is still `381/coverage-gate`: retarget it to `develop` at the push.
-- `381/coverage-gate`: merged; delete local and remote once Shyden agrees (tip e49c98d IS the merged head).
-- `272/python-floors` (#272, paused until #374): worktree `../steadyhand-272`, local head e6426b2; never push this branch again. Uncommitted on purpose: `tests/guards/test_no_literal_floor.py` (copy in `.superpowers/sdd/272/`).
-- `391/cut-thirty-days` (#391): worktree `../steadyhand-391` holds an uncommitted attempt that does not cut the CPU (findings on #391); discarding it is Shyden's call.
-- To delete when Shyden agrees: `367/scratch-ref-recorder` (#369), `381/coverage-gate`. Keep `203/spec-amendment-wip`, `ext/s3b-guards`.
-
-## #381: closed 2026-10-22
-Merged as dd8f9a9; every AC verified in its closing comment. `coverage` is required on develop (16 checks, strict) and reports on the docs-only path (PR #395). #394 is no longer blocked.
-
-## #374 state (gate `.superpowers/sdd/374/gate.sh`, mutations `mutations/374.toml`)
-- Done before today: integration suite measured, properties measured twice and joined, reports expected by name, Protocol `...` bodies are docstrings, Yahoo download stood in, stand-ins and recorders run. CI green on 2fb8220: 99.25% statements, 98.76% arms.
-- **Done today (5211f50, AC8):** no `TYPE_CHECKING` left. `scripts/workflow_coverage.py` and `workflow_runs.py`: runtime imports. `steadyhand_idx/yahoo.py` + `tests/idx/test_yahoo.py`: pandas replaced by `YahooFrame`/`YahooSplits`/`YahooRecord`/`YahooIndex`/`YahooColumns`/`YahooStamp` (pandas costs 1.555 s CPU at load). `cli.py`: `Writable` replaces `_typeshed.SupportsWrite`. mypy, ruff clean; 681 affected unit tests pass; a planted Protocol member turned mypy red at all 7 call sites.
-- **Next (AC9, design first):** perf runs twice. The 6 time checks are inline asserts in `tests/perf/*.py`. Needs: one helper judging time; a measured run (`-m perf --cov`, its own report, added to the coverage job's `--reports`) that judges no time; the judged run refusing coverage, and the untimed mode refusing to run without coverage (no way to dodge the verdict). Same for `test_yahoo_live` in `yahoo-shape.yml`. Write the before-list of gaps, plant each, then build.
-- Then: TS files Vitest can measure (AC6: `build.ts`, `eslint.config.js`, `playwright.config.ts` loaded in-process), the shell (16 lines), plugins' untraced-only paths (unit_limits, load_clock: a measurement limit to put to Shyden), run the full gate, push, retarget #389, fold CI's record.
+- `develop`: read with `git rev-parse origin/develop` (135fc3a when written, CI run 39937439249 all green, deploy-dev included). Merge green PRs into develop without asking; never `main`.
+- **#394 is DONE**: PR #399 squash-merged (135fc3a), issue closed with every AC's evidence, board Done. Worktree `../steadyhand-394` (branch `394/node-v8-coverage`, tip c5fa558 = the merged PR head) can be removed.
+- **`374/measure-every-suite`** (#374, 13 points, now unblocked): worktree `../steadyhand-374`, draft PR #389, head 7698da2. What it meets on merging develop: comment 6362572182 on #374 (build.ts folds away; no vi.mock/hoisted/doMock and four more, guard-refused; test/setup/config files enter at 0 untested; 8 files still unmeasured, all #374's). Rework detail: comment 6358790956.
+- `272/python-floors` paused until #374. `391/cut-thirty-days`: uncommitted attempt in `../steadyhand-391`. Keep `203/spec-amendment-wip`, `ext/s3b-guards`.
 
 ## Resume steps
-1. Run `ListAgents`; none were started.
-2. #374 AC9 design, then the rest of #374 as listed.
-3. Then #394 (8), #391, #382; #272 resumes after #374.
+1. `ListAgents`; `git rev-parse origin/develop`.
+2. Next ticket by the queue: #374. In `../steadyhand-374`: merge `origin/develop` (conflicts: build.ts take develop's; record-floors.test.ts and tool-configs.test.ts lose vi.mock), re-record floors via record-floors.yml on a scratch ref, run a local gate (copy `.superpowers/sdd/394/gate.sh` for 374), push, read CI by name.
+3. Laptop runs only unit, lint, format, types. A live CI plant must trip only its target check (memory `feedback-live-plants-move-no-floor`).
 
 ## Waiting on Shyden
-- #272: confirm a constant-name `setattr` is read like `x.name = value`. #308's read-only key.
-- Deleting `381/coverage-gate`, `367/scratch-ref-recorder`; discarding #391's attempt.
+- #394's guard refuses four vi members beyond the ruling's three (unmock, doUnmock, importActual, importMock: Vitest's own rewrite trigger). Told 2026-10-23; no answer yet.
+- #400 (filed for repo-template#86): confirm the ruling that `main` drops strict for a release-cut check; measured strict: true, develop..main empty; the setting is his click.
+- #272: constant-name `setattr` read like `x.name = value`. #308's read-only key.
+- Deleting `381/coverage-gate`, `367/scratch-ref-recorder`, stray `coverage/374/helper-coverage`; discarding #391's attempt.
+
+## Nothing running
+No background job, monitor, container or CI run of this session.
 
 ## Next on the clean-up queue (all before #222)
-#374 (13, draft PR #389), #394 (8), #391 (2), #382 (5), #365 (5, blocks #272), #366 (2), #377 (2), #378 (3), #348 (5, waits on repo-template#27), #308 (2, waits on the key), #315 (2), #317 (5), #320 (2), #337 (3), #336 (5), #341 (2), #359 (3), #362 (2).
+#374 (13, PR #389), #391 (2), #382 (5), #365 (5, blocks #272), #366 (2), #377 (2), #378 (3), #348 (5, waits on repo-template#27), #400 (3, waits on Shyden), #308 (2), #315 (2), #317 (5), #320 (2), #337 (3), #336 (5), #341 (2), #359 (3), #362 (2).
 
-## Progress (2026-10-22, `uv run --locked python .superpowers/sdd/estimates/progress.py`; `post-launch` left out)
-- **Measured:** EXT 4 of 28 stories closed (21 of 184 points). Board open: 44 tickets, 247 points across 43 scored (epic #214 unscored). Closed 2026-10-16 to 2026-10-22: 10 tickets, 51 points (#381 today). #394 (8) filed today.
-- **By tickets: 14% complete (4 of 28 stories). ETA 2026-11-22, low confidence:** 43 open scored tickets at 1.43 a day is about 31 days.
-- **By effort: 247 points remaining across 43 scored open tickets. ETA 2026-11-25, low confidence:** 7.3 points a day is about 34 days.
-- **Assumed:** last week's pace holds. **Outside waits:** broker account (#242), Web Store review, repo-template#6 (#315), the key (#308), #272's ruling.
+## Progress (2026-10-23, `uv run --locked python .superpowers/sdd/estimates/progress.py`; `post-launch` left out)
+- **Measured:** EXT 4 of 28 stories closed (21 of 184 points). Board open: 44 tickets, 242 points across 43 scored (epic #214 unscored). Closed 2026-10-16 to 2026-10-23: 8 tickets, 46 points.
+- **By tickets: 14% complete (4 of 28 stories). ETA 2026-11-30, low confidence:** 43 open scored tickets at 1.14 a day is about 38 days.
+- **By effort: 242 points remaining across 43 scored open tickets. ETA 2026-11-29, low confidence:** 6.6 points a day is about 37 days.
+- **Assumed:** last week's pace holds (it includes #394's 13). **Outside waits:** broker account (#242), Web Store review, repo-template#6 (#315), the key (#308), #272's ruling, #400's ruling.

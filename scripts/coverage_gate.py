@@ -25,8 +25,9 @@ IGNORE_HINT = re.compile(r"\b(?:v8|c8|istanbul)\s+ignore\b")
 # The committed record the measured counts must equal.
 RECORD = "tests/coverage_record.json"
 # Every suite that measures coverage, by the folder its CI job keeps (#381, #374): each must be
-# there, and no other, or the gate fails closed. coverage.py JSON, then istanbul (vitest). The
-# properties suite draws fresh random cases each run, so it is measured twice ("-again").
+# there, and no other, or the gate fails closed. coverage.py JSON, then istanbul: vitest's, and
+# Node's own of the test, setup and config files ("-node", #394). The properties suite draws
+# fresh random cases each run, so it is measured twice ("-again").
 PYTHON_REPORTS = tuple(
     f"coverage-python-{suite}{python}"
     for suite in ("", "guards-", "integration-", "perf-", "properties-", "properties-again-")
@@ -38,7 +39,10 @@ REPEATS = {
     f"coverage-python-properties-again-{v}": f"coverage-python-properties-{v}"
     for v in ("3.12", "3.13")
 }
-ISTANBUL_REPORTS = ("coverage-extension-unit", "coverage-extension-guards")
+ISTANBUL_REPORTS = tuple(
+    f"coverage-extension-{suite}"
+    for suite in ("unit", "guards", "unit-node", "guards-node", "integration-node")
+)
 # Code: every Python, TypeScript and JavaScript file, and every workflow ("all. so 1 and 2").
 CODE_SUFFIXES = (".py", ".ts", ".js")
 WORKFLOWS = ".github/workflows/"
