@@ -85,3 +85,6 @@ export default defineConfig(({ mode }) => ({
     },
   },
 }));
+
+// AC4 plant (#394), removed once CI reads it: a config line no run reaches.
+export const ac4Plant = (): string => "never called";

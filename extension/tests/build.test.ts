@@ -20,6 +20,11 @@ afterEach(async () => {
   await rm(outdir, { recursive: true, force: true });
 });
 
+// AC4 plant (#394), removed once CI reads it: a test file's line no test runs.
+if (process.env.STEADYHAND_AC4_PLANT === "never") {
+  throw new Error("planted");
+}
+
 const ROOT = join(import.meta.dirname, "..");
 const pkg = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8")) as {
   version: string;
