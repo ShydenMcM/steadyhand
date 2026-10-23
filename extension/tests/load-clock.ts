@@ -7,7 +7,7 @@
  */
 import { relative } from "node:path";
 import { beforeAll } from "vitest";
-import { JUDGE_ENV, loadRefusal, recordLoad } from "./lib/load-clock.ts";
+import { JUDGE_ENV, judge, loadRefusal, recordLoad } from "./lib/load-clock.ts";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const thread = (): number => {
@@ -27,5 +27,5 @@ beforeAll(({}, running) => {
   };
   recordLoad(running.meta, load);
   const refusal = loadRefusal(load);
-  if (process.env[JUDGE_ENV] === "1" && refusal !== undefined) throw new Error(refusal);
+  judge(refusal, process.env[JUDGE_ENV]);
 });

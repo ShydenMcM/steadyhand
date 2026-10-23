@@ -53,3 +53,11 @@ export const report = (loads: readonly Load[]): string[] => [
         `${column(load.cpuMicroseconds)} us CPU ${column(load.wallMicroseconds)} us wall  ${load.path}`,
     ),
 ];
+
+/** Throw *refusal*, if there is one, when the run judges (*judging* is `JUDGE_ENV`'s value, "1"
+ * in a limits run); any other run reports and passes. */
+export const judge = (refusal: string | undefined, judging: string | undefined): void => {
+  if (judging === "1" && refusal !== undefined) {
+    throw new Error(refusal);
+  }
+};
