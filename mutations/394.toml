@@ -217,3 +217,14 @@ suite = "extension-guards"
 tests = ["extension/tests/guards/import-direction.test.ts"]
 expect = "red"
 red = ["extension/tests/guards/import-direction.test.ts::only tests/lib/source.ts imports the TypeScript compiler"]
+
+[[mutation]]
+id = "P1"
+why = "Dependabot no longer holds back acorn's next major, which acorn-jsx (under eslint) refuses."
+path = ".github/dependabot.yml"
+old = "      - dependency-name: \"acorn\" # acorn-jsx: ^6.0.0 || ^7.0.0 || ^8.0.0\n        update-types: [\"version-update:semver-major\"]\n"
+new = ""
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = ["tests/guards/test_supply_chain.py::test_dependabot_holds_back_exactly_the_lines_a_peer_refuses[acorn]"]
