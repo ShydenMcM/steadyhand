@@ -53,8 +53,7 @@ COMMANDS = [
     "npm run format:check",
     "npm run typecheck",
     "npm test" + KEEP_REPORT,
-    # AC4 plant (#394), reverted once CI reads it: the unit report names the commit before.
-    native("unit").replace("HEAD >", "HEAD~1 >"),
+    native("unit"),
     "npm run test:limits",
     "npm run build",
 ]
