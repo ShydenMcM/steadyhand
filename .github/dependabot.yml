@@ -46,6 +46,8 @@ updates:
       # its range, and the entry goes. Dependabot reads 0.28 to 0.29 as minor, hence `versions`.
       - dependency-name: "esbuild" # vite: ^0.27.0 || ^0.28.0
         versions: [">=0.29.0"]
+      - dependency-name: "acorn" # acorn-jsx: ^6.0.0 || ^7.0.0 || ^8.0.0
+        update-types: ["version-update:semver-major"]
       - dependency-name: "eslint" # typescript-eslint: ^8.57.0 || ^9.0.0 || ^10.0.0
         update-types: ["version-update:semver-major"]
       - dependency-name: "typescript" # typescript-eslint: >=4.8.4 <6.1.0

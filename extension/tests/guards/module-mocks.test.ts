@@ -111,6 +111,7 @@ test.each([
   ["vi renamed to itself", 'import { vi as vi } from "vitest";'],
   ["vi exported by name", 'export { vi } from "vitest";'],
   ["a type imported from vitest", 'import type { Mock } from "vitest";'],
+  ["a bare import of vitest, binding nothing", 'import "vitest";'],
   ["an import of another module", 'await import("node:fs");'],
   ["an object key", "const o = { vi: 1 };"],
   ["a class field and a method", "class A { vi = 1; mock() {} }"],

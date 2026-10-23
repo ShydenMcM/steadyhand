@@ -51,7 +51,8 @@ def test_the_extension_integration_job_installs_then_runs_its_suite_with_one_lim
     assert [step.get("working-directory") for step in npm] == ["extension", "extension"]
     limited = [step for step in steps if "timeout-minutes" in step]
     assert limited == [npm[-1]]
-    # Measured on the laptop on 2026-10-13: 3 s.
+    # Measured on the laptop on 2026-10-13: 3 s. Native, with its report (#394), on CI on 2026-10-23
+    # (run 39921986342): 5 s.
     assert limited[0]["timeout-minutes"] == 1
 
 
