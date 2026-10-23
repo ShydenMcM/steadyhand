@@ -580,6 +580,14 @@ jobs:
           NODE_V8_COVERAGE="${RUNNER_TEMP}/node-coverage-raw" npm run test:native -- --project integration
           node tests/node-coverage-report.ts --raw "${RUNNER_TEMP}/node-coverage-raw" --out "${RUNNER_TEMP}/node-coverage-report" --project integration
           git rev-parse HEAD > "${RUNNER_TEMP}/node-coverage-report/sha.txt"
+      - name: Keep Node's coverage report
+        if: steps.scope.outputs.docs_only != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-extension-integration-node
+          path: ${{ runner.temp }}/node-coverage-report
+          if-no-files-found: error
+          retention-days: 7
 
   # Develop's deploy (spec §12.1): the extension zip, its build provenance attested and then
   # verified here, on the run that made it. It always runs in full (#218).
