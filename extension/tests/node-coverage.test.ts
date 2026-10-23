@@ -18,6 +18,7 @@ import {
   report,
   type ScriptCoverage,
   type Settings,
+  summed,
   toIstanbul,
 } from "./lib/node-coverage.ts";
 
@@ -187,6 +188,27 @@ test("one file's scripts from several workers are summed, their queries left off
   );
   expect(report[path]?.s).toEqual({ 0: 2, 1: 3 });
   expect(report[path]?.f).toEqual({ 0: 3 });
+});
+
+test.each([
+  ["statements", { statementMap: { 0: "x", 1: "y" } }],
+  ["functions", { fnMap: { 0: "g" } }],
+  ["branches", { branchMap: { 0: "if" } }],
+])("two scripts of one file whose %s differ are refused, not summed out of step", (_kind, change) => {
+  const one = {
+    path: "/a.ts",
+    statementMap: { 0: "x" },
+    fnMap: {},
+    branchMap: {},
+    s: { 0: 1 },
+    f: {},
+    b: {},
+  };
+  expect(() => summed(one, { ...one, ...change })).toThrow(
+    new NodeCoverageError(
+      "/a.ts: two scripts of the file converted to different maps, so their counts cannot be summed",
+    ),
+  );
 });
 
 test("a file the run never loaded is refused, naming it", async () => {

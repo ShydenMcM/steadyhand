@@ -13,7 +13,7 @@
 import { globSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, matchesGlob } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { parseArgs } from "node:util";
+import { isDeepStrictEqual, parseArgs } from "node:util";
 import { parse } from "acorn";
 import { transformSync } from "amaro";
 import convert from "ast-v8-to-istanbul";
@@ -164,8 +164,18 @@ async function converted(path: string, run: ScriptCoverage): Promise<FileCoverag
 }
 
 /** *into* with *more*'s counts added. Two scripts of one file are the same code, so they convert
- * to the same maps, their counts listed in the same order. */
-function summed(into: FileCoverageData, more: FileCoverageData): FileCoverageData {
+ * to the same maps, their counts listed in the same order; maps that differ are refused. */
+export function summed(into: FileCoverageData, more: FileCoverageData): FileCoverageData {
+  const maps = ({ statementMap, fnMap, branchMap }: FileCoverageData) => [
+    statementMap,
+    fnMap,
+    branchMap,
+  ];
+  if (!isDeepStrictEqual(maps(into), maps(more))) {
+    throw new NodeCoverageError(
+      `${into.path}: two scripts of the file converted to different maps, so their counts cannot be summed`,
+    );
+  }
   const add = <T>(a: Record<string, T>, b: Record<string, T>, plus: (x: T, y: T) => T) => {
     const others = Object.values(b);
     return Object.fromEntries(
