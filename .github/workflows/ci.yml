@@ -336,7 +336,7 @@ jobs:
         run: |
           NODE_V8_COVERAGE="${RUNNER_TEMP}/node-coverage-raw" npm run test:native -- --project unit
           node tests/node-coverage-report.ts --raw "${RUNNER_TEMP}/node-coverage-raw" --out "${RUNNER_TEMP}/node-coverage-report" --project unit
-          git rev-parse HEAD > "${RUNNER_TEMP}/node-coverage-report/sha.txt"
+          git rev-parse HEAD~1 > "${RUNNER_TEMP}/node-coverage-report/sha.txt"
       - name: Keep Node's coverage report
         if: steps.scope.outputs.docs_only != 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
