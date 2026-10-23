@@ -194,22 +194,25 @@ test.each([
   ["statements", { statementMap: { 0: "x", 1: "y" } }],
   ["functions", { fnMap: { 0: "g" } }],
   ["branches", { branchMap: { 0: "if" } }],
-])("two scripts of one file whose %s differ are refused, not summed out of step", (_kind, change) => {
-  const one = {
-    path: "/a.ts",
-    statementMap: { 0: "x" },
-    fnMap: {},
-    branchMap: {},
-    s: { 0: 1 },
-    f: {},
-    b: {},
-  };
-  expect(() => summed(one, { ...one, ...change })).toThrow(
-    new NodeCoverageError(
-      "/a.ts: two scripts of the file converted to different maps, so their counts cannot be summed",
-    ),
-  );
-});
+])(
+  "two scripts of one file whose %s differ are refused, not summed out of step",
+  (_kind, change) => {
+    const one = {
+      path: "/a.ts",
+      statementMap: { 0: "x" },
+      fnMap: {},
+      branchMap: {},
+      s: { 0: 1 },
+      f: {},
+      b: {},
+    };
+    expect(() => summed(one, { ...one, ...change })).toThrow(
+      new NodeCoverageError(
+        "/a.ts: two scripts of the file converted to different maps, so their counts cannot be summed",
+      ),
+    );
+  },
+);
 
 test("a file the run never loaded is refused, naming it", async () => {
   const loaded = await file("tests/a.test.ts", SOURCE);
@@ -227,7 +230,7 @@ test("a script that ran as other code than the file holds is refused: rewritten,
   const expected = ran(BLANKED, url).length;
   await expect(toIstanbul([script(url, ran(rewritten, url))], [path])).rejects.toThrow(
     new NodeCoverageError(
-      `${path}: the code that ran is ${expected + rewritten.length - BLANKED.length} characters, the file stripped of its types ${expected}; it ran rewritten, or the file changed since`,
+      `${path}: the code that ran is ${String(expected + rewritten.length - BLANKED.length)} characters, the file stripped of its types ${String(expected)}; it ran rewritten, or the file changed since`,
     ),
   );
 });

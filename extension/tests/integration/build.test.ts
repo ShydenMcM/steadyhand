@@ -2,6 +2,7 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import * as esbuild from "esbuild";
 import { build, ENTRY_POINTS } from "../../build.ts";
 
 let outdir = "";
@@ -17,7 +18,7 @@ afterAll(async () => {
 
 /** The build, run once on first use, so a failing build fails each test that reads it by name. */
 const output = async (): Promise<string> => {
-  built ??= build(outdir);
+  built ??= build(outdir, esbuild.build);
   await built;
   return outdir;
 };

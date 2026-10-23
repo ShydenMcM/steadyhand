@@ -22,6 +22,7 @@ export const FLUSH_NODE_COVERAGE = "tests/flush-node-coverage.ts";
  * `--mode guards`; any other mode is a unit run. */
 export const UNIT_COVERED = [
   ...COVERED.map((name) => `packages/${name}/src/**/*.ts`),
+  "build.ts",
   "tests/lib/floors.ts",
   "tests/lib/load-clock.ts",
   "tests/lib/node-coverage.ts",

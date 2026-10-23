@@ -152,7 +152,7 @@ async function converted(path: string, run: ScriptCoverage): Promise<FileCoverag
   const end = Math.max(...run.functions.flatMap((fn) => fn.ranges.map((range) => range.endOffset)));
   if (end !== code.length) {
     throw new NodeCoverageError(
-      `${path}: the code that ran is ${end} characters, the file stripped of its types ${code.length}; it ran rewritten, or the file changed since`,
+      `${path}: the code that ran is ${String(end)} characters, the file stripped of its types ${String(code.length)}; it ran rewritten, or the file changed since`,
     );
   }
   const data = await convert({
@@ -265,9 +265,11 @@ export async function report(
     for (const [path, coverage] of Object.entries(measured)) {
       const statements = Object.values(coverage.s);
       const run = statements.filter((count) => count > 0).length;
-      log(`${path.slice(settings.root.length + 1)}: ${run} of ${statements.length} statements run`);
+      log(
+        `${path.slice(settings.root.length + 1)}: ${String(run)} of ${String(statements.length)} statements run`,
+      );
     }
-    log(`${files.length} files measured by Node's own coverage, written to ${out}`);
+    log(`${String(files.length)} files measured by Node's own coverage, written to ${out}`);
     return 0;
   } catch (failure) {
     error(`node coverage: ${(failure as Error).message}`);
