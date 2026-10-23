@@ -102,7 +102,10 @@ def judged_reports() -> list[str]:
 
 
 def test_every_coverage_report_a_job_keeps_is_judged_by_the_gate() -> None:
-    assert kept_reports() == REPORTS
+    # AC4 plant (#394), reverted once CI reads it: the integration job keeps no Node report.
+    assert kept_reports() == [
+        name for name in REPORTS if name != "coverage-extension-integration-node"
+    ]
 
 
 def test_the_gate_judges_every_coverage_report_a_job_keeps() -> None:
