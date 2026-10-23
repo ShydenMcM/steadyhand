@@ -249,13 +249,13 @@ const READERS = new Set([
 /** How `node`, an identifier named `ts`, is used: `ts.<name>`, a plain import, or another way. */
 /** Each way a file can reach the compiler's `ts`, with what `compilerUse` calls it. */
 test.each([
-  ["a member", "ts.isIdentifier(node);", "ts.isIdentifier"],
-  ["a type's name", "type T = ts.Node;", "ts.Node"],
-  ["an import by name", 'import { ts } from "./source.ts";', "import"],
-  ["an import renamed", 'import { ts as t } from "./source.ts";', "another way"],
-  ["ts held", "const t = ts;", "another way"],
-  ["ts passed", "f(ts);", "another way"],
-])("%s is read as %s", (_kind, code, use) => {
+  ["a member", "ts.isIdentifier", "ts.isIdentifier(node);"],
+  ["a type's name", "ts.Node", "type T = ts.Node;"],
+  ["an import by name", "import", 'import { ts } from "./source.ts";'],
+  ["an import renamed", "another way", 'import { ts as t } from "./source.ts";'],
+  ["ts held", "another way", "const t = ts;"],
+  ["ts passed", "another way", "f(ts);"],
+])("%s is read as %s", (_kind, use, code) => {
   const [name] = nodes(parse(code, "sample.ts")).filter(
     (node): node is ts.Identifier => ts.isIdentifier(node) && node.text === "ts",
   );
