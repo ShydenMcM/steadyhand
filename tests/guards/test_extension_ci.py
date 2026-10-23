@@ -32,6 +32,20 @@ KEEP_REPORT = (
     ' --coverage.reportsDirectory="${RUNNER_TEMP}/coverage-report"\n'
     'git rev-parse HEAD > "${RUNNER_TEMP}/coverage-report/sha.txt"\n'
 )
+
+
+def native(project: str, mode: str = "") -> str:
+    """A project run natively under Node's own coverage, then its report of the test, setup and
+    config files written with the commit it measured (#394)."""
+    return (
+        'NODE_V8_COVERAGE="${RUNNER_TEMP}/node-coverage-raw" npm run test:native'
+        f" -- --project {project}{mode}\n"
+        'node tests/node-coverage-report.ts --raw "${RUNNER_TEMP}/node-coverage-raw"'
+        f' --out "${{RUNNER_TEMP}}/node-coverage-report" --project {project}\n'
+        'git rev-parse HEAD > "${RUNNER_TEMP}/node-coverage-report/sha.txt"\n'
+    )
+
+
 # The npm commands the job runs, in order, and the tool behind each script (AC4).
 COMMANDS = [
     "npm ci --ignore-scripts",
@@ -39,6 +53,7 @@ COMMANDS = [
     "npm run format:check",
     "npm run typecheck",
     "npm test" + KEEP_REPORT,
+    native("unit"),
     "npm run test:limits",
     "npm run build",
 ]
@@ -49,6 +64,10 @@ TOOLS = {
     "test": "vitest run --project unit --coverage",
     "test:limits": "vitest run --project unit --mode limits",
     "test:guards": "vitest run --project guards --mode guards --coverage",
+    "test:native": (
+        "vitest run --experimental.viteModuleRunner=false --experimental.nodeLoader=false"
+        " --configLoader native"
+    ),
     "build": "node build.ts",
 }
 
@@ -66,7 +85,7 @@ def manifest() -> dict[str, Any]:
 
 
 def npm_steps() -> list[dict[str, Any]]:
-    return [step for step in job()["steps"] if str(step.get("run", "")).startswith("npm ")]
+    return [step for step in job()["steps"] if "npm " in str(step.get("run", ""))]
 
 
 def test_the_job_runs_the_workspace_checks_in_order() -> None:
@@ -208,14 +227,15 @@ def guards_job() -> dict[str, Any]:
 
 
 def test_the_guards_job_installs_then_runs_the_guards_alone_with_one_limit() -> None:
-    steps = [step for step in guards_job()["steps"] if str(step.get("run", "")).startswith("npm ")]
+    steps = [step for step in guards_job()["steps"] if "npm " in str(step.get("run", ""))]
     assert [step["run"] for step in steps] == [
         "npm ci --ignore-scripts",
         "npm run test:guards" + KEEP_REPORT,
+        native("guards", " --mode guards"),
     ]
-    assert [step.get("working-directory") for step in steps] == ["extension", "extension"]
+    assert [step.get("working-directory") for step in steps] == ["extension"] * 3
     limited = [step for step in guards_job()["steps"] if "timeout-minutes" in step]
-    assert limited == [steps[-1]]
+    assert limited == steps[1:]
     # Measured on CI on 2026-10-12 (run 38273371897): 5 s. A step limit is whole minutes, so the
-    # least it can be is 1.
-    assert limited[0]["timeout-minutes"] == 1
+    # least it can be is 1; the native run (#394) is held to the same.
+    assert [step["timeout-minutes"] for step in limited] == [1, 1]

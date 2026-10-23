@@ -1,11 +1,23 @@
 """The integration suites run in their own CI jobs, each with one limit at its step (#286): the
 Python suite on every Python the unit suite runs on, the extension's in its workspace."""
 
+import re
 from typing import Any
 
 from ci_workflow import ci
 
 INTEGRATION_RUN = "uv run --locked pytest -W error --suite integration -p no:cacheprovider"
+# The extension's suite runs natively under Node's own coverage, its report naming its commit
+# (#394).
+NATIVE_INTEGRATION = (
+    'NODE_V8_COVERAGE="${RUNNER_TEMP}/node-coverage-raw" npm run test:native'
+    " -- --project integration\n"
+    'node tests/node-coverage-report.ts --raw "${RUNNER_TEMP}/node-coverage-raw"'
+    ' --out "${RUNNER_TEMP}/node-coverage-report" --project integration\n'
+    'git rev-parse HEAD > "${RUNNER_TEMP}/node-coverage-report/sha.txt"\n'
+)
+# What runs a suite: pytest's suite option, vitest's project option, or an npm script for either.
+SUITE_RUN = re.compile(r"--suite integration|--project integration|test:integration")
 
 
 def job(name: str) -> dict[str, Any]:
@@ -34,8 +46,8 @@ def test_the_integration_job_runs_the_integration_suite_alone_with_one_limit() -
 
 def test_the_extension_integration_job_installs_then_runs_its_suite_with_one_limit() -> None:
     steps = job("extension-integration")["steps"]
-    npm = [step for step in steps if str(step.get("run", "")).startswith("npm ")]
-    assert [step["run"] for step in npm] == ["npm ci --ignore-scripts", "npm run test:integration"]
+    npm = [step for step in steps if "npm " in str(step.get("run", ""))]
+    assert [step["run"] for step in npm] == ["npm ci --ignore-scripts", NATIVE_INTEGRATION]
     assert [step.get("working-directory") for step in npm] == ["extension", "extension"]
     limited = [step for step in steps if "timeout-minutes" in step]
     assert limited == [npm[-1]]
@@ -48,7 +60,7 @@ def test_no_other_job_runs_an_integration_suite() -> None:
         name
         for name, found in ci()["jobs"].items()
         for step in found["steps"]
-        if "integration" in str(step.get("run", ""))
+        if SUITE_RUN.search(str(step.get("run", "")))
     )
     assert runners == ["extension-integration", "integration"]
 
