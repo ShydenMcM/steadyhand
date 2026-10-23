@@ -33,8 +33,3 @@ afterEach(({ task }) => {
   const refusal = testRefusal(spent);
   judge(refusal, process.env[JUDGE_ENV]);
 });
-
-// AC4 plant (#394), removed once CI reads it: a setup file's branch arm no run takes.
-if (process.env.STEADYHAND_AC4_PLANT === "never") {
-  judge("planted", "1");
-}
