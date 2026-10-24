@@ -1,0 +1,25 @@
+# #374's last files: the supply-chain guard's one test per ecosystem, which replaced a set built by
+# three `if`s that were always true here. E1 loses the npm locks the npm case looks for; E2 drops
+# the uv update from Dependabot. Each must turn its own ecosystem's case red, and only that case.
+
+[[mutation]]
+id = "E1"
+why = "The npm locks vanish from the guard's sight, so an ecosystem in use is never asked of Dependabot."
+path = "tests/guards/test_supply_chain.py"
+old = '    "npm": npm_locks,\n'
+new = '    "npm": lambda: [],\n'
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = ["tests/guards/test_supply_chain.py::test_each_ecosystem_in_the_repo_has_a_dependabot_update[npm]"]
+
+[[mutation]]
+id = "E2"
+why = "Dependabot stops updating the uv lock while the repo still uses it."
+path = ".github/dependabot.yml"
+old = '  - package-ecosystem: "uv"\n'
+new = '  - package-ecosystem: "pip"\n'
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = ["tests/guards/test_supply_chain.py::test_each_ecosystem_in_the_repo_has_a_dependabot_update[uv]"]

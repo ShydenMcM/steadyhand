@@ -425,6 +425,7 @@ PERF_CLOCKS = {
     "tests/perf/test_factor_performance.py": 1,
     "tests/perf/test_paper_performance.py": 1,
     "tests/perf/test_performance.py": 1,
+    "tests/perf/test_synthetic.py": 0,
 }
 
 

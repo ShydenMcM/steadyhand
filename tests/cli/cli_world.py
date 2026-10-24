@@ -22,7 +22,7 @@ from typing import NamedTuple
 from record_cli_seed import PLACEHOLDERS, SEED, recorded_or_empty
 from record_golden import END, RECORDED, START, STOCKS, replay
 
-from steadyhand import STRATEGIES, BacktestResult, DataSource, Market, backtest
+from steadyhand import DISCLAIMER, STRATEGIES, BacktestResult, DataSource, Market, backtest
 from steadyhand_idx import BarCache, CachedDataSource
 from steadyhand_idx.cli import SourceFactory, World, main
 from steadyhand_idx.config import load
@@ -220,6 +220,58 @@ def paper(tmp_path: Path, config: str = GOLDEN_CONFIG) -> Cli:
 
 def run_on(cli: Cli, day: date, *extra: str) -> Result:
     return replace(cli, now=at(day))("paper", "run", *extra)
+
+
+# The golden window's accounts for ``paper status``, ``report`` and ``resume``: one home for the
+# unit tests (tests/cli/test_paper_commands.py) and the runs moved out of unit by #292
+# (tests/integration/cli/test_paper_commands_golden.py), so the two cannot drift apart (#374).
+
+QUIET = '\n[training]\nlevel = "off"\n'
+"""Training off: a page is then its lines and the disclaimer, nothing else."""
+
+EXEMPT = "\n[tax]\ndividend_reinvestment_exemption = true\n"
+
+JUMPY = GOLDEN_CONFIG.replace(
+    '[risk]\nmax_weight = "0.25"\n', '[risk]\nmax_weight = "0.25"\ndaily_loss_limit = "0.001"\n'
+)
+"""A daily-loss limit the golden run's second day breaches (as ``paper run``'s halt test)."""
+
+TIGHT = GOLDEN_CONFIG.replace('[risk]\nmax_weight = "0.25"\n', '[risk]\nmax_weight = "0.19"\n')
+"""A 19% limit per stock, under buy-and-hold's 20% of each of the five: its first orders are cut to
+the limit and its later top-ups skipped. With BBRI's prices restored (#160), the golden settings
+spread the money five ways and never block an order."""
+
+
+def quiet(config: str = GOLDEN_CONFIG) -> str:
+    assert "[training]" not in config
+    return config + QUIET
+
+
+def page(text: str) -> str:
+    """The page as a command prints it with training off."""
+    return f"{text}\n\n{DISCLAIMER}\n"
+
+
+def run_from(cli: Cli, start: date, day: date) -> Cli:
+    """*cli*'s account opened on *start* and run up to *day*, and *cli* set at *day*."""
+    assert run_on(cli, start).code == 0
+    if day != start:
+        done = run_on(cli, day, "--catch-up")
+        assert done.code in (0, 3), done.err
+    return replace(cli, now=at(day))
+
+
+def ran_to(tmp_path: Path, day: date, config: str = GOLDEN_CONFIG) -> Cli:
+    """An account opened on the golden window's first day and run up to *day*."""
+    return run_from(paper(tmp_path, config), START, day)
+
+
+def halted(tmp_path: Path) -> Cli:
+    """An account halted by the daily-loss limit on 2021-02-02, the day it is left on."""
+    cli = paper(tmp_path, quiet(JUMPY))
+    assert run_on(cli, START).code == 0
+    assert run_on(cli, trading_days()[1]).code == 3
+    return replace(cli, now=at(trading_days()[1]), env={"USER": "tester"})
 
 
 @contextmanager

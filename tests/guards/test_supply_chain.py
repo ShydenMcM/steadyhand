@@ -7,7 +7,7 @@ parsed values so that no ``uses`` can hide from it.
 
 import json
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -56,15 +56,13 @@ def npm_locks() -> list[Path]:
     return [path for path in tracked(ROOT, "package-lock.json") if "node_modules" not in path.parts]
 
 
-def ecosystems_present() -> set[str]:
-    present: set[str] = set()
-    if (ROOT / "uv.lock").is_file():
-        present.add("uv")
-    if workflow_files():
-        present.add("github-actions")
-    if npm_locks():
-        present.add("npm")
-    return present
+# Each package ecosystem the repo uses, and the files that show it in use: one test each below, so
+# a lost lock or a dropped Dependabot update fails under its ecosystem's name (#374).
+ECOSYSTEM_FILES: dict[str, Callable[[], list[Path]]] = {
+    "uv": lambda: sorted(ROOT.glob("uv.lock")),
+    "github-actions": workflow_files,
+    "npm": npm_locks,
+}
 
 
 def update_for(ecosystem: str, directory: str) -> dict[str, Any]:
@@ -117,11 +115,11 @@ def test_every_pin_carries_its_release_version_as_a_comment() -> None:
     assert searched(missing, of=len(raw), what="uses lines") == []
 
 
-def test_dependabot_covers_every_ecosystem_in_the_repo() -> None:
-    present = ecosystems_present()
-    assert present == {"uv", "github-actions", "npm"}
+@pytest.mark.parametrize("ecosystem", sorted(ECOSYSTEM_FILES))
+def test_each_ecosystem_in_the_repo_has_a_dependabot_update(ecosystem: str) -> None:
+    assert ECOSYSTEM_FILES[ecosystem](), f"no {ecosystem} files: drop it here and in Dependabot"
     configured = {update["package-ecosystem"] for update in dependabot()["updates"]}
-    assert present <= configured
+    assert ecosystem in configured
 
 
 def test_the_npm_locks_are_the_extension_workspace_alone() -> None:

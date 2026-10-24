@@ -13,21 +13,21 @@ from datetime import date
 from pathlib import Path
 
 from cli_world import (
+    EXEMPT,
     GOLDEN_CONFIG,
-    Cli,
-    at,
+    TIGHT,
     golden_backtest,
+    halted,
     opened,
-    paper,
-    run_on,
+    page,
+    quiet,
+    ran_to,
     tables,
-    trading_days,
 )
 from record_golden import END, START
 
 from steadyhand import (
     CLAIMS_LABEL,
-    DISCLAIMER,
     FIGURES,
     LIMIT_WEIGHT_CUT,
     LIMIT_WEIGHT_FULL,
@@ -36,58 +36,11 @@ from steadyhand import (
 from steadyhand_idx.notes import PAPER_ORDER_SKIPPED, PAPER_RESUMED
 from steadyhand_idx.paper_pages import day_report_page, income_page, status_page
 
-QUIET = '\n[training]\nlevel = "off"\n'
-"""Training off: a page is then its lines and the disclaimer, nothing else."""
-
-
-EXEMPT = "\n[tax]\ndividend_reinvestment_exemption = true\n"
-
-
-JUMPY = GOLDEN_CONFIG.replace(
-    '[risk]\nmax_weight = "0.25"\n', '[risk]\nmax_weight = "0.25"\ndaily_loss_limit = "0.001"\n'
-)
-"""A daily-loss limit the golden run's second day breaches (as ``paper run``'s halt test)."""
-
-
-TIGHT = GOLDEN_CONFIG.replace('[risk]\nmax_weight = "0.25"\n', '[risk]\nmax_weight = "0.19"\n')
-"""A 19% limit per stock, under buy-and-hold's 20% of each of the five: its first orders are cut to
-the limit and its later top-ups skipped. With BBRI's prices restored (#160), the golden settings
-spread the money five ways and never block an order."""
-
-
 DEEP = GOLDEN_CONFIG.replace(
     '[risk]\nmax_weight = "0.25"\n', '[risk]\nmax_weight = "0.25"\nmax_drawdown = "0.05"\n'
 )
 """A drawdown limit breached on 2021-03-08 and still breached on 2021-04-30: 9.37% below,
 rounded down as every limit is written."""
-
-
-def quiet(config: str = GOLDEN_CONFIG) -> str:
-    assert "[training]" not in config
-    return config + QUIET
-
-
-def page(text: str) -> str:
-    """The page as a command prints it with training off."""
-    return f"{text}\n\n{DISCLAIMER}\n"
-
-
-def ran_to(tmp_path: Path, day: date, config: str = GOLDEN_CONFIG) -> Cli:
-    """An account opened on the golden window's first day and run up to *day*."""
-    cli = paper(tmp_path, config)
-    assert run_on(cli, START).code == 0
-    if day != START:
-        done = run_on(cli, day, "--catch-up")
-        assert done.code in (0, 3), done.err
-    return replace(cli, now=at(day))
-
-
-def halted(tmp_path: Path) -> Cli:
-    """An account halted by the daily-loss limit on 2021-02-02, the day it is left on."""
-    cli = paper(tmp_path, quiet(JUMPY))
-    assert run_on(cli, START).code == 0
-    assert run_on(cli, trading_days()[1]).code == 3
-    return replace(cli, now=at(trading_days()[1]), env={"USER": "tester"})
 
 
 def test_status_shows_each_holding_with_its_last_close_value_and_weight(tmp_path: Path) -> None:
