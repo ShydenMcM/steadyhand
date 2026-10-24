@@ -18,6 +18,7 @@ import {
   toIstanbul,
 } from "../lib/node-coverage.ts";
 import { FLUSH_NODE_COVERAGE } from "../../vitest.config.ts";
+import { stripTypes } from "../node-coverage-report.ts";
 
 const EXTENSION = join(import.meta.dirname, "..", "..");
 const VITEST = join(EXTENSION, "node_modules/vitest/vitest.mjs");
@@ -93,7 +94,7 @@ test("a TypeScript file Node ran converts at its own positions, an uncalled func
   const raw = join(folder, "raw-typed");
   await node(["typed.ts"], raw);
   const path = join(folder, "typed.ts");
-  const converted = (await toIstanbul(readRawReports(raw), [path]))[path];
+  const converted = (await toIstanbul(readRawReports(raw), [path], stripTypes))[path];
   assert.isDefined(converted);
   expect(lines(converted)).toEqual({ 1: 1, 3: 1, 6: 0, 8: 1 });
   expect(functions(converted)).toEqual({ used: 1, unused: 0 });
@@ -116,6 +117,7 @@ const reportOf = async (raw: string, out: string): Promise<{ status: number; sai
     configFile: join(folder, "vitest.config.ts"),
     projects: [PROJECT],
     defaultExclude: [],
+    strip: stripTypes,
   };
   const said: string[] = [];
   const argv = ["--raw", raw, "--out", out, "--project", "planted"];

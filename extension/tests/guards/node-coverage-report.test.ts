@@ -6,7 +6,7 @@
  */
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { main, SETTINGS } from "../node-coverage-report.ts";
+import { main, SETTINGS, stripTypes } from "../node-coverage-report.ts";
 
 let exitCode: typeof process.exitCode;
 
@@ -30,6 +30,11 @@ test("the settings are this checkout's config, its three projects and Vitest's d
   );
   expect(names).toEqual(["unit", "guards", "integration"]);
   expect(SETTINGS.defaultExclude).toContain("**/node_modules/**");
+});
+
+test("the settings strip with amaro, each type blanked in place as Node runs it", () => {
+  expect(SETTINGS.strip).toBe(stripTypes);
+  expect(stripTypes("const a: number = 1;\n")).toBe("const a         = 1;\n");
 });
 
 test("run as a program, its status is the report's, and its refusal printed", async () => {

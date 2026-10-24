@@ -18,6 +18,7 @@ import {
   report,
   type ScriptCoverage,
   type Settings,
+  type Strip,
   summed,
   toIstanbul,
 } from "./lib/node-coverage.ts";
@@ -86,6 +87,15 @@ function f(count: number): FunctionCoverage {
 
 test("the fixture's blanked text is what Node runs for it, position for position", () => {
   expect(BLANKED).toHaveLength(SOURCE.length);
+});
+
+/** The unit stand-in for amaro (#405: loading amaro took 44-61 ms of CPU, a unit file's whole load
+ * limit): it blanks the fixtures' one annotation as Node does. The real stripper converts a report
+ * Node wrote in `tests/integration/node-coverage.test.ts` and is checked in the guards suite. */
+const blank: Strip = (source) => source.replace(/: number/g, (type) => " ".repeat(type.length));
+
+test("the stand-in stripper blanks the fixture as Node does", () => {
+  expect(blank(SOURCE)).toBe(BLANKED);
 });
 
 test("the projects named are read in the order named, with their include, exclude and setup files", () => {
@@ -183,7 +193,7 @@ test.each([
 test("a TypeScript file converts with its types counted as nothing, and an uncalled function unrun", async () => {
   const path = await file("tests/a.test.ts", SOURCE);
   const url = pathToFileURL(path).href;
-  const report = await toIstanbul([script(url, ran(BLANKED, url), [f(0)])], [path]);
+  const report = await toIstanbul([script(url, ran(BLANKED, url), [f(0)])], [path], blank);
   expect(Object.keys(report)).toEqual([path]);
   expect(report[path]?.s).toEqual({ 0: 1, 1: 0 });
   expect(report[path]?.f).toEqual({ 0: 0 });
@@ -198,6 +208,7 @@ test("one file's scripts from several workers are summed, their queries left off
   const report = await toIstanbul(
     [script(one, ran(BLANKED, one), [f(2)]), script(two, ran(BLANKED, two), [f(1)])],
     [path],
+    blank,
   );
   expect(report[path]?.s).toEqual({ 0: 2, 1: 3 });
   expect(report[path]?.f).toEqual({ 0: 3 });
@@ -231,7 +242,9 @@ test("a file the run never loaded is refused, naming it", async () => {
   const loaded = await file("tests/a.test.ts", SOURCE);
   const never = await file("tests/b.test.ts", SOURCE);
   const url = pathToFileURL(loaded).href;
-  await expect(toIstanbul([script(url, ran(BLANKED, url))], [loaded, never])).rejects.toThrow(
+  await expect(
+    toIstanbul([script(url, ran(BLANKED, url))], [loaded, never], blank),
+  ).rejects.toThrow(
     new NodeCoverageError(`${never}: no raw report holds it, so the run never loaded it`),
   );
 });
@@ -241,7 +254,7 @@ test("a script that ran as other code than the file holds is refused: rewritten,
   const url = pathToFileURL(path).href;
   const rewritten = `${BLANKED}vi.mock("x");\n`;
   const expected = ran(BLANKED, url).length;
-  await expect(toIstanbul([script(url, ran(rewritten, url))], [path])).rejects.toThrow(
+  await expect(toIstanbul([script(url, ran(rewritten, url))], [path], blank)).rejects.toThrow(
     new NodeCoverageError(
       `${path}: the code that ran is ${String(expected + rewritten.length - BLANKED.length)} characters, the file stripped of its types ${String(expected)}; it ran rewritten, or the file changed since`,
     ),
@@ -254,7 +267,11 @@ test("a test or setup file Vitest loaded outside the files measured is refused: 
   const url = pathToFileURL(path).href;
   const strayUrl = `${pathToFileURL(stray).href}?vitest=5`;
   await expect(
-    toIstanbul([script(url, ran(BLANKED, url)), script(strayUrl, ran(BLANKED, strayUrl))], [path]),
+    toIstanbul(
+      [script(url, ran(BLANKED, url)), script(strayUrl, ran(BLANKED, strayUrl))],
+      [path],
+      blank,
+    ),
   ).rejects.toThrow(
     new NodeCoverageError(
       `${stray}: Vitest loaded it as a test or setup file, but the config's settings do not name it`,
@@ -273,6 +290,7 @@ test("scripts outside the files measured are left out: package sources, Node's o
       script(url, ran(BLANKED, url)),
     ],
     [path],
+    blank,
   );
   expect(Object.keys(report)).toEqual([path]);
 });
@@ -295,7 +313,13 @@ function settings(): Settings {
   const unit = {
     test: { name: "unit", include: ["tests/*.test.ts"], setupFiles: ["tests/setup.ts"] },
   };
-  return { root, configFile: join(root, "vitest.config.ts"), projects: [unit], defaultExclude: [] };
+  return {
+    root,
+    configFile: join(root, "vitest.config.ts"),
+    projects: [unit],
+    defaultExclude: [],
+    strip: blank,
+  };
 }
 
 test("the report of the files measured is written for the gate, and each file's share printed", async () => {
@@ -345,4 +369,30 @@ test("a refusal is printed and the status is 1, with no report written", async (
   await expect(readFile(join(root, "out", "coverage-final.json"), "utf8")).rejects.toThrow(
     "ENOENT",
   );
+});
+
+test("each file is stripped with the stripper given, once per script", async () => {
+  const path = await file("tests/a.test.ts", SOURCE);
+  const url = pathToFileURL(path).href;
+  const seen: string[] = [];
+  const strip: Strip = (source) => {
+    seen.push(source);
+    return BLANKED;
+  };
+  await toIstanbul([script(url, ran(BLANKED, url))], [path], strip);
+  expect(seen).toEqual([SOURCE]);
+});
+
+test("the report strips with its settings' stripper", async () => {
+  const config = await file("vitest.config.ts", "const a = 1;\n");
+  await file("tests/setup.ts", "const b = 2;\n");
+  await file("tests/a.test.ts", "const d = 4;\n");
+  await rawReport([config, join(root, "tests/setup.ts"), join(root, "tests/a.test.ts")]);
+  const { log, error, toLog, toError } = printing();
+  const argv = ["--raw", join(root, "raw"), "--out", join(root, "out"), "--project", "unit"];
+  const longer = { ...settings(), strip: (source: string) => `${source} ` };
+  expect(await report(argv, longer, toLog, toError)).toBe(1);
+  expect(log).toEqual([]);
+  expect(error).toHaveLength(1);
+  expect(error[0]).toMatch("it ran rewritten, or the file changed since");
 });
