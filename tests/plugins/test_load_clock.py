@@ -6,8 +6,6 @@ files, so a clock that stopped timing would be seen.
 
 import importlib
 import sys
-import time
-from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -262,47 +260,48 @@ def test_the_report_ranks_by_the_judged_load_and_shows_the_compiling() -> None:
     ]
 
 
-BUSY_NS = 2_000_000
+def _ticks(monkeypatch: pytest.MonkeyPatch, *ns: int) -> None:
+    """The thread clock stood in: each read gives the next of *ns*; a read past them fails."""
+    monkeypatch.setattr(load_clock, "thread_clock", iter(ns).__next__)
 
 
-def _busy() -> str:
-    """Spend BUSY_NS of this thread's CPU, standing in for a compile."""
-    end = time.thread_time_ns() + BUSY_NS
-    while time.thread_time_ns() < end:
-        pass
+def _compiled() -> str:
+    """A compile taking no time of its own: the clock stood in says how long it took."""
     return "compiled"
 
 
-def _spent(call: Callable[[], object]) -> int:
-    """How far *call* moved the compiling total, in nanoseconds."""
+def test_time_inside_a_compile_is_added_to_the_compiling_total(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _ticks(monkeypatch, 100, 350)
     before = load_clock.compiling_ns()
-    call()
-    return load_clock.compiling_ns() - before
+    assert load_clock.timed_apart(_compiled)() == "compiled"
+    assert load_clock.compiling_ns() - before == 250
 
 
-def test_time_inside_a_compile_is_added_to_the_compiling_total() -> None:
-    timed = load_clock.timed_apart(_busy)
-    assert timed() == "compiled"
-    assert _spent(timed) >= BUSY_NS
+def test_a_compile_inside_a_compile_is_counted_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The outer compile's start, the inner one's start (an inner compile reads no end), the outer
+    # one's end.
+    _ticks(monkeypatch, 0, 10, 20)
+    before = load_clock.compiling_ns()
+    assert load_clock.timed_apart(load_clock.timed_apart(_compiled))() == "compiled"
+    assert load_clock.compiling_ns() - before == 20
 
 
-def test_a_compile_inside_a_compile_is_counted_once() -> None:
-    inner = load_clock.timed_apart(_busy)
-    outer = load_clock.timed_apart(inner)
-    assert BUSY_NS <= _spent(outer) < 2 * BUSY_NS
-
-
-def test_a_failed_compile_is_counted_its_error_kept_and_the_next_one_counted() -> None:
+def test_a_failed_compile_is_counted_its_error_kept_and_the_next_one_counted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def broken() -> None:
-        _busy()
         msg = "planted"
         raise SyntaxError(msg)
 
+    _ticks(monkeypatch, 0, 400, 1_000, 1_100)
     before = load_clock.compiling_ns()
     with pytest.raises(SyntaxError, match="planted"):
         load_clock.timed_apart(broken)()
-    assert load_clock.compiling_ns() - before >= BUSY_NS
-    assert _spent(load_clock.timed_apart(_busy)) >= BUSY_NS
+    assert load_clock.compiling_ns() - before == 400
+    load_clock.timed_apart(_compiled)()
+    assert load_clock.compiling_ns() - before == 500
 
 
 def _compile(*_: object) -> None:
@@ -325,12 +324,16 @@ def test_the_clock_refuses_to_run_without_a_compile_it_times(
     assert getattr(loader, "source_to_code", _compile) is _compile
 
 
-def test_install_times_both_compiles() -> None:
-    rewriter = SimpleNamespace(_rewrite_test=_busy)
-    loader = SimpleNamespace(source_to_code=_busy)
+def test_install_times_both_compiles(monkeypatch: pytest.MonkeyPatch) -> None:
+    rewriter = SimpleNamespace(_rewrite_test=_compiled)
+    loader = SimpleNamespace(source_to_code=_compiled)
     load_clock.install(rewriter, loader)
-    assert _spent(rewriter._rewrite_test) >= BUSY_NS
-    assert _spent(loader.source_to_code) >= BUSY_NS
+    _ticks(monkeypatch, 0, 5, 10, 17)
+    before = load_clock.compiling_ns()
+    assert rewriter._rewrite_test() == "compiled"
+    assert load_clock.compiling_ns() - before == 5
+    assert loader.source_to_code() == "compiled"
+    assert load_clock.compiling_ns() - before == 12
 
 
 def test_this_run_times_pytests_rewrite_of_a_test_file(
@@ -363,15 +366,18 @@ def test_a_load_records_the_compiling_done_while_it_loaded(
     """The hook driven by hand, with a compile planted inside its window: a warm run compiles
     nothing, so the run's own loads cannot show a clock that recorded no compiling."""
     monkeypatch.setattr(load_clock, "LOADS", [])
+    # The hook's start, the compile's start and end, the hook's end.
+    _ticks(monkeypatch, 0, 1_000_000, 3_000_000, 4_000_000)
     module = object.__new__(pytest.Module)
     module.path = Path(__file__)
     hook = load_clock.pytest_make_collect_report(module)
     next(hook)
-    load_clock.timed_apart(_busy)()
+    load_clock.timed_apart(_compiled)()
     collected = object()
     with pytest.raises(StopIteration) as finished:
         hook.send(collected)  # type: ignore[arg-type]
     assert finished.value.value is collected
     [load] = load_clock.LOADS
     assert load.path == HERE
-    assert BUSY_NS // 1000 <= load.compile_microseconds <= load.cpu_microseconds
+    assert load.compile_microseconds == 2_000
+    assert load.cpu_microseconds == 4_000

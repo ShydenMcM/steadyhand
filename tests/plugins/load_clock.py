@@ -52,6 +52,10 @@ class Load:
 
 LOADS: list[Load] = []
 
+# This thread's CPU clock in nanoseconds, read through one name so a test stands it in with set
+# ticks: a unit test reads no clock of its own (tests/guards/test_no_raised_limit.py).
+thread_clock = time.thread_time_ns
+
 # This thread's CPU spent inside a timed compile so far, in nanoseconds, and how deep the calls
 # into timed compiles now nest, so a compile that calls another is counted once.
 _COMPILING = {"ns": 0, "depth": 0}
@@ -69,13 +73,13 @@ def timed_apart[**P, R](compile_function: Callable[P, R]) -> Callable[P, R]:
     def timed(*args: P.args, **kwargs: P.kwargs) -> R:
         outermost = _COMPILING["depth"] == 0
         _COMPILING["depth"] += 1
-        start = time.thread_time_ns()
+        start = thread_clock()
         try:
             return compile_function(*args, **kwargs)
         finally:
             _COMPILING["depth"] -= 1
             if outermost:
-                _COMPILING["ns"] += time.thread_time_ns() - start
+                _COMPILING["ns"] += thread_clock() - start
 
     return timed
 
@@ -141,14 +145,14 @@ def pytest_make_collect_report(
 ) -> Generator[None, pytest.CollectReport, pytest.CollectReport]:
     if not isinstance(collector, pytest.Module):
         return (yield)
-    cpu, wall, compiling = time.thread_time_ns(), time.perf_counter_ns(), compiling_ns()
+    cpu, wall, compiling = thread_clock(), time.perf_counter_ns(), compiling_ns()
     try:
         return (yield)
     finally:
         LOADS.append(
             Load(
                 collector.path.resolve().relative_to(ROOT).as_posix(),
-                (time.thread_time_ns() - cpu) // 1000,
+                (thread_clock() - cpu) // 1000,
                 (time.perf_counter_ns() - wall) // 1000,
                 traced=under_coverage(),
                 compile_microseconds=(compiling_ns() - compiling) // 1000,
