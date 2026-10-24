@@ -15,7 +15,7 @@ from types import NoneType
 
 from key_walk import TERM_MODULE, key_constants
 
-from steadyhand import FIGURES, BacktestResult, DayReport, IncomeReport, Money
+from steadyhand import FIGURES, IDR, BacktestResult, DayReport, IncomeReport, Money
 from steadyhand_idx.paper import PaperRun
 
 REPORTS: tuple[type, ...] = (DayReport, BacktestResult, IncomeReport, PaperRun)
@@ -94,6 +94,14 @@ def test_the_walk_follows_fields_properties_and_containers() -> None:
     figures, visited = figure_fields((_Root,))
     assert figures == {"_Root.rate", "_Root.maybe", "_Root.total", "_Leaf.amount"}
     assert set(visited) == {"_Root", "_Leaf"}
+
+
+def test_the_stand_in_s_properties_return_what_the_walk_reads_from_their_annotations() -> None:
+    # The walk reads annotations alone, so this is the one place the properties run (#374).
+    hidden = Money(1_500, IDR)
+    leaf = _Leaf(Money(700, IDR), 2)
+    root = _Root(Decimal("0.1"), None, (leaf,), {"a": leaf}, None, "root", hidden)
+    assert (root.total, root._secret, root.described) == (hidden, hidden, "root")
 
 
 def test_the_walk_reaches_every_report() -> None:

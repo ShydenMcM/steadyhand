@@ -1,0 +1,64 @@
+# #374's last files: the supply-chain guard's one test per ecosystem, which replaced a set built by
+# three `if`s that were always true here. E1 loses the npm locks the npm case looks for; E2 drops
+# the uv update from Dependabot. Each must turn its own ecosystem's case red, and only that case.
+
+[[mutation]]
+id = "E1"
+why = "The npm locks vanish from the guard's sight, so an ecosystem in use is never asked of Dependabot."
+path = "tests/guards/test_supply_chain.py"
+old = '    "npm": npm_locks,'
+new = '    "npm": lambda: [],'
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = ["tests/guards/test_supply_chain.py::test_each_ecosystem_in_the_repo_has_a_dependabot_update[npm]"]
+
+[[mutation]]
+id = "E2"
+why = "Dependabot stops updating the uv lock while the repo still uses it."
+path = ".github/dependabot.yml"
+old = '  - package-ecosystem: "uv"'
+new = '  - package-ecosystem: "pip"'
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = ["tests/guards/test_supply_chain.py::test_each_ecosystem_in_the_repo_has_a_dependabot_update[uv]"]
+
+# The perf folder's clock table pins each file's clock reads exactly, the new
+# tests/perf/test_synthetic.py at 0: C1 loses its row, C2 plants a clock in it.
+
+[[mutation]]
+id = "C1"
+why = "A perf file's row leaves the clock table, so its clock reads are no longer pinned."
+path = "tests/guards/test_no_raised_limit.py"
+old = '    "tests/perf/test_synthetic.py": 0,'
+new = ""
+suite = "guards"
+tests = ["tests/guards/test_no_raised_limit.py"]
+expect = "red"
+red = ["tests/guards/test_no_raised_limit.py::test_perf_reads_the_clocks_its_budgets_need_and_no_more"]
+
+[[mutation]]
+id = "C2"
+why = "The stand-in market's tests start reading a clock nobody budgeted."
+path = "tests/perf/test_synthetic.py"
+old = "from datetime import date\n"
+new = "import time\nfrom datetime import date\n"
+suite = "guards"
+tests = ["tests/guards/test_no_raised_limit.py"]
+expect = "red"
+red = ["tests/guards/test_no_raised_limit.py::test_perf_reads_the_clocks_its_budgets_need_and_no_more"]
+
+# The golden file now takes its helpers from tests/cli/cli_world.py: G1 breaks the shared page
+# helper, which the golden income test compares through.
+
+[[mutation]]
+id = "G1"
+why = "The shared page helper drops the disclaimer, so a page missing it would compare equal."
+path = "tests/cli/cli_world.py"
+old = '    return f"{text}\n\n{DISCLAIMER}\n"'
+new = '    return f"{text}\n"'
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_commands_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_paper_commands_golden.py::test_the_income_report_is_the_backtests_over_the_same_days"]

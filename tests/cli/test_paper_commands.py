@@ -15,12 +15,18 @@ from pathlib import Path
 
 import pytest
 from cli_world import (
-    GOLDEN_CONFIG,
+    EXEMPT,
+    TIGHT,
     Cli,
     at,
+    halted,
     opened,
+    page,
     paper,
+    quiet,
+    ran_to,
     recorded_source,
+    run_from,
     run_on,
     tables,
     trading_days,
@@ -35,7 +41,6 @@ from steadyhand import (
     CLAIMS_LABEL,
     CORPORATE_SPLIT_ORDER_CANCELLED,
     DATA_BAR_REFUSED,
-    DISCLAIMER,
     FIGURES,
     IDR,
     LIMIT_WEIGHT_CUT,
@@ -59,49 +64,6 @@ from steadyhand_idx.notes import PAPER_ORDER_SKIPPED, PAPER_RESUMED, PAPER_STRAT
 from steadyhand_idx.paper import HaltCausePresentError, check_resume
 from steadyhand_idx.paper_pages import day_report_page, income_page, status_page
 from steadyhand_idx.state import Account, Outcome
-
-QUIET = '\n[training]\nlevel = "off"\n'
-"""Training off: a page is then its lines and the disclaimer, nothing else."""
-
-EXEMPT = "\n[tax]\ndividend_reinvestment_exemption = true\n"
-
-JUMPY = GOLDEN_CONFIG.replace(
-    '[risk]\nmax_weight = "0.25"\n', '[risk]\nmax_weight = "0.25"\ndaily_loss_limit = "0.001"\n'
-)
-"""A daily-loss limit the golden run's second day breaches (as ``paper run``'s halt test)."""
-
-TIGHT = GOLDEN_CONFIG.replace('[risk]\nmax_weight = "0.25"\n', '[risk]\nmax_weight = "0.19"\n')
-"""A 19% limit per stock, under buy-and-hold's 20% of each of the five: its first orders are cut to
-the limit and its later top-ups skipped. With BBRI's prices restored (#160), the golden settings
-spread the money five ways and never block an order."""
-
-
-def quiet(config: str = GOLDEN_CONFIG) -> str:
-    assert "[training]" not in config
-    return config + QUIET
-
-
-def page(text: str) -> str:
-    """The page as a command prints it with training off."""
-    return f"{text}\n\n{DISCLAIMER}\n"
-
-
-def ran_to(tmp_path: Path, day: date, config: str = GOLDEN_CONFIG) -> Cli:
-    """An account opened on the golden window's first day and run up to *day*."""
-    cli = paper(tmp_path, config)
-    assert run_on(cli, START).code == 0
-    if day != START:
-        done = run_on(cli, day, "--catch-up")
-        assert done.code in (0, 3), done.err
-    return replace(cli, now=at(day))
-
-
-def halted(tmp_path: Path) -> Cli:
-    """An account halted by the daily-loss limit on 2021-02-02, the day it is left on."""
-    cli = paper(tmp_path, quiet(JUMPY))
-    assert run_on(cli, START).code == 0
-    assert run_on(cli, trading_days()[1]).code == 3
-    return replace(cli, now=at(trading_days()[1]), env={"USER": "tester"})
 
 
 def retired(cli: Cli) -> None:
@@ -394,17 +356,20 @@ def test_resume_is_allowed_just_inside_the_drawdown_limit() -> None:
 
 class RacingScreen(io.StringIO):
     """A terminal on which, once the question is shown, another ``paper run`` saves a day
-    before the answer is typed: the account changes between the question and the answer."""
+    before the answer is typed: the account changes between the question and the answer.
+    ``resume`` asks one question, and the CLI flushes only to show a question (``ask``), so a
+    second flush is a second question this race was never written for. ``main`` turns an error
+    raised here into its exit code 1, so the test reads ``questions`` before the exit code."""
 
     def __init__(self, other: Cli) -> None:
         super().__init__()
         self._other = other
-        self.raced = False
+        self.questions = 0
 
     def flush(self) -> None:
-        if not self.raced:
-            self.raced = True
-            assert self._other("paper", "run").code == 3
+        self.questions += 1
+        assert self.questions == 1, "resume showed a second question"
+        assert self._other("paper", "run").code == 3
         super().flush()
 
 
@@ -417,8 +382,9 @@ def test_an_account_changed_while_asking_is_left_as_the_other_run_saved_it(
     env = {"STEADYHAND_HOME": str(cli.home)}
     answer = io.StringIO("resume\n")
     world = World(answer, screen, err, env, lambda: cli.now, recorded_source)
-    assert main(["resume", "buy-and-hold"], world) == 3
-    assert screen.raced
+    code = main(["resume", "buy-and-hold"], world)
+    assert screen.questions == 1, "the race ran once, on resume's one question"
+    assert code == 3
     assert err.getvalue() == (
         "steadyhand-idx: another paper run saved a day while you were answering; nothing was "
         "changed, run the command again\n"
@@ -546,12 +512,7 @@ SHORT_JUMPY = SHORT_CONFIG.replace(SHORT_RISK, SHORT_RISK + 'daily_loss_limit = 
 
 def short_ran_to(tmp_path: Path, day: date, config: str = SHORT_CONFIG) -> Cli:
     """An account opened on the made-up window's first day and run up to *day*."""
-    cli = short_cli(tmp_path / "home", config)
-    assert run_on(cli, SHORT_START).code == 0
-    if day != SHORT_START:
-        done = run_on(cli, day, "--catch-up")
-        assert done.code in (0, 3), done.err
-    return replace(cli, now=at(day))
+    return run_from(short_cli(tmp_path / "home", config), SHORT_START, day)
 
 
 def saved_account(

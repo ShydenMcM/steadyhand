@@ -3,30 +3,6 @@
   ".github/workflows/record-floors.yml": [
    1,
    0
-  ],
-  ".github/workflows/yahoo-shape.yml": [
-   11,
-   0
-  ],
-  "tests/cli/test_paper_commands.py": [
-   0,
-   2
-  ],
-  "tests/guards/test_supply_chain.py": [
-   0,
-   3
-  ],
-  "tests/integration/cli/test_paper_commands_golden.py": [
-   0,
-   1
-  ],
-  "tests/perf/synthetic.py": [
-   5,
-   2
-  ],
-  "tests/training/test_terms.py": [
-   3,
-   0
   ]
  },
  "unmeasured": [
