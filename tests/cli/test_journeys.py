@@ -102,22 +102,31 @@ def test_the_exit_codes_and_their_messages(tmp_path: Path) -> None:
 
 
 # The paper trader's journey over the recorded golden window moved to
-# tests/integration/cli/test_journeys_golden.py (#282). Its stand-in, of the same name, takes the
-# same steps over the made-up window.
+# tests/integration/cli/test_journeys_golden.py (#282), one run from the backtest to the run after
+# a resume. Its stand-in over the made-up window takes the same steps in three phases, each from a
+# fresh home (#407: the stand-in in one piece took 111 ms of own CPU under load, over the limit).
 
 
-def test_a_paper_traders_journey(tmp_path: Path) -> None:
+def paper_trader(tmp_path: Path) -> tuple[Cli, str]:
+    """A home on the made-up market with training off, and the settings written to it."""
     home = tmp_path / "home"
     cli = Cli(home, uncached, at(SHORT_START))
     cli.init(training="off")
     write_short_universe(home)
     settings = SHORT_CONFIG + '\n[training]\nlevel = "off"\n'
     cli.config.write_text(settings, encoding="utf-8")
+    return cli, settings
 
+
+def test_a_paper_trader_backtests_the_week_first(tmp_path: Path) -> None:
+    cli, _ = paper_trader(tmp_path)
     tested = cli("backtest", *WEEK)
     assert tested.code == 0, tested.err
     assert tested.out.startswith("Backtest: buy-and-hold, 2021-12-15 to 2021-12-21")
 
+
+def test_a_paper_trader_opens_the_account_and_reads_its_reports(tmp_path: Path) -> None:
+    cli, _ = paper_trader(tmp_path)
     first = cli("paper", "run")
     assert first.code == 0, first.err
     assert first.out.startswith("2021-12-15: 0 fill(s), 3 order(s) queued, value IDR 100,000,000")
@@ -134,6 +143,11 @@ def test_a_paper_traders_journey(tmp_path: Path) -> None:
     assert income.code == 0, income.err
     assert income.out.startswith("Income as of 2021-12-15\n")
 
+
+def test_a_paper_trader_is_halted_resumes_and_runs_on(tmp_path: Path) -> None:
+    cli, settings = paper_trader(tmp_path)
+    first = cli("paper", "run")
+    assert first.code == 0, first.err
     jumpy = settings.replace(
         'max_weight = "0.35"\n', 'max_weight = "0.35"\ndaily_loss_limit = "0.001"\n'
     )
