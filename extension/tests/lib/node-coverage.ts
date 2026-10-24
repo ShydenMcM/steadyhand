@@ -7,7 +7,8 @@
  *
  * Node strips a TypeScript file's types by blanking them, so every position in the code it ran is
  * the same position in the file, and it appends one `//# sourceURL=` line. The converter strips the
- * file the same way (amaro, the stripper Node bundles) and refuses any script whose length differs:
+ * file with the stripper it is given (the program passes amaro, the stripper Node bundles; #405: not
+ * imported here, its 44-61 ms load is more than a unit file may take) and refuses any script whose length differs:
  * that script ran as other code than the file holds (rewritten by a loader, or changed since).
  */
 import { globSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -15,7 +16,6 @@ import { join, matchesGlob } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isDeepStrictEqual, parseArgs } from "node:util";
 import { parse } from "acorn";
-import { transformSync } from "amaro";
 import convert from "ast-v8-to-istanbul";
 
 /** A refusal: the raw reports cannot stand for the files they should measure. */
@@ -24,6 +24,9 @@ export class NodeCoverageError extends Error {
 }
 
 /** One Vitest project's settings that name the files Vitest loads itself. */
+/** Strips a TypeScript file's types as Node does when it runs it: each blanked in place. */
+export type Strip = (source: string) => string;
+
 export interface ProjectFiles {
   name: string;
   include: string[];
@@ -146,8 +149,12 @@ function fileOf(url: string): string | undefined {
 }
 
 /** One script's istanbul coverage of *path*, checked to be the file's own code. */
-async function converted(path: string, run: ScriptCoverage): Promise<FileCoverageData> {
-  const stripped = transformSync(readFileSync(path, "utf8"), { mode: "strip-only" }).code;
+async function converted(
+  path: string,
+  run: ScriptCoverage,
+  strip: Strip,
+): Promise<FileCoverageData> {
+  const stripped = strip(readFileSync(path, "utf8"));
   const code = `${stripped}\n\n//# sourceURL=${run.url}`;
   const end = Math.max(...run.functions.flatMap((fn) => fn.ranges.map((range) => range.endOffset)));
   if (end !== code.length) {
@@ -197,6 +204,7 @@ export function summed(into: FileCoverageData, more: FileCoverageData): FileCove
 export async function toIstanbul(
   scripts: readonly ScriptCoverage[],
   files: readonly string[],
+  strip: Strip,
 ): Promise<Record<string, FileCoverageData>> {
   const wanted = new Set(files);
   const runs = new Map<string, ScriptCoverage[]>();
@@ -221,7 +229,7 @@ export async function toIstanbul(
     if (held === undefined) {
       throw new NodeCoverageError(`${path}: no raw report holds it, so the run never loaded it`);
     }
-    const each = await Promise.all(held.map((run) => converted(path, run)));
+    const each = await Promise.all(held.map((run) => converted(path, run, strip)));
     report[path] = each.reduce(summed);
   }
   return report;
@@ -233,6 +241,7 @@ export interface Settings {
   configFile: string;
   projects: readonly unknown[];
   defaultExclude: readonly string[];
+  strip: Strip;
 }
 
 /** `tests/node-coverage-report.ts`'s work: its exit status. Every refusal is printed, and the status is 1. */
@@ -259,7 +268,7 @@ export async function report(
     }
     const projects = projectFiles(settings.projects, project, settings.defaultExclude);
     const files = measuredFiles(settings.root, settings.configFile, projects);
-    const measured = await toIstanbul(readRawReports(raw), files);
+    const measured = await toIstanbul(readRawReports(raw), files, settings.strip);
     mkdirSync(out, { recursive: true });
     writeFileSync(join(out, "coverage-final.json"), `${JSON.stringify(measured)}\n`);
     for (const [path, coverage] of Object.entries(measured)) {
