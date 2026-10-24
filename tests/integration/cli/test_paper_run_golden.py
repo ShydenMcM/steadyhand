@@ -9,6 +9,7 @@ the same runs over nineteen trading days of three made-up stocks across the turn
 
 #282 moved one more: thirty-one days run with ``--catch-up`` (0.066 s to 0.079 s of own CPU on
 the laptop, 2026-10-14). The window is too short for 31 days, so its stand-in lowers the cap to 3.
+#391 moved the cap's own thirty days the same way (135 ms of own CPU in a loaded unit run).
 """
 
 from datetime import date
@@ -76,6 +77,17 @@ def test_dividend_growth_reviews_again_on_the_first_trading_day_of_2022(tmp_path
     }
     assert {("TLKM", "buy"), ("UNVR", "sell")} <= filled
     assert account.state.memory == {"set": "IDX:BBCA IDX:TLKM", "year": "2022"}
+
+
+def test_thirty_days_to_run_proceed(tmp_path: Path) -> None:
+    """The cap's own thirty days run without --catch-up (#391 moved it here: 135 ms of own CPU in
+    a loaded unit run; its stand-in, the cap lowered to 3, stays in tests/cli/test_paper_run.py)."""
+    cli = paper(tmp_path)
+    run_on(cli, START)
+    result = run_on(cli, trading_days()[CATCH_UP_CAP])
+    assert result.code == 0, result.err
+    with opened(cli) as store:
+        assert store.days() == trading_days()[: CATCH_UP_CAP + 1]
 
 
 def test_thirty_one_days_to_run_proceed_with_catch_up(tmp_path: Path) -> None:
