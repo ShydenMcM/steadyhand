@@ -177,13 +177,17 @@ def test_missed_days_are_caught_up_in_order_each_saved(tmp_path: Path) -> None:
 # The catch-up cap (M5 spec §6.1, §9.2).
 
 
-def test_thirty_days_to_run_proceed(tmp_path: Path) -> None:
-    cli = paper(tmp_path)
-    run_on(cli, START)
-    result = run_on(cli, trading_days()[CATCH_UP_CAP])
+def test_thirty_days_to_run_proceed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The real thirty days over the golden window are in tests/integration/cli/
+    # test_paper_run_golden.py (#391: 135 ms of own CPU in a loaded run, over the unit limit).
+    # This stand-in lowers the cap to 3 over the made-up window: exactly the cap's days proceed.
+    monkeypatch.setattr("steadyhand_idx.paper.CATCH_UP_CAP", 3)
+    cli = short_cli(tmp_path / "home")
+    run_on(cli, SHORT_START)
+    result = run_on(cli, short_trading_days()[3])
     assert result.code == 0, result.err
     with opened(cli) as store:
-        assert store.days() == trading_days()[: CATCH_UP_CAP + 1]
+        assert store.days() == short_trading_days()[:4]
 
 
 def test_thirty_one_days_to_run_are_refused_and_nothing_is_written(tmp_path: Path) -> None:

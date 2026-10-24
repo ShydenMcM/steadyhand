@@ -1,0 +1,13 @@
+# #391: the cap's own thirty days moved to the integration suite with a stand-in left in unit
+# (the cap lowered to 3). The moved test still catches the cap refusing exactly thirty days.
+
+[[mutation]]
+id = '391-C1'
+why = 'exactly the cap refused (>= for >)'
+path = 'packages/steadyhand-idx/src/steadyhand_idx/paper.py'
+old = 'len(days) > CATCH_UP_CAP and not catch_up:'
+new = 'len(days) >= CATCH_UP_CAP and not catch_up:'
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_run_golden.py"]
+expect = "red"
+red = ["tests/integration/cli/test_paper_run_golden.py::test_thirty_days_to_run_proceed"]
