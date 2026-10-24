@@ -7,7 +7,6 @@ from decimal import Decimal
 from functools import cache
 from itertools import pairwise
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -44,9 +43,6 @@ from steadyhand_idx.yahoo import (
     ticker_for,
     unadjust,
 )
-
-if TYPE_CHECKING:
-    import pandas as pd
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "yahoo"
 BBCA_FILE = FIXTURES / "BBCA.JK_2021-09-01_2021-11-30.json"
@@ -280,7 +276,7 @@ def _frames(history: YahooHistory, zone: str = "Asia/Jakarta") -> tuple[Frame, S
 
 
 def _converted(ticker: str, frame: Frame, splits: Splits) -> YahooHistory:
-    return history_from_frames(ticker, cast("pd.DataFrame", frame), cast("pd.Series", splits))
+    return history_from_frames(ticker, frame, splits)
 
 
 def _row(day: date, prices: str, volume: int, dividend: str = "0") -> YahooRow:

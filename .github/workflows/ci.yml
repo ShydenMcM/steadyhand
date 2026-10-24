@@ -133,6 +133,25 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         timeout-minutes: 2
         run: uv run --locked pytest -W error -m perf -p no:cacheprovider
+      # The same tests again under coverage (#374 AC9, Shyden 2026-10-22: "Two runs, one judges
+      # time"): --measured judges no time and refuses a run coverage does not trace, and the
+      # step above refuses one it does (tests/plugins/perf_budget.py). No limit of its own, as the
+      # unit job's measured run has none, so the tracer is never timed.
+      - name: Performance, measured
+        if: steps.scope.outputs.docs_only != 'true'
+        run: |
+          mkdir -p "${RUNNER_TEMP}/coverage-perf"
+          uv run --locked pytest -W error -m perf -p no:cacheprovider --measured --cov --cov-report="json:${RUNNER_TEMP}/coverage-perf/coverage.json"
+          git rev-parse HEAD > "${RUNNER_TEMP}/coverage-perf/sha.txt"
+      # The coverage job joins every suite's report (#381); this one names the commit it measured.
+      - name: Keep the performance coverage report
+        if: steps.scope.outputs.docs_only != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-python-perf-${{ matrix.python }}
+          path: ${{ runner.temp }}/coverage-perf
+          if-no-files-found: error
+          retention-days: 7
       # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
       - name: Keep the workflow trace
         if: ${{ !cancelled() }}
@@ -533,6 +552,23 @@ jobs:
         # 31 s with the golden window's long real runs (#292; PR #316, run 38331680081).
         timeout-minutes: 3
         run: uv run --locked pytest -W error --suite integration -p no:cacheprovider
+      # The suite again under coverage (#374), whose tracer the limit above must not time; the
+      # scripts it starts as programs are measured too (pyproject: patch = subprocess).
+      - name: The integration suite, measured
+        if: steps.scope.outputs.docs_only != 'true'
+        run: |
+          mkdir -p "${RUNNER_TEMP}/coverage-report"
+          uv run --locked pytest -W error --suite integration -p no:cacheprovider --cov --cov-report="json:${RUNNER_TEMP}/coverage-report/coverage.json"
+          git rev-parse HEAD > "${RUNNER_TEMP}/coverage-report/sha.txt"
+      # The coverage job joins every suite's report (#381); this one names the commit it measured.
+      - name: Keep the coverage report
+        if: steps.scope.outputs.docs_only != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-python-integration-${{ matrix.python }}
+          path: ${{ runner.temp }}/coverage-report
+          if-no-files-found: error
+          retention-days: 7
       # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
       - name: Keep the workflow trace
         if: ${{ !cancelled() }}
@@ -635,6 +671,33 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         timeout-minutes: 2
         run: uv run --locked pytest -W error --suite properties -p no:cacheprovider
+      # The suite twice more under coverage (#374), unlimited so no limit times the tracer: it
+      # draws fresh random cases each run, so the coverage job joins every report once with each
+      # run and fails on a line whose verdict differs (Shyden 2026-10-22: wobble measured).
+      - name: The properties suite, measured twice
+        if: steps.scope.outputs.docs_only != 'true'
+        run: |
+          mkdir -p "${RUNNER_TEMP}/coverage-report" "${RUNNER_TEMP}/coverage-report-again"
+          uv run --locked pytest -W error --suite properties -p no:cacheprovider --cov --cov-report="json:${RUNNER_TEMP}/coverage-report/coverage.json"
+          uv run --locked pytest -W error --suite properties -p no:cacheprovider --cov --cov-report="json:${RUNNER_TEMP}/coverage-report-again/coverage.json"
+          git rev-parse HEAD | tee "${RUNNER_TEMP}/coverage-report/sha.txt" > "${RUNNER_TEMP}/coverage-report-again/sha.txt"
+      # The coverage job joins every suite's report (#381); these name the commit they measured.
+      - name: Keep the coverage report
+        if: steps.scope.outputs.docs_only != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-python-properties-${{ matrix.python }}
+          path: ${{ runner.temp }}/coverage-report
+          if-no-files-found: error
+          retention-days: 7
+      - name: Keep the second coverage report
+        if: steps.scope.outputs.docs_only != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-python-properties-again-${{ matrix.python }}
+          path: ${{ runner.temp }}/coverage-report-again
+          if-no-files-found: error
+          retention-days: 7
       # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
       - name: Keep the workflow trace
         if: ${{ !cancelled() }}
@@ -799,4 +862,4 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}/jobs?per_page=100" > "${RUNNER_TEMP}/jobs.json"
-          uv run --locked python scripts/workflow_coverage.py --workflow .github/workflows/ci.yml --jobs "${RUNNER_TEMP}/jobs.json" --sha "${GITHUB_SHA}" --traces "${RUNNER_TEMP}/traces" --own-traces --out "${RUNNER_TEMP}/workflow-coverage/ci.json" && uv run --locked python scripts/coverage_gate.py --event "${EVENT_NAME}" --sha "${GITHUB_SHA}" --head-sha "${HEAD_SHA:-$GITHUB_SHA}" --python "${RUNNER_TEMP}/coverage/coverage-python-3.12" --python "${RUNNER_TEMP}/coverage/coverage-python-3.13" --python "${RUNNER_TEMP}/coverage/coverage-python-guards-3.12" --python "${RUNNER_TEMP}/coverage/coverage-python-guards-3.13" --istanbul "${RUNNER_TEMP}/coverage/coverage-extension-unit" --istanbul "${RUNNER_TEMP}/coverage/coverage-extension-guards" --istanbul "${RUNNER_TEMP}/coverage/coverage-extension-unit-node" --istanbul "${RUNNER_TEMP}/coverage/coverage-extension-guards-node" --istanbul "${RUNNER_TEMP}/coverage/coverage-extension-integration-node" --workflow "${RUNNER_TEMP}/workflow-coverage"
+          uv run --locked python scripts/workflow_coverage.py --workflow .github/workflows/ci.yml --jobs "${RUNNER_TEMP}/jobs.json" --sha "${GITHUB_SHA}" --traces "${RUNNER_TEMP}/traces" --own-traces --out "${RUNNER_TEMP}/workflow-coverage/ci.json" && uv run --locked python scripts/coverage_gate.py --event "${EVENT_NAME}" --sha "${GITHUB_SHA}" --head-sha "${HEAD_SHA:-$GITHUB_SHA}" --reports "${RUNNER_TEMP}/coverage" --workflow "${RUNNER_TEMP}/workflow-coverage"

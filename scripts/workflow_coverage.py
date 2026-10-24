@@ -24,18 +24,14 @@ import json
 import os
 import re
 import sys
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import tree_sitter_bash
 import yaml
-from tree_sitter import Language, Parser
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
-
-    from tree_sitter import Node
+from tree_sitter import Language, Node, Parser
 
 BASH = Language(tree_sitter_bash.language())
 

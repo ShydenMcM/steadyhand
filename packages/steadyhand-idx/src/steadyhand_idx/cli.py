@@ -18,7 +18,7 @@ from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, NoReturn, TextIO
+from typing import Final, NoReturn, Protocol, TextIO
 
 from steadyhand import (
     DISCLAIMER,
@@ -100,8 +100,14 @@ from steadyhand_idx.state import STATE_FILE, StateSchemaError, StateStore
 from steadyhand_idx.universe import Exclusions, Lq45Membership, Lq45Universe
 from steadyhand_idx.yahoo import YahooDataSource
 
-if TYPE_CHECKING:
-    from _typeshed import SupportsWrite
+
+class Writable(Protocol):
+    """Where argparse writes help: anything taking text. Typeshed's ``SupportsWrite`` names the
+    same shape but exists only for the type checker, so it is spelled out here (#374)."""
+
+    def write(self, text: str, /) -> object:
+        """Write *text*."""
+
 
 type SourceFactory = Callable[[Path], AbstractContextManager[DataSource]]
 """Opens the data source over the data directory's cache, and closes it after the command."""
@@ -211,7 +217,7 @@ def _parser(stdout: TextIO) -> argparse.ArgumentParser:
     still ends in ``SystemExit``, which ``main`` turns into its exit code."""
 
     class Parser(argparse.ArgumentParser):
-        def print_help(self, file: SupportsWrite[str] | None = None) -> None:
+        def print_help(self, file: Writable | None = None) -> None:
             super().print_help(stdout if file is None else file)
 
         def error(self, message: str) -> NoReturn:

@@ -251,10 +251,12 @@ def test_the_configuration_and_the_commands_stay_outside_the_exception(module: s
     assert not _within(module, MAY_IMPORT_TRAINING)
 
 
-def test_training_imports_nothing_that_decides() -> None:
+def training_imports(modules: list[tuple[str, bool, str]]) -> tuple[int, list[str]]:
+    """How many imports of the training modules in *modules* were read, and each one outside
+    that training package's allowlist."""
     checked = 0
     found: list[str] = []
-    for name, is_package, source in sources():
+    for name, is_package, source in modules:
         for own, allowlist in zip(
             TRAINING, (ENGINE_TRAINING_MAY_IMPORT, IDX_TRAINING_MAY_IMPORT), strict=True
         ):
@@ -264,8 +266,24 @@ def test_training_imports_nothing_that_decides() -> None:
                 checked += 1
                 if not allowed(statement, allowlist, own):
                     found.append(f"{name}: {statement[0]}")
+    return checked, found
+
+
+def test_training_imports_nothing_that_decides() -> None:
+    checked, found = training_imports(sources())
     assert checked >= TRAINING_IMPORTS_FLOOR, f"read {checked} imports of the training modules"
     assert searched(found, of=checked, what="imports of the training modules") == []
+
+
+def test_a_training_module_importing_what_decides_is_named() -> None:
+    """The plant: a lesson that imports the backtest, which decides (#374: the failing branch
+    runs here, not only when the tree is broken)."""
+    planted = [("steadyhand.training.planted", False, "from steadyhand.backtest import run\n")]
+    checked, found = training_imports(planted)
+    assert checked == 1
+    assert len(found) == 1
+    assert found[0].startswith("steadyhand.training.planted: ")
+    assert "steadyhand.backtest" in found[0]
 
 
 @pytest.mark.parametrize("phrase", ADVICE_PHRASES)

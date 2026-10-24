@@ -14,7 +14,7 @@ import re
 import socket
 import subprocess
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from types import SimpleNamespace
 
 import no_process
@@ -69,20 +69,47 @@ def test_the_plugin_is_registered_in_this_unit_run(request: pytest.FixtureReques
     assert request.config.pluginmanager.get_plugin("no-process") is no_process
 
 
+def unready(armed: list[bool], entry_points: Sequence[tuple[str, object, str]]) -> list[str]:
+    """Why no plant may run: the refusal unarmed, or an entry point no longer wrapped."""
+    problems = [] if armed == [True] else ["the refusal is not armed, so no plant runs"]
+    unwrapped = [
+        label
+        for label, owner, name in entry_points
+        if getattr(getattr(owner, name), "__refuses__", None) != label
+    ]
+    if unwrapped:
+        problems.append(f"not wrapped, so no plant runs: {', '.join(unwrapped)}")
+    return problems
+
+
 @pytest.fixture
 def every_entry_point_wrapped() -> None:
     """Fail before a plant runs unless every entry point is wrapped, so that taking a wrapper
     out, or leaving it unarmed (a mutation), can never let a plant start a real process or reach
     the network."""
-    if no_process._armed != [True]:
-        pytest.fail("the refusal is not armed, so no plant runs")
-    unwrapped = [
-        label
-        for label, owner, name in ENTRY_POINTS
-        if getattr(getattr(owner, name), "__refuses__", None) != label
+    problems = unready(no_process._armed, ENTRY_POINTS)
+    assert problems == [], problems
+
+
+def test_an_unarmed_refusal_lets_no_plant_run() -> None:
+    assert unready([False], []) == ["the refusal is not armed, so no plant runs"]
+
+
+def test_an_entry_point_left_unwrapped_lets_no_plant_run() -> None:
+    bare = SimpleNamespace(run=lambda: None)
+    assert unready([True], [("bare.run", bare, "run")]) == [
+        "not wrapped, so no plant runs: bare.run"
     ]
-    if unwrapped:
-        pytest.fail(f"not wrapped, so no plant runs: {', '.join(unwrapped)}")
+
+
+def test_a_disarmed_wrapper_calls_through_to_the_original() -> None:
+    """Outside a unit test's own body (collection, teardown) the wrapper must not refuse."""
+    wrapped = no_process._refusing("plain", lambda value: value * 2)
+    no_process._armed[0] = False
+    try:
+        assert wrapped(21) == 42
+    finally:
+        no_process._armed[0] = True
 
 
 def connect() -> None:

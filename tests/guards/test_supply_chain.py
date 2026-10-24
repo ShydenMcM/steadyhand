@@ -597,3 +597,10 @@ def test_every_ignore_names_a_direct_dependency() -> None:
         if entry["dependency-name"] not in direct_versions()
     ]
     assert searched(stale, of=len(ignored), what="npm ignore entries") == []
+
+
+@pytest.mark.parametrize("version", ["lts/*", "^20", None], ids=["lts", "range", "none"])
+def test_an_unreadable_node_version_is_refused_by_name(version: object) -> None:
+    """A setup-node version the check cannot read fails it by name, never passes it (#374)."""
+    with pytest.raises(AssertionError, match=r"ci\.yml: cannot read a major version from"):
+        major_of(version, where="ci.yml")

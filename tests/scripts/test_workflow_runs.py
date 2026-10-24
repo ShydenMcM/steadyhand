@@ -21,6 +21,9 @@ OTHER = "d" * 40
 BRANCH = "coverage/384/x"
 SLUG = "o/r"
 SHAPE = ".github/workflows/yahoo-shape.yml"
+# The file only yahoo-shape measures (coverage_gate.MEASURED_ONLY_BY), and its report as kept.
+LIVE = "tests/idx/test_yahoo_live.py"
+LIVE_REPORT = "coverage-python-yahoo-shape/coverage.json"
 # Lines 2-4: the tracing shell every workflow sets (YAML single quotes double a quote).
 TRACED = "name: s\ndefaults:\n  run:\n    shell: '" + TRACING_SHELL.replace("'", "''") + "'\n"
 SHAPE_TEXT = TRACED + "jobs:\n  shape:\n    steps:\n      - run: echo hi\n"
@@ -53,7 +56,7 @@ def standard(changed: bytes = SHAPE.encode() + b"\0", head_text: str = SHAPE_TEX
             ("gh", "api", f"repos/{SLUG}/actions/workflows/yahoo-shape.yml/runs"): runs_listing(7),
             ("gh", "api", f"repos/{SLUG}/actions/runs/7/jobs"): jobs_payload(),
         },
-        downloads={"7": {"workflow-trace-shape-0/shape/__run": TRACE}},
+        downloads={"7": {"workflow-trace-shape-0/shape/__run": TRACE, LIVE_REPORT: '{"run": 7}'}},
     )
 
 
@@ -109,6 +112,7 @@ def test_the_changed_files_come_from_the_merge_commits_two_parents(
         "HEAD",
         "--",
         ".github/workflows/",
+        LIVE,
     ]
 
 
@@ -159,8 +163,8 @@ def test_runs_of_the_same_commit_join(tmp_path: Path, stood_in: dict[str, Comman
         payload
     ).encode()
     commands.downloads = {
-        "7": {"workflow-trace-shape-0/shape/__run": f"sha {HEAD}\nlines 2\n1\n"},
-        "8": {"workflow-trace-shape-0/shape/__run": f"sha {HEAD}\nlines 2\n2\n"},
+        "7": {"workflow-trace-shape-0/shape/__run": f"sha {HEAD}\nlines 2\n1\n", LIVE_REPORT: "7"},
+        "8": {"workflow-trace-shape-0/shape/__run": f"sha {HEAD}\nlines 2\n2\n", LIVE_REPORT: "8"},
     }
     stood_in["c"] = commands
     assert run_main(repo_with(tmp_path / "repo", text), tmp_path / "out") == 0
@@ -170,13 +174,21 @@ def test_runs_of_the_same_commit_join(tmp_path: Path, stood_in: dict[str, Comman
         "missing_lines": [],
     }
     assert report["meta"]["runs"] == [7, 8]
+    # Every run's coverage report is kept, none dropped (G12).
+    kept = tmp_path / "out/yahoo-shape-python"
+    assert [(kept / f"{run}/coverage.json").read_text(encoding="utf-8") for run in (7, 8)] == [
+        "7",
+        "8",
+    ]
 
 
 def test_a_trace_from_another_commit_fails(
     tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
 ) -> None:
     commands = standard()
-    commands.downloads = {"7": {"workflow-trace-shape-0/shape/__run": f"sha {OTHER}\nlines 1\n1\n"}}
+    commands.downloads = {
+        "7": {"workflow-trace-shape-0/shape/__run": f"sha {OTHER}\nlines 1\n1\n", LIVE_REPORT: "{}"}
+    }
     stood_in["c"] = commands
     assert run_main(repo_with(tmp_path / "repo"), tmp_path / "out") == 1
     assert OTHER in capsys.readouterr().err
@@ -242,3 +254,67 @@ def test_it_runs_as_a_script(
         runpy.run_path(str(script), run_name="__main__")
     assert exited.value.code == 0
     assert "push: no pull request" in capsys.readouterr().out
+
+
+def test_a_change_to_a_file_only_the_workflow_measures_reads_its_run_and_report(
+    tmp_path: Path, stood_in: dict[str, Commands]
+) -> None:
+    """The live test changed, yahoo-shape did not: its run on the commit is read all the same,
+    its trace and its coverage report (#374 AC9, "Same as workflows"; G10)."""
+    stood_in["c"] = standard(changed=LIVE.encode() + b"\0")
+    assert run_main(repo_with(tmp_path / "repo"), tmp_path / "out") == 0
+    assert json.loads((tmp_path / "out/yahoo-shape.json").read_text(encoding="utf-8"))["meta"] == {
+        "sha": HEAD,
+        "workflow": SHAPE,
+        "runs": [7],
+    }
+    kept = tmp_path / "out/yahoo-shape-python/7/coverage.json"
+    assert kept.read_text(encoding="utf-8") == '{"run": 7}'
+
+
+def test_the_workflow_and_a_file_it_measures_both_changed_read_it_once(
+    tmp_path: Path, stood_in: dict[str, Commands]
+) -> None:
+    stood_in["c"] = standard(changed=f"{SHAPE}\0{LIVE}\0".encode())
+    assert run_main(repo_with(tmp_path / "repo"), tmp_path / "out") == 0
+    listings = [
+        call for call in stood_in["c"].calls if "workflows/yahoo-shape.yml/runs" in call[-1]
+    ]
+    assert len(listings) == 1
+
+
+def test_the_coverage_report_is_downloaded_by_its_name(
+    tmp_path: Path, stood_in: dict[str, Commands]
+) -> None:
+    stood_in["c"] = standard()
+    run_main(repo_with(tmp_path / "repo"), tmp_path / "out")
+    named = [call for call in stood_in["c"].calls if "--name" in call]
+    assert [call[call.index("--name") + 1] for call in named] == ["coverage-python-yahoo-shape"]
+
+
+def test_a_run_that_kept_no_coverage_report_fails_naming_it(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The live check failed, so its measured step never ran and kept nothing (G11)."""
+    commands = standard()
+    commands.downloads = {"7": {"workflow-trace-shape-0/shape/__run": TRACE}}
+    stood_in["c"] = commands
+    assert run_main(repo_with(tmp_path / "repo"), tmp_path / "out") == 1
+    assert "no artifact matches" in capsys.readouterr().err
+
+
+def test_a_workflow_measuring_no_file_of_its_own_downloads_no_report(
+    tmp_path: Path, stood_in: dict[str, Commands]
+) -> None:
+    other = ".github/workflows/record-floors.yml"
+    commands = standard(changed=other.encode() + b"\0")
+    commands.answers[("gh", "api", f"repos/{SLUG}/actions/workflows/record-floors.yml/runs")] = (
+        runs_listing(7)
+    )
+    stood_in["c"] = commands
+    repo = tmp_path / "repo"
+    (repo / ".github/workflows").mkdir(parents=True)
+    (repo / other).write_text(SHAPE_TEXT, encoding="utf-8")
+    assert run_main(repo, tmp_path / "out") == 0
+    assert not [call for call in stood_in["c"].calls if "--name" in call]
+    assert not (tmp_path / "out/record-floors-python").exists()

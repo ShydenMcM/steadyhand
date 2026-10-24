@@ -30,12 +30,10 @@ class MarketRules(Protocol):
     @property
     def currency(self) -> Currency:
         """The currency every price and cost in this market is quoted in."""
-        ...
 
     @property
     def verified_from(self) -> date:
         """The first day on which every rule is verified. A backtest may not start earlier."""
-        ...
 
     def require_supported(self, day: date) -> None:
         """Raise ``UnsupportedDateError`` for a day the rule data does not cover.
@@ -43,23 +41,18 @@ class MarketRules(Protocol):
         The message names the rule table that sets the limit. Every other method checks this,
         except ``is_trading_day``, which answers for every year of holiday data (M6 spec §4.1).
         """
-        ...
 
     def lot_size(self, instrument: Instrument, on: date) -> int:
         """Shares per board lot. Orders are whole lots."""
-        ...
 
     def round_to_tick(self, instrument: Instrument, price: Money, side: Side, on: date) -> Money:
         """The nearest valid price against the trader: up for a BUY, down for a SELL."""
-        ...
 
     def price_band(self, instrument: Instrument, reference: Money, on: date) -> tuple[Money, Money]:
         """The (lowest, highest) price the exchange accepts, given the reference price."""
-        ...
 
     def costs(self, side: Side, gross: Money, on: date) -> Costs:
         """Fee, levy and tax for one trade of *gross* value. Never negative."""
-        ...
 
     def daily_costs(self, traded: Money, on: date) -> Money:
         """Charges made once per trading day, given the day's buys plus sells.
@@ -67,33 +60,27 @@ class MarketRules(Protocol):
         Stamp duty on a trade confirmation is the example: brokers issue one confirmation a day,
         so it cannot be charged per trade. Never negative, and nothing when nothing traded.
         """
-        ...
 
     def settlement_date(self, trade_date: date) -> date:
         """The trading day on which a trade made on *trade_date* settles."""
-        ...
 
     def dividend_tax(self, gross: Money, *, on: date) -> Money:
         """The full tax due on a *gross* dividend paid on *on*, before any exemption.
 
         IDX issuers withhold nothing from resident individuals; see docs/research/t-tax.md.
         """
-        ...
 
     def reinvestment_deadline(self, ex_date: date) -> date | None:
         """The last day a dividend with *ex_date* may be reinvested to be exempt from its tax.
 
         ``None`` where the market has no such exemption for that ex-date (M4 spec §6.1).
         """
-        ...
 
     def protection_end(self, purchase_day: date) -> date:
         """The last day an investment made on *purchase_day* must stay held to keep its claim."""
-        ...
 
     def is_trading_day(self, day: date) -> bool:
         """Whether the market is open on *day*. Raises for a year with no holiday data."""
-        ...
 
 
 def add_trading_days(rules: MarketRules, day: date, count: int) -> date:

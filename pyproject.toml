@@ -88,15 +88,15 @@ branch = true
 # a folder without __init__.py too (below). No total is judged here: the coverage job holds each
 # file's untested statements and branch arms to tests/coverage_record.json (scripts/coverage_gate.py).
 source = ["packages/steadyhand/src", "packages/steadyhand-idx/src", "scripts", "tests"]
+# The scripts the integration suite starts as their own programs are measured too (#374), their
+# data joined into the parent run's (coverage.py's subprocess patch).
+patch = ["subprocess"]
 
 [tool.coverage.report]
 # Report never-imported files in folders without __init__.py too (tests/ has several).
 include_namespace_packages = true
 show_missing = true
 skip_covered = true
-# coverage.py's own report leaves out a bare `...` (a Protocol method body); the coverage job
-# counts it as an untested statement all the same (Shyden 2026-10-22, "Count them as unrun").
-exclude_also = ['^\s*\.\.\.$']
 
 [dependency-groups]
 dev = [

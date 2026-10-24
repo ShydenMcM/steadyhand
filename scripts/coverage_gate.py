@@ -24,11 +24,40 @@ HUNK = re.compile(r"@@ -[0-9]+(?:,[0-9]+)? \+([0-9]+)(?:,([0-9]+))? @@")
 IGNORE_HINT = re.compile(r"\b(?:v8|c8|istanbul)\s+ignore\b")
 # The committed record the measured counts must equal.
 RECORD = "tests/coverage_record.json"
+# Every suite that measures coverage, by the folder its CI job keeps (#381, #374): each must be
+# there, and no other, or the gate fails closed. coverage.py JSON, then istanbul: vitest's, and
+# Node's own of the test, setup and config files ("-node", #394). The properties suite draws
+# fresh random cases each run, so it is measured twice ("-again").
+PYTHON_REPORTS = tuple(
+    f"coverage-python-{suite}{python}"
+    for suite in ("", "guards-", "integration-", "perf-", "properties-", "properties-again-")
+    for python in ("3.12", "3.13")
+)
+# Each second run, and the first it is compared with (wobble_between): every report is joined
+# once with each of the two runs, and a verdict that differs between the joins wobbles.
+REPEATS = {
+    f"coverage-python-properties-again-{v}": f"coverage-python-properties-{v}"
+    for v in ("3.12", "3.13")
+}
+ISTANBUL_REPORTS = tuple(
+    f"coverage-extension-{suite}"
+    for suite in ("unit", "guards", "unit-node", "guards-node", "integration-node")
+)
 # Code: every Python, TypeScript and JavaScript file, and every workflow ("all. so 1 and 2").
 CODE_SUFFIXES = (".py", ".ts", ".js")
 WORKFLOWS = ".github/workflows/"
 # The workflow whose own run holds the gate; every other one is started by hand (#384).
 OWN_WORKFLOW = ".github/workflows/ci.yml"
+# The files only a hand-started workflow's own run measures, by that workflow (#374 AC9, Shyden
+# 2026-10-22: "Same as workflows"). A pull request changing one, or the workflow, reads the
+# workflow's run on its commit (scripts/workflow_runs.py), whose coverage report counts for these
+# files alone; otherwise their recorded counts are carried, as the workflow's own are.
+MEASURED_ONLY_BY = {".github/workflows/yahoo-shape.yml": ("tests/idx/test_yahoo_live.py",)}
+
+
+def python_folder(workflow: str) -> str:
+    """The folder workflow_runs.py keeps a workflow's coverage reports in, one folder per run."""
+    return f"{Path(workflow).stem}-python"
 
 
 class GateError(Exception):
@@ -113,6 +142,13 @@ def from_istanbul(report: Mapping[str, Any], root: str) -> dict[str, FileCoverag
         if not path.startswith(prefix):
             msg = f"the report names {path}, outside {root}"
             raise GateError(msg)
+        # Vitest's V8 coverage counts no statement in a bare `export default <expression>` (#374
+        # AC6): a file measured so would pass every change unjudged, so it is refused instead.
+        if not entry["statementMap"]:
+            msg = (
+                f"{path}: measured, but coverage counts no statement in it, so no change is judged"
+            )
+            raise GateError(msg)
         coverage = FileCoverage()
         for key, location in entry["statementMap"].items():
             placed = _lines(location)
@@ -183,8 +219,9 @@ def measured_record(
     carried: Mapping[str, tuple[int, int] | None],
 ) -> Record:
     """The record as measured: each measured file's untested counts (zero left out), each
-    *carried* file's recorded counts (a hand-started workflow not run on this commit), and every
-    code file no report holds. A carried file recorded as unmeasured (None) stays so."""
+    *carried* file's recorded counts in place of any measured (a hand-started workflow, or a file
+    only it measures, not run on this commit), and every code file no report holds. A carried
+    file recorded as unmeasured (None) stays so."""
     listed = set(code_files)
     gone = sorted(set(carried) - listed)
     if gone:
@@ -192,6 +229,8 @@ def measured_record(
         raise GateError(msg)
     files: dict[str, tuple[int, int]] = {}
     for path, coverage in measured.items():
+        if path in carried:
+            continue
         found = counts(coverage)
         if found.untested_statements or found.untested_arms:
             files[path] = (found.untested_statements, found.untested_arms)
@@ -355,6 +394,32 @@ def renames_in(listing: str) -> dict[str, str]:
     return renames
 
 
+def wobble_between(one: Mapping[str, FileCoverage], two: Mapping[str, FileCoverage]) -> list[str]:
+    """Each file, statement and branch arm whose verdict differs between two joins of the same
+    commit's reports, one with each of a suite's two runs (Shyden 2026-10-22: wobble measured,
+    a wobbling line fixed). A line another suite always runs cannot differ, so it is not named."""
+    said: list[str] = []
+    for path in sorted(set(one) | set(two)):
+        if path not in one or path not in two:
+            said.append(f"{path}: measured in one of two runs")
+            continue
+        for kind, units_one, units_two in (
+            ("statement", one[path].statements, two[path].statements),
+            ("branch arm", one[path].arms, two[path].arms),
+        ):
+            for key in sorted(set(units_one) | set(units_two), key=_natural):
+                hit_one = key in units_one and units_one[key].hit
+                hit_two = key in units_two and units_two[key].hit
+                if hit_one != hit_two:
+                    said.append(f"{path}: {kind} {key} ran in one of two runs")
+    return said
+
+
+def _natural(key: str) -> tuple[int, ...]:
+    """A unit key ("12", "11>12", "3.1") in number order."""
+    return tuple(int(part) for part in re.split(r"[>.]", key))
+
+
 def is_code(path: str) -> bool:
     return path.endswith(CODE_SUFFIXES) or (
         path.startswith(WORKFLOWS) and path.endswith((".yml", ".yaml"))
@@ -427,33 +492,103 @@ def _from_folder(folder: Path, report: str, sha: str) -> Any:  # noqa: ANN401 - 
     return _read_json(folder / report)
 
 
-def _measure(args: argparse.Namespace, root: Path) -> dict[str, FileCoverage]:
-    parts: list[Mapping[str, FileCoverage]] = []
-    parts += [from_python(_from_folder(f, "coverage.json", args.sha)) for f in args.python]
-    parts += [
-        from_istanbul(
-            _from_folder(f, "coverage-final.json", args.sha), args.report_root or str(root)
+def _live_reports(folder: Path, head_sha: str) -> list[tuple[str, dict[str, FileCoverage]]]:
+    """Each run's coverage report of the files only a hand-started workflow measures (#374 AC9),
+    cut to those files: what else it runs is for the pull request's own suites to measure."""
+    owners = {python_folder(workflow): workflow for workflow in MEASURED_ONLY_BY}
+    folders = sorted(path.name for path in folder.iterdir() if path.is_dir())
+    strays = [name for name in folders if name not in owners]
+    if strays:
+        msg = f"folders of no workflow that measures files of its own: {strays}"
+        raise GateError(msg)
+    found: list[tuple[str, dict[str, FileCoverage]]] = []
+    for name in folders:
+        workflow = owners[name]
+        runs = sorted(path for path in (folder / name).iterdir() if path.is_dir())
+        if not runs:
+            msg = f"{folder / name} holds no run's report"
+            raise GateError(msg)
+        for run in runs:
+            coverage = from_python(_from_folder(run, "coverage.json", head_sha))
+            missing = [path for path in MEASURED_ONLY_BY[workflow] if path not in coverage]
+            if missing:
+                msg = f"{run / 'coverage.json'} does not measure {', '.join(missing)}"
+                raise GateError(msg)
+            found.append((workflow, {path: coverage[path] for path in MEASURED_ONLY_BY[workflow]}))
+    return found
+
+
+def _paired(read: set[str], live: set[str]) -> None:
+    """A workflow measuring files of its own is read with its coverage report, or not at all."""
+    for workflow in MEASURED_ONLY_BY:
+        if workflow in read and workflow not in live:
+            msg = f"{workflow} was read from its run without its coverage report"
+            raise GateError(msg)
+        if workflow in live and workflow not in read:
+            msg = f"a coverage report of {workflow} without its run read"
+            raise GateError(msg)
+
+
+def _measure(
+    args: argparse.Namespace, root: Path
+) -> tuple[dict[str, FileCoverage], list[str], set[str]]:
+    """Every report joined, each place the join differs between a suite's two runs, and each
+    workflow whose own coverage report of its files was read."""
+    found = (
+        sorted(p.name for p in args.reports.iterdir() if p.is_dir())
+        if args.reports.is_dir()
+        else []
+    )
+    unknown = sorted(set(found) - {*PYTHON_REPORTS, *ISTANBUL_REPORTS})
+    if unknown:
+        msg = f"reports from no suite the gate joins: {unknown}"
+        raise GateError(msg)
+    missing = [name for name in (*PYTHON_REPORTS, *ISTANBUL_REPORTS) if name not in found]
+    if missing:
+        msg = f"no report from {', '.join(missing)}"
+        raise GateError(msg)
+    named: dict[str, Mapping[str, FileCoverage]] = {
+        name: from_python(_from_folder(args.reports / name, "coverage.json", args.sha))
+        for name in PYTHON_REPORTS
+    }
+    named |= {
+        name: from_istanbul(
+            _from_folder(args.reports / name, "coverage-final.json", args.sha),
+            args.report_root or str(root),
         )
-        for f in args.istanbul
-    ]
+        for name in ISTANBUL_REPORTS
+    }
+    parts: list[Mapping[str, FileCoverage]] = []
+    read: set[str] = set()
+    live: set[str] = set()
     for folder in args.workflow:
         for path in sorted(folder.glob("*.json")):
             report = _read_json(path)
             # ci.yml's own run is on the merge commit; a hand-started one on the head (#384).
             _same_commit(path, report.get("meta", {}).get("sha"), {args.sha, args.head_sha})
+            read.add(str(report.get("meta", {}).get("workflow")))
             parts.append(from_workflow(report))
-    return join(parts)
+        for workflow, coverage in _live_reports(folder, args.head_sha):
+            live.add(workflow)
+            parts.append(coverage)
+    _paired(read, live)
+    first = join([*parts, *(c for n, c in named.items() if n not in REPEATS)])
+    second = join([*parts, *(c for n, c in named.items() if n not in REPEATS.values())])
+    return join([*parts, *named.values()]), wobble_between(first, second), live
 
 
 def _carried(
-    measured: Mapping[str, FileCoverage], code_files: list[str], record: Record
+    measured: Mapping[str, FileCoverage], code_files: list[str], record: Record, live: set[str]
 ) -> dict[str, tuple[int, int] | None]:
-    """Each hand-started workflow with no report on this commit, as the record holds it."""
-    hand_started = [p for p in code_files if p.startswith(WORKFLOWS) and p != OWN_WORKFLOW]
+    """Each hand-started workflow with no report on this commit, and each file only a workflow
+    measures whose report of it was not read (*live* holds those read), as the record holds it."""
+    hand_started = [
+        p for p in code_files if p.startswith(WORKFLOWS) and p != OWN_WORKFLOW and p not in measured
+    ]
+    only_by = [p for w, files in MEASURED_ONLY_BY.items() if w not in live for p in files]
     return {
         path: None if path in record.unmeasured else record.files.get(path, (0, 0))
-        for path in hand_started
-        if path not in measured
+        for path in [*hand_started, *only_by]
     }
 
 
@@ -513,8 +648,8 @@ def main(argv: Sequence[str], root: Path) -> int:
     parser.add_argument("--event", required=True)
     parser.add_argument("--sha", required=True)
     parser.add_argument("--head-sha", required=True)
-    parser.add_argument("--python", type=Path, action="append", default=[])
-    parser.add_argument("--istanbul", type=Path, action="append", default=[])
+    # The folder holding every suite's report, one folder each (PYTHON_REPORTS, ISTANBUL_REPORTS).
+    parser.add_argument("--reports", type=Path, required=True)
     parser.add_argument("--workflow", type=Path, action="append", default=[])
     parser.add_argument("--write-record", type=Path)
     # Where the istanbul reports' absolute paths start, when they were written in another
@@ -522,19 +657,22 @@ def main(argv: Sequence[str], root: Path) -> int:
     parser.add_argument("--report-root")
     args = parser.parse_args(argv)
     try:
-        measured = _measure(args, root)
+        measured, wobble, live = _measure(args, root)
         code_files = _code_files(root, measured)
         record = load_record((root / RECORD).read_text(encoding="utf-8"))
-        carried = _carried(measured, code_files, record)
+        carried = _carried(measured, code_files, record, live)
         now = measured_record(measured, code_files, carried)
         differences = compare(record, now)
         print(percentages(measured))
         if args.write_record is not None:
             args.write_record.write_text(dump_record(now), encoding="utf-8")
-            print("\n".join(differences) or "the record is unchanged")
+            print(
+                "\n".join([*differences, *(f"wobble: {w}" for w in wobble)])
+                or "the record is unchanged"
+            )
             return 0
         run = _Run(measured=measured, code_files=code_files, carried=set(carried), now=now)
-        failures = differences + _failures(args, root, run)
+        failures = differences + [f"wobble: {w}" for w in wobble] + _failures(args, root, run)
     except (GateError, ToolError, OSError) as error:
         print(f"coverage gate: {error}", file=sys.stderr)
         return 1

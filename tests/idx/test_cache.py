@@ -705,3 +705,9 @@ def test_a_backtest_over_a_cache_holding_narrower_ranges_never_asks_twice(tmp_pa
         if any(first <= high and low <= last for low, high in STORED)
     ]
     assert asked_stored == []
+
+
+def test_the_stand_ins_add_no_note_of_their_own() -> None:
+    """Every stand-in's members run in some test (#374): neither adds a note."""
+    assert _Refusing().data_notes([BBCA], *TWO_MONTHS) == []
+    assert _OnlyBbca().survivorship_warnings(*TWO_MONTHS) == ()

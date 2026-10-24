@@ -1,0 +1,99 @@
+# #374: the planted unit-limits run this story changed (it starts its child untraced, so the
+# suite's measured run still proves how a run without coverage is judged), proved on a planted
+# mutation predicted before the first run. U1 renames the plugin's CPU-limit report, which the
+# first planted test reads and the second asserts is absent. X1 tells coverage to skip a kind of
+# line again, which the exclusions guard refuses.
+
+[[mutation]]
+id = "U1"
+why = "A test over its CPU limit is reported under another label, so nobody reading the run finds it."
+path = "tests/plugins/unit_limits.py"
+old = 'f"CPU LIMIT: {one.nodeid} took'
+new = 'f"CPU OVER: {one.nodeid} took'
+suite = "integration"
+tests = ["tests/integration/plugins/test_unit_limits_planted.py"]
+expect = "red"
+red = [
+    "tests/integration/plugins/test_unit_limits_planted.py::test_a_spinning_test_is_named_and_a_waiting_one_fails_on_the_wall",
+]
+
+[[mutation]]
+id = "X1"
+why = "Coverage is told to skip a kind of line again, hiding it from the record."
+path = "pyproject.toml"
+old = "[tool.coverage.report]\n"
+new = "[tool.coverage.report]\nexclude_also = ['^x$']\n"
+suite = "guards"
+tests = ["tests/guards/test_coverage_exclusions.py"]
+expect = "red"
+red = ["tests/guards/test_coverage_exclusions.py::test_the_configuration_excludes_nothing"]
+
+[[mutation]]
+id = "X2"
+why = "The Yahoo download is excluded from coverage again, so its lines hide from the record."
+path = "packages/steadyhand-idx/src/steadyhand_idx/yahoo.py"
+old = "    module = yahoo()\n"
+new = "    module = yahoo()  # pragma: no cover\n"
+suite = "guards"
+tests = ["tests/guards/test_coverage_exclusions.py"]
+expect = "red"
+red = ["tests/guards/test_coverage_exclusions.py::test_no_shipped_line_is_excluded"]
+
+[[mutation]]
+id = "Y1"
+why = "The download's factory hands back another module, so every real fetch fails."
+path = "packages/steadyhand-idx/src/steadyhand_idx/yahoo.py"
+old = "    return yfinance\n"
+new = "    return json\n"
+suite = "integration"
+tests = ["tests/integration/idx/test_yfinance_loads.py"]
+expect = "red"
+red = ["tests/integration/idx/test_yfinance_loads.py::test_the_real_yfinance_loads_with_what_the_download_uses"]
+
+[[mutation]]
+id = "S1"
+why = "The seed's transaction is never committed, so a CLI test would start from an empty cache."
+path = "scripts/record_cli_seed.py"
+old = '    return ["BEGIN;", *rows, "COMMIT;"]'
+new = '    return ["BEGIN;", *rows]'
+suite = "integration"
+tests = ["tests/integration/scripts/test_cli_seed_rebuilt.py"]
+expect = "red"
+red = ["tests/integration/scripts/test_cli_seed_rebuilt.py::test_the_recorder_rebuilds_the_committed_seed_byte_for_byte"]
+
+[[mutation]]
+id = "PH1"
+why = "A property with no unit home is reported under the wrong words, so the reader looks elsewhere."
+path = "tests/guards/test_property_homes.py"
+old = 'return f"{where}: no unit file {home.relative_to(tests)}"'
+new = 'return f"{where}: no home file {home.relative_to(tests)}"'
+suite = "guards"
+tests = ["tests/guards/test_property_homes.py"]
+expect = "red"
+red = ["tests/guards/test_property_homes.py::test_each_problem_of_a_propertys_home_is_named[no-home]"]
+
+[[mutation]]
+id = "SC1"
+why = "An unreadable setup-node version is refused in other words than the check promises."
+path = "tests/guards/test_supply_chain.py"
+old = 'msg = f"{where}: cannot read a major version from {version!r}"'
+new = 'msg = f"{where}: cannot parse a major version from {version!r}"'
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_an_unreadable_node_version_is_refused_by_name[lts]",
+    "tests/guards/test_supply_chain.py::test_an_unreadable_node_version_is_refused_by_name[range]",
+    "tests/guards/test_supply_chain.py::test_an_unreadable_node_version_is_refused_by_name[none]",
+]
+
+[[mutation]]
+id = "LL1"
+why = "A training module's forbidden import is reported without what it imports."
+path = "tests/guards/test_legal_line.py"
+old = '                    found.append(f"{name}: {statement[0]}")'
+new = '                    found.append(name)'
+suite = "guards"
+tests = ["tests/guards/test_legal_line.py"]
+expect = "red"
+red = ["tests/guards/test_legal_line.py::test_a_training_module_importing_what_decides_is_named"]

@@ -177,3 +177,13 @@ def test_a_long_ledger_survives_deepcopy() -> None:
     assert restored is not None, "copied link by link, the chain recursed too deep"
     assert restored == portfolio
     assert restored.cash_balance() == rp(deep + 1)
+
+
+def test_a_copy_that_recurses_too_deep_is_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The helper's own refusal path, the recursion stood in (#374)."""
+
+    def recurse(_value: object) -> object:
+        raise RecursionError
+
+    monkeypatch.setattr(copy, "deepcopy", recurse)
+    assert copied_or_none(Portfolio(IDR, (), ())) is None

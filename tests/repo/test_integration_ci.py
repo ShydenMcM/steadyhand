@@ -7,6 +7,12 @@ from typing import Any
 from ci_workflow import ci
 
 INTEGRATION_RUN = "uv run --locked pytest -W error --suite integration -p no:cacheprovider"
+# The suite again under coverage, unlimited, so the limit never times the tracer (#374).
+INTEGRATION_MEASURED = (
+    'mkdir -p "${RUNNER_TEMP}/coverage-report"\n'
+    f'{INTEGRATION_RUN} --cov --cov-report="json:${{RUNNER_TEMP}}/coverage-report/coverage.json"\n'
+    'git rev-parse HEAD > "${RUNNER_TEMP}/coverage-report/sha.txt"\n'
+)
 # The extension's suite runs natively under Node's own coverage, its report naming its commit
 # (#394).
 NATIVE_INTEGRATION = (
@@ -34,7 +40,8 @@ def test_the_integration_suite_runs_on_the_pythons_the_unit_suite_runs_on() -> N
 def test_the_integration_job_runs_the_integration_suite_alone_with_one_limit() -> None:
     steps = job("integration")["steps"]
     assert [step["run"] for step in steps if "pytest" in str(step.get("run", ""))] == [
-        INTEGRATION_RUN
+        INTEGRATION_RUN,
+        INTEGRATION_MEASURED,
     ]
     limited = [step for step in steps if "timeout-minutes" in step]
     assert [step["run"] for step in limited] == [INTEGRATION_RUN]
@@ -57,11 +64,14 @@ def test_the_extension_integration_job_installs_then_runs_its_suite_with_one_lim
 
 
 def test_no_other_job_runs_an_integration_suite() -> None:
+    # A set: the integration job runs the suite twice, limited and measured (#374).
     runners = sorted(
-        name
-        for name, found in ci()["jobs"].items()
-        for step in found["steps"]
-        if SUITE_RUN.search(str(step.get("run", "")))
+        {
+            name
+            for name, found in ci()["jobs"].items()
+            for step in found["steps"]
+            if SUITE_RUN.search(str(step.get("run", "")))
+        }
     )
     assert runners == ["extension-integration", "integration"]
 

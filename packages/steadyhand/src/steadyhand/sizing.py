@@ -34,7 +34,6 @@ class Sizer(Protocol):
         *held* is the shares of each holding and *prices* the last close of every stock that
         is weighted or held. A stock missing from *weights* is targeted at zero.
         """
-        ...
 
 
 class CompoundingSizer:

@@ -10,6 +10,7 @@ from contextlib import closing, contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import cast
 
 import pytest
 from cli_world import (
@@ -724,3 +725,19 @@ def test_dividend_growth_reviews_again_on_the_first_trading_day_of_2022(tmp_path
     }
     assert {("XBBB", "buy"), ("XAAA", "sell")} <= filled
     assert account.state.memory == {"set": "IDX:XBBB IDX:XCCC", "year": "2022"}
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        Edited(cast(DataSource, None), lambda bar: bar),
+        Unserved(cast(DataSource, None), "SRIL"),
+        Interrupted(cast(DataSource, None), lambda: None, []),
+    ],
+    ids=["edited", "unserved", "interrupted"],
+)
+def test_each_wrapping_source_notes_nothing_of_its_own(
+    source: Edited | Unserved | Interrupted,
+) -> None:
+    """Every stand-in's members run in some test (#374): none adds a note to the data."""
+    assert source.data_notes([], date(2024, 1, 2), date(2024, 1, 2)) == ()

@@ -20,15 +20,12 @@ class Universe(Protocol):
 
     def members_on(self, day: date) -> frozenset[Instrument]:
         """Every member on *day*. Raises ``LookupError`` for a day before ``first_day()``."""
-        ...
 
     def excluded_on(self, day: date) -> Mapping[Instrument, str]:
         """Each stock the operator keeps out on *day*, with the reason given for it."""
-        ...
 
     def first_day(self) -> date:
         """The first day whose membership is known."""
-        ...
 
     def survivorship_warnings(self, start: date, end: date) -> Sequence[Note]:
         """What a backtest from *start* to *end* must print about gaps in the membership record.
@@ -36,4 +33,3 @@ class Universe(Protocol):
         A stock that joined and left inside a gap never appears, so the results look better than
         a real investor's would have (core spec §9.4).
         """
-        ...

@@ -3,6 +3,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -255,3 +256,11 @@ def test_dividend_growth_holds_15_to_25_stocks_grown_over_5_years_by_default() -
         ValueError, match=r"^max_stocks must be at least min_stocks \(15\), got 14$"
     ):
         entry({"min_stocks": 15, "max_stocks": 14, "growth_years": 5})
+
+
+def test_the_stand_in_strategy_is_named_and_asks_for_nothing() -> None:
+    """Every stand-in's members run in some test (#374)."""
+    rounds = _Rounds(rounds=2, pause=1)
+    assert rounds.name == "rounds"
+    nothing = (cast(MarketView, None), cast(PortfolioView, None), cast(Memory, None))
+    assert rounds.decide(*nothing) == Decision({})

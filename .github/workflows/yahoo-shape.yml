@@ -62,6 +62,23 @@ jobs:
       - name: Yahoo still gives what the fixtures recorded
         timeout-minutes: 2
         run: uv run --locked pytest -W error -m live -p no:cacheprovider tests/idx/test_yahoo_live.py
+      # The same check again under coverage (#374 AC9, Shyden 2026-10-22: "Two runs, one judges
+      # time", then "Same as workflows"): --measured judges no time and refuses a run coverage does
+      # not trace, and the step above refuses one it does (tests/plugins/perf_budget.py). No limit of
+      # its own, so the tracer is never timed. When a pull request changes the check, or this file,
+      # scripts/workflow_runs.py reads this report from a run on its commit, by the name below.
+      - name: Yahoo still gives what the fixtures recorded, measured
+        run: |
+          mkdir -p "${RUNNER_TEMP}/coverage-live"
+          uv run --locked pytest -W error -m live -p no:cacheprovider --measured --cov --cov-report="json:${RUNNER_TEMP}/coverage-live/coverage.json" tests/idx/test_yahoo_live.py
+          git rev-parse HEAD > "${RUNNER_TEMP}/coverage-live/sha.txt"
+      - name: Keep the live check's coverage report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-python-yahoo-shape
+          path: ${{ runner.temp }}/coverage-live
+          if-no-files-found: error
+          retention-days: 7
       - name: Open an issue, unless one is already open
         if: failure()
         env:

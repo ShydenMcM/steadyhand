@@ -1,7 +1,10 @@
 import { configDefaults, defineConfig } from "vitest/config";
 import { limitsFor } from "./tests/lib/test-clock.ts";
 
-/** The packages held to 100% coverage (spec §14.1); the shell is proved by browser tests. */
+/** The packages held to 100% coverage (spec §14.1). The shell's side panel is measured in unit with
+ * its document stood in (#374 AC5); its content script and service worker are `export {};`
+ * placeholders with nothing to count, unmeasured until EXT S14a writes them (Shyden, 2026-10-23:
+ * "Leave until S14a"), so the coverage gate fails any change to them until then. */
 export const COVERED = ["core", "readers", "history"] as const;
 
 /** The whole-repo guards (#285): they read the tracked tree to check a rule across the code, so
@@ -19,15 +22,23 @@ export const FLUSH_NODE_COVERAGE = "tests/flush-node-coverage.ts";
 
 /** What each suite holds to 100% coverage: every helper in `tests/lib` is in exactly one list,
  * the list of the suite whose tests cover it (measured 2026-10-12, #285). A guards run is
- * `--mode guards`; any other mode is a unit run. */
+ * `--mode guards`; any other mode is a unit run. The build and the tool configurations are loaded
+ * in-process with their tools stood in (#374 AC6: `tests/build.test.ts`, `tests/tool-configs.test.ts`). */
 export const UNIT_COVERED = [
   ...COVERED.map((name) => `packages/${name}/src/**/*.ts`),
+  "packages/shell/src/side-panel.ts",
   "build.ts",
+  "eslint.config.js",
+  "playwright.config.ts",
+  "tests/fetch-floors.ts",
+  "tests/load-report.ts",
+  "tests/record-floors.ts",
   "tests/lib/floors.ts",
   "tests/lib/load-clock.ts",
   "tests/lib/node-coverage.ts",
   "tests/lib/no-process.ts",
   "tests/lib/population.ts",
+  "tests/lib/program.ts",
   "tests/lib/test-clock.ts",
 ];
 export const GUARDS_COVERED = [

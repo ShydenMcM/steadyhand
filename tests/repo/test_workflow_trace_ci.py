@@ -7,6 +7,8 @@ from typing import Any
 import pytest
 from ci_workflow import ci, parse
 
+from coverage_gate import ISTANBUL_REPORTS, PYTHON_REPORTS
+
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = sorted((ROOT / ".github/workflows").glob("*.yml"))
 UPLOAD = {
@@ -63,8 +65,9 @@ def test_the_coverage_jobs_last_step_reads_this_run_then_judges_it_on_one_line()
     assert '--workflow "${RUNNER_TEMP}/workflow-coverage"' in gate
 
 
-# Every coverage report a job keeps, and every one the gate reads (#381, #394): a report kept but
-# not judged would pass unread, and one judged but never kept fails only when the run reaches it.
+# Every coverage report a job keeps, and every one the gate reads (#381, #374, #394): a report
+# kept but not judged would pass unread, and one judged but never kept fails only when the run
+# reaches it.
 REPORTS = [
     "coverage-extension-guards",
     "coverage-extension-guards-node",
@@ -75,6 +78,14 @@ REPORTS = [
     "coverage-python-3.13",
     "coverage-python-guards-3.12",
     "coverage-python-guards-3.13",
+    "coverage-python-integration-3.12",
+    "coverage-python-integration-3.13",
+    "coverage-python-perf-3.12",
+    "coverage-python-perf-3.13",
+    "coverage-python-properties-3.12",
+    "coverage-python-properties-3.13",
+    "coverage-python-properties-again-3.12",
+    "coverage-python-properties-again-3.13",
 ]
 MATRIX_PYTHON = "${{ matrix.python }}"
 
@@ -94,11 +105,11 @@ def kept_reports() -> list[str]:
 
 
 def judged_reports() -> list[str]:
-    """Each report folder the gate is given, every --python and --istanbul flag read."""
+    """Each report folder the gate reads: it is given the folder every report is downloaded into,
+    and joins exactly the reports it names, failing closed on any other or any missing (#374)."""
     gate = ci()["jobs"]["coverage"]["steps"][-1]["run"].splitlines()[1].split(" && ")[1]
-    folders = re.findall(r'--(?:python|istanbul) "\$\{RUNNER_TEMP\}/coverage/([^"]+)"', gate)
-    assert len(folders) == len(re.findall(r"--(?:python|istanbul) ", gate)), gate
-    return sorted(folders)
+    assert re.findall(r"--reports \S+", gate) == ['--reports "${RUNNER_TEMP}/coverage"'], gate
+    return sorted((*PYTHON_REPORTS, *ISTANBUL_REPORTS))
 
 
 def test_every_coverage_report_a_job_keeps_is_judged_by_the_gate() -> None:

@@ -160,3 +160,60 @@ def test_a_judged_load_keeps_a_failed_runs_status(monkeypatch: pytest.MonkeyPatc
     )
     load_clock.pytest_sessionfinish(session)  # type: ignore[arg-type]
     assert session.exitstatus == pytest.ExitCode.INTERRUPTED
+
+
+class _Reporter:
+    """The terminal reporter as the summary hook writes to it: each line, and whether it is red."""
+
+    def __init__(self) -> None:
+        self.lines: list[tuple[str, bool]] = []
+
+    def section(self, title: str) -> None:
+        self.lines.append((f"== {title}", False))
+
+    def write_line(self, line: str, *, red: bool = False) -> None:
+        self.lines.append((line, red))
+
+
+def _summary(monkeypatch: pytest.MonkeyPatch, loads: list[Load]) -> list[tuple[str, bool]]:
+    """The summary hook called directly (#374): the real run calls it after coverage stopped."""
+    monkeypatch.setattr(load_clock, "LOADS", loads)
+    reporter = _Reporter()
+    config = SimpleNamespace(getoption=lambda name: {"suite": "unit"}[name])
+    load_clock.pytest_terminal_summary(reporter, config)  # type: ignore[arg-type]
+    return reporter.lines
+
+
+TRACED_NOTE = "coverage traced these loads, so none is judged: the limits step runs without it"
+
+
+def test_the_summary_reports_every_load_then_names_each_refusal_in_red(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert _summary(monkeypatch, [HEAVY]) == [
+        ("== test file loads (#285)", False),
+        *[(line, False) for line in report([HEAVY])],
+        *[(refusal, True) for refusal in judged("unit", [HEAVY])],
+    ]
+    assert judged("unit", [HEAVY])
+
+
+def test_the_summary_of_a_traced_run_says_so_and_refuses_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    traced = Load("tests/test_heavy.py", 100_001, 100_001, traced=True)
+    assert _summary(monkeypatch, [traced]) == [
+        ("== test file loads (#285)", False),
+        *[(line, False) for line in report([traced])],
+        (TRACED_NOTE, False),
+    ]
+
+
+def test_the_summary_of_an_untraced_run_inside_the_limit_carries_no_note(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    light = Load("tests/test_light.py", 5, 5)
+    assert _summary(monkeypatch, [light]) == [
+        ("== test file loads (#285)", False),
+        *[(line, False) for line in report([light])],
+    ]
