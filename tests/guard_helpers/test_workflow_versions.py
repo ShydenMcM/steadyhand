@@ -235,14 +235,14 @@ def test_a_minor_named_in_a_workflow_string_is_read(text: str, minor: str) -> No
 
 
 def test_every_key_and_string_of_a_workflow_is_read_and_nothing_else() -> None:
-    workflow = {"jobs": {"a (py3.12)": {"steps": [{"name": "x", "timeout": 5}, "y"]}}, 1: None}
+    workflow = {"jobs": {"a (py3.12)": {"steps": [{"name": "x", "count": 5}, "y"]}}, 1: None}
     assert list(strings(workflow)) == [
         "jobs",
         "a (py3.12)",
         "steps",
         "name",
         "x",
-        "timeout",
+        "count",
         "y",
         "1",
     ]
