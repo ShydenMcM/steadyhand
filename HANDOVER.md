@@ -1,26 +1,22 @@
 # Handover: steadyhand
 
-**Updated:** 2026-10-24 (UTC). Current state only. Older history: `git show ff266fc:HANDOVER.md`.
+**Updated:** 2026-10-26 (UTC). Current state only. Older history: `git show ff266fc:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. EXT stories #222-#245 follow the clean-up queue.
 
 ## Branches and heads
-- `develop`: read with `git rev-parse origin/develop` (f67c6f0 when written, #413's squash). Merge green PRs into develop without asking; never `main`.
-- **#405 closed** (comment 6384633904): PR #413 squashed as f67c6f0, develop CI 40096743193 green (16 jobs, 158 steps). The load clock times compiling apart (Shyden's ruling, global); the coverage converter loads no amaro.
-- **#407 open, held** for five full limits rounds at one-minute load above 20 (comment 6382861651; tools `.superpowers/sdd/407/measure.zsh`).
-- **#374 open, waits on #382** (record-floors line 58; comment 6381842167).
-- #405 AC1 posted (comment 6384344851): develop's heaviest load 102,909 us (a red run, all tests passing), the branch's 30,786; fully cold branch runs judge test_backtest at 5,188 / 5,734 us. Local gate (`.superpowers/sdd/405/gate.sh`): all green except floors-current, the extension floors to re-record.
+- `develop`: read with `git rev-parse origin/develop` (7bdec64 when written, #415's squash). Merge green PRs into develop without asking; never `main`.
+- **#382 closed** (comment 6405961756) and **#374 closed** (comment 6405962599). PR #415 was squash-merged as 7bdec64, and develop CI run 40252215004 is green on it (12 jobs, 121 steps).
+- What #382 changed: every job runs on `ubuntu-26.04`; Python is exactly 3.13.15 (Shyden, 2026-10-26: "3.13.15 only"), pinned only in `.python-version`; uv runs every Python step; the manifest's `minimum_chrome_version` is 119. `tests/guards/test_versions.py` checks all of it.
+- Required checks: the four `(py3.12)` checks came off `develop` and `main` on 2026-10-26, done through Claude in Chrome with Shyden's consent for that change only. Both lists were read back: develop has 12, main has 11, and `strict` is unchanged.
+- **#407 open, held** for five full limits rounds at one-minute load above 20 (`.superpowers/sdd/407/measure.zsh`).
 
 ## Resume steps
 1. `ListAgents`; `git rev-parse origin/develop`; read develop's CI by name.
-2. Commit this handover as a one-commit docs PR into develop if not yet done.
-3. Read develop's CI on its new head by step.
-4. Next: **#382** (5 points; also closes #374), then the queue below. #407's rounds whenever `sysctl -n vm.loadavg` reads above 20.
-5. Every PR changing a non-unit test file needs a mutation targeting it; TOML basic strings `"..."` for `\n`. Commit and merge messages go in a file written in its own call, with the full Gaps checked section (Before, After, New passes).
-6. Laptop runs only unit, lint, format and types; guards, integration and properties are CI's. Gate template: `.superpowers/sdd/405/gate.sh` (Python and extension; set TREE, LOG and the lock name). A unit file reads no clock (guards refuse `import time`).
-
-## Global rule recorded this session
-"Compiling is timed apart" (Shyden 2026-10-24, every project): `~/.claude/CLAUDE.md` load line and `global-rules/reference/reference-engineering-standards.md` ("COMPILING IS TIMED APART FROM A LOAD"). Other Python projects take it up in their own sessions; nothing filed outside steadyhand.
+2. Commit this handover as a one-commit docs PR into develop if not yet done, then read develop's CI on the new head.
+3. Next: **#365** (5 points, blocks #272), then the queue below. Run #407's rounds whenever `sysctl -n vm.loadavg` reads above 20.
+4. A PR changing a workflow other than ci.yml runs that workflow on `coverage/<branch>` at the PR head before the PR push (`scripts/workflow_runs.py`). Every new commit needs the runs again at its own SHA, so settle every edit first. Before the first push, run the text guards' readers over new test files from a script (memory `feedback-new-test-files-meet-the-text-guards`).
+5. The laptop runs only unit, lint, format and types. Every PR changing a non-unit test file needs a mutation targeting it. Commit and merge messages go in a file written in its own call, with the full Gaps checked section. Gate template: `.superpowers/sdd/382/gate.sh` (one Python now).
 
 ## Waiting on Shyden
 - #400: his settings click (strict off on `main`, then requiring `release-cut`).
@@ -34,10 +30,13 @@
 Nothing.
 
 ## Next on the clean-up queue (all before #222)
-#382 (5, also closes #374), #365 (5, blocks #272), #366 (2), #377 (2), #378 (3), #348 (5, waits on repo-template#27), #400 (3), #308 (2), #315 (2), #317 (5), #320 (2), #337 (3), #336 (5), #341 (2), #359 (3), #362 (2); #407 (2) when load allows.
+#365 (5, blocks #272), #366 (2), #377 (2), #378 (3), #348 (5, waits on repo-template#27), #400 (3), #308 (2), #315 (2), #317 (5), #320 (2), #337 (3), #336 (5), #341 (2), #359 (3), #362 (2); #407 (2) when load allows.
 
-## Progress (2026-10-24, `uv run --locked python .superpowers/sdd/estimates/progress.py`; `post-launch` left out)
-- **Measured:** EXT 4 of 28 stories closed (21 of 184 points). Board open: 44 tickets, 242 points across 43 scored (epic #214 unscored). Closed 2026-10-17 to 2026-10-24: 11 tickets, 52 points.
-- **By tickets: 14% complete (4 of 28 stories). ETA 2026-11-21, low confidence:** 43 open scored tickets at 1.57 a day is about 27 days.
-- **By effort: 242 points remaining across 43 scored open tickets. ETA 2026-11-26, low confidence:** 7.4 points a day is about 33 days.
+## Progress (2026-10-26, `uv run --locked python .superpowers/sdd/estimates/progress.py`; `post-launch` left out)
+- **Measured:** EXT 4 of 28 stories closed (21 of 184 points). Board open: 42 tickets, 224 points across 41 scored (epic #214 unscored). Closed 2026-10-19 to 2026-10-26: 13 tickets, 70 points.
+- **By tickets: 14% complete (4 of 28 stories). ETA 2026-11-17, low confidence:** 41 open scored tickets at 1.86 a day is about 22 days.
+- **By effort: 224 points remaining across 41 scored open tickets. ETA 2026-11-17, low confidence:** 10 points a day is about 22 days.
 - **Assumed:** last week's pace holds. **Outside waits:** broker account (#242), Web Store review, repo-template#6 (#315), the key (#308), #272's ruling, #400's and #308's settings clicks, machine load above 20 for #407.
+
+## Notes
+- Wi-Fi is unstable (Shyden, 2026-10-26): name the network as a possible cause of a failed fetch or push; still no retries.
