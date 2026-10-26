@@ -272,7 +272,14 @@ def test_one_exact_line_is_read() -> None:
 
 
 AGREED: dict[str, Any] = {
-    "project": {"requires-python": ">=3.13"},
+    "project": {
+        "requires-python": ">=3.13",
+        "classifiers": [
+            "Programming Language :: Python :: 3",
+            "Programming Language :: Python :: 3 :: Only",
+            "Programming Language :: Python :: 3.13",
+        ],
+    },
     "tool": {"ruff": {"target-version": "py313"}, "mypy": {"python_version": "3.13"}},
 }
 
@@ -290,6 +297,20 @@ def test_a_pyproject_naming_the_pinned_minor_everywhere_is_not_found() -> None:
             id="requires-python",
         ),
         pytest.param({**AGREED, "project": {}}, "p: requires-python None", id="no-requires-python"),
+        pytest.param(
+            {
+                **AGREED,
+                "project": {
+                    **AGREED["project"],
+                    "classifiers": [
+                        *AGREED["project"]["classifiers"],
+                        "Programming Language :: Python :: 3.12",
+                    ],
+                },
+            },
+            "p: classifier Programming Language :: Python :: 3.12",
+            id="a-classifier",
+        ),
         pytest.param(
             {**AGREED, "tool": {**AGREED["tool"], "ruff": {"target-version": "py312"}}},
             "p: ruff target-version py312",

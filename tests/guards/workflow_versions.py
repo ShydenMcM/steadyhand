@@ -27,6 +27,8 @@ SEPARATORS = frozenset("();<>|&")
 BACKTICKS = re.compile(r"`([^`]*)`")
 # A Python minor named in a workflow string: "test (py3.13)", "python-3.13", "python3.13".
 NAMED_MINOR = re.compile(r"\bpy(?:thon)?-?(\d+\.\d+)\b")
+# A trove classifier naming one Python minor; "Python :: 3" and "Python :: 3 :: Only" name none.
+CLASSIFIER = re.compile(r"Programming Language :: Python :: (\d+\.\d+)")
 
 
 class UnreadableShellError(AssertionError):
@@ -247,12 +249,16 @@ def exact_version(text: str) -> tuple[int, int, int]:
 
 
 def pyproject_findings(where: str, project: dict[str, Any], major: int, minor: int) -> list[str]:
-    """Each place a parsed pyproject names a Python minor other than *major*.*minor*. A
-    ``requires-python`` that is missing is a finding too."""
+    """Each place a parsed pyproject names a Python minor other than *major*.*minor*: its
+    ``requires-python`` (a missing one too), a Python classifier, ruff's and mypy's targets."""
     found = []
     requires = project.get("project", {}).get("requires-python")
     if requires != f">={major}.{minor}":
         found.append(f"{where}: requires-python {requires}")
+    for classifier in project.get("project", {}).get("classifiers", []):
+        named = CLASSIFIER.fullmatch(classifier)
+        if named and named[1] != f"{major}.{minor}":
+            found.append(f"{where}: classifier {classifier}")
     tool = project.get("tool", {})
     if "ruff" in tool and tool["ruff"].get("target-version") != f"py{major}{minor}":
         found.append(f"{where}: ruff target-version {tool['ruff'].get('target-version')}")

@@ -124,6 +124,19 @@ red = [
 ]
 
 [[mutation]]
+id = "382-V5"
+why = "a package's classifiers name another Python than the pin"
+path = "packages/steadyhand/pyproject.toml"
+old = "    \"Programming Language :: Python :: 3.13\",\n"
+new = "    \"Programming Language :: Python :: 3.12\",\n"
+suite = "guards"
+tests = ["tests/guards/test_versions.py"]
+expect = "red"
+red = [
+  "tests/guards/test_versions.py::test_every_package_and_tool_names_the_pinned_minor",
+]
+
+[[mutation]]
 id = "382-F1"
 why = "the job count reads one workflow of four"
 path = "tests/guards/test_versions.py"
