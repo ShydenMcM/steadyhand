@@ -55,12 +55,10 @@ class Recorder:
 
 
 def _real(path: str) -> str:
-    """*path* with its symlinks followed. A loop makes 3.12 raise and 3.13 return the path
-    unchanged; the open then fails, so the absolute spelling is all there is to place."""
-    try:
-        return str(Path(path).resolve())
-    except RuntimeError:
-        return os.path.abspath(path)  # noqa: PTH100 - the spelling, without following links
+    """*path* with its symlinks followed. A loop comes back unchanged on 3.13 (measured; 3.12
+    raised, and steadyhand runs 3.13 alone since #382); the open then fails, so the absolute
+    spelling is all there is to place."""
+    return str(Path(path).resolve())
 
 
 RECORDER = Recorder(Path(__file__).resolve().parents[2])

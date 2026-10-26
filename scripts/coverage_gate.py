@@ -26,19 +26,16 @@ IGNORE_HINT = re.compile(r"\b(?:v8|c8|istanbul)\s+ignore\b")
 RECORD = "tests/coverage_record.json"
 # Every suite that measures coverage, by the folder its CI job keeps (#381, #374): each must be
 # there, and no other, or the gate fails closed. coverage.py JSON, then istanbul: vitest's, and
-# Node's own of the test, setup and config files ("-node", #394). The properties suite draws
-# fresh random cases each run, so it is measured twice ("-again").
+# Node's own of the test, setup and config files ("-node", #394). Python runs on one version, the
+# one .python-version pins (#382). The properties suite draws fresh random cases each run, so it
+# is measured twice ("-again").
 PYTHON_REPORTS = tuple(
-    f"coverage-python-{suite}{python}"
-    for suite in ("", "guards-", "integration-", "perf-", "properties-", "properties-again-")
-    for python in ("3.12", "3.13")
+    f"coverage-python{suite}"
+    for suite in ("", "-guards", "-integration", "-perf", "-properties", "-properties-again")
 )
 # Each second run, and the first it is compared with (wobble_between): every report is joined
 # once with each of the two runs, and a verdict that differs between the joins wobbles.
-REPEATS = {
-    f"coverage-python-properties-again-{v}": f"coverage-python-properties-{v}"
-    for v in ("3.12", "3.13")
-}
+REPEATS = {"coverage-python-properties-again": "coverage-python-properties"}
 ISTANBUL_REPORTS = tuple(
     f"coverage-extension-{suite}"
     for suite in ("unit", "guards", "unit-node", "guards-node", "integration-node")

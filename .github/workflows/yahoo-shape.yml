@@ -45,7 +45,7 @@ defaults:
 jobs:
   shape:
     name: shape
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -56,7 +56,6 @@ jobs:
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           version: ${{ env.UV_VERSION }}
-          python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked
       # Its one limit (#323): 6-9 s measured on CI; it waits on Yahoo's network, so two minutes.

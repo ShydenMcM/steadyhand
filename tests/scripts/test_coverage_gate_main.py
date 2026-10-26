@@ -76,11 +76,11 @@ def tree(tmp_path: Path, record: Record = CLEAN_RECORD, sha: str = SHA) -> tuple
     # Every suite's folder, as the coverage job downloads them; one of each kind holds data.
     empty_python = {"meta": {"format": 3, "branch_coverage": True}, "files": {}}
     for name in PYTHON_REPORTS:
-        data = python_report() if name == "coverage-python-3.12" else empty_python
+        data = python_report() if name == "coverage-python" else empty_python
         write(reports / "coverage" / name / "coverage.json", json.dumps(data))
         write(
             reports / "coverage" / name / "sha.txt",
-            f"{sha if name == 'coverage-python-3.12' else SHA}\n",
+            f"{sha if name == 'coverage-python' else SHA}\n",
         )
     for name in ISTANBUL_REPORTS:
         data = istanbul_report(root) if name == "coverage-extension-unit" else {}
@@ -275,7 +275,7 @@ def test_a_measured_file_git_does_not_list_is_refused(
         "executed_branches": [],
         "missing_branches": [],
     }
-    write(tmp_path / "reports/coverage/coverage-python-3.12/coverage.json", json.dumps(report))
+    write(tmp_path / "reports/coverage/coverage-python/coverage.json", json.dumps(report))
     assert main(["--event", "push", *argv], root) == 1
     assert "measure files git does not list: ['scripts/stray.py']" in capsys.readouterr().err
 
@@ -332,7 +332,7 @@ def test_a_report_naming_no_commit_fails_closed(
 ) -> None:
     stood_in["c"] = git()
     root, argv = tree(tmp_path)
-    (tmp_path / "reports/coverage/coverage-python-3.12/sha.txt").unlink()
+    (tmp_path / "reports/coverage/coverage-python/sha.txt").unlink()
     assert main(["--event", "push", *argv], root) == 1
     assert "names no commit" in capsys.readouterr().err
 
@@ -439,7 +439,7 @@ def test_a_suites_second_run_that_differs_where_no_other_runs_fails(
     wobbly["files"]["scripts/a.py"]["executed_lines"] = [1, 2, 3]
     wobbly["files"]["scripts/a.py"]["missing_lines"] = []
     write(
-        tmp_path / "reports/coverage/coverage-python-properties-again-3.13/coverage.json",
+        tmp_path / "reports/coverage/coverage-python-properties-again/coverage.json",
         json.dumps(wobbly),
     )
     assert main(["--event", "push", *argv], root) == 1
@@ -447,25 +447,18 @@ def test_a_suites_second_run_that_differs_where_no_other_runs_fails(
 
 
 def test_the_suite_run_twice_is_named_in_the_report_list() -> None:
-    assert "coverage-python-properties-again-3.12" in PYTHON_REPORTS
-    assert "coverage-python-properties-again-3.13" in PYTHON_REPORTS
+    assert "coverage-python-properties-again" in PYTHON_REPORTS
 
 
 def test_every_python_report_the_gate_waits_for_is_named() -> None:
     """Each a ci.yml upload; the measured perf run (#374 AC9) feeds the record too."""
     assert PYTHON_REPORTS == (
-        "coverage-python-3.12",
-        "coverage-python-3.13",
-        "coverage-python-guards-3.12",
-        "coverage-python-guards-3.13",
-        "coverage-python-integration-3.12",
-        "coverage-python-integration-3.13",
-        "coverage-python-perf-3.12",
-        "coverage-python-perf-3.13",
-        "coverage-python-properties-3.12",
-        "coverage-python-properties-3.13",
-        "coverage-python-properties-again-3.12",
-        "coverage-python-properties-again-3.13",
+        "coverage-python",
+        "coverage-python-guards",
+        "coverage-python-integration",
+        "coverage-python-perf",
+        "coverage-python-properties",
+        "coverage-python-properties-again",
     )
 
 
@@ -481,7 +474,7 @@ def lines(executed: list[int], missing: list[int]) -> dict[str, Any]:
 
 def measured_in_unit(tmp_path: Path, path: str, data: dict[str, Any]) -> None:
     """The unit report measures *path* too: a test module's import lines run when collected."""
-    report = tmp_path / "reports/coverage/coverage-python-3.12/coverage.json"
+    report = tmp_path / "reports/coverage/coverage-python/coverage.json"
     whole = json.loads(report.read_text(encoding="utf-8"))
     whole["files"][path] = data
     write(report, json.dumps(whole))

@@ -8,6 +8,16 @@ const ROOT = import.meta.dirname;
 /** The extension's entry points (spec §3): each becomes one self-contained bundle. */
 export const ENTRY_POINTS = ["content-script", "side-panel", "service-worker"] as const;
 
+/**
+ * The oldest Chrome the extension runs on (#382). The code is compiled against the ES2024 library
+ * (`tsconfig.json` `lib`), and Chrome 119 is the first with all of it: `Promise.withResolvers`
+ * arrived in 119, `Object.groupBy` and `Map.groupBy` in 117 (MDN browser-compat-data, read
+ * 2026-10-26). The extension calls no `chrome.*` API yet; the side panel (spec §10.1) needs 114.
+ * Raise this when the code first uses something newer. esbuild checks the bundle's syntax
+ * against the same Chrome.
+ */
+const MINIMUM_CHROME = "119";
+
 interface PackageJson {
   version: string;
   description: string;
@@ -23,6 +33,7 @@ export function manifest(pkg: PackageJson): Record<string, unknown> {
     name: "steadyhand",
     version: pkg.version,
     description: pkg.description,
+    minimum_chrome_version: MINIMUM_CHROME,
     background: { service_worker: "service-worker.js" },
   };
 }
@@ -46,7 +57,7 @@ export async function build(outdir: string, bundle: Bundle): Promise<void> {
     bundle: true,
     format: "iife",
     platform: "browser",
-    target: "es2024",
+    target: ["es2024", `chrome${MINIMUM_CHROME}`],
     charset: "utf8",
     legalComments: "none",
     logLevel: "warning",

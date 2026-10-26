@@ -57,7 +57,7 @@ test("the bundler is asked once for one self-contained browser script per entry 
       bundle: true,
       format: "iife",
       platform: "browser",
-      target: "es2024",
+      target: ["es2024", "chrome119"],
       charset: "utf8",
       legalComments: "none",
       logLevel: "warning",
@@ -86,6 +86,7 @@ test("the manifest is Manifest V3 at the given version, asking for no permission
     name: "steadyhand",
     version: "1.2.3",
     description: "d",
+    minimum_chrome_version: "119",
     background: { service_worker: "service-worker.js" },
   });
 });

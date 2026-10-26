@@ -10,7 +10,7 @@ from typing import Any
 from ci_workflow import ROOT, ci, parse
 
 WORKFLOW = ROOT / ".github/workflows/mutations.yml"
-PLAN = 'python3 scripts/run_mutations.py --plan "$EVENT_NAME"'
+PLAN = 'uv run --no-project scripts/run_mutations.py --plan "$EVENT_NAME"'
 RUN = (
     "mapfile -t files < mutation-files.txt\n"
     'uv run --locked python scripts/run_mutations.py "${files[@]}"\n'
@@ -75,9 +75,11 @@ def test_every_expression_it_reads_is_one_it_needs() -> None:
     ]
 
 
-def test_the_plan_runs_first_on_the_runner_s_own_python_with_the_input_in_the_environment() -> None:
+def test_the_plan_runs_first_on_the_pinned_python_with_the_input_in_the_environment() -> None:
+    """uv comes before it, unconditionally, so the plan runs on the Python .python-version pins,
+    never the runner image's own (#382)."""
     plan = step("Plan: which mutation files must run?")
-    assert job()["steps"].index(plan) == 1
+    assert job()["steps"].index(plan) == 2
     assert plan["id"] == "plan"
     assert plan["run"] == PLAN
     assert plan["env"] == {"EVENT_NAME": "${{ github.event_name }}", "FILE": "${{ inputs.file }}"}
@@ -88,7 +90,7 @@ def test_the_plan_runs_first_on_the_runner_s_own_python_with_the_input_in_the_en
 def test_every_step_after_the_plan_runs_only_when_it_planned_a_run() -> None:
     # The last step keeps the workflow trace whatever ran (#384, test_workflow_trace_ci.py).
     assert job()["steps"][-1]["name"] == "Keep the workflow trace"
-    later = job()["steps"][2:-1]
+    later = job()["steps"][3:-1]
     assert [found.get("if") for found in later[:-1]] == [PLANNED] * (len(later) - 1)
     assert later[-1]["if"] == f"${{{{ !cancelled() && {PLANNED} }}}}"
 
@@ -113,14 +115,14 @@ def test_the_report_is_kept_even_when_a_mutation_is_not_as_predicted() -> None:
     }
 
 
-def test_it_uses_the_uv_and_a_python_that_ci_uses() -> None:
+def test_it_uses_the_uv_and_the_python_that_ci_uses() -> None:
+    """The uv CI pins, set up second whatever the plan says; it names no Python, so uv reads
+    .python-version as every CI job does (#382)."""
     assert workflow()["env"]["UV_VERSION"] == ci()["env"]["UV_VERSION"]
-    setup = job()["steps"][2]
+    setup = job()["steps"][1]
     assert setup["uses"].startswith("astral-sh/setup-uv@")
-    assert (
-        setup["with"]["python-version"]
-        in ci()["jobs"]["integration"]["strategy"]["matrix"]["python"]
-    )
+    assert setup["with"] == {"version": "${{ env.UV_VERSION }}", "enable-cache": True}
+    assert "if" not in setup
 
 
 def test_it_installs_the_extension_workspace_as_ci_does_with_no_install_script() -> None:

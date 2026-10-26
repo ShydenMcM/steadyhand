@@ -37,6 +37,13 @@ request that adds a note key or a term key must add its lesson in the same pull 
 until it does. A lesson that states an IDX rule value copies it from a research document under
 `docs/research/` and names that document in its `sources`.
 
+steadyhand runs the versions every Shyden Labs project runs, the newest any of them uses. Python
+is pinned once, to an exact patch version, in `.python-version`: uv reads it locally and in every
+CI job, and no workflow names a Python of its own. CI runs on `ubuntu-26.04`, and the extension
+needs Chrome 119 or later (`MINIMUM_CHROME` in `extension/build.ts`, which says why). To move
+Python, change `.python-version` and follow `tests/guards/test_versions.py`, which names every
+place that must follow it.
+
 ## Licence
 
 [Apache-2.0](LICENSE)

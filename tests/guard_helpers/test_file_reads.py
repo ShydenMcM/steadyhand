@@ -100,9 +100,9 @@ def test_a_file_opened_through_a_symlink_is_recorded_by_its_real_path(
     assert recorder.opened == frozenset({"HANDOVER.md"})
 
 
-def test_a_symlink_loop_is_placed_by_its_spelling_on_every_python(root: Path) -> None:
-    """3.12's resolve raises on a loop and 3.13's returns the path unchanged (measured); the
-    open itself then fails, so the spelling is all there is to place, on both."""
+def test_a_symlink_loop_is_placed_by_its_spelling(root: Path) -> None:
+    """3.13's resolve returns a loop unchanged (measured); the open itself then fails, so the
+    spelling is all there is to place."""
     (root / "a").symlink_to(root / "b")
     (root / "b").symlink_to(root / "a")
     recorder = Recorder(root)

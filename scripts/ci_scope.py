@@ -1,6 +1,6 @@
 """Decide whether a CI run may skip its expensive steps (#218).
 
-Usage: python3 scripts/ci_scope.py <github.event_name>
+Usage: uv run --no-project scripts/ci_scope.py <github.event_name>
 
 A pull request that only adds or edits paths on the docs-only fast path (the handover and the
 plans and specs under ``docs/superpowers/``, which no test opens) writes ``docs_only=true`` to
@@ -10,7 +10,8 @@ everything: a code change, a fast-path file that goes away (lesson ``sources`` c
 test checks that each one exists), any other event, and every diff this script cannot compute
 or read. It always exits 0, because failing closed means a full run, never a red one.
 
-Standard library only: it runs on the runner's system ``python3`` before uv is installed.
+Standard library only: it runs outside the project, before anything is synced, on the Python
+``.python-version`` pins, which uv installs (#382).
 """
 
 from __future__ import annotations

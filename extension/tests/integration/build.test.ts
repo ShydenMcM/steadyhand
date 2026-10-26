@@ -61,6 +61,7 @@ test("the manifest is Manifest V3 at the workspace's version, asking for no perm
     name: "steadyhand",
     version: pkg.version,
     description: "What the strategy you chose implies, read from what your broker's page shows.",
+    minimum_chrome_version: "119",
     background: { service_worker: "service-worker.js" },
   });
 });

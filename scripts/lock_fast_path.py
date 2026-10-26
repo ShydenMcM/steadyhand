@@ -1,6 +1,6 @@
 """Make every file on CI's docs-only fast path unreadable before a full run's later steps (#264).
 
-Usage: python3 scripts/lock_fast_path.py
+Usage: uv run --no-project scripts/lock_fast_path.py
 
 ``scripts/ci_scope.py`` lets a pull request that only adds or edits files on the fast path skip
 the tests, which is safe only while no test reads them. On every full run, each gated job runs
@@ -11,7 +11,8 @@ step that reads one fails by name in any language (Python raises ``PermissionErr
 no file to lock, a tree git cannot list, or a lock that does not bite (root, or a filesystem that
 ignores modes).
 
-Standard library only: it runs on the runner's system ``python3`` before uv is installed.
+Standard library only: it runs outside the project, before anything is synced, on the Python
+``.python-version`` pins, which uv installs (#382).
 """
 
 from __future__ import annotations

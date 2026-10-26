@@ -1,8 +1,9 @@
 """The docs-only fast path is wired into ci.yml so every required check still reports (#218).
 
 ``scripts/ci_scope.py`` decides; this guard checks the workflow obeys. Each job that gates a
-merge checks out two commits (the merge commit and its parents, for the diff), runs the scope
-step second, and skips every later step on a docs-only verdict, so the job reports success
+merge checks out two commits (the merge commit and its parents, for the diff), sets up uv, which
+installs the Python ``.python-version`` pins (#382), runs the scope step third on that Python,
+and skips every later step on a docs-only verdict, so the job reports success
 under its own name instead of being left pending. Deploy jobs (the ones holding an
 ``environment``) never carry the skip: they always run in full.
 """
@@ -18,23 +19,24 @@ from population import searched
 ROOT = Path(__file__).resolve().parents[2]
 CI = ROOT / ".github/workflows/ci.yml"
 SKIP = "steps.scope.outputs.docs_only != 'true'"
-SCOPE_RUN = 'python3 scripts/ci_scope.py "$EVENT_NAME"'
+SCOPE_RUN = 'uv run --no-project scripts/ci_scope.py "$EVENT_NAME"'
 EVENT = "${{ github.event_name }}"
 LOCK = {
     "name": "Lock the docs-only fast path: no later step may read it",
     "if": SKIP,
-    "run": "python3 scripts/lock_fast_path.py",
+    "run": "uv run --no-project scripts/lock_fast_path.py",
 }
-# Measured on 2026-10-13 (#290, the properties job added to #286's 9): 10 gated jobs whose
-# later steps number 53, the lock included. Lower each only by a deliberate edit when the
+UV_VERSION = "${{ env.UV_VERSION }}"
+# Measured on 2026-10-26 (#382, uv set up before the scope in every job): 11 gated jobs whose
+# later steps number 69, the lock included. Lower each only by a deliberate edit when the
 # workflow shrinks.
-GATED_FLOOR = 10
+GATED_FLOOR = 11
 # Every job ends by keeping its steps' traces, docs-only or not (#384): the step reads only the
 # runner's temp folder, never a fast-path file, and it is pinned in test_workflow_trace_ci.py.
 TRACE_UPLOAD = "Keep the workflow trace"
 # The one job-level condition allowed: it never skips the job, so its check always reports.
 NEVER_SKIPPED = "${{ !cancelled() }}"
-SKIPPED_STEPS_FLOOR = 53
+SKIPPED_STEPS_FLOOR = 69
 
 # PyYAML reads the bare key `on` as the boolean True, so a key may be a bool.
 WORKFLOW = ci()
@@ -76,8 +78,19 @@ def test_a_gated_job_checks_out_the_merge_commit_and_its_parents(name: str) -> N
 
 
 @pytest.mark.parametrize("name", GATED)
-def test_a_gated_job_runs_the_scope_step_second_and_unconditionally(name: str) -> None:
-    scope = JOBS[name]["steps"][1]
+def test_a_gated_job_sets_up_uv_second_and_unconditionally(name: str) -> None:
+    """The scope and the lock run on the pinned Python, so uv comes before them, docs-only or
+    not (#382). It reads uv.lock for its cache key and no fast-path file."""
+    setup = JOBS[name]["steps"][1]
+    assert setup["uses"].startswith("astral-sh/setup-uv@")
+    assert set(setup) == {"uses", "with"}
+    assert setup["with"]["version"] == UV_VERSION
+    assert set(setup["with"]) <= {"version", "enable-cache"}
+
+
+@pytest.mark.parametrize("name", GATED)
+def test_a_gated_job_runs_the_scope_step_third_and_unconditionally(name: str) -> None:
+    scope = JOBS[name]["steps"][2]
     assert scope == {
         "name": "Scope: may this docs-only change skip the rest?",
         "id": "scope",
@@ -88,9 +101,10 @@ def test_a_gated_job_runs_the_scope_step_second_and_unconditionally(name: str) -
 
 @pytest.mark.parametrize("name", GATED)
 def test_a_gated_job_locks_the_fast_path_before_any_other_step(name: str) -> None:
-    """On a full run, every fast-path file is unreadable from the third step on, so a reader in
-    any language fails by name (#264). Checkout and scope come first: both read the tree."""
-    assert JOBS[name]["steps"][2] == LOCK
+    """On a full run, every fast-path file is unreadable from the fourth step on, so a reader in
+    any language fails by name (#264). Checkout, uv and scope come first: each reads the tree,
+    and none a fast-path file."""
+    assert JOBS[name]["steps"][3] == LOCK
 
 
 # The user flag in a `container:`'s Docker options, spelled either way Docker accepts.
@@ -162,13 +176,13 @@ def test_a_gated_job_reports_and_skips_every_later_step(name: str) -> None:
 
 
 def later_steps(name: str) -> list[dict[str, Any]]:
-    """The steps after the checkout and the scope step, the trace upload that ends every job but
-    the coverage job left out."""
+    """The steps after the checkout, uv and the scope step, the trace upload that ends every job
+    but the coverage job left out."""
     steps: list[dict[str, Any]] = JOBS[name]["steps"]
     if name == "coverage":
-        return steps[2:]
+        return steps[3:]
     assert steps[-1].get("name") == TRACE_UPLOAD, name
-    return steps[2:-1]
+    return steps[3:-1]
 
 
 def test_the_skip_covers_every_later_step_of_every_gated_job() -> None:
