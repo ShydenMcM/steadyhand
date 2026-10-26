@@ -38,27 +38,27 @@ defaults:
 jobs:
   lint:
     name: lint
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 2
+      # uv installs the Python .python-version pins, and the scope and the lock run on it, never
+      # on the runner image's own python3 (#382). Neither reads a fast-path file.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
       - name: "Scope: may this docs-only change skip the rest?"
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
-        run: python3 scripts/ci_scope.py "$EVENT_NAME"
+        run: uv run --no-project scripts/ci_scope.py "$EVENT_NAME"
       - name: "Lock the docs-only fast path: no later step may read it"
         if: steps.scope.outputs.docs_only != 'true'
-        run: python3 scripts/lock_fast_path.py
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        if: steps.scope.outputs.docs_only != 'true'
-        with:
-          version: ${{ env.UV_VERSION }}
-          python-version: "3.12"
-          enable-cache: true
+        run: uv run --no-project scripts/lock_fast_path.py
       - run: uv sync --locked
         if: steps.scope.outputs.docs_only != 'true'
       - run: uv run --locked ruff check
@@ -78,32 +78,28 @@ jobs:
           retention-days: 7
 
   test:
-    name: test (py${{ matrix.python }})
-    runs-on: ubuntu-24.04
+    name: test (py3.13)
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        python: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 2
+      # uv installs the Python .python-version pins, and the scope and the lock run on it, never
+      # on the runner image's own python3 (#382). Neither reads a fast-path file.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
       - name: "Scope: may this docs-only change skip the rest?"
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
-        run: python3 scripts/ci_scope.py "$EVENT_NAME"
+        run: uv run --no-project scripts/ci_scope.py "$EVENT_NAME"
       - name: "Lock the docs-only fast path: no later step may read it"
         if: steps.scope.outputs.docs_only != 'true'
-        run: python3 scripts/lock_fast_path.py
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        if: steps.scope.outputs.docs_only != 'true'
-        with:
-          version: ${{ env.UV_VERSION }}
-          python-version: ${{ matrix.python }}
-          enable-cache: true
+        run: uv run --no-project scripts/lock_fast_path.py
       - run: uv sync --locked
         if: steps.scope.outputs.docs_only != 'true'
       - name: The unit suite, measured
@@ -117,7 +113,7 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: coverage-python-${{ matrix.python }}
+          name: coverage-python
           path: ${{ runner.temp }}/coverage-report
           if-no-files-found: error
           retention-days: 7
@@ -148,7 +144,7 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: coverage-python-perf-${{ matrix.python }}
+          name: coverage-python-perf
           path: ${{ runner.temp }}/coverage-perf
           if-no-files-found: error
           retention-days: 7
@@ -164,27 +160,27 @@ jobs:
 
   audit:
     name: audit
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 2
+      # uv installs the Python .python-version pins, and the scope and the lock run on it, never
+      # on the runner image's own python3 (#382). Neither reads a fast-path file.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
       - name: "Scope: may this docs-only change skip the rest?"
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
-        run: python3 scripts/ci_scope.py "$EVENT_NAME"
+        run: uv run --no-project scripts/ci_scope.py "$EVENT_NAME"
       - name: "Lock the docs-only fast path: no later step may read it"
         if: steps.scope.outputs.docs_only != 'true'
-        run: python3 scripts/lock_fast_path.py
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        if: steps.scope.outputs.docs_only != 'true'
-        with:
-          version: ${{ env.UV_VERSION }}
-          python-version: "3.12"
-          enable-cache: true
+        run: uv run --no-project scripts/lock_fast_path.py
       - run: uv sync --locked
         if: steps.scope.outputs.docs_only != 'true'
       - name: Audit every locked dependency, dev tools included
@@ -205,26 +201,26 @@ jobs:
 
   build:
     name: build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 2
+      # uv installs the Python .python-version pins, and the scope and the lock run on it, never
+      # on the runner image's own python3 (#382). Neither reads a fast-path file.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
       - name: "Scope: may this docs-only change skip the rest?"
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
-        run: python3 scripts/ci_scope.py "$EVENT_NAME"
+        run: uv run --no-project scripts/ci_scope.py "$EVENT_NAME"
       - name: "Lock the docs-only fast path: no later step may read it"
         if: steps.scope.outputs.docs_only != 'true'
-        run: python3 scripts/lock_fast_path.py
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        if: steps.scope.outputs.docs_only != 'true'
-        with:
-          version: ${{ env.UV_VERSION }}
-          python-version: "3.12"
+        run: uv run --no-project scripts/lock_fast_path.py
       - run: uv build --all-packages --out-dir dist
         if: steps.scope.outputs.docs_only != 'true'
       - name: Both packages built a wheel and an sdist
@@ -297,21 +293,27 @@ jobs:
           retention-days: 7
   extension:
     name: extension
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 2
+      # uv installs the Python .python-version pins, and the scope and the lock run on it, never
+      # on the runner image's own python3 (#382). Neither reads a fast-path file.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
       - name: "Scope: may this docs-only change skip the rest?"
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
-        run: python3 scripts/ci_scope.py "$EVENT_NAME"
+        run: uv run --no-project scripts/ci_scope.py "$EVENT_NAME"
       - name: "Lock the docs-only fast path: no later step may read it"
         if: steps.scope.outputs.docs_only != 'true'
-        run: python3 scripts/lock_fast_path.py
+        run: uv run --no-project scripts/lock_fast_path.py
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.scope.outputs.docs_only != 'true'
         with:
@@ -384,32 +386,28 @@ jobs:
           if-no-files-found: error
           retention-days: 7
   guards:
-    name: guards (py${{ matrix.python }})
-    runs-on: ubuntu-24.04
+    name: guards (py3.13)
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        python: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 2
+      # uv installs the Python .python-version pins, and the scope and the lock run on it, never
+      # on the runner image's own python3 (#382). Neither reads a fast-path file.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
       - name: "Scope: may this docs-only change skip the rest?"
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
-        run: python3 scripts/ci_scope.py "$EVENT_NAME"
+        run: uv run --no-project scripts/ci_scope.py "$EVENT_NAME"
       - name: "Lock the docs-only fast path: no later step may read it"
         if: steps.scope.outputs.docs_only != 'true'
-        run: python3 scripts/lock_fast_path.py
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        if: steps.scope.outputs.docs_only != 'true'
-        with:
-          version: ${{ env.UV_VERSION }}
-          python-version: ${{ matrix.python }}
-          enable-cache: true
+        run: uv run --no-project scripts/lock_fast_path.py
       - run: uv sync --locked
         if: steps.scope.outputs.docs_only != 'true'
       - name: The whole-repo guards
@@ -429,7 +427,7 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: coverage-python-guards-${{ matrix.python }}
+          name: coverage-python-guards
           path: ${{ runner.temp }}/coverage-report
           if-no-files-found: error
           retention-days: 7
@@ -445,21 +443,27 @@ jobs:
 
   extension-guards:
     name: extension-guards
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 2
+      # uv installs the Python .python-version pins, and the scope and the lock run on it, never
+      # on the runner image's own python3 (#382). Neither reads a fast-path file.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
       - name: "Scope: may this docs-only change skip the rest?"
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
-        run: python3 scripts/ci_scope.py "$EVENT_NAME"
+        run: uv run --no-project scripts/ci_scope.py "$EVENT_NAME"
       - name: "Lock the docs-only fast path: no later step may read it"
         if: steps.scope.outputs.docs_only != 'true'
-        run: python3 scripts/lock_fast_path.py
+        run: uv run --no-project scripts/lock_fast_path.py
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.scope.outputs.docs_only != 'true'
         with:
@@ -519,32 +523,28 @@ jobs:
           if-no-files-found: error
           retention-days: 7
   integration:
-    name: integration (py${{ matrix.python }})
-    runs-on: ubuntu-24.04
+    name: integration (py3.13)
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        python: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 2
+      # uv installs the Python .python-version pins, and the scope and the lock run on it, never
+      # on the runner image's own python3 (#382). Neither reads a fast-path file.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
       - name: "Scope: may this docs-only change skip the rest?"
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
-        run: python3 scripts/ci_scope.py "$EVENT_NAME"
+        run: uv run --no-project scripts/ci_scope.py "$EVENT_NAME"
       - name: "Lock the docs-only fast path: no later step may read it"
         if: steps.scope.outputs.docs_only != 'true'
-        run: python3 scripts/lock_fast_path.py
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        if: steps.scope.outputs.docs_only != 'true'
-        with:
-          version: ${{ env.UV_VERSION }}
-          python-version: ${{ matrix.python }}
-          enable-cache: true
+        run: uv run --no-project scripts/lock_fast_path.py
       - run: uv sync --locked
         if: steps.scope.outputs.docs_only != 'true'
       - name: The integration suite
@@ -565,7 +565,7 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: coverage-python-integration-${{ matrix.python }}
+          name: coverage-python-integration
           path: ${{ runner.temp }}/coverage-report
           if-no-files-found: error
           retention-days: 7
@@ -581,21 +581,27 @@ jobs:
 
   extension-integration:
     name: extension-integration
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 2
+      # uv installs the Python .python-version pins, and the scope and the lock run on it, never
+      # on the runner image's own python3 (#382). Neither reads a fast-path file.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
       - name: "Scope: may this docs-only change skip the rest?"
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
-        run: python3 scripts/ci_scope.py "$EVENT_NAME"
+        run: uv run --no-project scripts/ci_scope.py "$EVENT_NAME"
       - name: "Lock the docs-only fast path: no later step may read it"
         if: steps.scope.outputs.docs_only != 'true'
-        run: python3 scripts/lock_fast_path.py
+        run: uv run --no-project scripts/lock_fast_path.py
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.scope.outputs.docs_only != 'true'
         with:
@@ -639,32 +645,28 @@ jobs:
           if-no-files-found: error
           retention-days: 7
   properties:
-    name: properties (py${{ matrix.python }})
-    runs-on: ubuntu-24.04
+    name: properties (py3.13)
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        python: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 2
+      # uv installs the Python .python-version pins, and the scope and the lock run on it, never
+      # on the runner image's own python3 (#382). Neither reads a fast-path file.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
       - name: "Scope: may this docs-only change skip the rest?"
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
-        run: python3 scripts/ci_scope.py "$EVENT_NAME"
+        run: uv run --no-project scripts/ci_scope.py "$EVENT_NAME"
       - name: "Lock the docs-only fast path: no later step may read it"
         if: steps.scope.outputs.docs_only != 'true'
-        run: python3 scripts/lock_fast_path.py
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        if: steps.scope.outputs.docs_only != 'true'
-        with:
-          version: ${{ env.UV_VERSION }}
-          python-version: ${{ matrix.python }}
-          enable-cache: true
+        run: uv run --no-project scripts/lock_fast_path.py
       - run: uv sync --locked
         if: steps.scope.outputs.docs_only != 'true'
       - name: The properties suite
@@ -686,7 +688,7 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: coverage-python-properties-${{ matrix.python }}
+          name: coverage-python-properties
           path: ${{ runner.temp }}/coverage-report
           if-no-files-found: error
           retention-days: 7
@@ -694,7 +696,7 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: coverage-python-properties-again-${{ matrix.python }}
+          name: coverage-python-properties-again
           path: ${{ runner.temp }}/coverage-report-again
           if-no-files-found: error
           retention-days: 7
@@ -727,7 +729,7 @@ jobs:
         extension-integration,
         properties,
       ]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     environment:
       name: dev
@@ -807,7 +809,7 @@ jobs:
         properties,
         deploy-dev,
       ]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -817,20 +819,20 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
+      # uv installs the Python .python-version pins, and the scope and the lock run on it, never
+      # on the runner image's own python3 (#382). Neither reads a fast-path file.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
       - name: "Scope: may this docs-only change skip the rest?"
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
-        run: python3 scripts/ci_scope.py "$EVENT_NAME"
+        run: uv run --no-project scripts/ci_scope.py "$EVENT_NAME"
       - name: "Lock the docs-only fast path: no later step may read it"
         if: steps.scope.outputs.docs_only != 'true'
-        run: python3 scripts/lock_fast_path.py
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        if: steps.scope.outputs.docs_only != 'true'
-        with:
-          version: ${{ env.UV_VERSION }}
-          python-version: "3.12"
-          enable-cache: true
+        run: uv run --no-project scripts/lock_fast_path.py
       - run: uv sync --locked
         if: steps.scope.outputs.docs_only != 'true'
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2

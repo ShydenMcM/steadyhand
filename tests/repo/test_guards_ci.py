@@ -17,9 +17,13 @@ def runs(name: str) -> list[str]:
     return [str(step["run"]) for step in job(name)["steps"] if "run" in step]
 
 
-def test_the_guards_run_on_the_pythons_the_unit_suite_runs_on() -> None:
-    assert job("guards")["strategy"]["matrix"] == job("test")["strategy"]["matrix"]
-    assert job("guards")["name"] == "guards (py${{ matrix.python }})"
+def test_the_guards_run_on_the_python_the_unit_suite_runs_on() -> None:
+    """One Python since #382, the one .python-version pins: neither job has a matrix, and both
+    names carry its minor (tests/guards/test_versions.py checks it against the pin)."""
+    assert "strategy" not in job("guards")
+    assert "strategy" not in job("test")
+    assert job("test")["name"] == "test (py3.13)"
+    assert job("guards")["name"] == "guards (py3.13)"
 
 
 GUARDS_MEASURED = (

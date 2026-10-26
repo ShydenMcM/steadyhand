@@ -74,33 +74,27 @@ REPORTS = [
     "coverage-extension-integration-node",
     "coverage-extension-unit",
     "coverage-extension-unit-node",
-    "coverage-python-3.12",
-    "coverage-python-3.13",
-    "coverage-python-guards-3.12",
-    "coverage-python-guards-3.13",
-    "coverage-python-integration-3.12",
-    "coverage-python-integration-3.13",
-    "coverage-python-perf-3.12",
-    "coverage-python-perf-3.13",
-    "coverage-python-properties-3.12",
-    "coverage-python-properties-3.13",
-    "coverage-python-properties-again-3.12",
-    "coverage-python-properties-again-3.13",
+    "coverage-python",
+    "coverage-python-guards",
+    "coverage-python-integration",
+    "coverage-python-perf",
+    "coverage-python-properties",
+    "coverage-python-properties-again",
 ]
-MATRIX_PYTHON = "${{ matrix.python }}"
 
 
 def kept_reports() -> list[str]:
-    """Each coverage artifact a ci.yml job uploads, one per Python of its matrix."""
+    """Each coverage artifact a ci.yml job uploads. No job has a matrix since #382 (one Python),
+    so each upload's name is the artifact's, and a job given a matrix again fails here."""
     kept: list[str] = []
     for job in ci()["jobs"].values():
+        assert "strategy" not in job, job.get("name")
         for step in job["steps"]:
             name = str(step.get("with", {}).get("name", ""))
             if str(step.get("uses", "")).startswith("actions/upload-artifact@") and name.startswith(
                 "coverage-"
             ):
-                pythons = job["strategy"]["matrix"]["python"] if MATRIX_PYTHON in name else [""]
-                kept += [name.replace(MATRIX_PYTHON, python) for python in pythons]
+                kept.append(name)
     return sorted(kept)
 
 

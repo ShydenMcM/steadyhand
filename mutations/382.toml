@@ -1,0 +1,191 @@
+# #382: every workflow job on ubuntu-26.04, Python run only through uv after setup-uv, and one
+# exact Python pin in .python-version that every workflow, package and tool agrees with. Each
+# defect below is planted in the repository the guard reads, or in the guard's own count, and
+# tests/guards/test_versions.py must go red on it by name. The built manifest's minimum Chrome is
+# pinned by the extension's integration build test too.
+
+[[mutation]]
+id = "382-R1"
+why = "one job of a hand-started workflow left on the old runner image"
+path = ".github/workflows/record-floors.yml"
+old = "    runs-on: ubuntu-26.04\n"
+new = "    runs-on: ubuntu-24.04\n"
+suite = "guards"
+tests = ["tests/guards/test_versions.py"]
+expect = "red"
+red = [
+  "tests/guards/test_versions.py::test_every_job_runs_on_the_one_runner_image[.github/workflows/record-floors.yml]",
+]
+
+[[mutation]]
+id = "382-R2"
+why = "the lint job left on the old runner image"
+path = ".github/workflows/ci.yml"
+old = "    name: lint\n    runs-on: ubuntu-26.04\n"
+new = "    name: lint\n    runs-on: ubuntu-24.04\n"
+suite = "guards"
+tests = ["tests/guards/test_versions.py"]
+expect = "red"
+red = [
+  "tests/guards/test_versions.py::test_every_job_runs_on_the_one_runner_image[.github/workflows/ci.yml]",
+]
+
+[[mutation]]
+id = "382-P1"
+why = "the mutation plan runs on the runner image's own python3 again"
+path = ".github/workflows/mutations.yml"
+old = "run: uv run --no-project scripts/run_mutations.py --plan \"$EVENT_NAME\"\n"
+new = "run: python3 scripts/run_mutations.py --plan \"$EVENT_NAME\"\n"
+suite = "guards"
+tests = ["tests/guards/test_versions.py"]
+expect = "red"
+red = [
+  "tests/guards/test_versions.py::test_no_step_runs_python_outside_the_pinned_one[.github/workflows/mutations.yml]",
+]
+
+[[mutation]]
+id = "382-P2"
+why = "a step runs uv before setup-uv installs the pinned uv and Python"
+path = ".github/workflows/yahoo-shape.yml"
+old = "          persist-credentials: false\n"
+new = "          persist-credentials: false\n      - run: uv --version\n"
+suite = "guards"
+tests = ["tests/guards/test_versions.py"]
+expect = "red"
+red = [
+  "tests/guards/test_versions.py::test_no_step_runs_python_outside_the_pinned_one[.github/workflows/yahoo-shape.yml]",
+]
+
+[[mutation]]
+id = "382-P3"
+why = "a workflow names a Python beside .python-version, a second pin"
+path = ".github/workflows/yahoo-shape.yml"
+old = "          version: ${{ env.UV_VERSION }}\n"
+new = "          version: ${{ env.UV_VERSION }}\n          python-version: \"3.13.15\"\n"
+suite = "guards"
+tests = ["tests/guards/test_versions.py"]
+expect = "red"
+red = [
+  "tests/guards/test_versions.py::test_no_workflow_names_a_python_for_an_action",
+]
+
+[[mutation]]
+id = "382-V1"
+why = "the pin moves to another exact Python that nothing else names"
+path = ".python-version"
+old = "3.13.15\n"
+new = "3.12.14\n"
+suite = "guards"
+tests = ["tests/guards/test_versions.py"]
+expect = "red"
+red = [
+  "tests/guards/test_versions.py::test_python_is_pinned_once_to_an_exact_patch_version",
+  "tests/guards/test_versions.py::test_every_minor_a_workflow_names_is_the_pinned_one",
+  "tests/guards/test_versions.py::test_every_package_and_tool_names_the_pinned_minor",
+]
+
+[[mutation]]
+id = "382-V2"
+why = "the pin names a minor version, so its patch floats"
+path = ".python-version"
+old = "3.13.15\n"
+new = "3.13\n"
+suite = "guards"
+tests = ["tests/guards/test_versions.py"]
+expect = "red"
+red = [
+  "tests/guards/test_versions.py::test_python_is_pinned_once_to_an_exact_patch_version",
+  "tests/guards/test_versions.py::test_every_minor_a_workflow_names_is_the_pinned_one",
+  "tests/guards/test_versions.py::test_every_package_and_tool_names_the_pinned_minor",
+]
+
+[[mutation]]
+id = "382-V3"
+why = "a required check's name carries another Python minor than the pin"
+path = ".github/workflows/ci.yml"
+old = "    name: test (py3.13)\n"
+new = "    name: test (py3.12)\n"
+suite = "guards"
+tests = ["tests/guards/test_versions.py"]
+expect = "red"
+red = [
+  "tests/guards/test_versions.py::test_every_minor_a_workflow_names_is_the_pinned_one",
+]
+
+[[mutation]]
+id = "382-V4"
+why = "ruff lints for another Python than the pin"
+path = "pyproject.toml"
+old = "target-version = \"py313\"\n"
+new = "target-version = \"py312\"\n"
+suite = "guards"
+tests = ["tests/guards/test_versions.py"]
+expect = "red"
+red = [
+  "tests/guards/test_versions.py::test_every_package_and_tool_names_the_pinned_minor",
+]
+
+[[mutation]]
+id = "382-F1"
+why = "the job count reads one workflow of four"
+path = "tests/guards/test_versions.py"
+old = "    jobs = sum(len(load(path)[\"jobs\"]) for path in FILES)\n"
+new = "    jobs = sum(len(load(path)[\"jobs\"]) for path in FILES[:1])\n"
+suite = "guards"
+tests = ["tests/guards/test_versions.py"]
+expect = "red"
+red = [
+  "tests/guards/test_versions.py::test_every_workflow_git_lists_is_read",
+]
+
+[[mutation]]
+id = "382-F2"
+why = "the setup-uv count reads one workflow of four"
+path = "tests/guards/test_versions.py"
+old = "        for workflow in loaded.values()\n"
+new = "        for workflow in list(loaded.values())[:1]\n"
+suite = "guards"
+tests = ["tests/guards/test_versions.py"]
+expect = "red"
+red = [
+  "tests/guards/test_versions.py::test_no_workflow_names_a_python_for_an_action",
+]
+
+[[mutation]]
+id = "382-F3"
+why = "the named minors are read from every workflow but the one that names them"
+path = "tests/guards/test_versions.py"
+old = "        for path in FILES\n        for text in strings(load(path))\n"
+new = "        for path in FILES[1:]\n        for text in strings(load(path))\n"
+suite = "guards"
+tests = ["tests/guards/test_versions.py"]
+expect = "red"
+red = [
+  "tests/guards/test_versions.py::test_every_minor_a_workflow_names_is_the_pinned_one",
+]
+
+[[mutation]]
+id = "382-F4"
+why = "the pyproject count reads two files of three"
+path = "tests/guards/test_versions.py"
+old = "    files = tracked(ROOT, \"pyproject.toml\")\n"
+new = "    files = tracked(ROOT, \"pyproject.toml\")[:2]\n"
+suite = "guards"
+tests = ["tests/guards/test_versions.py"]
+expect = "red"
+red = [
+  "tests/guards/test_versions.py::test_every_package_and_tool_names_the_pinned_minor",
+]
+
+[[mutation]]
+id = "382-C1"
+why = "the built manifest names an older Chrome than the code needs"
+path = "extension/build.ts"
+old = "const MINIMUM_CHROME = \"119\";\n"
+new = "const MINIMUM_CHROME = \"118\";\n"
+suite = "extension-integration"
+tests = ["extension/tests/integration/build.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/integration/build.test.ts::the manifest is Manifest V3 at the workspace's version, asking for no permission",
+]

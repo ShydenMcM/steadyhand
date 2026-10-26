@@ -24,9 +24,13 @@ def job(name: str) -> dict[str, Any]:
     return jobs[name]
 
 
-def test_the_properties_run_on_the_pythons_the_unit_suite_runs_on() -> None:
-    assert job("properties")["strategy"]["matrix"] == job("test")["strategy"]["matrix"]
-    assert job("properties")["name"] == "properties (py${{ matrix.python }})"
+def test_the_properties_run_on_the_python_the_unit_suite_runs_on() -> None:
+    """One Python since #382, the one .python-version pins: neither job has a matrix, and both
+    names carry its minor (tests/guards/test_versions.py checks it against the pin)."""
+    assert "strategy" not in job("properties")
+    assert "strategy" not in job("test")
+    assert job("test")["name"] == "test (py3.13)"
+    assert job("properties")["name"] == "properties (py3.13)"
 
 
 def test_the_properties_job_runs_the_properties_suite_alone_with_one_limit() -> None:

@@ -1,10 +1,5 @@
 {
- "files": {
-  ".github/workflows/record-floors.yml": [
-   1,
-   0
-  ]
- },
+ "files": {},
  "unmeasured": [
   "extension/packages/shell/src/content-script.ts",
   "extension/packages/shell/src/service-worker.ts"

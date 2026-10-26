@@ -2,7 +2,7 @@
 name = "steadyhand-workspace"
 version = "0.0.0"
 description = "Development workspace for steadyhand and steadyhand-idx. Not published."
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = ["steadyhand", "steadyhand-idx"]
 
 [tool.uv]
@@ -17,7 +17,7 @@ steadyhand = { workspace = true }
 steadyhand-idx = { workspace = true }
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py313"
 line-length = 100
 # Specs and plans hold hand-aligned sketches for reading, not shipped code; READMEs stay checked.
 # Both are on CI's docs-only fast path (#218), where nothing runs ruff: ruff formats Markdown, and
@@ -55,7 +55,7 @@ known-first-party = [
 
 [tool.mypy]
 strict = true
-python_version = "3.12"
+python_version = "3.13"
 files = ["packages", "tests", "scripts"]
 
 [[tool.mypy.overrides]]
