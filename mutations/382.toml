@@ -71,17 +71,15 @@ red = [
 
 [[mutation]]
 id = "382-V1"
-why = "the pin moves to another exact Python that nothing else names"
+why = "the pin drifts to another patch of 3.13 (a pin below requires-python is refused by uv itself before any test runs: run 40249191691)"
 path = ".python-version"
 old = "3.13.15\n"
-new = "3.12.14\n"
+new = "3.13.14\n"
 suite = "guards"
 tests = ["tests/guards/test_versions.py"]
 expect = "red"
 red = [
   "tests/guards/test_versions.py::test_python_is_pinned_once_to_an_exact_patch_version",
-  "tests/guards/test_versions.py::test_every_minor_a_workflow_names_is_the_pinned_one",
-  "tests/guards/test_versions.py::test_every_package_and_tool_names_the_pinned_minor",
 ]
 
 [[mutation]]
