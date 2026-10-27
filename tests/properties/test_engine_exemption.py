@@ -1,4 +1,4 @@
-"""The exemption claim property at its full count (#290). It calls its unit stand-in, in
+"""The exemption claim property at its full count (#290). It calls its unit stand-in's check, in
 tests/engine/test_exemption.py, on every case it draws."""
 
 import test_exemption as unit
@@ -16,6 +16,6 @@ from hypothesis import strategies as st
 def test_a_claims_tax_never_exceeds_its_full_tax_plus_one_unit_per_extra_booking(
     gross: int, steps: list[tuple[int, int]], last_day: int
 ) -> None:
-    unit.test_a_claims_tax_never_exceeds_its_full_tax_plus_one_unit_per_extra_booking(
+    unit.check_a_claims_tax_never_exceeds_its_full_tax_plus_one_unit_per_extra_booking(
         gross, steps, last_day
     )
