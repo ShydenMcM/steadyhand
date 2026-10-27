@@ -675,7 +675,29 @@ def test_a_backtest_s_second_run_asks_only_for_the_refused_days(cache: BarCache)
     assert [d.day for d in second if BBCA in d.refused] == [SEP_7, OCT_5, OCT_6]
     # Over the cache the first run filled, each refused gap is asked once, and nothing else.
     assert upstream.requests == [("bars", SEP_7, SEP_7), ("bars", OCT_5, OCT_6)]
-    assert len(fresh) > len(upstream.requests)
+    # Over the empty cache, worked by hand: the whole window's bars, refused; the run's actions
+    # read without prices, answered with its restorations; then each clean range around the
+    # refused days, whose bars the cache fetches with that range's actions and restorations.
+    sep_6, sep_8, oct_4, oct_7 = (
+        date(2021, 9, 6),
+        date(2021, 9, 8),
+        date(2021, 10, 4),
+        date(2021, 10, 7),
+    )
+    assert fresh == [
+        ("bars", *TWO_MONTHS),
+        ("actions", *TWO_MONTHS),
+        ("restorations", *TWO_MONTHS),
+        ("bars", TWO_MONTHS[0], sep_6),
+        ("actions", TWO_MONTHS[0], sep_6),
+        ("restorations", TWO_MONTHS[0], sep_6),
+        ("bars", sep_8, oct_4),
+        ("actions", sep_8, oct_4),
+        ("restorations", sep_8, oct_4),
+        ("bars", oct_7, TWO_MONTHS[1]),
+        ("actions", oct_7, TWO_MONTHS[1]),
+        ("restorations", oct_7, TWO_MONTHS[1]),
+    ]
 
 
 def refused_and_priced(source: CachedDataSource) -> tuple[list[date], list[date]]:
