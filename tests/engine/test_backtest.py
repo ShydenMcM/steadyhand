@@ -713,9 +713,9 @@ def test_a_halt_lasts_to_the_end_of_the_run_and_is_recorded() -> None:
     )
     reports = {report.day: report for report in result.run.reports}
     assert reports[date(2025, 7, 7)].halt == result.run.halt
-    assert all(  # runtime population: the run's reports
-        report.queued == () for day, report in reports.items() if day >= date(2025, 7, 7)
-    )
+    # From the halt on, the run's last five days, nothing is queued.
+    after = [(report.day, report.queued) for report in result.run.reports[5:]]
+    assert after == [(date(2025, 7, day), ()) for day in (7, 8, 9, 10, 11)]
     assert all(  # runtime population: the run's reports
         report.halt is None for day, report in reports.items() if day != date(2025, 7, 7)
     )
@@ -777,15 +777,17 @@ def test_without_a_goal_there_is_no_income_report_and_no_history_fetch() -> None
     result = run(source)
     assert result.baseline is not None
     assert (result.run.income, result.baseline.income, result.income_impact) == (None, None, None)
-    assert [request for request in source.requests if request[2] < START] == []
+    # Every request starts on the run's first day: there is no history fetch.
+    assert [request for request in source.requests if request[2] != START] == []
 
 
 def test_with_a_goal_each_run_reports_its_income_from_five_years_of_history() -> None:
     source = _Source(calm(), EARLIER)
     result = run(source, chosen=with_goal(lag=3))
     assert result.baseline is not None
-    # The strategy ends holding BBCA; the baseline BBCA and BBRI. Each is asked for once a run.
-    assert [request for request in source.requests if request[2] < START] == [
+    # The strategy ends holding BBCA; the baseline BBCA and BBRI. Each is asked for once a run,
+    # and these are the only requests that do not start on the run's first day.
+    assert [request for request in source.requests if request[2] != START] == [
         ("actions", "BBCA", HISTORY_FROM, END),
         ("actions", "BBCA", HISTORY_FROM, END),
         ("actions", "BBRI", HISTORY_FROM, END),
@@ -1300,7 +1302,8 @@ def test_compare_fetches_the_look_back_once_for_every_strategy() -> None:
     source = _Source(calm(), LOOKED_BACK)
     reader = _Reader()
     compare([_Fixed({BBCA: Decimal("0.5")}), reader], market(source), START, END, looking_back(1))
-    assert [request for request in source.requests if request[2] < START] == [
+    # The only requests that do not start on the run's first day: one look-back a stock.
+    assert [request for request in source.requests if request[2] != START] == [
         ("actions", "BBCA", date(2024, 1, 1), UNTIL),
         ("actions", "BBRI", date(2024, 1, 1), UNTIL),
     ]
