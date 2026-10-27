@@ -1,0 +1,29 @@
+# #365: the checks the non-unit suites run, proved on planted mutations, each predicted before
+# the first run. G1 and G2 plant the two versions Shyden's ruling names ("One version pattern"):
+# a fourth part and an empty part, each of which the one pattern must refuse by name.
+
+[[mutation]]
+id = "365-G1"
+why = "The version pattern takes a fourth part, so 1.2.3.4 is read as 1.2.3."
+path = "tests/guards/test_supply_chain.py"
+old = '''VERSION = re.compile(r"(?:\d+|[xX*])(?:\.(?:\d+|[xX*])){0,2}")'''
+new = '''VERSION = re.compile(r"(?:\d+|[xX*])(?:\.(?:\d+|[xX*])){0,3}")'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_an_unreadable_npm_version_is_refused_by_name[four-parts]",
+]
+
+[[mutation]]
+id = "365-G2"
+why = "The version pattern takes an empty part, so 1..2 is read as 1."
+path = "tests/guards/test_supply_chain.py"
+old = '''VERSION = re.compile(r"(?:\d+|[xX*])(?:\.(?:\d+|[xX*])){0,2}")'''
+new = '''VERSION = re.compile(r"(?:\d*|[xX*])(?:\.(?:\d*|[xX*])){0,2}")'''
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_an_unreadable_npm_version_is_refused_by_name[empty-part]",
+]

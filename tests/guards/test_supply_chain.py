@@ -373,18 +373,20 @@ def test_dependabot_never_moves_types_node_past_the_runtime() -> None:
 Triple = tuple[int, int, int]
 EVERY_VERSION: tuple[Triple, Triple] = ((0, 0, 0), (10**9, 0, 0))
 COMPARATOR = re.compile(r"(?P<op>\^|~|>=|<=|>|<|=)?(?P<version>[^-]*)(?P<pre>-[0-9A-Za-z.-]+)?")
-VERSION_PART = re.compile(r"\d+|[xX*]")
+VERSION = re.compile(r"(?:\d+|[xX*])(?:\.(?:\d+|[xX*])){0,2}")
+"""A version npm's ranges here use: one to three dot-separated parts, each digits or a wildcard
+(Shyden, #365: "One version pattern")."""
 
 
 def _known(version: str) -> list[int]:
     """The leading numbers of *version* (``8.x`` is ``[8]``); ``v``, build metadata or a hyphen
     range is refused by name, so no form this does not read is ever judged (#350)."""
-    parts = version.split(".") if version else ["*"]
-    if len(parts) > 3 or not all(VERSION_PART.fullmatch(part) for part in parts):
+    written = version or "*"
+    if not VERSION.fullmatch(written):
         msg = f"cannot read an npm version from {version!r}"
         raise AssertionError(msg)
     known: list[int] = []
-    for part in parts:
+    for part in written.split("."):
         if not part.isdigit():
             break
         known.append(int(part))
@@ -595,6 +597,29 @@ def test_every_ignore_names_a_direct_dependency() -> None:
         if entry["dependency-name"] not in direct_versions()
     ]
     assert searched(stale, of=len(ignored), what="npm ignore entries") == []
+
+
+@pytest.mark.parametrize(
+    "version",
+    ["1.2.3.4", "1..2", "v1.2.3", "1.2.3+build"],
+    ids=["four-parts", "empty-part", "v", "build"],
+)
+def test_an_unreadable_npm_version_is_refused_by_name(version: str) -> None:
+    """A version past three parts, with an empty part, a ``v`` or build metadata fails by name,
+    never read as some other version (#350, #365)."""
+    with pytest.raises(
+        AssertionError, match=rf"^cannot read an npm version from {re.escape(repr(version))}$"
+    ):
+        _known(version)
+
+
+@pytest.mark.parametrize(
+    ("version", "known"),
+    [("", []), ("*", []), ("8.x", [8]), ("4.X.*", [4]), ("1.2.3", [1, 2, 3])],
+    ids=["empty", "star", "minor-wildcard", "upper-x", "three-parts"],
+)
+def test_an_npm_version_reads_as_its_leading_numbers(version: str, known: list[int]) -> None:
+    assert _known(version) == known
 
 
 @pytest.mark.parametrize("version", ["lts/*", "^20", None], ids=["lts", "range", "none"])
