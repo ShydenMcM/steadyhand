@@ -322,20 +322,22 @@ def test_a_zero_run_rate_cannot_be_projected(value: int, target: int, contributi
     assert {s.outcome for s in projection.scenarios} == {ProjectionOutcome.CANNOT}
 
 
-# Found by hypothesis (#97): rounding the income down every month made Rp6 a month take 1.7 years
-# where Rp5 took 1.6. Then the ends of what it draws, shrinking and growing.
-@pytest.mark.parametrize(
-    ("gross", "value", "target", "growth", "smaller", "extra"),
-    [
-        (12, 14, 6, Decimal(0), 5, 1),
-        (12, 1, 10**7, Decimal("-0.2"), 0, 1),
-        (10**9, 10**11, 10**7, Decimal("0.2"), 10**6, 10**6),
-    ],
-    ids=["issue-97", "smallest-shrinking", "largest-growing"],
-)
-def test_a_larger_contribution_never_takes_longer(
+type Years = tuple[Decimal | None, Decimal | None, Decimal | None]
+"""A projection's years: pessimistic, base and optimistic, ``None`` where it is not within."""
+
+
+def scenario_years(projection: Projection) -> Years:
+    pessimistic, base, optimistic = (s.years for s in projection.scenarios)
+    return pessimistic, base, optimistic
+
+
+def check_a_larger_contribution_never_takes_longer(
     gross: int, value: int, target: int, growth: Decimal, smaller: int, extra: int
-) -> None:
+) -> tuple[Years, Years]:
+    """The contribution property's check on any goal, called by its unit stand-in below and by
+    tests/properties/test_engine_income_projection.py on every draw: in each scenario the larger
+    contribution's rank sorts first, as sorted([larger, fewer]) == [larger, fewer] (#365:
+    equalities, no typed-in bound). Returns both projections' years."""
     less = project(
         rate(gross), measured(str(growth)), rp(value), goal(target, smaller or None), rules()
     )
@@ -346,28 +348,119 @@ def test_a_larger_contribution_never_takes_longer(
         goal(target, smaller + extra or None),
         rules(),
     )
-    for fewer, larger in zip(  # runtime population: the scenarios of two drawn projections
-        less.scenarios, more.scenarios, strict=True
-    ):
-        assert rank(larger) <= rank(fewer)
+    pairs = [
+        [rank(larger), rank(fewer)]
+        for fewer, larger in zip(less.scenarios, more.scenarios, strict=True)
+    ]
+    assert [sorted(pair) for pair in pairs] == pairs
+    return scenario_years(less), scenario_years(more)
 
 
-# The smallest income shrinking, the largest growing, a mid case with a contribution, and the
-# same goal growing faster than both caps (5% and 10%), where each cap decides the order.
+# Found by hypothesis (#97): rounding the income down every month made Rp6 a month take 1.7 years
+# where Rp5 took 1.6. Then the ends of what it draws, shrinking and growing. The years are worked
+# by hand month by month: each month adds the month's income, less its 10% tax rounded up, and
+# the contribution; the income is the worth at the yield, rounded down, the yield growing at
+# each twelfth month; the goal is met once a month's take-home reaches the target. For #97 the
+# income must reach Rp80: at Rp5 that is month 17 pessimistic (from Rp9) and month 12 in the
+# other two, at Rp6 months 15 and 11. With nothing added the smallest stays at Rp1 for good;
+# with Rp1 it reaches Rp133,333,334, the income whose take-home is Rp10m a month, in month 41
+# pessimistic and 29 in the other two, whose 5% and 10% caps both give way to the -20% measured.
+# The largest meets its target before the first month.
 @pytest.mark.parametrize(
-    ("gross", "value", "target", "growth", "contribution"),
+    ("gross", "value", "target", "growth", "smaller", "extra", "fewer_years", "larger_years"),
     [
-        (12, 1, 1, Decimal("-0.2"), 0),
-        (10**9, 10**11, 10**7, Decimal("0.2"), 10**6),
-        (5_000, 2_000_000, 50_000, Decimal("0.0123"), 1_000),
-        (5_000, 2_000_000, 50_000, Decimal("0.2"), 0),
+        (
+            12,
+            14,
+            6,
+            Decimal(0),
+            5,
+            1,
+            (Decimal("1.5"), Decimal("1.0"), Decimal("1.0")),
+            (Decimal("1.3"), Decimal("1.0"), Decimal("1.0")),
+        ),
+        (
+            12,
+            1,
+            10**7,
+            Decimal("-0.2"),
+            0,
+            1,
+            (None, None, None),
+            (Decimal("3.5"), Decimal("2.5"), Decimal("2.5")),
+        ),
+        (
+            10**9,
+            10**11,
+            10**7,
+            Decimal("0.2"),
+            10**6,
+            10**6,
+            (Decimal("0.0"), Decimal("0.0"), Decimal("0.0")),
+            (Decimal("0.0"), Decimal("0.0"), Decimal("0.0")),
+        ),
     ],
+    ids=["issue-97", "smallest-shrinking", "largest-growing"],
 )
-def test_pessimistic_never_beats_base_and_base_never_beats_optimistic(
-    gross: int, value: int, target: int, growth: Decimal, contribution: int
+def test_a_larger_contribution_never_takes_longer(
+    gross: int,
+    value: int,
+    target: int,
+    growth: Decimal,
+    smaller: int,
+    extra: int,
+    fewer_years: Years,
+    larger_years: Years,
 ) -> None:
+    found = check_a_larger_contribution_never_takes_longer(
+        gross, value, target, growth, smaller, extra
+    )
+    assert found == (fewer_years, larger_years)
+
+
+def check_pessimistic_never_beats_base_and_base_never_beats_optimistic(
+    gross: int, value: int, target: int, growth: Decimal, contribution: int
+) -> Years:
+    """The scenario-order property's check on any goal, called by its unit stand-in below and by
+    tests/properties/test_engine_income_projection.py on every draw: the ranks sort optimistic,
+    base, pessimistic, as sorted([...]) == [optimistic, base, pessimistic] (#365: equalities, no
+    typed-in bound). Returns the projection's years."""
     projection = project(
         rate(gross), measured(str(growth)), rp(value), goal(target, contribution or None), rules()
     )
     pessimistic, base, optimistic = (rank(s) for s in projection.scenarios)
-    assert pessimistic >= base >= optimistic
+    assert sorted([pessimistic, base, optimistic]) == [optimistic, base, pessimistic]
+    return scenario_years(projection)
+
+
+# The smallest income shrinking, the largest growing, a mid case with a contribution, and a goal
+# growing faster than both caps (5% and 10%), where each cap decides the order. Worked by hand as
+# above: the smallest stays at Rp1 and the mid case's yield of 0.25%, growing 1.23% a year, keeps
+# its income under Rp20,000 in 600 months, far from the Rp666,667 its target needs; the largest
+# meets its target before the first month. In the last, Rp120,000 a year on Rp100bn, reinvesting
+# never moves the income a rupiah, so only the growth does: 10% gives Rp132,000 at month 12,
+# Rp9,900 a month after tax, and 5% gives Rp126,000 then Rp132,300 at month 24; the pessimistic
+# Rp96,000 does not grow.
+@pytest.mark.parametrize(
+    ("gross", "value", "target", "growth", "contribution", "expected"),
+    [
+        (12, 1, 1, Decimal("-0.2"), 0, (None, None, None)),
+        (
+            10**9,
+            10**11,
+            10**7,
+            Decimal("0.2"),
+            10**6,
+            (Decimal("0.0"), Decimal("0.0"), Decimal("0.0")),
+        ),
+        (5_000, 2_000_000, 50_000, Decimal("0.0123"), 1_000, (None, None, None)),
+        (120_000, 10**11, 9_900, Decimal("0.2"), 0, (None, Decimal("2.0"), Decimal("1.0"))),
+    ],
+)
+def test_pessimistic_never_beats_base_and_base_never_beats_optimistic(
+    gross: int, value: int, target: int, growth: Decimal, contribution: int, expected: Years
+) -> None:
+    found = check_pessimistic_never_beats_base_and_base_never_beats_optimistic(
+        gross, value, target, growth, contribution
+    )
+    assert found == expected

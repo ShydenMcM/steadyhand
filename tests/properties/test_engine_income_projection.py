@@ -1,4 +1,4 @@
-"""The projection properties at their full count (#290). Each calls its unit stand-in, in
+"""The projection properties at their full count (#290). Each calls its unit stand-in's check, in
 tests/engine/test_income_projection.py, on every case it draws."""
 
 from decimal import Decimal
@@ -31,7 +31,9 @@ def test_a_zero_run_rate_cannot_be_projected(value: int, target: int, contributi
 def test_a_larger_contribution_never_takes_longer(
     gross: int, value: int, target: int, growth: Decimal, smaller: int, extra: int
 ) -> None:
-    unit.test_a_larger_contribution_never_takes_longer(gross, value, target, growth, smaller, extra)
+    unit.check_a_larger_contribution_never_takes_longer(
+        gross, value, target, growth, smaller, extra
+    )
 
 
 @settings(max_examples=100)
@@ -39,6 +41,6 @@ def test_a_larger_contribution_never_takes_longer(
 def test_pessimistic_never_beats_base_and_base_never_beats_optimistic(
     gross: int, value: int, target: int, growth: Decimal, contribution: int
 ) -> None:
-    unit.test_pessimistic_never_beats_base_and_base_never_beats_optimistic(
+    unit.check_pessimistic_never_beats_base_and_base_never_beats_optimistic(
         gross, value, target, growth, contribution
     )
