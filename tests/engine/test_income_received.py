@@ -167,18 +167,33 @@ def test_a_run_with_no_days_has_no_income_report() -> None:
         received_income([], final(), rules())
 
 
-# Unit stand-in of the property in tests/properties/test_engine_income_received.py (#290):
-# one smallest dividend, five largest, and a mix.
-@pytest.mark.parametrize(
-    "amounts",
-    [
-        [1],
-        [10**12] * 5,
-        [3, 7, 1_000, 999_999],
-    ],
-)
-def test_take_home_is_never_more_than_gross(amounts: list[int]) -> None:
+def check_take_home_is_never_more_than_gross(amounts: list[int]) -> IncomeFigures:
+    """The take-home property's check on any dividends paid one day, called by its unit stand-in
+    below and by tests/properties/test_engine_income_received.py on every draw: the gross is the
+    sum paid, and nothing, the take-home and the gross sort in that order (#365: equalities, no
+    typed-in bound). Returns the trailing figures."""
     day = date(2025, 3, 10)
     run = [report(day, paid=[paid(day, amount) for amount in amounts])]
     trailing = received_income(run, final(), rules()).trailing
-    assert Money.zero(IDR) <= trailing.take_home <= trailing.gross
+    assert trailing.gross == rp(sum(amounts))
+    nothing = Money.zero(IDR)
+    ordered = [nothing, trailing.take_home, trailing.gross]
+    assert sorted([trailing.gross, trailing.take_home, nothing]) == ordered
+    return trailing
+
+
+# Unit stand-in of the property in tests/properties/test_engine_income_received.py (#290):
+# one smallest dividend, five largest, and a mix. The take-home is worked by hand, each payment
+# less its 10% tax rounded up: Rp1 keeps nothing, each Rp1tn keeps Rp900bn, and the mix keeps
+# 2 + 6 + 900 + 899,999 (Rp999,999's tax of 99,999.9 rounds up to 100,000). Nothing was booked.
+@pytest.mark.parametrize(
+    ("amounts", "gross", "take_home"),
+    [
+        ([1], 1, 0),
+        ([10**12] * 5, 5 * 10**12, 45 * 10**11),
+        ([3, 7, 1_000, 999_999], 1_001_009, 900_907),
+    ],
+)
+def test_take_home_is_never_more_than_gross(amounts: list[int], gross: int, take_home: int) -> None:
+    trailing = check_take_home_is_never_more_than_gross(amounts)
+    assert trailing == figures(gross, 0, gross, take_home)
