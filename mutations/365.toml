@@ -27,3 +27,16 @@ expect = "red"
 red = [
     "tests/guards/test_supply_chain.py::test_an_unreadable_npm_version_is_refused_by_name[empty-part]",
 ]
+
+[[mutation]]
+id = "365-I1"
+why = "The span leaves out its last day, 7 September 2021, the last of BBRI's proven run: 1,102 days."
+path = "tests/integration/idx/test_yahoo_whole_bbri.py"
+old = '''    every_day = {span[0] + timedelta(days=n) for n in range((span[1] - span[0]).days + 1)}'''
+new = '''    every_day = {span[0] + timedelta(days=n) for n in range((span[1] - span[0]).days)}'''
+suite = "integration"
+tests = ["tests/integration/idx/test_yahoo_whole_bbri.py"]
+expect = "red"
+red = [
+    "tests/integration/idx/test_yahoo_whole_bbri.py::test_bbri_s_golden_years_are_restored_except_where_a_volume_is_not_whole",
+]

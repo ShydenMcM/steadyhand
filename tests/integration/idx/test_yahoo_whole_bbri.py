@@ -12,7 +12,7 @@ the proof reads every row priced off whole rupiah
 other thirteen recordings' pinned answers in ``tests/idx/test_yahoo_answers.py``.
 """
 
-from datetime import date
+from datetime import date, timedelta
 from functools import cache
 from pathlib import Path
 
@@ -40,7 +40,8 @@ def test_bbri_s_golden_years_are_restored_except_where_a_volume_is_not_whole() -
     found = evidence(history)
     runs = find_runs(found)
     span = (date(2017, 1, 31), date(2021, 9, 7))
-    assert len([row for row in found if span[0] <= row.day <= span[1]]) == 1_103
+    every_day = {span[0] + timedelta(days=n) for n in range((span[1] - span[0]).days + 1)}
+    assert len([row for row in found if row.day in every_day]) == 1_103
     with pytest.raises(UnrecoverablePricesError) as refused:
         unadjust(history, BBRI, calendar(), span, runs)
     assert (len(refused.value.days), refused.value.days[-1]) == (153, date(2017, 11, 9))
