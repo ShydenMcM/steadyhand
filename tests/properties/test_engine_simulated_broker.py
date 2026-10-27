@@ -1,5 +1,5 @@
-"""The simulated broker properties at their full count (#290). Each calls its unit stand-in, in
-tests/engine/test_simulated_broker.py, on every case it draws."""
+"""The simulated broker properties at their full count (#290). Each calls its unit stand-in, or
+the stand-in's check, in tests/engine/test_simulated_broker.py, on every case it draws."""
 
 from datetime import date
 
@@ -55,4 +55,4 @@ def test_fills_keep_cash_whole_lots_ticks_and_bands(
     opens: tuple[int, int],
     volumes: tuple[int, int],
 ) -> None:
-    unit.test_fills_keep_cash_whole_lots_ticks_and_bands(cash, held, orders, opens, volumes)
+    unit.check_fills_keep_cash_whole_lots_ticks_and_bands(cash, held, orders, opens, volumes)
