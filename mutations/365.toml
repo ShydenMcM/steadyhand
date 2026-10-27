@@ -41,6 +41,38 @@ red = [
     "tests/integration/idx/test_yahoo_whole_bbri.py::test_bbri_s_golden_years_are_restored_except_where_a_volume_is_not_whole",
 ]
 
+[[mutation]]
+id = "365-I2"
+why = "Each instalment is split six ways over five stocks: every month keeps a sixth more than is due, inside the old bound's 25,000,000."
+path = "packages/steadyhand/src/steadyhand/strategies/monthly_savings.py"
+old = '''            each = ratio_down(max(cash - reserve, 0) // len(buying), portfolio.value.amount)'''
+new = '''            each = ratio_down(max(cash - reserve, 0) // (len(buying) + 1), portfolio.value.amount)'''
+suite = "integration"
+tests = ["tests/integration/cli/test_backtest_command_golden.py"]
+expect = "red"
+red = [
+    "tests/integration/cli/test_backtest_command_golden.py::test_monthly_savings_keeps_back_the_instalments_still_due[2021-02]",
+    "tests/integration/cli/test_backtest_command_golden.py::test_monthly_savings_keeps_back_the_instalments_still_due[2021-03]",
+    "tests/integration/cli/test_backtest_command_golden.py::test_monthly_savings_keeps_back_the_instalments_still_due[2021-04]",
+    "tests/integration/cli/test_backtest_command_golden.py::test_monthly_savings_keeps_back_the_instalments_still_due[2021-05]",
+]
+
+[[mutation]]
+id = "365-I3"
+why = "The reserve keeps back this month's instalment too: February buys nothing, and the old range caught every month as the exact cash does."
+path = "packages/steadyhand/src/steadyhand/strategies/monthly_savings.py"
+old = '''            reserve = (due - 1) * instalment if due > 0 else 0'''
+new = '''            reserve = due * instalment if due > 0 else 0'''
+suite = "integration"
+tests = ["tests/integration/cli/test_backtest_command_golden.py"]
+expect = "red"
+red = [
+    "tests/integration/cli/test_backtest_command_golden.py::test_monthly_savings_keeps_back_the_instalments_still_due[2021-02]",
+    "tests/integration/cli/test_backtest_command_golden.py::test_monthly_savings_keeps_back_the_instalments_still_due[2021-03]",
+    "tests/integration/cli/test_backtest_command_golden.py::test_monthly_savings_keeps_back_the_instalments_still_due[2021-04]",
+    "tests/integration/cli/test_backtest_command_golden.py::test_monthly_savings_keeps_back_the_instalments_still_due[2021-05]",
+]
+
 # P1 to P13: one source defect for each property file #365 changed, each breaking the property's
 # check, which every draw runs, on nearly every draw: the unit pins are not in the property suite.
 

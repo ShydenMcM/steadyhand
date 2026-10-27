@@ -268,10 +268,25 @@ def test_monthly_savings_keeps_back_the_instalments_still_due(
     savings: tuple[Result, dict[str, list[int]]], month: str
 ) -> None:
     # Each instalment of 25,000,000 fills the day after the month's first trading day, and the
-    # instalments still due stay back as cash until their month.
+    # instalments still due stay back as cash until their month. Worked by hand from Yahoo's
+    # recorded rows (BBCA's before its split times 5, BBRI's times the warning's 1.100019): a
+    # fifth of what it may spend in each stock, as whole lots at the decision day's close, bought
+    # at the next open plus 0.1% rounded up to the tick, paying 0.208% of each buy rounded up and
+    # 10,000 stamp duty. February keeps 75,000,000 back and spends 23,330,000 and 48,528 in fees:
+    # 76,611,472. March keeps 50,000,000 and spends 24,085,500 and 50,100: 52,465,872. April
+    # keeps 25,000,000 and spends 24,600,000 and 51,170: 27,804,702. BBRI's dividend on 3,400
+    # shares (336,279 less 33,628 tax) and BBCA's on 300 (129,600 less 12,960) bring 419,291,
+    # and May spends 25,102,500 and 52,215 of the 28,223,993: 3,059,278.
     _, cash = savings
-    reserve = (len(SAVINGS_MONTHS) - 1 - SAVINGS_MONTHS.index(month)) * 25_000_000
-    assert reserve <= cash[month][1] < reserve + 25_000_000
+    assert (
+        cash[month][1]
+        == {
+            "2021-02": 76_611_472,
+            "2021-03": 52_465_872,
+            "2021-04": 27_804_702,
+            "2021-05": 3_059_278,
+        }[month]
+    )
 
 
 def test_a_holding_whose_old_prices_cannot_be_recovered_keeps_its_dividend_history(
