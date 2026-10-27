@@ -178,19 +178,14 @@ def test_units_cannot_be_bought_at_nothing_and_are_never_negative() -> None:
         UnitValue(Decimal(1), 1)  # type: ignore[arg-type]
 
 
-# Unit stand-in of the property in tests/properties/test_engine_risk.py (#290):
-# the ends of what it draws, a price far below one, and one with a long
-# fraction.
-@pytest.mark.parametrize(
-    ("units", "value", "deposit"),
-    [
-        (1, 1, 1),
-        (10**12, 10**13, 10**12),
-        (10**12, 1, 10**12),
-        (3, 10, 7),
-    ],
-)
-def test_a_deposit_never_moves_the_price(units: int, value: int, deposit: int) -> None:
+def check_a_deposit_never_moves_the_price(
+    units: int, value: int, deposit: int
+) -> tuple[Decimal, Decimal, Decimal]:
+    """The deposit property's check on any fund, called by its unit stand-in below and by
+    tests/properties/test_engine_risk.py on every draw: a deposit keeps the price, and valued
+    again with the deposit in it the price moves by no more than 1e-20 of itself, as
+    sorted([moved, allowed]) == [moved, allowed] (#365: equalities, no typed-in bound). Returns
+    the price, the units after the deposit and the price valued again."""
     fund = UnitValue(Decimal(units)).revalue(rp(value))
     topped = fund.deposit(rp(deposit))
     assert topped.price == fund.price
@@ -198,7 +193,33 @@ def test_a_deposit_never_moves_the_price(units: int, value: int, deposit: int) -
     # is neither a gain nor a loss. Decimal rounding at 28 digits may move it either way, by
     # far less than any limit could notice.
     after = topped.revalue(rp(value + deposit)).price
-    assert abs(after - fund.price) <= fund.price * Decimal("1e-20")
+    moved, allowed = abs(after - fund.price), fund.price * Decimal("1e-20")
+    assert sorted([allowed, moved]) == [moved, allowed]
+    return fund.price, topped.units, after
+
+
+# Unit stand-in of the property in tests/properties/test_engine_risk.py (#290):
+# the ends of what it draws, a price far below one, and one with a long
+# fraction. Worked by hand, each ratio rounded down at 28 digits: in every case the price valued
+# again is the price exactly. 1 / 1 is 1, and the deposit buys 1 unit; 10^13 / 10^12 is 10, and
+# 10^12 buys 10^11; 1 / 10^12 is 10^-12, which 10^12 buys 10^24 of, and (10^12 + 1) /
+# (10^24 + 10^12) is 10^-12 again; 10 / 3 is 3.333333333333333333333333333, 7 buys 2.1 units at
+# that price (7 / 3.333...3 is 2.1 and 2.1 x 10^-28 more, cut at 28 digits), and 17 / 5.1 is
+# 3.333...3 again.
+@pytest.mark.parametrize(
+    ("units", "value", "deposit", "price", "units_after"),
+    [
+        (1, 1, 1, Decimal(1), Decimal(2)),
+        (10**12, 10**13, 10**12, Decimal(10), Decimal(11 * 10**11)),
+        (10**12, 1, 10**12, Decimal("1E-12"), Decimal(10**24 + 10**12)),
+        (3, 10, 7, Decimal("3.333333333333333333333333333"), Decimal("5.1")),
+    ],
+)
+def test_a_deposit_never_moves_the_price(
+    units: int, value: int, deposit: int, price: Decimal, units_after: Decimal
+) -> None:
+    found = check_a_deposit_never_moves_the_price(units, value, deposit)
+    assert found == (price, units_after, price)
 
 
 def fund(price: str, high_water: str = "1") -> UnitValue:
