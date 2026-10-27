@@ -122,8 +122,8 @@ def test_recovered_prices_obey_the_ticks_and_bands(
         if bar.day in split_days:
             continue
         low, high = rules().price_band(instrument, previous.close, bar.day)
-        assert low <= bar.low, bar.day
-        assert bar.high <= high, bar.day
+        inside = {bar.day: [low, bar.low, bar.high, high]}
+        assert {bar.day: sorted([high, bar.high, bar.low, low])} == inside
         checked += 1
     assert checked == len(bars) - 1 - len(split_days & {bar.day for bar in bars[1:]})
     assert checked > 10
@@ -551,8 +551,9 @@ def test_a_restored_day_is_the_same_whatever_range_is_asked() -> None:
     source, _ = restoring()
     whole = source.bars(BBRI, date(2021, 2, 1), date(2021, 9, 7))
     week = source.bars(BBRI, date(2021, 3, 1), date(2021, 3, 5))
-    assert week == [bar for bar in whole if date(2021, 3, 1) <= bar.day <= date(2021, 3, 5)]
-    assert len(week) == 5
+    days = [date(2021, 3, day) for day in range(1, 6)]  # Monday to Friday, all trading days
+    assert [bar.day for bar in week] == days
+    assert week == [bar for bar in whole if bar.day in days]
 
 
 def test_restorations_are_the_proven_runs_overlapping_the_range() -> None:
@@ -760,7 +761,8 @@ def test_bbri_s_2021_dividend_restores_to_what_bri_announced() -> None:
     (dividend,) = actions_in(history, BBRI, date(2021, 4, 1), date(2021, 4, 30), runs)
     assert isinstance(dividend, CashDividend)
     assert dividend.per_share == Decimal("98.9057")
-    assert abs(dividend.per_share - Decimal("98.905659443")) <= Decimal("0.0001")  # Liputan6
+    # What BRI announced (Liputan6), at the four places it restores to.
+    assert Decimal("98.905659443").quantize(Decimal("0.0001")) == dividend.per_share
 
 
 def test_the_older_bbri_recordings_are_the_three_made_before_the_whole_one() -> None:
