@@ -5,23 +5,22 @@
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. EXT stories #222-#245 follow the clean-up queue.
 
 ## Branches and heads
-- `develop` = d271ae1 (#422, #377's tracked git hooks). Merge green PRs into develop without asking; never `main`.
+- `develop` = ea66922 (#423 handover; #422 = #377's tracked git hooks, d271ae1). Merge green PRs into develop without asking; never `main`.
 - #377 closed (evidence comment), Done. #378 unblocked (link and body line removed, read back). #366 now `blocked_by: #272`. #407, #378, #366 and #272 reworded "both Pythons" to the pinned Python, each with a comment.
 - **This clone has `core.hooksPath .githooks`:** every push runs the pre-push (about 20 s) and is refused while anything is uncommitted or untracked, or when the pushed branch is not checked out. Commit or stash first; never `--no-verify`.
-- **Worktrees off an older develop lack `.githooks/`**, so `~/.claude/hooks/git-hooks-present.py` refuses their commits AND the merge that would bring the folder in: `../steadyhand-272` (#272, uncommitted `tests/guards/test_no_literal_floor.py`) and `../steadyhand-docs` (branch `docs/handover-2026-10-28b`, no commits, an older copy of this handover; safe to remove once this one lands). Put to Shyden 2026-10-28.
-- This handover lands through its own docs PR (`docs/handover-2026-10-28c`).
+- **`../steadyhand-272`** (#272) has develop's `.githooks/pre-push` staged (Shyden "Both", 2026-10-28), beside its uncommitted `tests/guards/test_no_literal_floor.py`; its next step is merging develop. `~/.claude/hooks/git-hooks-present.py` now lets through a merge of one commit holding every missing hook, executable (29 cases, 19 mutants). The docs worktree is removed.
+- This handover lands through its own docs PR (`docs/handover-2026-10-28d`).
 - Backups (keep 30 days, never delete early): `377/wip-backup-2026-10-28` (74a0a30, until 2026-11-27); `365/exact-values-backup-2026-10-27` (98453d2, until 2026-11-26), `365/exact-values-backup-2026-10-28` (693fab5, until 2026-11-27); `.superpowers/sdd/365/mutations_head.py` and `pr_body_head.py` (until 2026-11-27).
 - **#407 open, held** for five limits rounds at one-minute load above 20 (`.superpowers/sdd/407/measure.zsh`).
 
 ## Resume steps
 1. `ListAgents`; `git status --short` clean; `git fetch` and confirm `develop`'s last ci run on its head is green by job name (`deploy-dev` and `coverage` included).
 2. If this handover's docs PR is still open: wait with `~/.claude/scripts/wait-run.sh <repo> <run id> <sha file>`, then `~/.claude/scripts/pr-verdict.sh <pr>` (a one-shot snapshot); merge when green.
-3. Apply Shyden's answer on the two worktrees without hooks.
-4. Next ticket by the queue below (#378 first); one branch per ticket off `develop`; In Progress once its branch exists (`.superpowers/sdd/377/board_status.py <n> "In Progress"`).
-5. The laptop runs only unit, lint, format and types; guards, integration and properties run in CI. Before pushing, check statically: the text guards, `assert all/any` or asserting loops in tests, literal workflow counts in `tests/guards` (e.g. `SETUP_NODE_STEPS`), and anything reading the whole working tree (CI locks the fast path unreadable). #290's: `python3 .superpowers/sdd/365/stand_in_rule.py`.
+3. Next ticket by the queue below (#378 first); one branch per ticket off `develop`; In Progress once its branch exists (`.superpowers/sdd/377/board_status.py <n> "In Progress"`).
+4. The laptop runs only unit, lint, format and types; guards, integration and properties run in CI. Before pushing, check statically: the text guards, `assert all/any` or asserting loops in tests, literal workflow counts in `tests/guards` (e.g. `SETUP_NODE_STEPS`), and anything reading the whole working tree (CI locks the fast path unreadable). #290's: `python3 .superpowers/sdd/365/stand_in_rule.py`.
 
 ## Waiting on Shyden
-- The worktrees off an older develop (above): how to bring `.githooks/` into them.
+- Told 2026-10-28, not ruled: `git-hooks-present.py` does not judge `git pull`, counts a non-executable hook as present (`isfile`), and `git -c core.hooksPath=...` overrides it per command.
 - #400 and #308: his settings clicks (`main` strict off then `release-cut`; `coverage` on `main`).
 - #394's guard refuses four vi members beyond the ruling's three (told 2026-10-23).
 - #272: constant-name `setattr` read like `x.name = value`; its reader refuses `max(...) == x` though #365's ruling named it (comment 2026-10-27). #308's read-only key.
