@@ -16,6 +16,19 @@ def rp(amount: int) -> Money:
     return Money(amount, IDR)
 
 
+# The money property's stand-in cases (tests/properties/test_engine_money.py, #290): the ends of
+# what it draws, the smallest rate that rounds, and a value with a long fraction. Each case's exact
+# (down, up) is worked by hand: 1 x 0.000001 is 0.000001, 7 x 0.333333 is 2.333331, and
+# 10**15 x 0.999999 is the whole 999,999,000,000,000 (#365).
+TIMES_CASES = [
+    (0, Decimal(0), 0, 0),
+    (10**15, Decimal(1), 10**15, 10**15),
+    (1, Decimal("0.000001"), 0, 1),
+    (10**15, Decimal("0.999999"), 999_999_000_000_000, 999_999_000_000_000),
+    (7, Decimal("0.333333"), 2, 3),
+]
+
+
 class TestCurrency:
     def test_idr_has_no_minor_unit(self) -> None:
         assert IDR.code == "IDR"
@@ -85,12 +98,15 @@ class TestArithmetic:
             getattr(operator, name)(rp(1), 1)
 
     def test_ordering(self) -> None:
-        assert rp(1) < rp(2)
-        assert rp(2) <= rp(2)
-        assert rp(3) > rp(2)
-        assert rp(2) >= rp(2)
-        assert not rp(2) < rp(2)
-        assert not rp(2) > rp(2)
+        # Each operator on a smaller, an equal and a larger amount, as (<, <=, >, >=), called
+        # through the operator module so the whole table is one equality (#365, Shyden 2026-10-27).
+        pairs = [(rp(1), rp(2)), (rp(2), rp(2)), (rp(3), rp(2))]
+        ops = (operator.lt, operator.le, operator.gt, operator.ge)
+        assert [tuple(op(a, b) for op in ops) for a, b in pairs] == [
+            (True, True, False, False),
+            (False, True, False, True),
+            (False, False, True, True),
+        ]
 
     def test_multiply_by_a_share_count_on_either_side(self) -> None:
         assert rp(4_150) * 300 == rp(1_245_000)
@@ -133,24 +149,27 @@ class TestTimes:
         with pytest.raises(TypeError, match="rate must be a Decimal, got int"):
             rp(1).times(1, Rounding.UP)  # type: ignore[arg-type]
 
-    # Unit stand-in of the property in tests/properties/test_engine_money.py (#290): the ends of
-    # what it draws, the smallest rate that rounds, and a value with a long fraction.
-    @pytest.mark.parametrize(
-        ("amount", "rate"),
-        [
-            (0, Decimal(0)),
-            (10**15, Decimal(1)),
-            (1, Decimal("0.000001")),
-            (10**15, Decimal("0.999999")),
-            (7, Decimal("0.333333")),
-        ],
-    )
+    # Unit stand-in of the property in tests/properties/test_engine_money.py (#290), which calls it
+    # on every draw, on the amounts and rates of TIMES_CASES.
+    @pytest.mark.parametrize(("amount", "rate"), [case[:2] for case in TIMES_CASES])
     def test_up_and_down_bracket_the_exact_value(self, amount: int, rate: Decimal) -> None:
-        up = rp(amount).times(rate, Rounding.UP)
-        down = rp(amount).times(rate, Rounding.DOWN)
+        # Rounding down and up bracket the exact product, and are one apart only when it has a
+        # fraction (#365: equalities, no typed-in bound).
+        down = Decimal(rp(amount).times(rate, Rounding.DOWN).amount)
+        up = Decimal(rp(amount).times(rate, Rounding.UP).amount)
         exact = amount * rate
-        assert down.amount <= exact <= up.amount
-        assert up.amount - down.amount <= 1
+        assert sorted([up, exact, down]) == [down, exact, up]
+        assert up - down == (0 if exact == int(exact) else 1)
+
+    @pytest.mark.parametrize(("amount", "rate", "down", "up"), TIMES_CASES)
+    def test_each_stand_in_case_rounds_to_its_hand_worked_pair(
+        self, amount: int, rate: Decimal, down: int, up: int
+    ) -> None:
+        rounded = (
+            rp(amount).times(rate, Rounding.DOWN).amount,
+            rp(amount).times(rate, Rounding.UP).amount,
+        )
+        assert rounded == (down, up)
 
 
 class TestFormatting:

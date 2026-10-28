@@ -17,6 +17,7 @@ from steadyhand.money import IDR, Money
 from steadyhand.portfolio import CashMovement, MovementKind, Portfolio
 
 D0 = date(2026, 1, 5)
+SHORT = 1_000
 LONG = 10_000
 
 
@@ -36,9 +37,8 @@ def booked(count: int) -> Portfolio:
     return portfolio
 
 
-def booking_bytes(portfolio: Portfolio) -> int:
-    """The peak memory one more deposit allocates on top of *portfolio*."""
-    portfolio.deposit(rp(1), D0)  # warm every code path first
+def deposit_peak(portfolio: Portfolio) -> int:
+    """The peak memory one more deposit allocates on top of *portfolio*, traced alone."""
     tracemalloc.start()
     try:
         portfolio.deposit(rp(1), D0)
@@ -48,13 +48,26 @@ def booking_bytes(portfolio: Portfolio) -> int:
     return peak
 
 
-def test_booking_onto_a_long_ledger_allocates_no_more_than_onto_a_short_one() -> None:
-    short = booking_bytes(Portfolio(IDR, (), deposits(100)))
+def booking_bytes(portfolio: Portfolio) -> int:
+    """The peak memory one more deposit allocates on top of *portfolio*, measured a second time:
+    the first warms every code path, the measuring lines' own too, so a tracer such as
+    coverage's records nothing new while it is traced (under ``--cov`` an unwarmed first
+    measurement held coverage's 64 bytes for the new lines: 1,512 against 1,448, #365)."""
+    deposit_peak(portfolio)
+    return deposit_peak(portfolio)
+
+
+def test_booking_onto_a_long_ledger_allocates_exactly_what_it_does_onto_a_short_one() -> None:
+    short = booking_bytes(Portfolio(IDR, (), deposits(SHORT)))
     long = booking_bytes(Portfolio(IDR, (), deposits(LONG)))
     # Copying a 10,000-entry ledger allocated 170,248 bytes, 88 times the 1,928 on 100 entries;
     # one more link, 648 bytes. Measured 2026-10-12 (#282); 100,000 entries cost 0.25 s of CPU.
+    # SHORT sits past CPython's cached small ints (up to 256): a ledger of 255 or fewer books
+    # 616 bytes, its new length needing no new int object; from 256 on, 648 (#365, 3.13.15).
     assert short > 0
-    assert long <= 2 * short, f"booking allocated {long} bytes on {LONG:,} entries, {short} on 100"
+    assert long == short, (
+        f"booking allocated {long} bytes on {LONG:,} entries, {short} on {SHORT:,}"
+    )
 
 
 def test_two_bookings_on_one_snapshot_leave_three_ledgers() -> None:

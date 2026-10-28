@@ -9,7 +9,7 @@ import pytest
 from steadyhand._ratio import ratio_down
 from steadyhand.market import PayDates
 from steadyhand.money import IDR, Money
-from steadyhand.strategies import MonthlySavings, Strategy
+from steadyhand.strategies import Decision, MonthlySavings, Strategy
 from steadyhand.types import Instrument
 from steadyhand.view import ActionHistory, MarketView, PortfolioView, PriceHistory, Tradable
 from steadyhand_idx import IdxMarketRules
@@ -129,26 +129,20 @@ def test_a_first_day_on_a_portfolio_that_holds_stocks_sizes_the_instalment_from_
     assert decision.weights == {TLKM: held.weight(TLKM), BBCA: ratio_down(1_000_000, 10_000_000)}
 
 
-# Unit stand-in of the property in tests/properties/test_engine_monthly_savings.py (#290):
-# one instalment with nothing to buy; the most instalments, cash and months
-# drawn; and months with nothing to buy between those that buy.
-@pytest.mark.parametrize(
-    ("instalments", "start", "months"),
-    [
-        (1, 1_000, [(0, 0, 1)]),
-        (24, 10**10, [(10**8, 4, 3)] * 30),
-        (3, 50_000, [(0, 1, 2), (10_000, 0, 1), (0, 4, 3), (5, 2, 1), (0, 1, 1)]),
-    ],
-)
-def test_the_reserve_for_the_instalments_still_due_is_never_spent_before_its_month(
+def _saved(
     instalments: int, start: int, months: list[tuple[int, int, int]]
-) -> None:
+) -> tuple[list[tuple[PortfolioView, Decision, int, int]], tuple[int, int, dict[str, str]]]:
+    """A journey of *months*, each the cash that arrives at its end, how many stocks it can buy
+    and its days, through monthly savings from *start* in cash: each day's holdings, decision,
+    cash after its spend and instalments still due, then the cash, the amount invested and the
+    strategy's memory at the end."""
     strategy = MonthlySavings(instalments)
     memory: dict[str, str] = {}
     cash, invested = start, 0
     # Counted here, not read from the strategy's memory: a month buys once, on its first day
     # with something to buy, so the instalments still due are the ones no month has bought yet.
     bought: set[int] = set()
+    run: list[tuple[PortfolioView, Decision, int, int]] = []
     for number, (arrived, buyable, days) in enumerate(  # runtime population: a drawn journey
         months
     ):
@@ -160,12 +154,80 @@ def test_the_reserve_for_the_instalments_still_due_is_never_spent_before_its_mon
             decision = strategy.decide(view(when, set(STOCKS[:buyable])), held, memory)
             memory = dict(decision.memory)
             added = sum(decision.weights.values()) - held.weight(BBCA)
-            assert all(  # runtime population: the stocks held that day
-                decision.weights[stock] >= held.weight(stock) for stock in held.holdings
-            )
             spent = int(added * held.value.amount)
             cash, invested = cash - spent, invested + spent
-            due = max(instalments - len(bought), 0)
-            assert int(memory["due"]) == due
-            assert cash >= due * int(memory["instalment"])
+            run.append((held, decision, cash, max(instalments - len(bought), 0)))
         cash += arrived
+    return run, (cash, invested, memory)
+
+
+ONE_INSTALMENT = (1, 1_000, [(0, 0, 1)])
+THE_MOST = (24, 10**10, [(10**8, 4, 3)] * 30)
+GAPS = (3, 50_000, [(0, 1, 2), (10_000, 0, 1), (0, 4, 3), (5, 2, 1), (0, 1, 1)])
+
+
+# Unit stand-in of the property in tests/properties/test_engine_monthly_savings.py (#290), which
+# calls it on every draw: one instalment with nothing to buy; the most instalments, cash and
+# months drawn; and months with nothing to buy between those that buy.
+@pytest.mark.parametrize(
+    ("instalments", "start", "months"),
+    [ONE_INSTALMENT, THE_MOST, GAPS],
+    ids=["one-instalment", "the-most", "gaps"],
+)
+def test_the_reserve_for_the_instalments_still_due_is_never_spent_before_its_month(
+    instalments: int, start: int, months: list[tuple[int, int, int]]
+) -> None:
+    # Each day the strategy lowers no holding's weight, its count of instalments due is the months
+    # not yet bought, and the cash sorts at or above their reserve (#365: equalities, no typed-in
+    # bound).
+    run, _ = _saved(instalments, start, months)
+    for held, decision, cash, due in run:  # runtime population: the journey's days
+        before_after = {s: [held.weight(s), decision.weights[s]] for s in held.holdings}
+        assert {s: sorted(pair) for s, pair in before_after.items()} == before_after
+        assert int(decision.memory["due"]) == due
+        reserve = due * int(decision.memory["instalment"])
+        assert sorted([cash, reserve]) == [reserve, cash]
+
+
+# Each stand-in journey's end, worked by hand: buying only moves cash into the holding, so cash
+# and holding together are the start plus what arrived; the instalment is the start over the
+# instalments, rounded down (10bn / 24 is 416,666,666, 50,000 / 3 is 16,666); the memory names
+# the last month that bought, number 29 of the 30 being June 2027, and no instalment is due once
+# every one is bought.
+@pytest.mark.parametrize(
+    ("journey", "total", "memory"),
+    [
+        (ONE_INSTALMENT, 1_000, {"instalment": "1000", "due": "1"}),
+        (
+            THE_MOST,
+            10**10 + 30 * 10**8,
+            {"instalment": "416666666", "due": "0", "month": "2027-06"},
+        ),
+        (GAPS, 60_005, {"instalment": "16666", "due": "0", "month": "2025-05"}),
+    ],
+    ids=["one-instalment", "the-most", "gaps"],
+)
+def test_each_stand_in_journey_s_total_and_memory_are_worked_by_hand(
+    journey: tuple[int, int, list[tuple[int, int, int]]], total: int, memory: dict[str, str]
+) -> None:
+    _, (cash, invested, found) = _saved(*journey)
+    assert (cash + invested, found) == (total, memory)
+
+
+# The two journeys whose every spend can be worked by hand. The most-drawn one cannot: its value
+# changes every month, so each spend passes through 28-digit weights that do not terminate.
+# One instalment buys nothing. In the gaps, the first month spends 16,668, what 33,332 of
+# reserve leaves; the third month spends 4 x 6,666 of the 26,666 above one reserved
+# instalment; the fourth spends 2 x 8,334, all the cash, as nothing is due after it; the fifth
+# spends the Rp5 that arrived, whose weight of 5/60,005 and the holding's 60,000/60,005, each
+# rounded down at 28 digits, sum back to 1 and leave the spend at exactly Rp5.
+@pytest.mark.parametrize(
+    ("journey", "cash", "invested"),
+    [(ONE_INSTALMENT, 1_000, 0), (GAPS, 0, 60_005)],
+    ids=["one-instalment", "gaps"],
+)
+def test_a_journey_s_cash_and_holding_are_worked_by_hand(
+    journey: tuple[int, int, list[tuple[int, int, int]]], cash: int, invested: int
+) -> None:
+    _, end = _saved(*journey)
+    assert end[:2] == (cash, invested)

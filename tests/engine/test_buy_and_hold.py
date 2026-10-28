@@ -106,16 +106,64 @@ def test_an_empty_first_day_leaves_an_empty_set() -> None:
     assert later.weights == {}
 
 
-# Unit stand-in of the property in tests/properties/test_engine_buy_and_hold.py (#290):
-# nothing held, chosen or buyable; every stock held, chosen and buyable at
-# the largest amounts; and a set that only partly overlaps what can be bought.
+def _decided(
+    held: dict[Instrument, int],
+    spendable: int,
+    unsettled: int,
+    chosen: set[Instrument],
+    buyable: set[Instrument],
+) -> tuple[PortfolioView, dict[str, str], Decision]:
+    """The portfolio, the memory naming the *chosen* set, and buy-and-hold's decision on a day
+    when *buyable* can be bought."""
+    value = sum(held.values()) + spendable + unsettled
+    portfolio = PortfolioView(rp(value), rp(spendable), {i: rp(v) for i, v in held.items()})
+    memory = {"set": " ".join(sorted(f"IDX:{i.symbol}" for i in chosen))}
+    return portfolio, memory, BuyAndHold().decide(view(buyable), portfolio, memory)
+
+
+# The buy-and-hold property's stand-in cases (#290): nothing held, chosen or buyable; every stock
+# held, chosen and buyable at the largest amounts; and a set that only partly overlaps what can be
+# bought. The weights are worked by hand at the default 28 digits: in the second case each holding
+# is 1/7 of Rp70bn rounded down, 0.1428571428571428571428571428, and each stock's share of the cash
+# is Rp2bn of Rp70bn, 1/35 rounded down, 0.02857142857142857142857142857; their sum,
+# 0.17142857142857142857142857137, has 29 digits and rounds half-even to
+# 0.1714285714285714285714285714. In the third the value is Rp10,000, so ASII's Rp1 is 0.0001,
+# TLKM's Rp9,892 is 0.9892, and BBRI, the one stock both chosen and buyable, gets all Rp100 of
+# the cash, 0.01.
+HOLD_CASES: list[
+    tuple[
+        dict[Instrument, int],
+        int,
+        int,
+        set[Instrument],
+        set[Instrument],
+        dict[Instrument, Decimal],
+    ]
+] = [
+    ({}, 0, 0, set(), set(), {}),
+    (
+        dict.fromkeys(STOCKS, 10**10),
+        10**10,
+        10**10,
+        set(STOCKS),
+        set(STOCKS),
+        dict.fromkeys(STOCKS, Decimal("0.1714285714285714285714285714")),
+    ),
+    (
+        {ASII: 1, TLKM: 9_892},
+        100,
+        7,
+        {ASII, BBCA, BBRI},
+        {BBRI, UNVR},
+        {ASII: Decimal("0.0001"), TLKM: Decimal("0.9892"), BBRI: Decimal("0.01")},
+    ),
+]
+
+
+# Unit stand-in of the property in tests/properties/test_engine_buy_and_hold.py (#290), which
+# calls it on every draw.
 @pytest.mark.parametrize(
-    ("held", "spendable", "unsettled", "chosen", "buyable"),
-    [
-        ({}, 0, 0, set(), set()),
-        (dict.fromkeys(STOCKS, 10**10), 10**10, 10**10, set(STOCKS), set(STOCKS)),
-        ({ASII: 1, TLKM: 5_000}, 100, 7, {ASII, BBCA, BBRI}, {BBRI, UNVR}),
-    ],
+    ("held", "spendable", "unsettled", "chosen", "buyable"), [case[:5] for case in HOLD_CASES]
 )
 def test_it_never_sells_and_buys_only_its_set(
     held: dict[Instrument, int],
@@ -124,12 +172,29 @@ def test_it_never_sells_and_buys_only_its_set(
     chosen: set[Instrument],
     buyable: set[Instrument],
 ) -> None:
-    value = sum(held.values()) + spendable + unsettled
-    portfolio = PortfolioView(rp(value), rp(spendable), {i: rp(v) for i, v in held.items()})
-    memory = {"set": " ".join(sorted(f"IDX:{i.symbol}" for i in chosen))}
-    decision = BuyAndHold().decide(view(buyable), portfolio, memory)
-    for instrument in held:  # runtime population: the drawn holdings
-        assert decision.weights[instrument] >= portfolio.weight(instrument)
-    bought = {i for i, weight in decision.weights.items() if weight > portfolio.weight(i)}
-    assert bought <= chosen & buyable
+    # Weights go to exactly the holdings and the set's buyable stocks, every stock it does not buy
+    # keeps its weight to the last digit, and no stock it buys drops (#365: equalities, no typed-in
+    # bound).
+    portfolio, memory, decision = _decided(held, spendable, unsettled, chosen, buyable)
+    buying = chosen & buyable
+    assert set(decision.weights) == set(held) | buying
+    kept = set(held) - buying
+    assert {i: decision.weights[i] for i in kept} == {i: portfolio.weight(i) for i in kept}
+    before_after = {i: [portfolio.weight(i), decision.weights[i]] for i in buying}
+    assert {i: sorted(pair) for i, pair in before_after.items()} == before_after
     assert decision.memory == memory
+
+
+@pytest.mark.parametrize(
+    ("held", "spendable", "unsettled", "chosen", "buyable", "weights"), HOLD_CASES
+)
+def test_each_stand_in_case_s_weights_are_worked_by_hand(
+    held: dict[Instrument, int],
+    spendable: int,
+    unsettled: int,
+    chosen: set[Instrument],
+    buyable: set[Instrument],
+    weights: dict[Instrument, Decimal],
+) -> None:
+    *_, decision = _decided(held, spendable, unsettled, chosen, buyable)
+    assert decision.weights == weights

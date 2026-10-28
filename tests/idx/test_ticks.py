@@ -55,8 +55,10 @@ def test_validity_uses_the_tier_of_the_price_itself(price: int, valid: object) -
 @pytest.mark.parametrize(
     ("price", "down", "up"),
     [
-        (200, 200, 200), (201, 200, 202), (499, 498, 500), (1_999, 1_995, 2_000),
-        (4_999, 4_990, 5_000), (5_001, 5_000, 5_025), (5_024, 5_000, 5_025),
+        (1, 1, 1), (199, 199, 199), (200, 200, 200), (201, 200, 202), (499, 498, 500),
+        (501, 500, 505), (1_999, 1_995, 2_000), (2_001, 2_000, 2_010), (4_999, 4_990, 5_000),
+        (5_000, 5_000, 5_000), (5_001, 5_000, 5_025), (5_024, 5_000, 5_025),
+        (2_000_000, 2_000_000, 2_000_000),
     ],
 )  # fmt: skip
 def test_rounding_lands_on_the_grid(price: int, down: int, up: int) -> None:
@@ -64,36 +66,18 @@ def test_rounding_lands_on_the_grid(price: int, down: int, up: int) -> None:
     assert row().round_up(price) == up
 
 
-# Unit stand-in of the property in tests/properties/test_idx_ticks.py (#290):
-# the ends of the prices drawn, and each side of every tier's first price.
+# Unit stand-in of the property in tests/properties/test_idx_ticks.py (#290), which calls it on
+# every price it draws: the ends of the prices drawn, and each side of every tier's first price.
+# Each price's rounded pair is worked by hand in test_rounding_lands_on_the_grid above.
 @pytest.mark.parametrize(
-    "price",
-    [
-        1,
-        199,
-        200,
-        201,
-        499,
-        501,
-        1_999,
-        2_001,
-        4_999,
-        5_000,
-        5_001,
-        2_000_000,
-    ],
+    "price", [1, 199, 200, 201, 499, 501, 1_999, 2_001, 4_999, 5_000, 5_001, 2_000_000]
 )
 def test_rounding_is_tight_and_valid(price: int) -> None:
+    # The price sits between its rounded pair, and the only valid prices from one to the other are
+    # the pair itself (#365: equalities, no typed-in bound).
     low, high = row().round_down(price), row().round_up(price)
-    assert low <= price <= high
-    assert row().is_valid(low)
-    assert row().is_valid(high)
-    assert not any(  # runtime population: the prices between the rounded-down and the drawn
-        row().is_valid(p) for p in range(low + 1, price)
-    )
-    assert not any(  # runtime population: the prices between the drawn and the rounded-up
-        row().is_valid(p) for p in range(price + 1, high)
-    )
+    assert sorted([high, price, low]) == [low, price, high]
+    assert [p for p in range(low, high + 1) if row().is_valid(p)] == sorted({low, high})
 
 
 @pytest.mark.parametrize("price", [0, -5, True, "200"])

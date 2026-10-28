@@ -369,7 +369,14 @@ def test_monthly_savings_keeps_back_the_instalments_still_due(
     savings: tuple[Result, dict[str, list[int]]], month: str
 ) -> None:
     # Each instalment of 50,000,000 fills the day after the month's first trading day, and the
-    # instalment still due stays back as cash until its month.
+    # instalment still due stays back as cash until its month. Worked by hand: a third of what it
+    # may spend in each stock, as whole lots at the decision day's close, bought at the next open
+    # plus 0.1% rounded up to the tick, paying 0.208% of each buy rounded up (0.15% commission
+    # with 10% VAT, the levy 0.03% with VAT and the guarantee fund 0.01%) and 10,000 stamp duty.
+    # 27 December keeps January's 50,000,000 back and buys 161 lots of XAAA at 1,025, 81 of XBBB
+    # at 2,040 and 23 of XCCC at 7,125: 49,414,000 and 102,782 in fees, so 50,473,218 is left,
+    # the 50,000,000 still due and 473,218 the lots could not use. 3 January spends it all: 161
+    # lots of XAAA at 1,035, 81 of XBBB at 2,050 and 23 of XCCC at 7,175, 49,771,000 and 103,526
+    # in fees, leaving 588,692.
     _, cash = savings
-    reserve = (len(SAVINGS_MONTHS) - 1 - SAVINGS_MONTHS.index(month)) * 50_000_000
-    assert reserve <= cash[month][1] < reserve + 50_000_000
+    assert cash[month][1] == {"2021-12": 50_473_218, "2022-01": 588_692}[month]
