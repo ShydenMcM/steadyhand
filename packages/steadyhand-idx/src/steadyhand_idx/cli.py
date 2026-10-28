@@ -521,7 +521,7 @@ def _resume(ctx: Context) -> str:
             return render(page, config.training)
         ctx.say(f"The paper account halted on {halt.day.isoformat()}: {halt.cause.text}.\n")
         _confirm(ctx, "resume", "Type resume to resume ordering: ")
-        resume(store, account, halt, ctx.today(), _user(ctx))
+        resume(store, account, halt, ctx.today())
     page.add(
         "Resumed. From the next day run, the strategy's orders are placed again.", PAPER_RESUMED
     )
@@ -543,7 +543,7 @@ def _paper_switch(ctx: Context) -> str:
             f"{name} trades from the next day run.\n"
         )
         _confirm(ctx, name, f"Type {name} to switch: ")
-        switch(store, account, name, ctx.today(), _user(ctx))
+        switch(store, account, name, ctx.today())
     page = Page()
     page.add(f"Switched the paper account to {name}.", PAPER_STRATEGY_SWITCHED)
     return render(page, config.training)
@@ -555,12 +555,6 @@ def _confirm(ctx: Context, expected: str, question: str) -> None:
     if answer != expected:
         msg = f"you typed {answer!r}, not {expected!r}; nothing was changed"
         raise UsageError(msg)
-
-
-def _user(ctx: Context) -> str:
-    """Who is running the command, for the audit log (core spec §6.1)."""
-    env = ctx.world.env
-    return env.get("USER") or env.get("LOGNAME") or "unknown"
 
 
 def _entry(name: str) -> Registered:

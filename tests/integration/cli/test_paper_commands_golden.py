@@ -8,18 +8,20 @@ the same pages over nineteen trading days of three made-up stocks (``tests/cli/s
 which meet a dividend paid and reinvested, a weight limit that cuts and skips orders, and a halt.
 """
 
-from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
+import pytest
 from cli_world import (
     EXEMPT,
     GOLDEN_CONFIG,
     TIGHT,
     golden_backtest,
     halted,
+    names_held,
     opened,
     page,
+    planted,
     quiet,
     ran_to,
     tables,
@@ -197,19 +199,12 @@ def test_the_income_report_is_the_backtests_over_the_same_days(tmp_path: Path) -
     ) in result.out
 
 
-def test_resume_names_who_resumed_from_logname_or_else_unknown(tmp_path: Path) -> None:
-    cli = replace(halted(tmp_path), env={"LOGNAME": "operator"})
+def test_resume_writes_no_login_name_anywhere_in_the_state_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cli = planted(halted(tmp_path), monkeypatch)
     assert cli("resume", "buy-and-hold", stdin="resume\n").code == 0
-    with opened(cli) as store:
-        assert store.audit()[-1].note.text.endswith(", by operator")
-    again = halted(tmp_path / "again")
-    assert replace(again, env={})("resume", "buy-and-hold", stdin="resume\n").code == 0
-    with opened(again) as store:
-        assert store.audit()[-1].note.text.endswith(", by unknown")
-    both = replace(halted(tmp_path / "both"), env={"USER": "tester", "LOGNAME": "operator"})
-    assert both("resume", "buy-and-hold", stdin="resume\n").code == 0
-    with opened(both) as store:
-        assert store.audit()[-1].note.text.endswith(", by tester")
+    assert names_held(cli, "resumed ordering after the halt of 2021-02-02 ") == []
 
 
 def test_resume_is_refused_while_the_drawdown_is_still_past_its_limit(tmp_path: Path) -> None:

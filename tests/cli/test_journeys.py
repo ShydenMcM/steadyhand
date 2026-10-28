@@ -153,7 +153,7 @@ def test_a_paper_trader_is_halted_resumes_and_runs_on(tmp_path: Path) -> None:
     )
     assert jumpy != settings
     cli.config.write_text(jumpy, encoding="utf-8")
-    second = replace(cli, now=at(short_trading_days()[1]), env={"USER": "trader"})
+    second = replace(cli, now=at(short_trading_days()[1]))
     halted = second("paper", "run")
     assert halted.code == 3
     assert "steadyhand-idx resume buy-and-hold" in halted.err

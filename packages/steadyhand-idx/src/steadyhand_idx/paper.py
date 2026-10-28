@@ -354,12 +354,12 @@ def check_resume(account: Account, named: str, limits: RiskLimits) -> Halt | Non
     return halt
 
 
-def resume(store: StateStore, account: Account, halt: Halt, day: date, user: str) -> None:
-    """Clear *account*'s halt and write who resumed it, dated *day*, unless another run saved a
-    day since *account* was read."""
+def resume(store: StateStore, account: Account, halt: Halt, day: date) -> None:
+    """Clear *account*'s halt and write that it was resumed, dated *day*, unless another run saved
+    a day since *account* was read. The line names no one (#341)."""
     line = Note(
         PAPER_RESUMED,
-        f"resumed ordering after the halt of {halt.day.isoformat()} ({halt.cause.text}), by {user}",
+        f"resumed ordering after the halt of {halt.day.isoformat()} ({halt.cause.text})",
     )
     resumed = replace(account, state=replace(account.state, halt=None))
     _save_change(store, account, resumed, AuditLine(day, line))
@@ -376,13 +376,14 @@ def check_switch(account: Account, name: str, configured: str) -> None:
         raise AccountHaltedError(account.state.halt, account.strategy)
 
 
-def switch(store: StateStore, account: Account, name: str, day: date, user: str) -> None:
+def switch(store: StateStore, account: Account, name: str, day: date) -> None:
     """Move *account* to the strategy *name*, keeping its holdings and cash and clearing what
-    the old strategy remembered, and write who switched it, dated *day*."""
+    the old strategy remembered, and write that it was switched, dated *day*. The line names no
+    one (#341)."""
     line = Note(
         PAPER_STRATEGY_SWITCHED,
         f"switched the strategy from {account.strategy} to {name}, keeping the holdings and the "
-        f"cash, by {user}",
+        "cash",
     )
     switched = Account(account.opened_on, name, replace(account.state, memory={}), account.settings)
     _save_change(store, account, switched, AuditLine(day, line))

@@ -19,6 +19,7 @@ from multiprocessing.synchronize import Event
 from pathlib import Path
 from typing import NamedTuple
 
+import pytest
 from record_cli_seed import PLACEHOLDERS, SEED, recorded_or_empty
 from record_golden import END, RECORDED, START, STOCKS, replay
 
@@ -271,7 +272,7 @@ def halted(tmp_path: Path) -> Cli:
     cli = paper(tmp_path, quiet(JUMPY))
     assert run_on(cli, START).code == 0
     assert run_on(cli, trading_days()[1]).code == 3
-    return replace(cli, now=at(trading_days()[1]), env={"USER": "tester"})
+    return replace(cli, now=at(trading_days()[1]))
 
 
 @contextmanager
@@ -290,6 +291,55 @@ def tables(cli: Cli) -> dict[str, list[tuple[object, ...]]]:
         }
     finally:
         database.close()
+
+
+def every_value(cli: Cli) -> dict[str, list[str]]:
+    """Every value of every column of every table the state file holds, as text, by table: the
+    tables are read from SQLite's own list, not named here, so a new table is read too."""
+    database = sqlite3.connect(cli.home / STATE_FILE)
+    try:
+        names = [
+            name
+            for (name,) in database.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
+            )
+        ]
+        return {
+            name: [
+                str(value)
+                for row in database.execute(f"SELECT * FROM {name}")  # noqa: S608
+                for value in row
+            ]
+            for name in names
+        }
+    finally:
+        database.close()
+
+
+# The login names a shell sets, planted where a command could read them (#341).
+PLANTED_NAMES = {"USER": "planted-user-341", "LOGNAME": "planted-logname-341"}
+
+
+def planted(cli: Cli, monkeypatch: pytest.MonkeyPatch) -> Cli:
+    """*cli* with the login names planted in the environment it hands the command and in the
+    process's own, so a command reading either one finds them."""
+    for key, name in PLANTED_NAMES.items():
+        monkeypatch.setenv(key, name)
+    return replace(cli, env=PLANTED_NAMES)
+
+
+def names_held(cli: Cli, written: str) -> list[str]:
+    """Every value in the state file holding a planted name, once the file is shown to hold the
+    four tables it has and an audit line starting *written* (a read of nothing holds none)."""
+    held = every_value(cli)
+    assert list(held) == ["account", "audit", "day_reports", "runs"]
+    assert [line for line in held["audit"] if line.startswith(written)] != []
+    return [
+        value
+        for values in held.values()
+        for value in values
+        if any(name in value for name in PLANTED_NAMES.values())
+    ]
 
 
 def golden_backtest(
