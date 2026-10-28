@@ -6,17 +6,37 @@ Self-hosted, open-source toolkit for building a **dividend income portfolio**, s
 
 ## Status
 
-**Early development.** The engine library, the IDX rules, the backtester, income reporting, the
-lesson catalogue and the command line (`steadyhand-idx`: `init`, `backtest`, `compare`,
-`strategies`, `explain`, `learn` and `training`) are built; paper trading comes next. The approved design
-for the first sub-project is in
+**Early development, and changing direction.** steadyhand is becoming a Chrome extension: epic #214,
+with its approved design in
+[`docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`](docs/superpowers/specs/2026-10-06-broker-view-extension-design.md).
+The extension's TypeScript workspace, its CI and its dev build are in place in
+[`extension/`](extension/). Its advice logic, broker readers and side panel are being built story by
+story (#222 to #245), and nothing has been released yet.
+
+The Python packages are built: the engine library, the IDX rules, the backtester, paper trading,
+income reporting, the lesson catalogue and the command line (`steadyhand-idx`). They stay in the
+repository unchanged and are no longer developed. They are the reference the extension's TypeScript
+port is checked against. Their design is in
 [`docs/superpowers/specs/2026-09-24-steadyhand-core-design.md`](docs/superpowers/specs/2026-09-24-steadyhand-core-design.md).
 
 ## What it will be
 
-- `steadyhand`: a market-neutral Python engine library covering strategies, a simulated broker, risk controls, a backtester and income tracking.
-- `steadyhand-idx`: the IDX distribution, with IDX trading rules, Yahoo Finance `.JK` data, paper trading, a CLI, and an income goal tracker that shows when dividends could cover a monthly target.
-- A course for first-time investors, and plain-English explanations under each command's output at the level you choose, or none. `steadyhand-idx learn` shows the lessons, which ship inside both packages.
+- **A Chrome extension beside your broker.** You open your broker's web platform as usual. steadyhand
+  reads what the page shows and records it on your own machine. In a side panel beside the broker
+  tab, it shows what your chosen strategy implies now: which stock to buy or sell, how many lots, at
+  what limit price, what it costs and why. It also shows your progress towards an income goal, and
+  any risk alerts. Where it lacks a fact, it names the page to open rather than guessing.
+- **You place every order yourself**, by hand or with your broker's own automatic-order feature.
+  steadyhand never places, changes or cancels an order, and nothing it reads leaves your machine.
+- **Six strategies, one broker and English to start:** buy-and-hold, monthly-savings, dividend-growth,
+  high-yield, ma-trend and momentum-rotation; one broker's web platform, with each later broker a
+  reader of its own; Indonesian later.
+- **Lessons for first-time investors**, carried over from the Python packages and rewritten for the
+  extension.
+- **Free**, with no ads, broker referral fees or paid tier.
+- **The Python packages, kept as they are.** `steadyhand` (the market-neutral engine) and
+  `steadyhand-idx` (IDX rules, Yahoo Finance `.JK` data, backtesting, paper trading and the command
+  line) remain the reference for the port. Backtesting and paper trading stay there.
 
 ## What it will never be
 
