@@ -56,14 +56,14 @@ const declarationOf = (file: ts.SourceFile, name: string): ts.VariableDeclaratio
       ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name,
   );
 
-/** Whether the identifier `node` is read as a value of its own: not a property's name
- * (`rows.length`'s `length`), nor the object a property or element is read from (`rows`). */
+/** Whether the identifier `node`, which names no property (`isPropertyName`), is read as a value
+ * of its own rather than as the object a property or element is read from (`rows` in
+ * `rows.length` or `rows[i]`). */
 const isOperand = (node: ts.Identifier): boolean => {
   const { parent } = node;
   return !(
-    (ts.isPropertyAccessExpression(parent) &&
-      (parent.name === node || parent.expression === node)) ||
-    (ts.isElementAccessExpression(parent) && parent.expression === node)
+    (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
+    parent.expression === node
   );
 };
 
@@ -80,10 +80,48 @@ const valueParts = (node: ts.Node): ts.Node[] => {
   return found;
 };
 
+/** The refusal of a bound held in `name`, a value this reader cannot classify. */
+const unclassifiable = (file: ts.SourceFile, name: ts.Identifier): UnreadableSourceError =>
+  new UnreadableSourceError(
+    `${file.fileName} line ${String(lineOf(file, name))}: cannot tell whether ${name.text} is ` +
+      "a literal floor; bound an assertion by a value computed in the test, or by a recorded floor",
+  );
+
+/** Whether the identifier `node` names a property (`rows.length`'s `length`, `{ min: 3 }`'s
+ * `min`) rather than a value. */
+const isPropertyName = (node: ts.Identifier): boolean =>
+  (ts.isPropertyAccessExpression(node.parent) || ts.isPropertyAssignment(node.parent)) &&
+  node.parent.name === node;
+
+/** Every name a parameter binds, through object and array destructuring. */
+const boundNames = (name: ts.BindingName): ts.Identifier[] =>
+  ts.isIdentifier(name)
+    ? [name]
+    : name.elements.flatMap((element) =>
+        ts.isOmittedExpression(element) ? [] : boundNames(element.name),
+      );
+
+/** Whether `node` is a parameter of a function enclosing it (#432): any caller may pass a
+ * literal, so a bound reaching one cannot be classified. */
+const isParameter = (node: ts.Identifier): boolean => {
+  for (let scope = node.parent; !ts.isSourceFile(scope); scope = scope.parent) {
+    if (
+      ts.isFunctionLike(scope) &&
+      scope.parameters.some((parameter) =>
+        boundNames(parameter.name).some((bound) => bound.text === node.text),
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
 /** Whether `node` holds a non-zero literal anywhere in its value (#362): itself, any node under it
  * (arithmetic, a call's argument, a cast, parentheses), or a name it uses as an operand that
  * `file` declares with one, followed to a fixed point. `seen` holds the names already followed,
- * so a cycle ends. */
+ * so a cycle ends. A parameter reached anywhere in it, directly, through a property or element, or
+ * nested, cannot be classified and is refused by name (#432). */
 const holdsLiteral = (
   file: ts.SourceFile,
   node: ts.Node,
@@ -93,7 +131,13 @@ const holdsLiteral = (
     if (isFloor(part)) {
       return true;
     }
-    if (!ts.isIdentifier(part) || !isOperand(part) || seen.has(part.text)) {
+    if (!ts.isIdentifier(part) || isPropertyName(part)) {
+      return false;
+    }
+    if (isParameter(part)) {
+      throw unclassifiable(file, part);
+    }
+    if (!isOperand(part) || seen.has(part.text)) {
       return false;
     }
     const initializer = declarationOf(file, part.text)?.initializer;
@@ -107,10 +151,7 @@ const holdsLiteral = (
 const boundOf = (file: ts.SourceFile, name: ts.Identifier): ts.Node | undefined => {
   const initializer = declarationOf(file, name.text)?.initializer;
   if (initializer === undefined) {
-    throw new UnreadableSourceError(
-      `${file.fileName} line ${String(lineOf(file, name))}: cannot tell whether ${name.text} is ` +
-        "a literal floor; bound an assertion by a value computed in the test, or by a recorded floor",
-    );
+    throw unclassifiable(file, name);
   }
   return holdsLiteral(file, initializer, new Set([name.text])) ? initializer : undefined;
 };

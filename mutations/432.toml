@@ -1,0 +1,106 @@
+# #432: a bound that reaches a function's parameter, directly, through a property or element, or
+# nested anywhere in it, is refused by name. The plants live in the guards project, which runs
+# only in CI, so each new branch of the reader is removed here: Q1 drops the parameter refusal,
+# Q2 and Q3 lose destructured parameters (Q3 the array hole), Q4 and Q5 judge property names as
+# values, Q6 reads a callback's body inside the bound, and Q7 stops at the nearest function.
+
+[[mutation]]
+id = "Q1"
+why = "A parameter reached in a bound is never refused, so opts.min and Math.max(n, min) read as computed."
+path = "extension/tests/lib/literal-floors.ts"
+old = "    if (isParameter(part)) {\n      throw unclassifiable(file, part);\n    }\n"
+new = ""
+suite = "extension-guards"
+tests = ["extension/tests/guards/literal-floors.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/guards/literal-floors.test.ts::a bound held in a parameter's property cannot be classified, and is refused by name",
+  "extension/tests/guards/literal-floors.test.ts::a bound held in a parameter's element cannot be classified, and is refused by name",
+  "extension/tests/guards/literal-floors.test.ts::a bound held in a parameter nested in a call cannot be classified, and is refused by name",
+  "extension/tests/guards/literal-floors.test.ts::a bound held in a parameter in a comparison cannot be classified, and is refused by name",
+  "extension/tests/guards/literal-floors.test.ts::a bound held in a destructured parameter cannot be classified, and is refused by name",
+  "extension/tests/guards/literal-floors.test.ts::a bound held in a parameter destructured from an array cannot be classified, and is refused by name",
+  "extension/tests/guards/literal-floors.test.ts::a bound held in an outer function's parameter cannot be classified, and is refused by name",
+]
+
+[[mutation]]
+id = "Q2"
+why = "A destructured parameter binds no names, so ({ min }) and ([, min]) are not parameters."
+path = "extension/tests/lib/literal-floors.ts"
+old = "ts.isOmittedExpression(element) ? [] : boundNames(element.name)"
+new = "[]"
+suite = "extension-guards"
+tests = ["extension/tests/guards/literal-floors.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/guards/literal-floors.test.ts::a bound held in a destructured parameter cannot be classified, and is refused by name",
+  "extension/tests/guards/literal-floors.test.ts::a bound held in a parameter destructured from an array cannot be classified, and is refused by name",
+]
+
+[[mutation]]
+id = "Q3"
+why = "An array parameter's hole is read as a binding, so ([, min]) throws a TypeError, not the refusal by name."
+path = "extension/tests/lib/literal-floors.ts"
+old = "ts.isOmittedExpression(element) ? [] : boundNames(element.name)"
+new = "boundNames((element as ts.BindingElement).name)"
+suite = "extension-guards"
+tests = ["extension/tests/guards/literal-floors.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/guards/literal-floors.test.ts::a bound held in a parameter destructured from an array cannot be classified, and is refused by name",
+]
+
+[[mutation]]
+id = "Q4"
+why = "A property's name is judged as a value, so rows.length beside a parameter named length is refused."
+path = "extension/tests/lib/literal-floors.ts"
+old = "    if (!ts.isIdentifier(part) || isPropertyName(part)) {\n"
+new = "    if (!ts.isIdentifier(part)) {\n"
+suite = "extension-guards"
+tests = ["extension/tests/guards/literal-floors.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/guards/literal-floors.test.ts::a property named like a parameter is not a literal floor",
+  "extension/tests/guards/literal-floors.test.ts::an object key named like a parameter is not a literal floor",
+  "extension/tests/guards/literal-floors.test.ts::a property named like a declared literal is not a literal floor",
+]
+
+[[mutation]]
+id = "Q5"
+why = "An object literal's key is judged as a value, so { min: rows } beside a parameter min is refused."
+path = "extension/tests/lib/literal-floors.ts"
+old = "(ts.isPropertyAccessExpression(node.parent) || ts.isPropertyAssignment(node.parent)) &&"
+new = "ts.isPropertyAccessExpression(node.parent) &&"
+suite = "extension-guards"
+tests = ["extension/tests/guards/literal-floors.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/guards/literal-floors.test.ts::an object key named like a parameter is not a literal floor",
+]
+
+[[mutation]]
+id = "Q6"
+why = "A callback's body inside the bound is read, so its own parameter is refused as the bound's."
+path = "extension/tests/lib/literal-floors.ts"
+old = "  if (ts.isFunctionLike(node)) {\n    return [];\n  }\n"
+new = ""
+suite = "extension-guards"
+tests = ["extension/tests/guards/literal-floors.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/guards/literal-floors.test.ts::a parameter of a callback inside the bound is not a literal floor",
+  "extension/tests/guards/literal-floors.test.ts::a bound from a helper whose body holds a literal is not a literal floor",
+]
+
+[[mutation]]
+id = "Q7"
+why = "Only the nearest enclosing function is searched, so an outer function's parameter is missed."
+path = "extension/tests/lib/literal-floors.ts"
+old = "      return true;\n    }\n  }\n  return false;\n};\n"
+new = "      return true;\n    }\n    if (ts.isFunctionLike(scope)) {\n      return false;\n    }\n  }\n  return false;\n};\n"
+suite = "extension-guards"
+tests = ["extension/tests/guards/literal-floors.test.ts"]
+expect = "red"
+red = [
+  "extension/tests/guards/literal-floors.test.ts::a bound held in an outer function's parameter cannot be classified, and is refused by name",
+]

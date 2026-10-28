@@ -75,6 +75,12 @@ test.each([
     "expect(400 + 20).toBeLessThan(n);",
     "expect(400 + 20).toBeLessThan(n)",
   ],
+  // A function encloses it, but the name read is no parameter of it (#432).
+  [
+    "a literal beside a name that is no parameter",
+    "(opts: object) => expect(n).toBeGreaterThan(Math.max(found.length, 5));",
+    "toBeGreaterThan(Math.max(found.length, 5))",
+  ],
 ])("a floor written as %s is refused by line", (_, code, found) => {
   expect(literalFloors(sample(`\n${code}\n`))).toEqual([`line 2: ${found}`]);
 });
@@ -159,6 +165,20 @@ test.each([
   ],
   ["the object of an element read", "const rows = [1, 2];\nexpect(n).toBeGreaterThan(rows[i]);"],
   ["a cycle of names", "const A = B;\nconst B = A;\nexpect(n).toBeGreaterThan(A);"],
+  // A parameter that the bound never reads (#432).
+  [
+    "a property named like a parameter",
+    "(length: number) => expect(n).toBeGreaterThan(rows.length);",
+  ],
+  [
+    "an object key named like a parameter",
+    "(min: number) => expect(n).toBeGreaterThan(pick({ min: rows }).length);",
+  ],
+  ["a parameter only in the subject", "(n: number) => expect(n).toBeGreaterThan(rows.length);"],
+  [
+    "a parameter of a callback inside the bound",
+    "expect(n).toBeGreaterThan(rows.filter((row) => row.ok).length);",
+  ],
   ["a floor constant computed in a call", "const FLOOR = Math.max(a.length, b.length);"],
   // Found by CI on the real tree (#362): a floor-named function or fixture is not a floor.
   [
@@ -183,6 +203,38 @@ test.each([
   ["an imported name", 'import { MIN } from "./m.ts";\nexpect(n).toBeGreaterThan(MIN);', "MIN"],
   ["a parameter", "(min: number) =>\n  expect(n).toBeGreaterThan(min);", "min"],
   ["a name declared with no value", "let min;\nexpect(n).toBeGreaterThan(min);", "min"],
+  // A parameter reached anywhere in the bound (#432).
+  [
+    "a parameter's property",
+    "(opts: { min: number }) =>\n  expect(n).toBeGreaterThan(opts.min);",
+    "opts",
+  ],
+  ["a parameter's element", "(mins: number[]) =>\n  expect(n).toBeGreaterThan(mins[0]);", "mins"],
+  [
+    "a parameter nested in a call",
+    "(min: number) =>\n  expect(n).toBeGreaterThan(Math.max(found.length, min));",
+    "min",
+  ],
+  [
+    "a parameter in a comparison",
+    "(opts: { min: number }) =>\n  expect(n >= opts.min).toBe(true);",
+    "opts",
+  ],
+  [
+    "a destructured parameter",
+    "({ min }: { min: number }) =>\n  expect(n).toBeGreaterThan(Math.max(found.length, min));",
+    "min",
+  ],
+  [
+    "a parameter destructured from an array",
+    "([, min]: number[]) =>\n  expect(n).toBeGreaterThan(Math.max(found.length, min));",
+    "min",
+  ],
+  [
+    "an outer function's parameter",
+    '(min: number) => {\n  test("t", () => expect(n).toBeGreaterThan(min + found.length));\n};',
+    "min",
+  ],
 ])("a bound held in %s cannot be classified, and is refused by name", (_, code, name) => {
   expect(() => literalFloors(sample(code))).toThrow(
     new UnreadableSourceError(
