@@ -157,6 +157,7 @@ test.each([
     "the object of a property read",
     "const rows = [1, 2];\nexpect(n).toBeGreaterThan(rows.length);",
   ],
+  ["the object of an element read", "const rows = [1, 2];\nexpect(n).toBeGreaterThan(rows[i]);"],
   ["a cycle of names", "const A = B;\nconst B = A;\nexpect(n).toBeGreaterThan(A);"],
   ["a floor constant computed in a call", "const FLOOR = Math.max(a.length, b.length);"],
   // Found by CI on the real tree (#362): a floor-named function or fixture is not a floor.

@@ -143,3 +143,14 @@ suite = "extension-guards"
 tests = ["extension/tests/guards/literal-floors.test.ts"]
 expect = "red"
 red = ["extension/tests/guards/literal-floors.test.ts::a floor-named value from a call with a literal is not a literal floor"]
+
+[[mutation]]
+id = "M10"
+why = "The object an element is read from is followed as a name, so rows[i] is read as a declared literal."
+path = "extension/tests/lib/literal-floors.ts"
+old = "    (ts.isElementAccessExpression(parent) && parent.expression === node)\n"
+new = "    false\n"
+suite = "extension-guards"
+tests = ["extension/tests/guards/literal-floors.test.ts"]
+expect = "red"
+red = ["extension/tests/guards/literal-floors.test.ts::the object of an element read is not a literal floor"]
