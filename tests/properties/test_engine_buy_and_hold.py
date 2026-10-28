@@ -1,4 +1,4 @@
-"""The buy-and-hold property at its full count (#290). It calls its unit stand-in's check, in
+"""The buy-and-hold property at its full count (#290). It calls its unit stand-in, in
 tests/engine/test_buy_and_hold.py, on every case it draws."""
 
 import test_buy_and_hold as unit
@@ -22,4 +22,4 @@ def test_it_never_sells_and_buys_only_its_set(
     chosen: set[Instrument],
     buyable: set[Instrument],
 ) -> None:
-    unit.check_it_never_sells_and_buys_only_its_set(held, spendable, unsettled, chosen, buyable)
+    unit.test_it_never_sells_and_buys_only_its_set(held, spendable, unsettled, chosen, buyable)

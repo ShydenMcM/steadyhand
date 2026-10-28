@@ -1,4 +1,4 @@
-"""The price band property at its full count (#290). It calls its unit stand-in's check, in
+"""The price band property at its full count (#290). It calls its unit stand-in, in
 tests/idx/test_rules.py, on every case it draws."""
 
 from datetime import date
@@ -13,4 +13,4 @@ from hypothesis import strategies as st
     on=st.sampled_from([date(2021, 1, 4), date(2023, 6, 5), date(2023, 9, 4), unit.TODAY]),
 )
 def test_band_edges_are_the_widest_valid_prices_inside_the_band(reference: int, on: date) -> None:
-    unit.check_band_edges_are_the_widest_valid_prices_inside_the_band(reference, on)
+    unit.test_band_edges_are_the_widest_valid_prices_inside_the_band(reference, on)

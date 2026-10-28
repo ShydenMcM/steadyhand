@@ -133,6 +133,53 @@ def test_lots_and_ticks() -> None:
         (date(2026, 9, 28), 7, 6, 8, "the Rp1-10 tier moves Rp1 either way"),
         (date(2026, 9, 28), 1, 1, 2, "never below the Rp1 minimum"),
         (date(2027, 1, 1), 1_000, 750, 1_250, "symmetric 25% from 2027"),
+        # The band property's stand-in cases below, each edge worked by hand from auto_reject.toml
+        # and tick_sizes.toml: the band's bottom and top, the bottom raised to the minimum price,
+        # then the bottom rounded up and the top rounded down onto the tick grid.
+        (
+            date(2021, 1, 4),
+            50,
+            50,
+            67,
+            "2020-03-13 row, up to 200: +35% / -7%; 46.5 is raised to Rp50, 67.5 floors to 67",
+        ),
+        (
+            date(2021, 1, 4),
+            1_000_000,
+            930_000,
+            1_200_000,
+            "the 2020-03-13 row's top tier: +20% / -7%, both edges on the Rp25 grid",
+        ),
+        (
+            date(2023, 6, 5),
+            199,
+            170,
+            268,
+            "2023-06-05 row, up to 200: +35% / -15%; 169.15 rounds up to 170, 268.65 floors to 268",
+        ),
+        (date(2023, 6, 5), 200, 170, 270, "the same row at 200: exactly 170 and 270"),
+        (date(2023, 9, 4), 5_000, 3_750, 6_250, "2023-09-04 row, up to 5,000: +-25%"),
+        (
+            date(2023, 9, 4),
+            5_001,
+            4_010,
+            6_000,
+            "past 5,000 +-20%: 4,000.8 rounds up to 4,010 (tick 10), 6,001.2 down to 6,000",
+        ),
+        (
+            TODAY,
+            4_999,
+            4_250,
+            6_225,
+            "2025-04-08 row, up to 5,000 +25% / -15%: 4,249.15 rounds up, 6,248.75 down to 6,225",
+        ),
+        (
+            TODAY,
+            1_000_000,
+            850_000,
+            1_200_000,
+            "the 2025-04-08 row's top tier: +20% / -15%",
+        ),
     ],
 )
 def test_band_edges_come_from_the_band_and_the_tick_grid_together(
@@ -146,13 +193,28 @@ def test_a_reference_below_the_minimum_price_is_refused() -> None:
         rules().price_band(BBCA, rp(40), TODAY)
 
 
-def check_band_edges_are_the_widest_valid_prices_inside_the_band(reference: int, on: date) -> None:
-    """The band property's check on any reference and day, called by its unit stand-in below and
-    by tests/properties/test_idx_rules.py on every draw: from the band's first admitted price (its
-    bottom, raised to the minimum price) up to the low edge, the only valid price is the low edge;
-    from the high edge up to the band's top, the only valid price is the high edge (#365:
-    equalities, no typed-in bound). Only the two ends are scanned: a whole band at a reference of
-    1,000,000 is 270,000 prices."""
+# Unit stand-in of the property in tests/properties/test_idx_rules.py (#290), which calls it on
+# every draw: each band table's date, at the ends of the references drawn and across each side of
+# the band tiers' edges at 200 and 5,000. Each case's edges are worked by hand in
+# test_band_edges_come_from_the_band_and_the_tick_grid_together above.
+@pytest.mark.parametrize(
+    ("reference", "on"),
+    [
+        (50, date(2021, 1, 4)),
+        (1_000_000, date(2021, 1, 4)),
+        (199, date(2023, 6, 5)),
+        (200, date(2023, 6, 5)),
+        (5_000, date(2023, 9, 4)),
+        (5_001, date(2023, 9, 4)),
+        (4_999, TODAY),
+        (1_000_000, TODAY),
+    ],
+)
+def test_band_edges_are_the_widest_valid_prices_inside_the_band(reference: int, on: date) -> None:
+    # From the band's first admitted price (its bottom, raised to the minimum price) up to the low
+    # edge, the only valid price is the low edge; from the high edge up to the band's top, the only
+    # valid price is the high edge (#365: equalities, no typed-in bound). Only the two ends are
+    # scanned: a whole band at a reference of 1,000,000 is 270,000 prices.
     low, high = rules().price_band(BBCA, rp(reference), on)
     tables = RuleTables.shipped()
     ticks, band = tables.ticks.on(on), tables.bands.on(on)
@@ -161,39 +223,6 @@ def check_band_edges_are_the_widest_valid_prices_inside_the_band(reference: int,
     assert [p for p in range(first, low.amount + 1) if ticks.is_valid(p)] == [low.amount]
     last = math.floor(top)
     assert [p for p in range(high.amount, last + 1) if ticks.is_valid(p)] == [high.amount]
-
-
-# Unit stand-in of the property in tests/properties/test_idx_rules.py (#290):
-# each band table's date, at the ends of the references drawn and across
-# each side of the band tiers' edges at 200 and 5,000. Each edge is worked by hand from
-# auto_reject.toml and tick_sizes.toml: the band's bottom and top, the bottom raised to the minimum
-# price, then the bottom rounded up and the top rounded down onto the tick grid.
-@pytest.mark.parametrize(
-    ("reference", "on", "low", "high"),
-    [
-        # 2020-03-13 row, up to 200: +35% / -7%. 46.5 is below the Rp50 minimum; 67.5 floors to 67.
-        (50, date(2021, 1, 4), 50, 67),
-        # The same row's top tier: +20% / -7%, both edges on the 25 grid.
-        (1_000_000, date(2021, 1, 4), 930_000, 1_200_000),
-        # 2023-06-05 row, up to 200: +35% / -15%. 169.15 rounds up to 170 (tick 1); 268.65 floors
-        # to 268, already on the 2 grid.
-        (199, date(2023, 6, 5), 170, 268),
-        (200, date(2023, 6, 5), 170, 270),
-        # 2023-09-04 row: up to 5,000 +-25%, then +-20%. 4,000.8 rounds up to 4,010 (tick 10);
-        # 6,001.2 floors to 6,001, down to 6,000 (tick 25).
-        (5_000, date(2023, 9, 4), 3_750, 6_250),
-        (5_001, date(2023, 9, 4), 4_010, 6_000),
-        # 2025-04-08 row: up to 5,000 +25% / -15%, then +20% / -15%. 4,249.15 rounds up to 4,250;
-        # 6,248.75 floors to 6,248, down to 6,225 (tick 25).
-        (4_999, TODAY, 4_250, 6_225),
-        (1_000_000, TODAY, 850_000, 1_200_000),
-    ],
-)
-def test_band_edges_are_the_widest_valid_prices_inside_the_band(
-    reference: int, on: date, low: int, high: int
-) -> None:
-    assert rules().price_band(BBCA, rp(reference), on) == (rp(low), rp(high))
-    check_band_edges_are_the_widest_valid_prices_inside_the_band(reference, on)
 
 
 def test_costs_use_the_chosen_broker_preset() -> None:

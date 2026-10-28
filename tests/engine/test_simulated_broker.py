@@ -350,17 +350,46 @@ def test_the_settled_cash_is_never_negative_from_the_trade_to_its_settlement(
     assert result.portfolio.settled_cash(probe).amount >= 0
 
 
-def check_fills_keep_cash_whole_lots_ticks_and_bands(
+# The fill property's stand-in cases (#290): the same four draws as the test above. Worked by hand
+# on 3 June 2025, whose band is 25% up to Rp5,000 and 20% above, 15% down, and whose fills slip
+# 0.1% against the trader before the tick: only the second fills. Its sale of 3,000 BBRI goes
+# first, 4,950 less 0.1% being 4,945 and 4,940 on the Rp10 grid; 30 lots of BBCA at 10,710.7,
+# 10,711 and 10,725 on the Rp25 grid are cut to the 27 the Rp30m pays for (sale proceeds do not
+# count), with room for their costs; and its lot of BBRI at 4,954.95, 4,955 and 4,960 fits the
+# Rp1m or so left. The third's BBCA volume of 150 is under a lot at 10% and its BBRI did not
+# trade; the fourth cannot pay its costs.
+FILL_CASES = [
+    (0, 0, [], (7_700, 3_450), (0, 0), [], (0, 0)),
+    (
+        *BUSY,
+        [
+            (Side.SELL, BBRI, 3_000, 4_940),
+            (Side.BUY, BBCA, 2_700, 10_725),
+            (Side.BUY, BBRI, 100, 4_960),
+        ],
+        (0, 1),
+    ),
+    (*SHORT, [], (3, 0)),
+    (*EXACT, [], (1, 0)),
+]
+
+
+# Unit stand-in of the property in tests/properties/test_engine_simulated_broker.py (#290), which
+# calls it on every draw.
+@pytest.mark.parametrize(
+    ("cash", "held", "orders", "opens", "volumes"),
+    [case[:5] for case in FILL_CASES],
+    ids=["nothing", "busy", "short", "exact"],
+)
+def test_fills_keep_cash_whole_lots_ticks_and_bands(
     cash: int,
     held: int,
     orders: list[tuple[Side, Instrument, int]],
     opens: tuple[int, int],
     volumes: tuple[int, int],
-) -> FillResult:
-    """The fill property's check on any book and orders, called by its unit stand-in below and by
-    tests/properties/test_engine_simulated_broker.py on every draw: the cash moves by each fill
-    and the day's charge, and every fill is in whole lots, on the tick grid and sorts inside its
-    band (#365: equalities, no typed-in bound). Returns the broker's result."""
+) -> None:
+    # The cash moves by each fill and the day's charge, and every fill is in whole lots, on the
+    # tick grid and sorts inside its band (#365: equalities, no typed-in bound).
     book, placed, result = drawn(cash, held, orders, opens, volumes)
     movements = result.portfolio.ledger[len(book.ledger) :]
     expected = [
@@ -379,36 +408,14 @@ def check_fills_keep_cash_whole_lots_ticks_and_bands(
         low, high = rules().price_band(f.order.instrument, REFERENCES[f.order.instrument], TODAY)
         assert sorted([high, f.price, low]) == [low, f.price, high]
     assert len(result.fills) + len(result.rejected) == len(placed)
-    return result
 
 
-# Unit stand-in of the property in tests/properties/test_engine_simulated_broker.py (#290):
-# the same four draws as the test above. Worked by hand on 3 June 2025, whose band is 25% up to
-# Rp5,000 and 20% above, 15% down, and whose fills slip 0.1% against the trader before the tick:
-# only the second fills. Its sale of 3,000 BBRI goes first, 4,950 less 0.1% being 4,945 and
-# 4,940 on the Rp10 grid; 30 lots of BBCA at 10,710.7, 10,711 and 10,725 on the Rp25 grid are
-# cut to the 27 the Rp30m pays for (sale proceeds do not count), with room for their costs; and
-# its lot of BBRI at 4,954.95, 4,955 and 4,960 fits the Rp1m or so left. The third's BBCA volume
-# of 150 is under a lot at 10% and its BBRI did not trade; the fourth cannot pay its costs.
 @pytest.mark.parametrize(
     ("cash", "held", "orders", "opens", "volumes", "fills", "refused"),
-    [
-        (0, 0, [], (7_700, 3_450), (0, 0), [], (0, 0)),
-        (
-            *BUSY,
-            [
-                (Side.SELL, BBRI, 3_000, 4_940),
-                (Side.BUY, BBCA, 2_700, 10_725),
-                (Side.BUY, BBRI, 100, 4_960),
-            ],
-            (0, 1),
-        ),
-        (*SHORT, [], (3, 0)),
-        (*EXACT, [], (1, 0)),
-    ],
+    FILL_CASES,
     ids=["nothing", "busy", "short", "exact"],
 )
-def test_fills_keep_cash_whole_lots_ticks_and_bands(
+def test_each_stand_in_case_s_fills_and_refusals_are_worked_by_hand(
     cash: int,
     held: int,
     orders: list[tuple[Side, Instrument, int]],
@@ -417,6 +424,6 @@ def test_fills_keep_cash_whole_lots_ticks_and_bands(
     fills: list[tuple[Side, Instrument, int, int]],
     refused: tuple[int, int],
 ) -> None:
-    result = check_fills_keep_cash_whole_lots_ticks_and_bands(cash, held, orders, opens, volumes)
+    _, _, result = drawn(cash, held, orders, opens, volumes)
     found = [(f.order.side, f.order.instrument, f.quantity, f.price.amount) for f in result.fills]
     assert (found, (len(result.rejected), len(result.cuts))) == (fills, refused)

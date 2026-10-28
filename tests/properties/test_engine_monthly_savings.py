@@ -1,4 +1,4 @@
-"""The monthly savings property at its full count (#290). It calls its unit stand-in's check, in
+"""The monthly savings property at its full count (#290). It calls its unit stand-in, in
 tests/engine/test_monthly_savings.py, on every case it draws."""
 
 import test_monthly_savings as unit
@@ -18,6 +18,6 @@ from hypothesis import strategies as st
 def test_the_reserve_for_the_instalments_still_due_is_never_spent_before_its_month(
     instalments: int, start: int, months: list[tuple[int, int, int]]
 ) -> None:
-    unit.check_the_reserve_for_the_instalments_still_due_is_never_spent_before_its_month(
+    unit.test_the_reserve_for_the_instalments_still_due_is_never_spent_before_its_month(
         instalments, start, months
     )

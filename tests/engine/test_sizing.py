@@ -83,21 +83,74 @@ def test_a_stock_with_no_price_cannot_be_sized() -> None:
         sizer().size({stock: Decimal("0.1")}, view(10_000_000, {}), {}, PRICES, DAY)
 
 
-def check_orders_are_whole_lots_that_never_overshoot_the_target(
+def _sized(
     value: int, weights: list[int], held: list[int]
-) -> list[Order]:
-    """The sizing property's check on any cash, weights and holdings, called by its unit
-    stand-in below and by tests/properties/test_engine_sizing.py on every draw: every order is
-    whole lots, a buy's holding sorts at or below its target, and a sale sorts at or below what
-    is held and leaves the holding at or above its target (#365: equalities, no typed-in
-    bound). Returns the orders."""
+) -> tuple[dict[Instrument, Decimal], dict[Instrument, int], PortfolioView, list[Order]]:
+    """Each of BBCA, BBRI and TLKM weighted half its share of *weights*, the shares *held*, the
+    portfolio worth them and *value* more, and the sizer's orders on them."""
     stocks = (BBCA, BBRI, TLKM)
     total = sum(weights) or 1
     decimals = {s: Decimal(w) / total / 2 for s, w in zip(stocks, weights, strict=True)}
     shares = {s: h for s, h in zip(stocks, held, strict=True) if h}
     worth = sum(PRICES[s].amount * n for s, n in shares.items())
     portfolio = view(worth + value, shares)
-    orders = sizer().size(decimals, portfolio, shares, PRICES, DAY)
+    return decimals, shares, portfolio, list(sizer().size(decimals, portfolio, shares, PRICES, DAY))
+
+
+# The sizing property's stand-in cases (#290): nothing at all, all cash at the largest value, all
+# held with no weights (everything sold), and a mix of both sides. Worked by hand, each weight
+# half its share of the drawn ones, each target the weight times the value rounded down, and each
+# order the whole lots between holding and target, rounded towards zero. All cash: a sixth of
+# Rp10bn is 1,666,666,666, which is 1,851 lots of BBCA at Rp900,000, 4,166 of BBRI at Rp400,000
+# and 6,666 of TLKM at Rp250,000. All held: each target is 0, so all 5,000 of each are sold. The
+# mix is worth Rp14,632,067: BBCA's 1/3,002 of it, 4,874, is within a lot of its Rp900,000 held;
+# BBRI's 250/1,501, 2,437,053, buys 6 lots; TLKM's 500/1,501, 4,874,106, sells 30 of the
+# Rp12,497,500 held.
+SIZING_CASES = [
+    (0, [0, 0, 0], [0, 0, 0], []),
+    (
+        10**10,
+        [1_000, 1_000, 1_000],
+        [0, 0, 0],
+        [
+            Order(BBCA, Side.BUY, 185_100, DAY),
+            Order(BBRI, Side.BUY, 416_600, DAY),
+            Order(TLKM, Side.BUY, 666_600, DAY),
+        ],
+    ),
+    (
+        0,
+        [0, 0, 0],
+        [5_000, 5_000, 5_000],
+        [
+            Order(BBCA, Side.SELL, 5_000, DAY),
+            Order(BBRI, Side.SELL, 5_000, DAY),
+            Order(TLKM, Side.SELL, 5_000, DAY),
+        ],
+    ),
+    (
+        1_234_567,
+        [1, 500, 1_000],
+        [100, 0, 4_999],
+        [Order(TLKM, Side.SELL, 3_000, DAY), Order(BBRI, Side.BUY, 600, DAY)],
+    ),
+]
+
+
+# Unit stand-in of the property in tests/properties/test_engine_sizing.py (#290), which calls it on
+# every draw.
+@pytest.mark.parametrize(
+    ("value", "weights", "held"),
+    [case[:3] for case in SIZING_CASES],
+    ids=["nothing", "all-cash", "all-held", "mix"],
+)
+def test_orders_are_whole_lots_that_never_overshoot_the_target(
+    value: int, weights: list[int], held: list[int]
+) -> None:
+    # Every order is whole lots, a buy's holding sorts at or below its target, and a sale sorts at
+    # or below what is held and leaves the holding at or above its target (#365: equalities, no
+    # typed-in bound).
+    decimals, shares, portfolio, orders = _sized(value, weights, held)
     for order in orders:  # runtime population: the orders the sizer returned
         stock = order.instrument
         assert order.quantity % 100 == 0
@@ -109,54 +162,15 @@ def check_orders_are_whole_lots_that_never_overshoot_the_target(
         else:
             assert sorted([shares[stock], order.quantity]) == [order.quantity, shares[stock]]
             assert sorted([current - traded, target]) == [target, current - traded]
-    return list(orders)
 
 
-# Unit stand-in of the property in tests/properties/test_engine_sizing.py (#290):
-# nothing at all, all cash at the largest value, all held with no weights
-# (everything sold), and a mix of both sides. Worked by hand, each weight half its share of the
-# drawn ones, each target the weight times the value rounded down, and each order the whole lots
-# between holding and target, rounded towards zero. All cash: a sixth of Rp10bn is 1,666,666,666,
-# which is 1,851 lots of BBCA at Rp900,000, 4,166 of BBRI at Rp400,000 and 6,666 of TLKM at
-# Rp250,000. All held: each target is 0, so all 5,000 of each are sold. The mix is worth
-# Rp14,632,067: BBCA's 1/3,002 of it, 4,874, is within a lot of its Rp900,000 held; BBRI's
-# 250/1,501, 2,437,053, buys 6 lots; TLKM's 500/1,501, 4,874,106, sells 30 of the Rp12,497,500 held.
 @pytest.mark.parametrize(
     ("value", "weights", "held", "expected"),
-    [
-        (0, [0, 0, 0], [0, 0, 0], []),
-        (
-            10**10,
-            [1_000, 1_000, 1_000],
-            [0, 0, 0],
-            [
-                Order(BBCA, Side.BUY, 185_100, DAY),
-                Order(BBRI, Side.BUY, 416_600, DAY),
-                Order(TLKM, Side.BUY, 666_600, DAY),
-            ],
-        ),
-        (
-            0,
-            [0, 0, 0],
-            [5_000, 5_000, 5_000],
-            [
-                Order(BBCA, Side.SELL, 5_000, DAY),
-                Order(BBRI, Side.SELL, 5_000, DAY),
-                Order(TLKM, Side.SELL, 5_000, DAY),
-            ],
-        ),
-        (
-            1_234_567,
-            [1, 500, 1_000],
-            [100, 0, 4_999],
-            [Order(TLKM, Side.SELL, 3_000, DAY), Order(BBRI, Side.BUY, 600, DAY)],
-        ),
-    ],
+    SIZING_CASES,
     ids=["nothing", "all-cash", "all-held", "mix"],
 )
-def test_orders_are_whole_lots_that_never_overshoot_the_target(
+def test_each_stand_in_case_s_orders_are_worked_by_hand(
     value: int, weights: list[int], held: list[int], expected: list[Order]
 ) -> None:
-    assert check_orders_are_whole_lots_that_never_overshoot_the_target(value, weights, held) == (
-        expected
-    )
+    *_, orders = _sized(value, weights, held)
+    assert orders == expected

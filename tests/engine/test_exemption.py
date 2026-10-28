@@ -376,16 +376,10 @@ def test_the_property_below_runs_over_twelve_trading_days() -> None:
     assert (len(TRADING), TRADING[0], TRADING[-1]) == (12, JUL1, date(2025, 7, 16))
 
 
-def check_a_claims_tax_never_exceeds_its_full_tax_plus_one_unit_per_extra_booking(
-    gross: int, steps: list[tuple[int, int]], last_day: int
-) -> tuple[int, int]:
-    """The exemption property's check on any claim and days, called by its unit stand-in below and
-    by tests/properties/test_engine_exemption.py on every draw: the tax booked is at most the full
-    tax plus one unit per booking after the first, as sorted([allowed, tax]) == [tax, allowed]
-    (#365: equalities, no typed-in bound). Returns the tax booked and the number of bookings."""
-    # M4 spec §9: each booking rounds up on its own, so pieces may add up to a unit more each.
-    # Each day buys and holds a percentage of the gross, so claims are covered in parts and
-    # shortfalls last long enough to break.
+def _booked(gross: int, steps: list[tuple[int, int]], last_day: int) -> tuple[int, int]:
+    """The tax booked on a claim of *gross* due by trading day *last_day*, and the number of
+    bookings. Each day buys and holds a percentage of the gross, so claims are covered in parts
+    and shortfalls last long enough to break."""
     opened = DividendClaim(BBCA, EX, PAY, rp(gross), TRADING[last_day], rp(gross))
     claims: tuple[DividendClaim, ...] = (opened,)
     since: date | None = None
@@ -398,17 +392,13 @@ def check_a_claims_tax_never_exceeds_its_full_tax_plus_one_unit_per_extra_bookin
         claims, since = after.claims, after.shortfall_since
         tax += after.tax
         bookings += len(after.notes)
-    full = rules().dividend_tax(rp(gross), on=PAY)
-    allowed = full.amount + (bookings - 1 if bookings else 0)
-    assert sorted([allowed, tax.amount]) == [tax.amount, allowed]
     return tax.amount, bookings
 
 
-# Unit stand-in of the property in tests/properties/test_engine_exemption.py (#290):
-# the smallest claim never covered, the largest bought in full every day to
-# the last day, one covered in parts with a shortfall in between, and one covered 60% with only
-# 20% held, so 40% breaks and the 40% never covered is taxed after its deadline: two bookings
-# of part of the claim, which a booking of the whole gross would overtax.
+# The exemption property's stand-in cases (#290): the smallest claim never covered, the largest
+# bought in full every day to the last day, one covered in parts with a shortfall in between, and
+# one covered 60% with only 20% held, so 40% breaks and the 40% never covered is taxed after its
+# deadline: two bookings of part of the claim, which a booking of the whole gross would overtax.
 # The tax is worked by hand at 10%, each booking rounded up to the rupiah, settling T+2, over
 # the trading days 1 to 16 July 2025. The first case ends on its deadline, the second is covered
 # on day one and always held: neither books. The third buys Rp29,999, Rp29,999 and Rp39,999 by
@@ -416,21 +406,31 @@ def check_a_claims_tax_never_exceeds_its_full_tax_plus_one_unit_per_extra_bookin
 # made good on 3 and 7 July, before their settlement dates. The fourth's Rp40,000 never covered
 # is taxed Rp4,000 on 2 July, and its Rp40,000 shortfall from 1 July breaks on 3 July for
 # another Rp4,000.
-@pytest.mark.parametrize(
-    ("gross", "steps", "last_day", "booked"),
-    [
-        (1, [(0, 0)], 0, (0, 0)),
-        (100_000, [(100, 150)] * len(TRADING), len(TRADING) - 1, (0, 0)),
-        (99_999, [(30, 0), (30, 10), (40, 150), (0, 0), (0, 100)], 2, (1, 1)),
-        (100_000, [(60, 20), (0, 20), (0, 20), (0, 0)], 0, (8_000, 2)),
-    ],
-)
+EXEMPTION_CASES = [
+    (1, [(0, 0)], 0, (0, 0)),
+    (100_000, [(100, 150)] * len(TRADING), len(TRADING) - 1, (0, 0)),
+    (99_999, [(30, 0), (30, 10), (40, 150), (0, 0), (0, 100)], 2, (1, 1)),
+    (100_000, [(60, 20), (0, 20), (0, 20), (0, 0)], 0, (8_000, 2)),
+]
+
+
+# Unit stand-in of the property in tests/properties/test_engine_exemption.py (#290), which calls
+# it on every draw.
+@pytest.mark.parametrize(("gross", "steps", "last_day"), [case[:3] for case in EXEMPTION_CASES])
 def test_a_claims_tax_never_exceeds_its_full_tax_plus_one_unit_per_extra_booking(
+    gross: int, steps: list[tuple[int, int]], last_day: int
+) -> None:
+    # M4 spec §9: each booking rounds up on its own, so pieces may add up to a unit more each. The
+    # tax booked is at most the full tax plus one unit per booking after the first (#365:
+    # equalities, no typed-in bound).
+    tax, bookings = _booked(gross, steps, last_day)
+    full = rules().dividend_tax(rp(gross), on=PAY)
+    allowed = full.amount + (bookings - 1 if bookings else 0)
+    assert sorted([allowed, tax]) == [tax, allowed]
+
+
+@pytest.mark.parametrize(("gross", "steps", "last_day", "booked"), EXEMPTION_CASES)
+def test_each_stand_in_case_s_tax_and_bookings_are_worked_by_hand(
     gross: int, steps: list[tuple[int, int]], last_day: int, booked: tuple[int, int]
 ) -> None:
-    assert (
-        check_a_claims_tax_never_exceeds_its_full_tax_plus_one_unit_per_extra_booking(
-            gross, steps, last_day
-        )
-        == booked
-    )
+    assert _booked(gross, steps, last_day) == booked

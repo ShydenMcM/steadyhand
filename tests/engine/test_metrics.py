@@ -218,48 +218,52 @@ def _deepest_fall(prices: Sequence[Decimal]) -> Decimal:
     return worst.quantize(RATIO_PLACES)
 
 
-def check_the_drawdown_matches_every_pair_checked(prices: list[Decimal]) -> Drawdown:
-    """The drawdown property's check on any prices, called by its unit stand-in below and by
-    tests/properties/test_engine_metrics.py on every draw: the depth is the oracle's, sorts
-    between 0 and 1, and the peak sorts no later than the trough (#365: equalities, no typed-in
-    bound). Returns the drawdown."""
+def _drawdown(prices: list[Decimal]) -> Drawdown:
+    """The drawdown of a run closing at each of *prices* in turn, from Monday 7 July 2025."""
     run = [report(day, price=str(p)) for day, p in zip(days(len(prices)), prices, strict=True)]
-    drawdown = measure(run, final(str(prices[-1]))).drawdown
+    return measure(run, final(str(prices[-1]))).drawdown
+
+
+# The drawdown property's stand-in cases (#290): one price, a fall to nothing, a rise, a fall then
+# a deeper one, and thirty. Each drawdown is worked by hand from a running peak that starts at 1,
+# the days counted from Monday 7 July 2025: 0 falls all the way on its first day; 5 then 0 falls
+# all the way the next; 0.001 falls 0.999 on its first day, before the rise; 4, 3, 5, 1.5 falls
+# deepest from 5 on 9 July to 1.5 on 10 July, 0.7; and the thirty fall from 6.125 on 13 July to
+# 0.125 on 14 July, 48/49, which is 0.97959183|67 and rounds half-even to 0.97959184.
+DRAWDOWN_CASES = [
+    ([Decimal(0)], Decimal(1), MONDAY, MONDAY),
+    ([Decimal(5), Decimal(0)], Decimal(1), MONDAY, date(2025, 7, 8)),
+    ([Decimal("0.001"), Decimal(5)], Decimal("0.999"), MONDAY, MONDAY),
+    (
+        [Decimal(4), Decimal(3), Decimal(5), Decimal("1.5"), Decimal(2)],
+        Decimal("0.7"),
+        date(2025, 7, 9),
+        date(2025, 7, 10),
+    ),
+    (
+        [Decimal(i % 7) + Decimal("0.125") for i in range(30)],
+        Decimal("0.97959184"),
+        date(2025, 7, 13),
+        date(2025, 7, 14),
+    ),
+]
+
+
+# Unit stand-in of the property in tests/properties/test_engine_metrics.py (#290), which calls it
+# on every draw.
+@pytest.mark.parametrize("prices", [case[0] for case in DRAWDOWN_CASES])
+def test_the_drawdown_matches_every_pair_checked(prices: list[Decimal]) -> None:
+    # The depth is the oracle's, sorts between 0 and 1, and the peak sorts no later than the
+    # trough (#365: equalities, no typed-in bound).
+    drawdown = _drawdown(prices)
     assert drawdown.depth == _deepest_fall(prices)
     ordered = [Decimal(0), drawdown.depth, Decimal(1)]
     assert sorted([Decimal(1), drawdown.depth, Decimal(0)]) == ordered
     assert sorted([drawdown.trough, drawdown.peak]) == [drawdown.peak, drawdown.trough]
-    return drawdown
 
 
-# Unit stand-in of the property in tests/properties/test_engine_metrics.py (#290):
-# one price, a fall to nothing, a rise, a fall then a deeper one, and thirty. Each drawdown is
-# worked by hand from a running peak that starts at 1, the days counted from Monday 7 July
-# 2025: 0 falls all the way on its first day; 5 then 0 falls all the way the next; 0.001 falls
-# 0.999 on its first day, before the rise; 4, 3, 5, 1.5 falls deepest from 5 on 9 July to 1.5 on
-# 10 July, 0.7; and the thirty fall from 6.125 on 13 July to 0.125 on 14 July, 48/49, which is
-# 0.97959183|67 and rounds half-even to 0.97959184.
-@pytest.mark.parametrize(
-    ("prices", "depth", "peak", "trough"),
-    [
-        ([Decimal(0)], Decimal(1), MONDAY, MONDAY),
-        ([Decimal(5), Decimal(0)], Decimal(1), MONDAY, date(2025, 7, 8)),
-        ([Decimal("0.001"), Decimal(5)], Decimal("0.999"), MONDAY, MONDAY),
-        (
-            [Decimal(4), Decimal(3), Decimal(5), Decimal("1.5"), Decimal(2)],
-            Decimal("0.7"),
-            date(2025, 7, 9),
-            date(2025, 7, 10),
-        ),
-        (
-            [Decimal(i % 7) + Decimal("0.125") for i in range(30)],
-            Decimal("0.97959184"),
-            date(2025, 7, 13),
-            date(2025, 7, 14),
-        ),
-    ],
-)
-def test_the_drawdown_matches_every_pair_checked(
+@pytest.mark.parametrize(("prices", "depth", "peak", "trough"), DRAWDOWN_CASES)
+def test_each_stand_in_case_s_drawdown_is_worked_by_hand(
     prices: list[Decimal], depth: Decimal, peak: date, trough: date
 ) -> None:
-    assert check_the_drawdown_matches_every_pair_checked(prices) == Drawdown(depth, peak, trough)
+    assert _drawdown(prices) == Drawdown(depth, peak, trough)

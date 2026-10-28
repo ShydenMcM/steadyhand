@@ -327,15 +327,50 @@ ACTIONS: list[CorporateAction] = [
 ]
 
 
-def check_nothing_after_today_is_returned_and_each_dividend_is_restated_by_its_own_splits(
+# The corporate action property's stand-in cases (#290): no actions; every action, today the last
+# day drawable; and the same with today on a dividend's ex-date between them. Worked by hand at 28
+# digits: on 31 December 2021 BBCA's Rp100 of 1 March 2019 is restated by both its splits,
+# 100 x 1 x 3 / (2 x 7) = 300 / 14, 21.42857142857142857142857142|857 rounded up, and its
+# Rp10,000 by that day's own 3-for-7, 30,000 / 7, 4,285.714285714285714285714285|714 rounded up;
+# BBRI's Rp7 by its 5-into-1, 35. On 2 January 2020 BBCA's Rp100 has had one split, 50, and
+# BBRI's Rp7, paid that day, none.
+VIEW_CASES = [
+    (BBCA, [], date(2019, 1, 1), []),
+    (BBRI, [], date(2019, 1, 1), []),
+    (
+        BBCA,
+        ACTIONS,
+        date(2021, 12, 31),
+        [
+            (date(2019, 3, 1), Decimal("21.42857142857142857142857143")),
+            (date(2021, 12, 31), Decimal("4285.714285714285714285714286")),
+        ],
+    ),
+    (BBRI, ACTIONS, date(2021, 12, 31), [(date(2020, 1, 2), Decimal(35))]),
+    (BBCA, ACTIONS, date(2020, 1, 2), [(date(2019, 3, 1), Decimal(50))]),
+    (BBRI, ACTIONS, date(2020, 1, 2), [(date(2020, 1, 2), Decimal(7))]),
+]
+VIEW_IDS = [
+    "BBCA-none",
+    "BBRI-none",
+    "BBCA-last-day",
+    "BBRI-last-day",
+    "BBCA-ex-date",
+    "BBRI-ex-date",
+]
+
+
+# Unit stand-in of the property in tests/properties/test_engine_view.py (#290), which calls it on
+# every draw.
+@pytest.mark.parametrize(
+    ("stock", "actions", "today"), [case[:3] for case in VIEW_CASES], ids=VIEW_IDS
+)
+def test_nothing_after_today_is_returned_and_each_dividend_is_restated_by_its_own_splits(
     stock: Instrument, actions: list[CorporateAction], today: date
-) -> list[tuple[date, Decimal]]:
-    """The corporate action property's check on any actions and day, called by its unit stand-in
-    below and by tests/properties/test_engine_view.py on every draw: every dividend's ex-date
-    sorts no later than today, they are the stock's paid ones, and each is restated by the splits
-    from its own ex-date to today (#365: equalities, no typed-in bound). Returns each dividend's
-    ex-date and amount."""
-    history = ActionHistory(actions)
+) -> None:
+    # Every dividend's ex-date sorts no later than today, they are the stock's paid ones, and each
+    # is restated by the splits from its own ex-date to today (#365: equalities, no typed-in bound).
+    found = ActionHistory(actions).dividends(stock, today)
     paid = sorted(
         (
             action
@@ -346,7 +381,6 @@ def check_nothing_after_today_is_returned_and_each_dividend_is_restated_by_its_o
         ),
         key=lambda action: action.ex_date,
     )
-    found = history.dividends(stock, today)
     days = [[dividend.ex_date, today] for dividend in found]
     assert [sorted(pair) for pair in days] == days
     assert [dividend.ex_date for dividend in found] == [dividend.ex_date for dividend in paid]
@@ -363,50 +397,14 @@ def check_nothing_after_today_is_returned_and_each_dividend_is_restated_by_its_o
         old = prod(split.old_shares for split in splits)
         new = prod(split.new_shares for split in splits)
         assert dividend.per_share == source.per_share * old / new
-    return [(dividend.ex_date, dividend.per_share) for dividend in found]
 
 
-# Unit stand-in of the property in tests/properties/test_engine_view.py (#290):
-# no actions; every action, today the last day drawable; and the same with
-# today on a dividend's ex-date between them. Worked by hand at 28 digits: on 31 December 2021
-# BBCA's Rp100 of 1 March 2019 is restated by both its splits, 100 x 1 x 3 / (2 x 7) = 300 / 14,
-# 21.42857142857142857142857142|857 rounded up, and its Rp10,000 by that day's own 3-for-7,
-# 30,000 / 7, 4,285.714285714285714285714285|714 rounded up; BBRI's Rp7 by its 5-into-1, 35. On
-# 2 January 2020 BBCA's Rp100 has had one split, 50, and BBRI's Rp7, paid that day, none.
-@pytest.mark.parametrize(
-    ("stock", "actions", "today", "expected"),
-    [
-        (BBCA, [], date(2019, 1, 1), []),
-        (BBRI, [], date(2019, 1, 1), []),
-        (
-            BBCA,
-            ACTIONS,
-            date(2021, 12, 31),
-            [
-                (date(2019, 3, 1), Decimal("21.42857142857142857142857143")),
-                (date(2021, 12, 31), Decimal("4285.714285714285714285714286")),
-            ],
-        ),
-        (BBRI, ACTIONS, date(2021, 12, 31), [(date(2020, 1, 2), Decimal(35))]),
-        (BBCA, ACTIONS, date(2020, 1, 2), [(date(2019, 3, 1), Decimal(50))]),
-        (BBRI, ACTIONS, date(2020, 1, 2), [(date(2020, 1, 2), Decimal(7))]),
-    ],
-    ids=[
-        "BBCA-none",
-        "BBRI-none",
-        "BBCA-last-day",
-        "BBRI-last-day",
-        "BBCA-ex-date",
-        "BBRI-ex-date",
-    ],
-)
-def test_nothing_after_today_is_returned_and_each_dividend_is_restated_by_its_own_splits(
+@pytest.mark.parametrize(("stock", "actions", "today", "expected"), VIEW_CASES, ids=VIEW_IDS)
+def test_each_stand_in_case_s_dividends_are_worked_by_hand(
     stock: Instrument,
     actions: list[CorporateAction],
     today: date,
     expected: list[tuple[date, Decimal]],
 ) -> None:
-    found = check_nothing_after_today_is_returned_and_each_dividend_is_restated_by_its_own_splits(
-        stock, actions, today
-    )
-    assert found == expected
+    found = ActionHistory(actions).dividends(stock, today)
+    assert [(dividend.ex_date, dividend.per_share) for dividend in found] == expected

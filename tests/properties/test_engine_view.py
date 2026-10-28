@@ -1,5 +1,5 @@
-"""The corporate action view property at its full count (#290). It calls its unit stand-in's
-check, in tests/engine/test_view.py, on every case it draws."""
+"""The corporate action view property at its full count (#290). It calls its unit stand-in, in
+tests/engine/test_view.py, on every case it draws."""
 
 from datetime import date
 from decimal import Decimal
@@ -27,6 +27,6 @@ _SPLIT = st.builds(
 def test_nothing_after_today_is_returned_and_each_dividend_is_restated_by_its_own_splits(
     stock: Instrument, actions: list[CorporateAction], today: date
 ) -> None:
-    unit.check_nothing_after_today_is_returned_and_each_dividend_is_restated_by_its_own_splits(
+    unit.test_nothing_after_today_is_returned_and_each_dividend_is_restated_by_its_own_splits(
         stock, actions, today
     )

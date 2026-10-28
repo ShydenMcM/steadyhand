@@ -1,4 +1,4 @@
-"""The sizing property at its full count (#290). It calls its unit stand-in's check, in
+"""The sizing property at its full count (#290). It calls its unit stand-in, in
 tests/engine/test_sizing.py, on every case it draws."""
 
 import test_sizing as unit
@@ -14,4 +14,4 @@ from hypothesis import strategies as st
 def test_orders_are_whole_lots_that_never_overshoot_the_target(
     value: int, weights: list[int], held: list[int]
 ) -> None:
-    unit.check_orders_are_whole_lots_that_never_overshoot_the_target(value, weights, held)
+    unit.test_orders_are_whole_lots_that_never_overshoot_the_target(value, weights, held)

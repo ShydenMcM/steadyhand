@@ -9,7 +9,7 @@ import pytest
 from steadyhand._ratio import ratio_down
 from steadyhand.market import PayDates
 from steadyhand.money import IDR, Money
-from steadyhand.strategies import MonthlySavings, Strategy
+from steadyhand.strategies import Decision, MonthlySavings, Strategy
 from steadyhand.types import Instrument
 from steadyhand.view import ActionHistory, MarketView, PortfolioView, PriceHistory, Tradable
 from steadyhand_idx import IdxMarketRules
@@ -129,20 +129,20 @@ def test_a_first_day_on_a_portfolio_that_holds_stocks_sizes_the_instalment_from_
     assert decision.weights == {TLKM: held.weight(TLKM), BBCA: ratio_down(1_000_000, 10_000_000)}
 
 
-def check_the_reserve_for_the_instalments_still_due_is_never_spent_before_its_month(
+def _saved(
     instalments: int, start: int, months: list[tuple[int, int, int]]
-) -> tuple[int, int, dict[str, str]]:
-    """The monthly savings property's check on any journey, called by its unit stand-ins below
-    and by tests/properties/test_engine_monthly_savings.py on every draw: each day the strategy
-    lowers no holding's weight, its count of instalments due is the months not yet bought, and
-    the cash sorts at or above their reserve (#365: equalities, no typed-in bound). Returns the
-    cash, the amount invested and the strategy's memory at the end."""
+) -> tuple[list[tuple[PortfolioView, Decision, int, int]], tuple[int, int, dict[str, str]]]:
+    """A journey of *months*, each the cash that arrives at its end, how many stocks it can buy
+    and its days, through monthly savings from *start* in cash: each day's holdings, decision,
+    cash after its spend and instalments still due, then the cash, the amount invested and the
+    strategy's memory at the end."""
     strategy = MonthlySavings(instalments)
     memory: dict[str, str] = {}
     cash, invested = start, 0
     # Counted here, not read from the strategy's memory: a month buys once, on its first day
     # with something to buy, so the instalments still due are the ones no month has bought yet.
     bought: set[int] = set()
+    run: list[tuple[PortfolioView, Decision, int, int]] = []
     for number, (arrived, buyable, days) in enumerate(  # runtime population: a drawn journey
         months
     ):
@@ -154,16 +154,11 @@ def check_the_reserve_for_the_instalments_still_due_is_never_spent_before_its_mo
             decision = strategy.decide(view(when, set(STOCKS[:buyable])), held, memory)
             memory = dict(decision.memory)
             added = sum(decision.weights.values()) - held.weight(BBCA)
-            before_after = {s: [held.weight(s), decision.weights[s]] for s in held.holdings}
-            assert {s: sorted(pair) for s, pair in before_after.items()} == before_after
             spent = int(added * held.value.amount)
             cash, invested = cash - spent, invested + spent
-            due = max(instalments - len(bought), 0)
-            assert int(memory["due"]) == due
-            reserve = due * int(memory["instalment"])
-            assert sorted([cash, reserve]) == [reserve, cash]
+            run.append((held, decision, cash, max(instalments - len(bought), 0)))
         cash += arrived
-    return cash, invested, memory
+    return run, (cash, invested, memory)
 
 
 ONE_INSTALMENT = (1, 1_000, [(0, 0, 1)])
@@ -171,13 +166,34 @@ THE_MOST = (24, 10**10, [(10**8, 4, 3)] * 30)
 GAPS = (3, 50_000, [(0, 1, 2), (10_000, 0, 1), (0, 4, 3), (5, 2, 1), (0, 1, 1)])
 
 
-# Unit stand-in of the property in tests/properties/test_engine_monthly_savings.py (#290):
-# one instalment with nothing to buy; the most instalments, cash and months
-# drawn; and months with nothing to buy between those that buy. Worked by hand: buying only
-# moves cash into the holding, so cash and holding together are the start plus what arrived;
-# the instalment is the start over the instalments, rounded down (10bn / 24 is 416,666,666,
-# 50,000 / 3 is 16,666); the memory names the last month that bought, number 29 of the 30
-# being June 2027, and no instalment is due once every one is bought.
+# Unit stand-in of the property in tests/properties/test_engine_monthly_savings.py (#290), which
+# calls it on every draw: one instalment with nothing to buy; the most instalments, cash and
+# months drawn; and months with nothing to buy between those that buy.
+@pytest.mark.parametrize(
+    ("instalments", "start", "months"),
+    [ONE_INSTALMENT, THE_MOST, GAPS],
+    ids=["one-instalment", "the-most", "gaps"],
+)
+def test_the_reserve_for_the_instalments_still_due_is_never_spent_before_its_month(
+    instalments: int, start: int, months: list[tuple[int, int, int]]
+) -> None:
+    # Each day the strategy lowers no holding's weight, its count of instalments due is the months
+    # not yet bought, and the cash sorts at or above their reserve (#365: equalities, no typed-in
+    # bound).
+    run, _ = _saved(instalments, start, months)
+    for held, decision, cash, due in run:  # runtime population: the journey's days
+        before_after = {s: [held.weight(s), decision.weights[s]] for s in held.holdings}
+        assert {s: sorted(pair) for s, pair in before_after.items()} == before_after
+        assert int(decision.memory["due"]) == due
+        reserve = due * int(decision.memory["instalment"])
+        assert sorted([cash, reserve]) == [reserve, cash]
+
+
+# Each stand-in journey's end, worked by hand: buying only moves cash into the holding, so cash
+# and holding together are the start plus what arrived; the instalment is the start over the
+# instalments, rounded down (10bn / 24 is 416,666,666, 50,000 / 3 is 16,666); the memory names
+# the last month that bought, number 29 of the 30 being June 2027, and no instalment is due once
+# every one is bought.
 @pytest.mark.parametrize(
     ("journey", "total", "memory"),
     [
@@ -191,12 +207,10 @@ GAPS = (3, 50_000, [(0, 1, 2), (10_000, 0, 1), (0, 4, 3), (5, 2, 1), (0, 1, 1)])
     ],
     ids=["one-instalment", "the-most", "gaps"],
 )
-def test_the_reserve_for_the_instalments_still_due_is_never_spent_before_its_month(
+def test_each_stand_in_journey_s_total_and_memory_are_worked_by_hand(
     journey: tuple[int, int, list[tuple[int, int, int]]], total: int, memory: dict[str, str]
 ) -> None:
-    cash, invested, found = (
-        check_the_reserve_for_the_instalments_still_due_is_never_spent_before_its_month(*journey)
-    )
+    _, (cash, invested, found) = _saved(*journey)
     assert (cash + invested, found) == (total, memory)
 
 
@@ -215,7 +229,5 @@ def test_the_reserve_for_the_instalments_still_due_is_never_spent_before_its_mon
 def test_a_journey_s_cash_and_holding_are_worked_by_hand(
     journey: tuple[int, int, list[tuple[int, int, int]]], cash: int, invested: int
 ) -> None:
-    found = check_the_reserve_for_the_instalments_still_due_is_never_spent_before_its_month(
-        *journey
-    )
-    assert found[:2] == (cash, invested)
+    _, end = _saved(*journey)
+    assert end[:2] == (cash, invested)

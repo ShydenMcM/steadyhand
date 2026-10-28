@@ -73,8 +73,9 @@ red = [
     "tests/integration/cli/test_backtest_command_golden.py::test_monthly_savings_keeps_back_the_instalments_still_due[2021-05]",
 ]
 
-# P1 to P13: one source defect for each property file #365 changed, each breaking the property's
-# check, which every draw runs, on nearly every draw: the unit pins are not in the property suite.
+# P1 to P13: one source defect for each properties file whose unit stand-ins #365 changed, each
+# breaking a stand-in's laws, which every draw runs, on nearly every draw: the unit pins are not in
+# the property suite.
 
 [[mutation]]
 id = "365-P1"
