@@ -76,3 +76,10 @@ def test_a_download_matching_no_artifact_fails_as_gh_does(
 def test_a_download_naming_no_artifact_fails_the_test(tmp_path: Path) -> None:
     with pytest.raises(AssertionError, match="names no artifact"):
         download(tmp_path)
+
+
+def test_each_call_keeps_the_folder_it_ran_in(tmp_path: Path) -> None:
+    commands = Commands(answers={("npm", "run"): b""})
+    commands.run(["/stood-in/npm", "run", "lint"], cwd=tmp_path, capture_output=True, check=False)
+    commands.run(["/stood-in/npm", "run", "x"], cwd=Path(), capture_output=True, check=False)
+    assert commands.folders == [tmp_path, Path()]

@@ -29,6 +29,21 @@ Every merge into `develop` that passes CI deploys to dev: the `deploy-dev` job i
 verifies the zip's build provenance, and keeps the zip with that run for 90 days. There is no hosted
 dev site, because steadyhand is [never a hosted service](#what-it-will-never-be).
 
+## Setting up a clone
+
+Run these once, from the repository root, after cloning:
+
+```sh
+uv sync --locked
+(cd extension && npm ci --ignore-scripts)
+git config core.hooksPath .githooks
+```
+
+The last line installs the git hooks tracked in `.githooks/`. Its `pre-push` runs ruff's lint
+and format checks, mypy, and the extension's lint, format and type checks, and a check that fails
+stops the push, named. It runs no test suite: run the unit suites by hand before each push
+(`uv run --locked pytest`, and `npm test` in `extension/`); CI runs every other suite.
+
 ## Contributing
 
 Every sentence a report says beyond its figures, and every figure it shows, carries a stable key,
