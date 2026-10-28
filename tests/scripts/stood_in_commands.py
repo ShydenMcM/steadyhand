@@ -17,9 +17,11 @@ class Commands:
     downloads: dict[str, dict[str, str]] = field(default_factory=dict)
     failing: tuple[str, ...] = ()
     calls: list[list[str]] = field(default_factory=list)
+    folders: list[object] = field(default_factory=list)
 
     def run(self, args: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
         self.calls.append(list(args))
+        self.folders.append(kwargs.get("cwd"))
         assert kwargs == {"cwd": kwargs["cwd"], "capture_output": True, "check": False}
         words = (Path(args[0]).name, *args[1:])
         if self.failing and words[: len(self.failing)] == self.failing:

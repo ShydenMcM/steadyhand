@@ -1,0 +1,4 @@
+#!/bin/sh
+# The pre-push checks (#377): format, lint and types, no test suite. Installed by
+# `git config core.hooksPath .githooks` (README.md, Setting up a clone).
+exec uv run --no-project scripts/pre_push.py "$@"

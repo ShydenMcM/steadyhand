@@ -547,6 +547,17 @@ jobs:
         run: uv run --no-project scripts/lock_fast_path.py
       - run: uv sync --locked
         if: steps.scope.outputs.docs_only != 'true'
+      # The pre-push hook's case runs the extension's lint, format and types in a clone (#377).
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.scope.outputs.docs_only != 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      # No install script runs: a dependency's postinstall is code nobody reviewed.
+      - run: npm ci --ignore-scripts
+        if: steps.scope.outputs.docs_only != 'true'
+        working-directory: extension
       - name: The integration suite
         if: steps.scope.outputs.docs_only != 'true'
         # 31 s with the golden window's long real runs (#292; PR #316, run 38331680081).

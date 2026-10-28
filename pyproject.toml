@@ -44,6 +44,7 @@ known-first-party = [
     "workflow_runs",
     "coverage_gate",
     "run_tool",
+    "pre_push",
 ]
 
 [tool.ruff.lint.per-file-ignores]

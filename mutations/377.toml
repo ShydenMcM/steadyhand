@@ -1,0 +1,75 @@
+# #377: the pre-push hook through git in a fresh clone (tests/integration/scripts/test_pre_push_hook.py),
+# proved on mutations predicted before the first run. The clone commits the checkout's uncommitted
+# changes, so each mutation planted here is the hook the clone runs. H1 lets an uncommitted file
+# through, H2 makes the hook run nothing, H3 drops a check, H4 stops at the first failure (Shyden
+# ruled every check runs, 2026-10-28), H5 lets a branch that is not checked out through.
+
+[[mutation]]
+id = "H1"
+why = "An uncommitted file is let through, so the checks judge files the pushed commit does not hold."
+path = "scripts/pre_push.py"
+old = "    if status:\n"
+new = "    if False:\n"
+suite = "integration"
+tests = ["tests/integration/scripts/test_pre_push_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_pre_push_hook.py::test_an_untracked_file_is_refused_before_any_check",
+]
+
+[[mutation]]
+id = "H2"
+why = "The installed hook runs nothing and exits 0, so every push passes unchecked."
+path = ".githooks/pre-push"
+old = "exec uv run --no-project scripts/pre_push.py \"$@\"\n"
+new = "exit 0\n"
+suite = "integration"
+tests = ["tests/integration/scripts/test_pre_push_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_pre_push_hook.py::test_the_clean_commit_passes_every_check",
+    "tests/integration/scripts/test_pre_push_hook.py::test_the_planted_commit_is_refused_with_every_check_named",
+    "tests/integration/scripts/test_pre_push_hook.py::test_an_untracked_file_is_refused_before_any_check",
+]
+
+[[mutation]]
+id = "H3"
+why = "mypy is dropped from the hook, so a type error reaches the push."
+path = "scripts/pre_push.py"
+old = "    Check(\"mypy\", \".\", (\"uv\", \"run\", \"--locked\", \"mypy\")),\n"
+new = ""
+suite = "integration"
+tests = ["tests/integration/scripts/test_pre_push_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_pre_push_hook.py::test_the_clean_commit_passes_every_check",
+    "tests/integration/scripts/test_pre_push_hook.py::test_the_planted_commit_is_refused_with_every_check_named",
+    "tests/integration/scripts/test_pre_push_hook.py::test_each_check_is_refused_for_its_own_plant_alone[mypy]",
+]
+
+[[mutation]]
+id = "H4"
+why = "The hook stops after its first check, so later failures go unnamed and unchecked."
+path = "scripts/pre_push.py"
+old = "    return [run(root, check) for check in checks]\n"
+new = "    return [run(root, check) for check in checks[:1]]\n"
+suite = "integration"
+tests = ["tests/integration/scripts/test_pre_push_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_pre_push_hook.py::test_the_clean_commit_passes_every_check",
+    "tests/integration/scripts/test_pre_push_hook.py::test_the_planted_commit_is_refused_with_every_check_named",
+]
+
+[[mutation]]
+id = "H5"
+why = "A branch that is not checked out is let through, judged by the checked-out files."
+path = "scripts/pre_push.py"
+old = "        if commit != head:\n"
+new = "        if False:\n"
+suite = "integration"
+tests = ["tests/integration/scripts/test_pre_push_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_pre_push_hook.py::test_a_branch_that_is_not_checked_out_is_refused_before_any_check",
+]
