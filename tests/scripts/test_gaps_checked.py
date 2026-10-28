@@ -36,6 +36,8 @@ BASE = "b" * 40
 HEAD = "c" * 40
 FIRST = "1" * 40
 SECOND = "2" * 40
+PARENT = "3" * 40
+OTHER_PARENT = "4" * 40
 ZERO = "0" * 40
 
 
@@ -312,31 +314,26 @@ def test_git_off_the_path_is_refused_and_starts_nothing(
 # --- Every commit a pull request holds or a push lands -------------------------------------------
 
 
+DIFF_TREE = ("git", "diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "-z")
+
+
 def history(
-    *commits: tuple[str, str, tuple[str, ...]], line: tuple[str, ...] = ()
+    *commits: tuple[str, str, tuple[str, ...]],
+    line: tuple[str, ...] = (),
+    parents: tuple[str, ...] = (PARENT,),
 ) -> dict[tuple[str, ...], bytes]:
-    """Git's answers for *commits*, each ``(name, message, files)``, oldest first, listed by
-    ``rev-list`` with *line*'s options."""
+    """Git's answers for *commits*, each ``(name, message, files)`` with *parents*, oldest first,
+    listed by ``rev-list`` with *line*'s options; the files are against the first parent."""
     answers = {
         ("git", "rev-list", "--reverse", *line, f"{BASE}..{HEAD}"): "".join(
             f"{name}\n" for name, _, _ in commits
         ).encode()
     }
+    against = (parents[0],) if parents else ("--root",)
     for name, message, files in commits:
         answers["git", "log", "-1", "--format=%B", name] = message.encode()
-        answers[
-            "git",
-            "diff-tree",
-            "--no-commit-id",
-            "--name-only",
-            "--no-renames",
-            "-r",
-            "-z",
-            "--root",
-            "-m",
-            "--first-parent",
-            name,
-        ] = b"".join(f"{f}\0".encode() for f in files)
+        answers["git", "log", "-1", "--format=%P", name] = f"{' '.join(parents)}\n".encode()
+        answers[(*DIFF_TREE, *against, name)] = b"".join(f"{f}\0".encode() for f in files)
     return answers
 
 
@@ -353,34 +350,35 @@ def test_every_commit_in_the_range_is_judged_oldest_first(
     assert commands["c"].calls == [
         ["/stood-in/git", "rev-list", "--reverse", f"{BASE}..{HEAD}"],
         ["/stood-in/git", "log", "-1", "--format=%B", FIRST],
-        [
-            "/stood-in/git",
-            "diff-tree",
-            "--no-commit-id",
-            "--name-only",
-            "--no-renames",
-            "-r",
-            "-z",
-            "--root",
-            "-m",
-            "--first-parent",
-            FIRST,
-        ],
+        ["/stood-in/git", "log", "-1", "--format=%P", FIRST],
+        ["/stood-in/git", *DIFF_TREE[1:], PARENT, FIRST],
         ["/stood-in/git", "log", "-1", "--format=%B", SECOND],
-        [
-            "/stood-in/git",
-            "diff-tree",
-            "--no-commit-id",
-            "--name-only",
-            "--no-renames",
-            "-r",
-            "-z",
-            "--root",
-            "-m",
-            "--first-parent",
-            SECOND,
-        ],
+        ["/stood-in/git", "log", "-1", "--format=%P", SECOND],
+        ["/stood-in/git", *DIFF_TREE[1:], PARENT, SECOND],
     ]
+
+
+def test_a_merge_is_judged_by_its_files_against_its_first_parent_alone(
+    tmp_path: Path, commands: dict[str, Commands]
+) -> None:
+    """diff-tree ignores --first-parent, so the two trees are named: the merge's own change."""
+    commands["c"] = Commands(
+        answers=history((FIRST, BARE, ("README.md",)), parents=(PARENT, OTHER_PARENT))
+    )
+    assert landed(tmp_path, BASE, HEAD, first_parent=False) == [
+        Verdict(FIRST, "feat: a change", None)
+    ]
+    assert commands["c"].calls[-1] == ["/stood-in/git", *DIFF_TREE[1:], PARENT, FIRST]
+
+
+def test_a_root_commit_is_judged_by_every_file_it_holds(
+    tmp_path: Path, commands: dict[str, Commands]
+) -> None:
+    commands["c"] = Commands(answers=history((FIRST, BARE, ("scripts/a.py",)), parents=()))
+    assert landed(tmp_path, BASE, HEAD, first_parent=False) == [
+        Verdict(FIRST, "feat: a change", 'it has no "Gaps checked:" section')
+    ]
+    assert commands["c"].calls[-1] == ["/stood-in/git", *DIFF_TREE[1:], "--root", FIRST]
 
 
 @pytest.mark.parametrize(

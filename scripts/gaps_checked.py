@@ -183,6 +183,10 @@ def landed(root: Path, base: str, head: str, *, first_parent: bool) -> list[Verd
     line = ("--first-parent",) if first_parent else ()
     for commit in git(root, "rev-list", "--reverse", *line, f"{base}..{head}").split():
         message = git(root, "log", "-1", "--format=%B", commit)
+        # Against its first parent as two trees: diff-tree ignores --first-parent, and with -m
+        # a merge would list its diff against every parent. A root commit has none.
+        parents = git(root, "log", "-1", "--format=%P", commit).split()
+        against = (parents[0], commit) if parents else ("--root", commit)
         files = names(
             git(
                 root,
@@ -192,10 +196,7 @@ def landed(root: Path, base: str, head: str, *, first_parent: bool) -> list[Verd
                 "--no-renames",
                 "-r",
                 "-z",
-                "--root",
-                "-m",
-                "--first-parent",
-                commit,
+                *against,
             )
         )
         problem = None if only_markdown(files) else section_problem(message)

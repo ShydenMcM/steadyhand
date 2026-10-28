@@ -3,9 +3,10 @@
 # changes, so each mutation planted here is the hook and the script the clone runs. G1 makes the
 # hook run nothing; G2 lets code renamed to a .md name pass as markdown; G3 stops cutting at the
 # scissors line; G4 lets another comment character through; G5 judges a push's whole range, not
-# its first-parent line; G6 and G7 lose a merge commit's own files (G6 to none, G7 to both
-# parents'); G8 and G9 drop the markdown exemption from the check and from the hook; G10 reads the
-# working tree in place of the index.
+# its first-parent line; G6 and G7 lose a merge commit's own files (G6 to none, G7 to its last
+# parent's diff); G8 and G9 drop the markdown exemption from the check and from the hook; G10 reads the
+# working tree in place of the index. G11 plants #377's pre-push test's old bare message, which
+# the clone's commit-msg hook now refuses.
 
 [[mutation]]
 id = "G1"
@@ -83,10 +84,10 @@ red = [
 
 [[mutation]]
 id = "G6"
-why = "Without -m a merge commit lists no files, so a docs-only merge is judged as code."
+why = "A merge is read with --root alone, which lists no files, so a docs-only merge is judged as code."
 path = "scripts/gaps_checked.py"
-old = "                \"--root\",\n                \"-m\",\n"
-new = "                \"--root\",\n"
+old = "        against = (parents[0], commit) if parents else (\"--root\", commit)\n"
+new = "        against = (\"--root\", commit)\n"
 suite = "integration"
 tests = ["tests/integration/scripts/test_gaps_checked_hook.py"]
 expect = "red"
@@ -96,10 +97,10 @@ red = [
 
 [[mutation]]
 id = "G7"
-why = "Without --first-parent a merge lists its diff against both parents, the branch's own code too."
+why = "A merge is read against its last parent, so the branch's own code counts as the merge's."
 path = "scripts/gaps_checked.py"
-old = "                \"-m\",\n                \"--first-parent\",\n"
-new = "                \"-m\",\n"
+old = "        against = (parents[0], commit) if parents else (\"--root\", commit)\n"
+new = "        against = (parents[-1], commit) if parents else (\"--root\", commit)\n"
 suite = "integration"
 tests = ["tests/integration/scripts/test_gaps_checked_hook.py"]
 expect = "red"
@@ -145,4 +146,17 @@ tests = ["tests/integration/scripts/test_gaps_checked_hook.py"]
 expect = "red"
 red = [
     "tests/integration/scripts/test_gaps_checked_hook.py::test_only_markdown_commits_without_a_section",
+]
+
+[[mutation]]
+id = "G11"
+why = "The pre-push test's planted commit loses its section, so the clone's commit-msg hook refuses it."
+path = "tests/integration/scripts/test_pre_push_hook.py"
+old = "    git(clone.path, \"commit\", \"--quiet\", \"-m\", PLANTED_MESSAGE)\n"
+new = "    git(clone.path, \"commit\", \"--quiet\", \"-m\", \"planted\")\n"
+suite = "integration"
+tests = ["tests/integration/scripts/test_pre_push_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_pre_push_hook.py::test_the_planted_commit_is_refused_with_every_check_named",
 ]

@@ -48,6 +48,16 @@ class Ran:
     output: str
 
 
+@dataclass(frozen=True)
+class Judged:
+    """The CI check's run: its exit status, and each stream apart (the count line is printed on
+    stdout, the commits it refuses on stderr)."""
+
+    returncode: int
+    out: str
+    err: str
+
+
 def environment() -> dict[str, str]:
     """This run's environment without what only the test process has: its virtual environment
     and coverage's settings, which a developer's commit never carries."""
@@ -82,7 +92,7 @@ def head(repo: Path) -> str:
     return git(repo, "rev-parse", "HEAD").strip()
 
 
-def judge(repo: Path, mode: str, base: str, tip: str) -> Ran:
+def judge(repo: Path, mode: str, base: str, tip: str) -> Judged:
     """The CI check, run as CI's gaps-checked job runs it: ``range`` on a pull request,
     ``landed`` on a push."""
     assert UV is not None, "uv is not on the path"
@@ -94,7 +104,7 @@ def judge(repo: Path, mode: str, base: str, tip: str) -> Ran:
         check=False,
         env=environment(),
     )
-    return Ran(done.returncode, done.stdout + done.stderr)
+    return Judged(done.returncode, done.stdout, done.stderr)
 
 
 @pytest.fixture(scope="module")
@@ -294,9 +304,13 @@ def test_a_no_verify_commit_passes_git_and_is_refused_by_the_check_by_name(branc
     git(branch, "commit", "-q", "--no-verify", "-m", BARE)
     skipped = head(branch)
     ran = judge(branch, "range", base, skipped)
-    assert ran.returncode == 1, ran.output
-    assert f'gaps-checked: {skipped} feat: bare: it has no "Gaps checked:" section\n' in ran.output
-    assert ran.output.endswith("gaps-checked: 2 commits judged, 1 without a whole section\n")
+    assert (ran.returncode, ran.out) == (
+        1,
+        "gaps-checked: 2 commits judged, 1 without a whole section\n",
+    ), ran.err
+    assert ran.err.startswith(
+        f'gaps-checked: {skipped} feat: bare: it has no "Gaps checked:" section\n'
+    ), ran.err
 
 
 def test_the_amend_the_hook_cannot_tell_is_refused_by_the_check(branch: Path) -> None:
@@ -310,10 +324,13 @@ def test_the_amend_the_hook_cannot_tell_is_refused_by_the_check(branch: Path) ->
     assert (ran.returncode, ran.output) == (0, "")
     amended = head(branch)
     judged = judge(branch, "range", base, amended)
-    assert judged.returncode == 1, judged.output
-    assert (
-        f'gaps-checked: {amended} feat: bare: it has no "Gaps checked:" section\n' in judged.output
-    )
+    assert (judged.returncode, judged.out) == (
+        1,
+        "gaps-checked: 1 commits judged, 1 without a whole section\n",
+    ), judged.err
+    assert judged.err.startswith(
+        f'gaps-checked: {amended} feat: bare: it has no "Gaps checked:" section\n'
+    ), judged.err
 
 
 def test_a_landed_merge_of_code_without_a_section_is_refused_by_the_check(branch: Path) -> None:
@@ -326,9 +343,13 @@ def test_a_landed_merge_of_code_without_a_section_is_refused_by_the_check(branch
     git(branch, "merge", "-q", "--no-ff", "--no-verify", "-m", BARE, side)
     merged = head(branch)
     ran = judge(branch, "landed", base, merged)
-    assert ran.returncode == 1, ran.output
-    assert f'gaps-checked: {merged} feat: bare: it has no "Gaps checked:" section\n' in ran.output
-    assert ran.output.endswith("gaps-checked: 1 commits judged, 1 without a whole section\n")
+    assert (ran.returncode, ran.out) == (
+        1,
+        "gaps-checked: 1 commits judged, 1 without a whole section\n",
+    ), ran.err
+    assert ran.err.startswith(
+        f'gaps-checked: {merged} feat: bare: it has no "Gaps checked:" section\n'
+    ), ran.err
 
 
 def test_a_landed_docs_only_merge_and_commit_pass_the_check(branch: Path) -> None:
@@ -343,9 +364,10 @@ def test_a_landed_docs_only_merge_and_commit_pass_the_check(branch: Path) -> Non
     git(branch, "commit", "-q", "-m", CHECKED)
     git(branch, "merge", "-q", "--no-ff", "-m", BARE, side)
     ran = judge(branch, "range", base, head(branch))
-    assert (ran.returncode, ran.output) == (
+    assert (ran.returncode, ran.out, ran.err) == (
         0,
         "gaps-checked: 3 commits judged, 0 without a whole section\n",
+        "",
     )
 
 
@@ -361,12 +383,18 @@ def test_a_push_judges_the_merge_it_landed_and_not_the_branch_behind_it(branch: 
     git(branch, "merge", "-q", "--no-ff", "-F", str(message_file(branch, CHECKED)), side)
     landed = judge(branch, "landed", base, head(branch))
     every = judge(branch, "range", base, head(branch))
-    assert (landed.returncode, landed.output) == (
+    assert (landed.returncode, landed.out, landed.err) == (
         0,
         "gaps-checked: 1 commits judged, 0 without a whole section\n",
+        "",
     )
-    assert every.returncode == 1, every.output
-    assert f'gaps-checked: {side} feat: bare: it has no "Gaps checked:" section\n' in every.output
+    assert (every.returncode, every.out) == (
+        1,
+        "gaps-checked: 2 commits judged, 1 without a whole section\n",
+    ), every.err
+    assert every.err.startswith(
+        f'gaps-checked: {side} feat: bare: it has no "Gaps checked:" section\n'
+    ), every.err
 
 
 def branch_name(repo: Path) -> str:
