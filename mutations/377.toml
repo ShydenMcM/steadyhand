@@ -3,6 +3,7 @@
 # changes, so each mutation planted here is the hook the clone runs. H1 lets an uncommitted file
 # through, H2 makes the hook run nothing, H3 drops a check, H4 stops at the first failure (Shyden
 # ruled every check runs, 2026-10-28), H5 lets a branch that is not checked out through.
+# G1 and G2 lose and add a setup-node step against the supply-chain guard's count of seven.
 
 [[mutation]]
 id = "H1"
@@ -73,3 +74,25 @@ expect = "red"
 red = [
     "tests/integration/scripts/test_pre_push_hook.py::test_a_branch_that_is_not_checked_out_is_refused_before_any_check",
 ]
+
+[[mutation]]
+id = "G1"
+why = "The integration job's setup-node step is lost, so the counted steps no longer match the workflows."
+path = ".github/workflows/ci.yml"
+old = "      # The pre-push hook's case runs the extension's lint, format and types in a clone (#377).\n      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0\n        if: steps.scope.outputs.docs_only != 'true'\n        with:\n          node-version-file: .nvmrc\n          cache: npm\n          cache-dependency-path: extension/package-lock.json\n"
+new = "      # The pre-push hook's case runs the extension's lint, format and types in a clone (#377).\n"
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = ["tests/guards/test_supply_chain.py::test_every_setup_node_step_reads_the_nvmrc"]
+
+[[mutation]]
+id = "G2"
+why = "A setup-node step is added beyond the seven counted, so one could run a Node nobody counted."
+path = ".github/workflows/ci.yml"
+old = "      # The pre-push hook's case runs the extension's lint, format and types in a clone (#377).\n      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0\n        if: steps.scope.outputs.docs_only != 'true'\n        with:\n          node-version-file: .nvmrc\n          cache: npm\n          cache-dependency-path: extension/package-lock.json\n"
+new = "      # The pre-push hook's case runs the extension's lint, format and types in a clone (#377).\n      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0\n        if: steps.scope.outputs.docs_only != 'true'\n        with:\n          node-version-file: .nvmrc\n          cache: npm\n          cache-dependency-path: extension/package-lock.json\n      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0\n        if: steps.scope.outputs.docs_only != 'true'\n        with:\n          node-version-file: .nvmrc\n          cache: npm\n          cache-dependency-path: extension/package-lock.json\n"
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = ["tests/guards/test_supply_chain.py::test_every_setup_node_step_reads_the_nvmrc"]

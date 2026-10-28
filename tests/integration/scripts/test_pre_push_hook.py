@@ -17,9 +17,15 @@ from pathlib import Path
 
 import pytest
 
+from ci_scope import FAST_PATH_DIRS, FAST_PATH_FILES
+
 ROOT = Path(__file__).resolve().parents[3]
 GIT = shutil.which("git")
 ZERO = "0" * 40
+FAST_PATH_EXCLUDED = [
+    *(f":(exclude){name}" for name in sorted(FAST_PATH_FILES)),
+    *(f":(exclude){folder}" for folder in FAST_PATH_DIRS),
+]
 # Each check's plant: a defect only that check refuses (seen so by hand, 2026-10-28).
 PLANTS = {
     "ruff check": ("scripts/planted_lint.py", "import os\n"),
@@ -93,9 +99,16 @@ def clone(tmp_path_factory: pytest.TempPathFactory) -> Clone:
     # The checkout's uncommitted changes to tracked files are committed in the clone, so the
     # hook judged is the one on disk here: a planted mutation (mutations/377.toml) reaches it.
     assert GIT is not None, "git is not on the path"
-    changes = subprocess.run(  # noqa: S603 - git, with arguments written in the tests
-        [GIT, "diff", "--binary", "HEAD"], cwd=ROOT, capture_output=True, check=True
-    ).stdout
+    # The fast-path files are left out: a full run locks them unreadable (lock_fast_path.py), and
+    # git cannot hash a file it cannot read. No check reads them, so the clone needs no change.
+    diffed = subprocess.run(  # noqa: S603 - git, with arguments written in the tests
+        [GIT, "diff", "--binary", "HEAD", "--", ".", *FAST_PATH_EXCLUDED],
+        cwd=ROOT,
+        capture_output=True,
+        check=False,
+    )
+    assert diffed.returncode == 0, diffed.stderr.decode(errors="replace")
+    changes = diffed.stdout
     # Always one commit, empty when the checkout has no changes, so every run takes one path.
     subprocess.run(  # noqa: S603 - git, with arguments written in the tests
         [GIT, "apply", "--index", "--allow-empty"],

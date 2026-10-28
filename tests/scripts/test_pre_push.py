@@ -35,6 +35,8 @@ HEAD = "a" * 40
 OTHER = "b" * 40
 ZERO = "0" * 40
 PUSHING_HEAD = f"refs/heads/377 {HEAD} refs/heads/377 {ZERO}\n"
+STATUS_CALL = ["/stood-in/git", "status", "--porcelain=v1", "-z", "--untracked-files=all"]
+REV_PARSE_CALL = ["/stood-in/git", "rev-parse", "HEAD"]
 CLEAN = {("git", "status"): b"", ("git", "rev-parse"): f"{HEAD}\n".encode(), **EVERY_COMMAND}
 
 
@@ -242,21 +244,33 @@ def test_a_line_from_git_it_cannot_read_is_refused_before_any_check(
 
 
 @pytest.mark.parametrize(
-    ("answers", "failing", "refusal"),
+    ("answers", "failing", "asked", "refusal"),
     [
-        pytest.param({}, ("git", "status"), "git status exited 1: HTTP 404", id="status-fails"),
+        pytest.param(
+            {},
+            ("git", "status"),
+            [STATUS_CALL],
+            "git status exited 1: HTTP 404",
+            id="status-fails",
+        ),
         pytest.param(
             {("git", "status"): b""},
             ("git", "rev-parse"),
+            [STATUS_CALL, REV_PARSE_CALL],
             "git rev-parse exited 1: HTTP 404",
             id="rev-parse-fails",
         ),
         pytest.param(
-            {("git", "status"): b"?\0"}, (), "cannot read git status: b'?\\x00'", id="short-entry"
+            {("git", "status"): b"?\0"},
+            (),
+            [STATUS_CALL],
+            "cannot read git status: b'?\\x00'",
+            id="short-entry",
         ),
         pytest.param(
             {("git", "status"): b" M a.py"},
             (),
+            [STATUS_CALL],
             "cannot read git status: b' M a.py'",
             id="no-final-nul",
         ),
@@ -268,11 +282,12 @@ def test_a_git_answer_it_cannot_use_is_refused_before_any_check(
     capsys: pytest.CaptureFixture[str],
     answers: dict[tuple[str, ...], bytes],
     failing: tuple[str, ...],
+    asked: list[list[str]],
     refusal: str,
 ) -> None:
     commands["c"] = Commands(answers=answers, failing=failing)
     assert main(tmp_path, PUSHING_HEAD) == 1
-    assert all(Path(call[0]).name == "git" for call in commands["c"].calls)
+    assert commands["c"].calls == asked
     assert capsys.readouterr().err == f"pre-push: refused: {refusal}\n"
 
 

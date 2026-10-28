@@ -303,8 +303,9 @@ SETUP_NODE = "actions/setup-node@"
 PACKAGE_JSON = ROOT / "extension/package.json"
 NVMRC = ROOT / ".nvmrc"
 MAJOR = re.compile(r"(?P<major>\d+)(?:\.[\dx]+)*")
-# Measured on 2026-10-20 (#287): four in ci.yml, one each in mutations.yml and record-floors.yml.
-SETUP_NODE_STEPS = 6
+# Measured on 2026-10-28 (#377 added the integration job's): five in ci.yml, one each in
+# mutations.yml and record-floors.yml.
+SETUP_NODE_STEPS = 7
 
 
 def major_of(version: object, *, where: str) -> int:
