@@ -49,28 +49,127 @@ const isFloor = (node: ts.Node): boolean => {
   return value !== undefined && value !== 0;
 };
 
-/** The literal `name` is declared with in `file`, `undefined` if it is computed; a name not
- * declared there as a variable cannot be classified, so it is refused by name. */
-const boundOf = (file: ts.SourceFile, name: ts.Identifier): ts.Node | undefined => {
-  const declared = nodes(file).find(
+/** The variable `file` declares as `name`, if it declares one. */
+const declarationOf = (file: ts.SourceFile, name: string): ts.VariableDeclaration | undefined =>
+  nodes(file).find(
     (node): node is ts.VariableDeclaration =>
-      ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name.text,
+      ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name,
   );
-  if (declared?.initializer === undefined) {
+
+/** Whether the identifier `node` is read as a value of its own: not a property's name
+ * (`rows.length`'s `length`), nor the object a property or element is read from (`rows`). */
+const isOperand = (node: ts.Identifier): boolean => {
+  const { parent } = node;
+  return !(
+    (ts.isPropertyAccessExpression(parent) &&
+      (parent.name === node || parent.expression === node)) ||
+    (ts.isElementAccessExpression(parent) && parent.expression === node)
+  );
+};
+
+/** `node` and every node under it, except inside a function: a function's body is code it runs,
+ * not the value it is (the `2` in a helper's `JSON.stringify(x, null, 2)` bounds nothing). */
+const valueParts = (node: ts.Node): ts.Node[] => {
+  if (ts.isFunctionLike(node)) {
+    return [];
+  }
+  const found: ts.Node[] = [node];
+  ts.forEachChild(node, (child) => {
+    found.push(...valueParts(child));
+  });
+  return found;
+};
+
+/** Whether `node` holds a non-zero literal anywhere in its value (#362): itself, any node under it
+ * (arithmetic, a call's argument, a cast, parentheses), or a name it uses as an operand that
+ * `file` declares with one, followed to a fixed point. `seen` holds the names already followed,
+ * so a cycle ends. */
+const holdsLiteral = (
+  file: ts.SourceFile,
+  node: ts.Node,
+  seen: ReadonlySet<string> = new Set(),
+): boolean =>
+  valueParts(node).some((part) => {
+    if (isFloor(part)) {
+      return true;
+    }
+    if (!ts.isIdentifier(part) || !isOperand(part) || seen.has(part.text)) {
+      return false;
+    }
+    const initializer = declarationOf(file, part.text)?.initializer;
+    return (
+      initializer !== undefined && holdsLiteral(file, initializer, new Set([...seen, part.text]))
+    );
+  });
+
+/** The initializer `name` is declared with in `file` when it holds a literal, `undefined` if it is
+ * computed; a name not declared there as a variable cannot be classified, so it is refused by name. */
+const boundOf = (file: ts.SourceFile, name: ts.Identifier): ts.Node | undefined => {
+  const initializer = declarationOf(file, name.text)?.initializer;
+  if (initializer === undefined) {
     throw new UnreadableSourceError(
       `${file.fileName} line ${String(lineOf(file, name))}: cannot tell whether ${name.text} is ` +
         "a literal floor; bound an assertion by a value computed in the test, or by a recorded floor",
     );
   }
-  return isFloor(declared.initializer) ? declared.initializer : undefined;
+  return holdsLiteral(file, initializer, new Set([name.text])) ? initializer : undefined;
 };
 
-/** The lower-bound matcher `node` calls on an assertion, with its argument, if it is one. */
-const lowerBound = (node: ts.Node): { matcher: string; bound: ts.Expression } | undefined => {
+/** `node` with its parentheses, casts and non-null marks taken off. */
+const unwrapped = (node: ts.Expression): ts.Expression =>
+  ts.isParenthesizedExpression(node) ||
+  ts.isAsExpression(node) ||
+  ts.isSatisfiesExpression(node) ||
+  ts.isNonNullExpression(node)
+    ? unwrapped(node.expression)
+    : node;
+
+const SIGNS = new Set([ts.SyntaxKind.MinusToken, ts.SyntaxKind.PlusToken]);
+
+/** Whether `node` is made of literals alone (#362): a literal, a sign or arithmetic on literals, a
+ * cast or parentheses around one, or a name `file` declares with one; nothing read from anywhere
+ * else (no call, property or parameter). `seen` holds the names already followed. */
+const isLiteralsAlone = (
+  file: ts.SourceFile,
+  node: ts.Expression,
+  seen: ReadonlySet<string> = new Set(),
+): boolean => {
+  const inner = unwrapped(node);
+  if (ts.isNumericLiteral(inner) || ts.isBigIntLiteral(inner)) {
+    return true;
+  }
+  if (ts.isPrefixUnaryExpression(inner)) {
+    return SIGNS.has(inner.operator) && isLiteralsAlone(file, inner.operand, seen);
+  }
+  if (ts.isBinaryExpression(inner)) {
+    return isLiteralsAlone(file, inner.left, seen) && isLiteralsAlone(file, inner.right, seen);
+  }
+  if (!ts.isIdentifier(inner) || seen.has(inner.text)) {
+    return false;
+  }
+  const initializer = declarationOf(file, inner.text)?.initializer;
+  return (
+    initializer !== undefined && isLiteralsAlone(file, initializer, new Set([...seen, inner.text]))
+  );
+};
+
+/** Whether `node` is a hand-typed floor value: literals alone, and not zero (a non-emptiness
+ * check). The subject of a reversed matcher, `expect(5).toBeLessThan(n)`, and a floor constant. */
+const isLiteralValue = (file: ts.SourceFile, node: ts.Expression): boolean =>
+  isLiteralsAlone(file, node) && holdsLiteral(file, node);
+
+/** A bound matcher `node` calls on an assertion: its name as written, its argument, the
+ * assertion's subject, and whether it bounds the subject from below (`lower`) or, reversed, the
+ * argument from below by the subject (`expect(5).toBeLessThan(n)`). */
+const boundMatcher = (
+  node: ts.Node,
+):
+  | { matcher: string; bound: ts.Expression; subject: ts.Expression | undefined; lower: boolean }
+  | undefined => {
   if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) {
     return undefined;
   }
-  const matcher = node.expression.name.text;
+  const name = node.expression.name.text;
   let receiver = node.expression.expression;
   let negated = false;
   while (ts.isPropertyAccessExpression(receiver) && MODIFIERS.has(receiver.name.text)) {
@@ -78,9 +177,10 @@ const lowerBound = (node: ts.Node): { matcher: string; bound: ts.Expression } | 
     receiver = receiver.expression;
   }
   const [bound] = node.arguments;
-  const lower = negated ? UPPER.has(matcher) : LOWER.has(matcher);
-  return lower && isAssertion(receiver) && bound !== undefined
-    ? { matcher: `${negated ? "not." : ""}${matcher}`, bound }
+  const lower = negated ? UPPER.has(name) : LOWER.has(name);
+  const upper = negated ? LOWER.has(name) : UPPER.has(name);
+  return (lower || upper) && isAssertion(receiver) && bound !== undefined
+    ? { matcher: `${negated ? "not." : ""}${name}`, bound, subject: receiver.arguments[0], lower }
     : undefined;
 };
 
@@ -91,13 +191,15 @@ const COMPARISONS = new Map<ts.SyntaxKind, "left" | "right">([
   [ts.SyntaxKind.LessThanEqualsToken, "left"],
 ]);
 
-/** A comparison inside an assertion's subject that bounds a value from below by a literal. */
-const isLiteralComparison = (node: ts.Node): node is ts.BinaryExpression => {
+/** A comparison inside an assertion's subject whose lower side holds a literal anywhere. It is
+ * judged by syntax alone, so `elapsed / 1000 < 30` is refused too: write a ceiling with
+ * `toBeLessThan`, where the bound is unambiguous (#362). */
+const isLiteralComparison = (file: ts.SourceFile, node: ts.Node): node is ts.BinaryExpression => {
   if (!ts.isBinaryExpression(node)) {
     return false;
   }
   const side = COMPARISONS.get(node.operatorToken.kind);
-  return side !== undefined && isFloor(node[side]);
+  return side !== undefined && holdsLiteral(file, node[side]);
 };
 
 /** Every literal floor `file`'s assertions write, by line. */
@@ -107,21 +209,26 @@ export const literalFloors = (file: ts.SourceFile): string[] =>
     if (isAssertion(node)) {
       return node.arguments
         .flatMap((argument) => [argument, ...descendants(argument)])
-        .filter(isLiteralComparison)
+        .filter((part) => isLiteralComparison(file, part))
         .map((comparison) => `${at}: ${comparison.getText(file)}`);
     }
-    const found = lowerBound(node);
+    const found = boundMatcher(node);
     if (found === undefined) {
       return [];
     }
-    const { matcher, bound } = found;
+    const { matcher, bound, subject, lower } = found;
+    if (!lower) {
+      return subject !== undefined && isLiteralValue(file, subject)
+        ? [`${at}: expect(${subject.getText(file)}).${matcher}(${bound.getText(file)})`]
+        : [];
+    }
     if (ts.isIdentifier(bound)) {
       const literal = boundOf(file, bound);
       return literal === undefined
         ? []
         : [`${at}: ${matcher}(${bound.text} = ${literal.getText(file)})`];
     }
-    return isFloor(bound) ? [`${at}: ${matcher}(${bound.getText(file)})`] : [];
+    return holdsLiteral(file, bound) ? [`${at}: ${matcher}(${bound.getText(file)})`] : [];
   });
 
 /** Every node under `node`, by the compiler's child walk. */
@@ -148,7 +255,9 @@ export const variablesOf = (file: ts.SourceFile): ts.VariableDeclaration[] =>
 export const floorConstants = (file: ts.SourceFile): string[] =>
   variablesOf(file).flatMap((variable) => {
     const { name, initializer } = variable;
-    return FLOOR_NAME.test(name.getText(file)) && initializer !== undefined && isFloor(initializer)
+    return FLOOR_NAME.test(name.getText(file)) &&
+      initializer !== undefined &&
+      isLiteralValue(file, initializer)
       ? [
           `line ${String(lineOf(file, variable))}: ${name.getText(file)} = ${initializer.getText(file)}`,
         ]
