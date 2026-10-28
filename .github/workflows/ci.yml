@@ -199,6 +199,58 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # Every commit carries its gap check (#378): on a pull request, each commit it holds; on a push,
+  # each commit it landed on the branch's first-parent line (Shyden, 2026-10-28, "Judge it at merge
+  # + after", "First-parent on a push"): develop's squash commit, main's release merge. The
+  # commit-msg hook can be skipped, so this is the gate (scripts/gaps_checked.py).
+  gaps-checked:
+    name: gaps-checked
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      # uv installs the Python .python-version pins, and the scope and the lock run on it, never
+      # on the runner image's own python3 (#382). Neither reads a fast-path file.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - name: "Scope: may this docs-only change skip the rest?"
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: uv run --no-project scripts/ci_scope.py "$EVENT_NAME"
+      - name: "Lock the docs-only fast path: no later step may read it"
+        if: steps.scope.outputs.docs_only != 'true'
+        run: uv run --no-project scripts/lock_fast_path.py
+      # The checkout holds two commits; the range needs every commit between its ends. The
+      # repository is public, so the fetch needs no credential.
+      - name: Fetch every commit between the range's ends
+        if: steps.scope.outputs.docs_only != 'true'
+        env:
+          RANGE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          RANGE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: git fetch --no-tags --quiet --unshallow origin "$RANGE_BASE" "$RANGE_HEAD"
+      - name: Judge every commit's gap check
+        if: steps.scope.outputs.docs_only != 'true'
+        env:
+          MODE: ${{ github.event_name == 'pull_request' && 'range' || 'landed' }}
+          RANGE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          RANGE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: uv run --no-project scripts/gaps_checked.py "$MODE" "$RANGE_BASE" "$RANGE_HEAD"
+      # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
+      - name: Keep the workflow trace
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: workflow-trace-${{ github.job }}-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/workflow-trace
+          if-no-files-found: error
+          retention-days: 7
+
   build:
     name: build
     runs-on: ubuntu-26.04
@@ -732,6 +784,7 @@ jobs:
         lint,
         test,
         audit,
+        gaps-checked,
         build,
         extension,
         guards,
@@ -811,6 +864,7 @@ jobs:
         lint,
         test,
         audit,
+        gaps-checked,
         build,
         extension,
         guards,

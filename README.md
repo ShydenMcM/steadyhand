@@ -44,6 +44,11 @@ and format checks, mypy, and the extension's lint, format and type checks, and a
 stops the push, named. It runs no test suite: run the unit suites by hand before each push
 (`uv run --locked pytest`, and `npm test` in `extension/`); CI runs every other suite.
 
+Its `commit-msg` refuses a message without its `Gaps checked:` section (a `- Before:`, an
+`- After:` and a `- New passes:` entry), unless the commit holds only `.md` files. A git hook can
+be skipped, so CI's `gaps-checked` job is the gate: it judges every commit of a pull request, and
+every commit a push lands on `develop` or `main`.
+
 ## Contributing
 
 Every sentence a report says beyond its figures, and every figure it shows, carries a stable key,

@@ -1,0 +1,4 @@
+#!/bin/sh
+# The gap check every commit message carries (#378). Installed by
+# `git config core.hooksPath .githooks` (README.md, Setting up a clone).
+exec uv run --no-project scripts/gaps_checked.py commit-msg "$@"
