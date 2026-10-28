@@ -1,0 +1,42 @@
+# #341: the paper audit log names no one. The integration suite's golden resume plants the login
+# names in the command's environment and the process's own, then reads every value of every table
+# in the state file. I1 writes the process's USER back into the resume line, the route a test
+# planting only the command's environment would miss; I2 is the same defect against the golden
+# journey, whose resume step reads the page it prints and never the audit, so it stays green; I3
+# makes the state-file reader see no tables, which the test's own table list must turn red.
+
+[[mutation]]
+id = "I1"
+why = "The resume line ends with the process's login name again, read from os.environ."
+path = "packages/steadyhand-idx/src/steadyhand_idx/paper.py"
+old = "({halt.cause.text})\",\n"
+new = "({halt.cause.text}), by {__import__('os').environ.get('USER', 'unknown')}\",\n"
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_commands_golden.py"]
+expect = "red"
+red = [
+    "tests/integration/cli/test_paper_commands_golden.py::test_resume_writes_no_login_name_anywhere_in_the_state_file",
+]
+
+[[mutation]]
+id = "I2"
+why = "The same login name in the resume line, against the golden journey: it reads the resume page, not the audit, so I1's test is the one to catch it."
+path = "packages/steadyhand-idx/src/steadyhand_idx/paper.py"
+old = "({halt.cause.text})\",\n"
+new = "({halt.cause.text}), by {__import__('os').environ.get('USER', 'unknown')}\",\n"
+suite = "integration"
+tests = ["tests/integration/cli/test_journeys_golden.py"]
+expect = "green"
+
+[[mutation]]
+id = "I3"
+why = "The state-file reader lists no tables, so a search for the planted names finds none in nothing."
+path = "tests/cli/cli_world.py"
+old = "WHERE type = 'table' ORDER BY name"
+new = "WHERE type = 'view' ORDER BY name"
+suite = "integration"
+tests = ["tests/integration/cli/test_paper_commands_golden.py"]
+expect = "red"
+red = [
+    "tests/integration/cli/test_paper_commands_golden.py::test_resume_writes_no_login_name_anywhere_in_the_state_file",
+]

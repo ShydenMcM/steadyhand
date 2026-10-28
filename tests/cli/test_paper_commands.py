@@ -7,7 +7,8 @@ each page names are checked on the page itself.
 """
 
 import io
-import shutil
+import sqlite3
+from contextlib import closing
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
@@ -20,9 +21,11 @@ from cli_world import (
     Cli,
     at,
     halted,
+    names_held,
     opened,
     page,
     paper,
+    planted,
     quiet,
     ran_to,
     recorded_source,
@@ -63,7 +66,7 @@ from steadyhand_idx.cli import World, main
 from steadyhand_idx.notes import PAPER_ORDER_SKIPPED, PAPER_RESUMED, PAPER_STRATEGY_SWITCHED
 from steadyhand_idx.paper import HaltCausePresentError, check_resume
 from steadyhand_idx.paper_pages import day_report_page, income_page, status_page
-from steadyhand_idx.state import Account, Outcome
+from steadyhand_idx.state import STATE_FILE, Account, Outcome
 
 
 def retired(cli: Cli) -> None:
@@ -312,7 +315,7 @@ def test_a_typed_resume_clears_the_halt_and_the_next_day_orders_again(tmp_path: 
         PAPER_RESUMED,
         (
             "resumed ordering after the halt of 2021-02-02 (daily loss limit: the unit value "
-            "fell 2.53%, the limit is 0.10%), by tester"
+            "fell 2.53%, the limit is 0.10%)"
         ),
     )
     later = run_on(cli, trading_days()[2])
@@ -449,7 +452,7 @@ def test_switch_is_refused_while_the_account_is_halted(tmp_path: Path) -> None:
 def test_a_typed_switch_keeps_the_holdings_and_cash_and_clears_the_memory(
     tmp_path: Path,
 ) -> None:
-    cli = replace(ran_to(tmp_path, trading_days()[1], quiet()), env={"USER": "tester"})
+    cli = ran_to(tmp_path, trading_days()[1], quiet())
     retired(cli)
     with opened(cli) as store:
         before = store.account()
@@ -475,10 +478,7 @@ def test_a_typed_switch_keeps_the_holdings_and_cash_and_clears_the_memory(
     assert (line.day, line.note.key, line.note.text) == (
         trading_days()[1],
         PAPER_STRATEGY_SWITCHED,
-        (
-            "switched the strategy from retired to buy-and-hold, keeping the holdings and the "
-            "cash, by tester"
-        ),
+        ("switched the strategy from retired to buy-and-hold, keeping the holdings and the cash"),
     )
     assert run_on(cli, trading_days()[2]).code == 0
 
@@ -677,27 +677,41 @@ def test_the_income_report_is_the_backtests_over_the_same_days(tmp_path: Path) -
     assert f"\n\n{PROJECTION_LABEL}:\n" in result.out
 
 
-def test_resume_names_who_resumed_from_logname_or_else_unknown(tmp_path: Path) -> None:
-    # One halted account, saved as the second day's daily-loss halt left it, copied for each case.
+def test_resume_writes_no_login_name_anywhere_in_the_state_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     second = short_trading_days()[1]
     saved = saved_account(tmp_path, second, quiet(SHORT_JUMPY), daily_loss="0.001")
-    first = replace(saved, env={"USER": "tester"})
-    for name in ("again", "both"):
-        shutil.copytree(first.home, tmp_path / name / "home")
-    cli = replace(first, env={"LOGNAME": "operator"})
+    cli = planted(saved, monkeypatch)
     assert cli("resume", "buy-and-hold", stdin="resume\n").code == 0
+    assert names_held(cli, "resumed ordering after the halt of ") == []
+
+
+def test_switch_writes_no_login_name_anywhere_in_the_state_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cli = planted(ran_to(tmp_path, trading_days()[1], quiet()), monkeypatch)
+    retired(cli)
+    assert cli("paper", "switch", "buy-and-hold", stdin="buy-and-hold\n").code == 0
+    assert names_held(cli, "switched the strategy from retired to buy-and-hold") == []
+
+
+def test_a_resume_line_naming_its_user_from_an_older_release_still_reads(tmp_path: Path) -> None:
+    # Releases before #341 ended the line with ", by <login name>". The audit is append-only, so
+    # no migration rewrites it: the line stays as written and the account still opens.
+    second = short_trading_days()[1]
+    cli = saved_account(tmp_path, second, quiet(SHORT_JUMPY), daily_loss="0.001")
+    old = "resumed ordering after the halt of 2021-02-02 (a halt), by tester"
+    with closing(sqlite3.connect(cli.home / STATE_FILE)) as database, database:
+        database.execute(
+            "INSERT INTO audit (day, key, line) VALUES (?, ?, ?)",
+            (second.isoformat(), PAPER_RESUMED, old),
+        )
+    status = cli("paper", "status")
+    assert (status.code, status.err) == (0, "")
     with opened(cli) as store:
-        assert store.audit()[-1].note.text.endswith(", by operator")
-    again = replace(first, home=tmp_path / "again" / "home", env={})
-    assert again("resume", "buy-and-hold", stdin="resume\n").code == 0
-    with opened(again) as store:
-        assert store.audit()[-1].note.text.endswith(", by unknown")
-    both = replace(
-        first, home=tmp_path / "both" / "home", env={"USER": "tester", "LOGNAME": "operator"}
-    )
-    assert both("resume", "buy-and-hold", stdin="resume\n").code == 0
-    with opened(both) as store:
-        assert store.audit()[-1].note.text.endswith(", by tester")
+        line = store.audit()[-1]
+    assert (line.day, line.note.key, line.note.text) == (second, PAPER_RESUMED, old)
 
 
 def test_resume_is_refused_while_the_drawdown_is_still_past_its_limit(tmp_path: Path) -> None:
