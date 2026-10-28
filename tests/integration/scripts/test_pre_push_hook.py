@@ -50,6 +50,14 @@ def git(repo: Path, *args: str) -> str:
     return done.stdout
 
 
+PLANTED_MESSAGE = (
+    "planted\n\nGaps checked:\n"
+    "- Before: a defect for each check, planted so each refuses its own alone\n"
+    "- After: every check named with its plant, none with another check's plant\n"
+    "- New passes: none\n"
+)
+
+
 @dataclass(frozen=True)
 class Clone:
     path: Path
@@ -136,7 +144,8 @@ def planted(clone: Clone) -> Iterator[Pushed]:
     for relative, text in PLANTS.values():
         (clone.path / relative).write_text(text, encoding="utf-8")
     git(clone.path, "add", "-A")
-    git(clone.path, "commit", "--quiet", "-m", "planted")
+    # The clone's commit-msg hook (#378) refuses a message without its gap check.
+    git(clone.path, "commit", "--quiet", "-m", PLANTED_MESSAGE)
     yield push(clone, git(clone.path, "rev-parse", "HEAD").strip())
     git(clone.path, "checkout", "--quiet", "--detach", clone.head)
 

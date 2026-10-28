@@ -27,16 +27,15 @@ LOCK = {
     "run": "uv run --no-project scripts/lock_fast_path.py",
 }
 UV_VERSION = "${{ env.UV_VERSION }}"
-# Measured on 2026-10-26 (#382, uv set up before the scope in every job): 11 gated jobs whose
-# later steps number 69, the lock included. Lower each only by a deliberate edit when the
-# workflow shrinks.
-GATED_FLOOR = 11
+# Measured on 2026-10-28 (#378, the gaps-checked job added): 12 gated jobs whose later steps
+# number 72, the lock included. Lower each only by a deliberate edit when the workflow shrinks.
+GATED_FLOOR = 12
 # Every job ends by keeping its steps' traces, docs-only or not (#384): the step reads only the
 # runner's temp folder, never a fast-path file, and it is pinned in test_workflow_trace_ci.py.
 TRACE_UPLOAD = "Keep the workflow trace"
 # The one job-level condition allowed: it never skips the job, so its check always reports.
 NEVER_SKIPPED = "${{ !cancelled() }}"
-SKIPPED_STEPS_FLOOR = 69
+SKIPPED_STEPS_FLOOR = 72
 
 # PyYAML reads the bare key `on` as the boolean True, so a key may be a bool.
 WORKFLOW = ci()
@@ -53,6 +52,7 @@ def test_the_gated_and_deploy_jobs_are_the_ones_expected() -> None:
     assert "integration" in GATED
     assert "extension-integration" in GATED
     assert "properties" in GATED
+    assert "gaps-checked" in GATED
     assert DEPLOYS == ["deploy-dev"]
     assert len(GATED) >= GATED_FLOOR
 

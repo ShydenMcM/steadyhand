@@ -1,0 +1,162 @@
+# #378: the gap check through git in a fresh clone (tests/integration/scripts/test_gaps_checked_hook.py),
+# proved on mutations predicted before the first run. The clone commits the checkout's uncommitted
+# changes, so each mutation planted here is the hook and the script the clone runs. G1 makes the
+# hook run nothing; G2 lets code renamed to a .md name pass as markdown; G3 stops cutting at the
+# scissors line; G4 lets another comment character through; G5 judges a push's whole range, not
+# its first-parent line; G6 and G7 lose a merge commit's own files (G6 to none, G7 to its last
+# parent's diff); G8 and G9 drop the markdown exemption from the check and from the hook; G10 reads the
+# working tree in place of the index. G11 plants #377's pre-push test's old bare message, which
+# the clone's commit-msg hook now refuses.
+
+[[mutation]]
+id = "G1"
+why = "The installed hook runs nothing and exits 0, so a commit without its section is made."
+path = ".githooks/commit-msg"
+old = "exec uv run --no-project scripts/gaps_checked.py commit-msg \"$@\"\n"
+new = "exit 0\n"
+suite = "integration"
+tests = ["tests/integration/scripts/test_gaps_checked_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_m_without_a_section_is_refused",
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_a_message_file_without_a_section_is_refused",
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_a_heredoc_without_a_section_is_refused",
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_an_amend_of_code_without_a_section_is_refused",
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_a_merge_of_code_without_a_section_is_refused",
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_markdown_beside_code_is_refused",
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_code_renamed_to_a_markdown_name_is_refused",
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_a_partial_commit_of_code_is_refused",
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_a_section_below_the_scissors_line_git_cuts_is_refused",
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_another_comment_character_is_refused",
+]
+
+[[mutation]]
+id = "G2"
+why = "The hook reads the index with renames on, so code renamed to a .md name lists as markdown alone."
+path = "scripts/gaps_checked.py"
+old = "\"diff\", \"--cached\", \"--name-only\", \"--no-renames\", \"-z\""
+new = "\"diff\", \"--cached\", \"--name-only\", \"-z\""
+suite = "integration"
+tests = ["tests/integration/scripts/test_gaps_checked_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_code_renamed_to_a_markdown_name_is_refused",
+]
+
+[[mutation]]
+id = "G3"
+why = "The scissors line is passed over, so a section git cuts off is judged as if it landed."
+path = "scripts/gaps_checked.py"
+old = "        if line.rstrip(\"\\n\") == SCISSORS:\n            break\n"
+new = "        if line.rstrip(\"\\n\") == SCISSORS:\n            continue\n"
+suite = "integration"
+tests = ["tests/integration/scripts/test_gaps_checked_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_a_section_below_the_scissors_line_git_cuts_is_refused",
+]
+
+[[mutation]]
+id = "G4"
+why = "Another comment character is let through, though git drops lines the hook still reads."
+path = "scripts/gaps_checked.py"
+old = "        if value != COMMENT:\n"
+new = "        if False:\n"
+suite = "integration"
+tests = ["tests/integration/scripts/test_gaps_checked_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_another_comment_character_is_refused",
+]
+
+[[mutation]]
+id = "G5"
+why = "A push judges every commit behind the merge it landed, against Shyden's first-parent ruling."
+path = "scripts/gaps_checked.py"
+old = "    line = (\"--first-parent\",) if first_parent else ()\n"
+new = "    line = ()\n"
+suite = "integration"
+tests = ["tests/integration/scripts/test_gaps_checked_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_a_push_judges_the_merge_it_landed_and_not_the_branch_behind_it",
+]
+
+[[mutation]]
+id = "G6"
+why = "A merge is read with --root alone, which lists no files, so a docs-only merge is judged as code."
+path = "scripts/gaps_checked.py"
+old = "        against = (parents[0], commit) if parents else (\"--root\", commit)\n"
+new = "        against = (\"--root\", commit)\n"
+suite = "integration"
+tests = ["tests/integration/scripts/test_gaps_checked_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_a_landed_docs_only_merge_and_commit_pass_the_check",
+]
+
+[[mutation]]
+id = "G7"
+why = "A merge is read against its last parent, so the branch's own code counts as the merge's."
+path = "scripts/gaps_checked.py"
+old = "        against = (parents[0], commit) if parents else (\"--root\", commit)\n"
+new = "        against = (parents[-1], commit) if parents else (\"--root\", commit)\n"
+suite = "integration"
+tests = ["tests/integration/scripts/test_gaps_checked_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_a_landed_docs_only_merge_and_commit_pass_the_check",
+]
+
+[[mutation]]
+id = "G8"
+why = "The check judges a docs-only commit too, so a handover commit without a section fails."
+path = "scripts/gaps_checked.py"
+old = "        problem = None if only_markdown(files) else section_problem(message)\n"
+new = "        problem = section_problem(message)\n"
+suite = "integration"
+tests = ["tests/integration/scripts/test_gaps_checked_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_a_landed_docs_only_merge_and_commit_pass_the_check",
+]
+
+[[mutation]]
+id = "G9"
+why = "The hook judges a docs-only commit too, against the rule's .md exemption."
+path = "scripts/gaps_checked.py"
+old = "    if only_markdown(names(git(root, \"diff\", \"--cached\", \"--name-only\", \"--no-renames\", \"-z\"))):\n        return None\n"
+new = ""
+suite = "integration"
+tests = ["tests/integration/scripts/test_gaps_checked_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_only_markdown_commits_without_a_section",
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_a_partial_commit_of_only_markdown_needs_no_section",
+]
+
+[[mutation]]
+id = "G10"
+why = "The hook reads the working tree against the index, not the commit git is making."
+path = "scripts/gaps_checked.py"
+old = "\"diff\", \"--cached\", \"--name-only\", \"--no-renames\", \"-z\""
+new = "\"diff\", \"--name-only\", \"--no-renames\", \"-z\""
+suite = "integration"
+tests = ["tests/integration/scripts/test_gaps_checked_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_gaps_checked_hook.py::test_only_markdown_commits_without_a_section",
+]
+
+[[mutation]]
+id = "G11"
+why = "The pre-push test's planted commit loses its section, so the clone's commit-msg hook refuses it."
+path = "tests/integration/scripts/test_pre_push_hook.py"
+old = "    git(clone.path, \"commit\", \"--quiet\", \"-m\", PLANTED_MESSAGE)\n"
+new = "    git(clone.path, \"commit\", \"--quiet\", \"-m\", \"planted\")\n"
+suite = "integration"
+tests = ["tests/integration/scripts/test_pre_push_hook.py"]
+expect = "red"
+red = [
+    "tests/integration/scripts/test_pre_push_hook.py::test_the_planted_commit_is_refused_with_every_check_named",
+]
