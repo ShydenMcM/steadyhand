@@ -113,6 +113,7 @@ def test_the_changed_files_come_from_the_merge_commits_two_parents(
         "--",
         ".github/workflows/",
         LIVE,
+        "tests/logs/",
     ]
 
 
@@ -318,3 +319,53 @@ def test_a_workflow_measuring_no_file_of_its_own_downloads_no_report(
     assert run_main(repo, tmp_path / "out") == 0
     assert not [call for call in stood_in["c"].calls if "--name" in call]
     assert not (tmp_path / "out/record-floors-python").exists()
+
+
+LOGS = ".github/workflows/logs.yml"
+
+
+def logs_commands(changed: bytes) -> Commands:
+    """git and gh as a pull request changing a file under tests/logs meets them (#336)."""
+    return Commands(
+        answers={
+            ("git", "diff"): changed,
+            ("git", "show"): SHAPE_TEXT.encode(),
+            ("gh", "api", f"repos/{SLUG}/actions/workflows/logs.yml/runs"): runs_listing(9),
+            ("gh", "api", f"repos/{SLUG}/actions/runs/9/jobs"): jobs_payload(),
+        },
+        downloads={
+            "9": {
+                "workflow-trace-shape-0/shape/__run": TRACE,
+                "coverage-python-logs/coverage.json": '{"run": 9}',
+            }
+        },
+    )
+
+
+def logs_repo(tmp_path: Path) -> Path:
+    path = tmp_path / LOGS
+    path.parent.mkdir(parents=True)
+    path.write_text(SHAPE_TEXT, encoding="utf-8")
+    return tmp_path
+
+
+def test_a_change_under_tests_logs_reads_the_logs_workflows_run_and_report(
+    tmp_path: Path, stood_in: dict[str, Commands]
+) -> None:
+    stood_in["c"] = logs_commands(b"tests/logs/cli/test_paper_run_trails.py\0")
+    assert run_main(logs_repo(tmp_path / "repo"), tmp_path / "out") == 0
+    assert json.loads((tmp_path / "out/logs.json").read_text(encoding="utf-8"))["meta"] == {
+        "sha": HEAD,
+        "workflow": LOGS,
+        "runs": [9],
+    }
+    kept = tmp_path / "out/logs-python/9/coverage.json"
+    assert kept.read_text(encoding="utf-8") == '{"run": 9}'
+
+
+def test_a_change_beside_tests_logs_reads_no_run(
+    tmp_path: Path, stood_in: dict[str, Commands]
+) -> None:
+    stood_in["c"] = logs_commands(b"tests/logsx/test_beside.py\0")
+    assert run_main(logs_repo(tmp_path / "repo"), tmp_path / "out") == 0
+    assert [call[1] for call in stood_in["c"].calls] == ["diff"]

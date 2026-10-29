@@ -1,5 +1,5 @@
-"""Four suites under ``tests/``: unit, the whole-repo guards (#285), integration (#286) and the
-properties (#290).
+"""Five suites under ``tests/``: unit, the whole-repo guards (#285), integration (#286), the
+properties (#290) and the logs (#336).
 
 Shyden's rules (2026-10-08, every project): a test that reads or parses the whole tracked tree to
 check a rule across the code is a guard, run in its own CI job with one limit at its step; a test
@@ -8,11 +8,14 @@ for a lock) is an integration test, also in its own job with one limit; so is a 
 over the recorded golden window, too heavy for the unit limits, with a short stand-in of it in
 unit (#292, under the rule that a cut never drops a real run). Shyden's ruling on #290
 (2026-10-12): every Hypothesis property runs at its full count in a properties suite, with a fast
-stand-in of it in unit. Every other test is unit, bound by the unit rules. The guards live in
-``tests/guards``, integration in ``tests/integration``, the properties in ``tests/properties``.
+stand-in of it in unit. Shyden's rule (2026-10-16, every project): the checks of what the audit
+trails write, keep, refuse or replay run in a logs suite of their own, before each release and not
+on every pull request, with a fast stand-in of each in unit (#336). Every other test is unit,
+bound by the unit rules. The guards live in ``tests/guards``, integration in ``tests/integration``,
+the properties in ``tests/properties``, the logs in ``tests/logs``.
 
-``pytest`` runs unit; ``pytest --suite guards``, ``--suite integration`` and ``--suite properties``
-run the others.
+``pytest`` runs unit; ``pytest --suite guards``, ``--suite integration``, ``--suite properties``
+and ``--suite logs`` run the others.
 A run skips the other suites' folders before importing them, and refuses by name any test it
 collected from another suite anyway: a file named on the command line is collected whatever
 ``pytest_ignore_collect`` says (measured on 2026-10-12).
@@ -28,8 +31,9 @@ TESTS = Path(__file__).resolve().parents[1]
 GUARDS = TESTS / "guards"
 INTEGRATION = TESTS / "integration"
 PROPERTIES = TESTS / "properties"
-SUITES = ("unit", "guards", "integration", "properties")
-FOLDERS = {"guards": GUARDS, "integration": INTEGRATION, "properties": PROPERTIES}
+LOGS = TESTS / "logs"
+SUITES = ("unit", "guards", "integration", "properties", "logs")
+FOLDERS = {"guards": GUARDS, "integration": INTEGRATION, "properties": PROPERTIES, "logs": LOGS}
 
 
 class Located(Protocol):
@@ -46,7 +50,8 @@ class Collected(Protocol):
 
 def suite_of(path: Path) -> str:
     """The suite *path* belongs to: ``guards`` for ``tests/guards`` and everything in it,
-    ``integration`` and ``properties`` likewise for their folders, and ``unit`` for the rest."""
+    ``integration``, ``properties`` and ``logs`` likewise for their folders, and ``unit`` for the
+    rest."""
     for suite, folder in FOLDERS.items():
         if path == folder or folder in path.parents:
             return suite
@@ -99,7 +104,8 @@ def pytest_addoption(parser: pytest.Parser) -> None:
             "the suite to run: unit (the default), guards, the whole-repo guards (#285), or "
             "integration, the tests whose real case needs a process (#286) or runs the recorded "
             "golden window (#292), or properties, the "
-            "Hypothesis properties at their full count (#290)"
+            "Hypothesis properties at their full count (#290), or logs, the checks of the audit "
+            "trails, run before each release (#336)"
         ),
     )
 

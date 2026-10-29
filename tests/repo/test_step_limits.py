@@ -108,4 +108,5 @@ def test_the_files_only_yahoo_shape_measures_are_the_files_its_live_steps_run() 
         if " pytest " in line
     ]
     assert named == [sorted(MEASURED_ONLY_BY[YAHOO_SHAPE])] * 2
-    assert list(MEASURED_ONLY_BY) == [YAHOO_SHAPE]
+    # The logs suite's workflow is the other (#336), pinned in tests/repo/test_logs_ci.py.
+    assert list(MEASURED_ONLY_BY) == [YAHOO_SHAPE, ".github/workflows/logs.yml"]

@@ -24,7 +24,9 @@ from coverage_gate import (
     from_workflow,
     ignore_hints,
     join,
+    measured_only,
     measured_record,
+    owns,
     percentages,
     ratchet,
     renames_in,
@@ -555,3 +557,63 @@ def test_a_script_file_in_which_coverage_counts_no_statement_is_refused() -> Non
 def test_a_script_file_with_one_statement_is_measured() -> None:
     entry = istanbul_file("a.ts", [(1, 1, 0)], [])
     assert list(from_istanbul({entry["path"]: entry}, ROOT)) == ["a.ts"]
+
+
+@pytest.mark.parametrize(
+    ("spec", "path", "owned"),
+    [
+        ("tests/idx/test_yahoo_live.py", "tests/idx/test_yahoo_live.py", True),
+        ("tests/idx/test_yahoo_live.py", "tests/idx/test_yahoo_live.pyi", False),
+        ("tests/idx/test_yahoo_live.py", "tests/idx/test_yahoo.py", False),
+        ("tests/logs/", "tests/logs/test_trails.py", True),
+        ("tests/logs/", "tests/logs/cli/test_paper_run_trails.py", True),
+        ("tests/logs/", "tests/logsx/test_beside.py", False),
+        ("tests/logs/", "tests/logs", False),
+        ("tests/logs/", "tests/cli/tests/logs/test_x.py", False),
+    ],
+    ids=[
+        "file",
+        "file-longer",
+        "file-other",
+        "folder",
+        "folder-nested",
+        "beside",
+        "bare",
+        "inside",
+    ],
+)
+def test_a_spec_names_its_file_or_every_path_under_its_folder(
+    spec: str, path: str, *, owned: bool
+) -> None:
+    assert owns(spec, path) is owned
+
+
+CODE_FILES = [
+    "scripts/a.py",
+    "tests/idx/test_yahoo_live.py",
+    "tests/logs/trail_world.py",
+    "tests/logs/cli/test_paper_run_trails.py",
+    "tests/logsx/test_beside.py",
+]
+
+
+def test_a_workflow_owning_a_folder_measures_every_tracked_code_file_under_it() -> None:
+    assert measured_only(".github/workflows/logs.yml", CODE_FILES) == (
+        "tests/logs/cli/test_paper_run_trails.py",
+        "tests/logs/trail_world.py",
+    )
+
+
+def test_a_workflow_owning_a_file_measures_that_file() -> None:
+    assert measured_only(".github/workflows/yahoo-shape.yml", CODE_FILES) == (
+        "tests/idx/test_yahoo_live.py",
+    )
+
+
+def test_a_folder_holding_no_tracked_code_file_is_refused_by_name() -> None:
+    """A suite folder that owns nothing would let its workflow count for nothing (#336)."""
+    with pytest.raises(GateError) as refused:
+        measured_only(".github/workflows/logs.yml", ["scripts/a.py", "tests/logsx/test_beside.py"])
+    assert str(refused.value) == (
+        ".github/workflows/logs.yml measures tests/logs/, which holds no tracked code file"
+    )

@@ -30,9 +30,25 @@ WORKFLOW = ".github/workflows/ci.yml"
 SHAPE = ".github/workflows/yahoo-shape.yml"
 # The file only yahoo-shape's own run measures (MEASURED_ONLY_BY, #374 AC9).
 LIVE = "tests/idx/test_yahoo_live.py"
+# The logs suite's workflow owns every tracked code file under tests/logs (#336), read from git.
+LOGS = ".github/workflows/logs.yml"
+TRAIL = "tests/logs/test_trails.py"
+TRAIL_HELPER = "tests/logs/trail_world.py"
 # A code file of each language that no suite measures.
 UNMEASURED = ("extension/c.ts", "tools/d.py")
-TRACKED = ["scripts/a.py", "extension/b.ts", *UNMEASURED, WORKFLOW, SHAPE, LIVE, "README.md"]
+TRACKED = [
+    "scripts/a.py",
+    "extension/b.ts",
+    *UNMEASURED,
+    WORKFLOW,
+    SHAPE,
+    LIVE,
+    LOGS,
+    TRAIL,
+    TRAIL_HELPER,
+    "tests/logs/README.md",
+    "README.md",
+]
 CLEAN_RECORD = Record(files={"scripts/a.py": (1, 0)}, unmeasured=UNMEASURED)
 
 
@@ -487,17 +503,20 @@ def live_run(
     sha: str = HEAD,
     run: str = "7",
     trace: bool = True,
+    workflow: str = SHAPE,
 ) -> None:
-    """yahoo-shape read from its run on the head, as workflow_runs.py writes it: its trace report
-    and, one folder per run, its coverage report of the live check."""
-    folder = tmp_path / "reports/workflows/yahoo-shape-python" / run
+    """A hand-started workflow (yahoo-shape unless named) read from its run on the head, as
+    workflow_runs.py writes it: its trace report and, one folder per run, its coverage report of
+    the files only it measures."""
+    stem = Path(workflow).stem
+    folder = tmp_path / f"reports/workflows/{stem}-python" / run
     meta = {"format": 3, "branch_coverage": True}
     write(folder / "coverage.json", json.dumps({"meta": meta, "files": files}))
     write(folder / "sha.txt", f"{sha}\n")
     if trace:
-        shape = {SHAPE: {"executed_lines": [1, 2, 3], "missing_lines": []}}
-        report = {"meta": {"sha": HEAD, "workflow": SHAPE}, "files": shape}
-        write(tmp_path / "reports/workflows/yahoo-shape.json", json.dumps(report))
+        traced = {workflow: {"executed_lines": [1, 2, 3], "missing_lines": []}}
+        report = {"meta": {"sha": HEAD, "workflow": workflow}, "files": traced}
+        write(tmp_path / f"reports/workflows/{stem}.json", json.dumps(report))
 
 
 def with_live(counts: tuple[int, int] | None) -> Record:
@@ -505,8 +524,53 @@ def with_live(counts: tuple[int, int] | None) -> Record:
     return Record(files=files, unmeasured=UNMEASURED)
 
 
-def test_the_live_check_is_the_one_file_only_a_hand_started_workflow_measures() -> None:
-    assert MEASURED_ONLY_BY == {SHAPE: (LIVE,)}
+def test_the_live_check_and_the_logs_folder_are_what_only_hand_started_workflows_measure() -> None:
+    assert MEASURED_ONLY_BY == {SHAPE: (LIVE,), LOGS: ("tests/logs/",)}
+
+
+def test_a_changed_line_under_tests_logs_the_logs_run_ran_passes(
+    tmp_path: Path, stood_in: dict[str, Commands]
+) -> None:
+    stood_in["c"] = git(f"--- a/{TRAIL}\n+++ b/{TRAIL}\n@@ -1 +1 @@\n-o\n+x = 1\n")
+    root, argv = tree(tmp_path)
+    trails = {TRAIL: lines([1, 2, 3], []), TRAIL_HELPER: lines([1, 2, 3], [])}
+    live_run(tmp_path, trails, workflow=LOGS)
+    assert main(["--event", "pull_request", *argv], root) == 0
+
+
+def test_a_changed_line_under_tests_logs_with_no_logs_report_fails(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The logs suite runs on no pull request: only its run on the commit counts, never a line
+    the unit report ran by importing the file."""
+    stood_in["c"] = git(f"--- a/{TRAIL_HELPER}\n+++ b/{TRAIL_HELPER}\n@@ -1 +1 @@\n-o\n+x = 1\n")
+    root, argv = tree(tmp_path)
+    measured_in_unit(tmp_path, TRAIL_HELPER, lines([1, 2, 3], []))
+    assert main(["--event", "pull_request", *argv], root) == 1
+    assert f"{TRAIL_HELPER}:1: changed in a file no suite measures" in capsys.readouterr().err
+
+
+def test_a_logs_report_missing_a_tracked_file_under_tests_logs_fails_closed(
+    tmp_path: Path, stood_in: dict[str, Commands], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The folder is read from git, so a file the run did not measure is named, never skipped."""
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path)
+    live_run(tmp_path, {TRAIL: lines([1, 2, 3], [])}, workflow=LOGS)
+    assert main(["--event", "push", *argv], root) == 1
+    assert f"does not measure {TRAIL_HELPER}" in capsys.readouterr().err
+
+
+def test_a_logs_report_speaks_for_tests_logs_alone(
+    tmp_path: Path, stood_in: dict[str, Commands]
+) -> None:
+    """It runs lines of scripts/a.py too: counted, that file's record would swing between commits
+    that ran the logs suite and commits that did not."""
+    stood_in["c"] = git()
+    root, argv = tree(tmp_path)
+    trails = {TRAIL: lines([1, 2, 3], []), TRAIL_HELPER: lines([1, 2, 3], [])}
+    live_run(tmp_path, {**trails, "scripts/a.py": lines([1, 2, 3], [])}, workflow=LOGS)
+    assert main(["--event", "push", *argv], root) == 0
 
 
 @pytest.mark.parametrize("recorded", [(14, 0), None])

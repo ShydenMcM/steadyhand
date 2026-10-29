@@ -48,8 +48,13 @@ OWN_WORKFLOW = ".github/workflows/ci.yml"
 # The files only a hand-started workflow's own run measures, by that workflow (#374 AC9, Shyden
 # 2026-10-22: "Same as workflows"). A pull request changing one, or the workflow, reads the
 # workflow's run on its commit (scripts/workflow_runs.py), whose coverage report counts for these
-# files alone; otherwise their recorded counts are carried, as the workflow's own are.
-MEASURED_ONLY_BY = {".github/workflows/yahoo-shape.yml": ("tests/idx/test_yahoo_live.py",)}
+# files alone; otherwise their recorded counts are carried, as the workflow's own are. A spec
+# ending in "/" is a folder: every code file git lists under it, read from the tree, never listed
+# by hand (#336: the logs suite runs before each release, never on a pull request).
+MEASURED_ONLY_BY = {
+    ".github/workflows/yahoo-shape.yml": ("tests/idx/test_yahoo_live.py",),
+    ".github/workflows/logs.yml": ("tests/logs/",),
+}
 
 
 def python_folder(workflow: str) -> str:
@@ -59,6 +64,30 @@ def python_folder(workflow: str) -> str:
 
 class GateError(Exception):
     """A report, record or diff the gate cannot read, so nothing it says could be trusted."""
+
+
+def owns(spec: str, path: str) -> bool:
+    """Whether *spec* of MEASURED_ONLY_BY names *path*: the file itself, or, for a folder (a spec
+    ending in "/"), any path under it."""
+    return path.startswith(spec) if spec.endswith("/") else path == spec
+
+
+def measured_only(workflow: str, code_files: Iterable[str]) -> tuple[str, ...]:
+    """The code files only *workflow* measures: each file it names, and each of *code_files*
+    under a folder it names. A folder holding none is refused, since its workflow would count for
+    nothing."""
+    files = sorted(set(code_files))
+    owned: list[str] = []
+    for spec in MEASURED_ONLY_BY[workflow]:
+        if not spec.endswith("/"):
+            owned.append(spec)
+            continue
+        under = [path for path in files if owns(spec, path)]
+        if not under:
+            msg = f"{workflow} measures {spec}, which holds no tracked code file"
+            raise GateError(msg)
+        owned += under
+    return tuple(owned)
 
 
 @dataclass(frozen=True)
@@ -489,7 +518,9 @@ def _from_folder(folder: Path, report: str, sha: str) -> Any:  # noqa: ANN401 - 
     return _read_json(folder / report)
 
 
-def _live_reports(folder: Path, head_sha: str) -> list[tuple[str, dict[str, FileCoverage]]]:
+def _live_reports(
+    folder: Path, head_sha: str, code_files: list[str]
+) -> list[tuple[str, dict[str, FileCoverage]]]:
     """Each run's coverage report of the files only a hand-started workflow measures (#374 AC9),
     cut to those files: what else it runs is for the pull request's own suites to measure."""
     owners = {python_folder(workflow): workflow for workflow in MEASURED_ONLY_BY}
@@ -505,13 +536,14 @@ def _live_reports(folder: Path, head_sha: str) -> list[tuple[str, dict[str, File
         if not runs:
             msg = f"{folder / name} holds no run's report"
             raise GateError(msg)
+        owned = measured_only(workflow, code_files)
         for run in runs:
             coverage = from_python(_from_folder(run, "coverage.json", head_sha))
-            missing = [path for path in MEASURED_ONLY_BY[workflow] if path not in coverage]
+            missing = [path for path in owned if path not in coverage]
             if missing:
                 msg = f"{run / 'coverage.json'} does not measure {', '.join(missing)}"
                 raise GateError(msg)
-            found.append((workflow, {path: coverage[path] for path in MEASURED_ONLY_BY[workflow]}))
+            found.append((workflow, {path: coverage[path] for path in owned}))
     return found
 
 
@@ -527,7 +559,7 @@ def _paired(read: set[str], live: set[str]) -> None:
 
 
 def _measure(
-    args: argparse.Namespace, root: Path
+    args: argparse.Namespace, root: Path, code_files: list[str]
 ) -> tuple[dict[str, FileCoverage], list[str], set[str]]:
     """Every report joined, each place the join differs between a suite's two runs, and each
     workflow whose own coverage report of its files was read."""
@@ -565,7 +597,7 @@ def _measure(
             _same_commit(path, report.get("meta", {}).get("sha"), {args.sha, args.head_sha})
             read.add(str(report.get("meta", {}).get("workflow")))
             parts.append(from_workflow(report))
-        for workflow, coverage in _live_reports(folder, args.head_sha):
+        for workflow, coverage in _live_reports(folder, args.head_sha, code_files):
             live.add(workflow)
             parts.append(coverage)
     _paired(read, live)
@@ -582,7 +614,7 @@ def _carried(
     hand_started = [
         p for p in code_files if p.startswith(WORKFLOWS) and p != OWN_WORKFLOW and p not in measured
     ]
-    only_by = [p for w, files in MEASURED_ONLY_BY.items() if w not in live for p in files]
+    only_by = [p for w in MEASURED_ONLY_BY if w not in live for p in measured_only(w, code_files)]
     return {
         path: None if path in record.unmeasured else record.files.get(path, (0, 0))
         for path in [*hand_started, *only_by]
@@ -629,15 +661,18 @@ def _against_base(root: Path, now: Record) -> list[str]:
     return ratchet(base, now, renames_in(listing.decode("utf-8")))
 
 
-def _code_files(root: Path, measured: Mapping[str, FileCoverage]) -> list[str]:
-    """Every code file git lists; a report measuring a file git does not list is refused."""
+def _code_files(root: Path) -> list[str]:
+    """Every code file git lists."""
     listing = run_tool(root, "git", "ls-files", "-z").decode("utf-8")
-    code_files = sorted(p for p in listing.split("\0") if p and is_code(p))
+    return sorted(p for p in listing.split("\0") if p and is_code(p))
+
+
+def _refuse_strays(measured: Mapping[str, FileCoverage], code_files: list[str]) -> None:
+    """A report measuring a file git does not list is refused."""
     strays = sorted(set(measured) - set(code_files))
     if strays:
         msg = f"the reports measure files git does not list: {strays}"
         raise GateError(msg)
-    return code_files
 
 
 def main(argv: Sequence[str], root: Path) -> int:
@@ -654,8 +689,9 @@ def main(argv: Sequence[str], root: Path) -> int:
     parser.add_argument("--report-root")
     args = parser.parse_args(argv)
     try:
-        measured, wobble, live = _measure(args, root)
-        code_files = _code_files(root, measured)
+        code_files = _code_files(root)
+        measured, wobble, live = _measure(args, root, code_files)
+        _refuse_strays(measured, code_files)
         record = load_record((root / RECORD).read_text(encoding="utf-8"))
         carried = _carried(measured, code_files, record, live)
         now = measured_record(measured, code_files, carried)

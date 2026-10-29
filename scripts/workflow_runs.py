@@ -22,7 +22,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from coverage_gate import MEASURED_ONLY_BY, python_folder
+from coverage_gate import MEASURED_ONLY_BY, owns, python_folder
 from run_tool import ToolError, run_tool
 from workflow_coverage import (
     RunError,
@@ -45,8 +45,9 @@ class RunsError(Exception):
 
 def to_read(repo: Path) -> list[str]:
     """The workflows other than ci.yml the pull request's merge commit adds or changes, and each
-    workflow that alone measures a file it adds or changes (#374 AC9: "Same as workflows")."""
-    only_by = [path for files in MEASURED_ONLY_BY.values() for path in files]
+    workflow that alone measures a file it adds or changes (#374 AC9: "Same as workflows"), a
+    folder's files included: git reads a folder spec as a pathspec (#336)."""
+    only_by = [spec for specs in MEASURED_ONLY_BY.values() for spec in specs]
     span = ("--diff-filter=d", "-z", "HEAD^1", "HEAD", "--", WORKFLOWS, *only_by)
     raw = run_tool(repo, "git", "diff", "--name-only", *span)
     names = [name for name in raw.decode("utf-8").split("\0") if name]
@@ -55,7 +56,11 @@ def to_read(repo: Path) -> list[str]:
         for name in names
         if name.startswith(WORKFLOWS) and name != OWN and name.endswith((".yml", ".yaml"))
     ]
-    owners = [w for w, files in MEASURED_ONLY_BY.items() if set(files) & set(names)]
+    owners = [
+        w
+        for w, specs in MEASURED_ONLY_BY.items()
+        if any(owns(spec, name) for spec in specs for name in names)
+    ]
     return sorted({*changed, *owners})
 
 

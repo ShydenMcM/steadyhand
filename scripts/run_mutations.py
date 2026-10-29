@@ -38,7 +38,7 @@ REPORT = "mutations-report.md"
 # The extension workspace's non-unit vitest projects, each by its suite name here.
 EXTENSION = "extension/"
 VITEST_PROJECTS = {"extension-guards": "guards", "extension-integration": "integration"}
-SUITES = ("guards", "integration", "properties", *VITEST_PROJECTS)
+SUITES = ("guards", "integration", "properties", "logs", *VITEST_PROJECTS)
 EXPECTS = ("red", "green")
 TEXT_KEYS = ("id", "why", "path", "old", "new", "suite", "expect")
 LIST_KEYS = ("tests", "red")
@@ -49,11 +49,11 @@ TOTALS_LINE = re.compile(r"(?m)^=*\s*(\d+ [a-z]+(?:, \d+ [a-z]+)*) in [\d.]+s\b"
 TAIL = 300
 # A file directly in mutations/, so a dispatch's input can name nothing else.
 FILE_NAME = re.compile(r"mutations/[A-Za-z0-9][A-Za-z0-9._-]*\.toml")
-# A test file of a non-unit suite: the Python guards, integration and properties suites, and the
-# extension's guards and integration projects. A pull request that adds or changes one must carry
-# a mutation file that targets it (Shyden, 2026-10-16: "it must be run").
+# A test file of a non-unit suite: the Python guards, integration, properties and logs suites, and
+# the extension's guards and integration projects. A pull request that adds or changes one must
+# carry a mutation file that targets it (Shyden, 2026-10-16: "it must be run").
 NON_UNIT_TEST = re.compile(
-    r"tests/(?:guards|integration|properties)/(?:[^/]+/)*test_[^/]+\.py"
+    r"tests/(?:guards|integration|properties|logs)/(?:[^/]+/)*test_[^/]+\.py"
     r"|extension/tests/(?:guards|integration)/(?:[^/]+/)*[^/]+\.test\.ts"
 )
 

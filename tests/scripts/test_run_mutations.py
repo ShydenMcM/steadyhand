@@ -110,6 +110,7 @@ def test_the_suites_are_the_non_unit_ones() -> None:
         "guards",
         "integration",
         "properties",
+        "logs",
         "extension-guards",
         "extension-integration",
     )
@@ -703,6 +704,10 @@ def test_the_runner_starts_each_suite_s_tool_in_its_home(
         ("tests/guards/test_a.py", True),
         ("tests/integration/cli/test_b_golden.py", True),
         ("tests/properties/test_c.py", True),
+        ("tests/logs/test_state_trails.py", True),
+        ("tests/logs/cli/test_paper_run_trails.py", True),
+        ("tests/logs/trail_world.py", False),
+        ("tests/logsx/test_e.py", False),
         ("extension/tests/guards/core-rules.test.ts", True),
         ("extension/tests/integration/build.test.ts", True),
         ("tests/engine/test_d.py", False),

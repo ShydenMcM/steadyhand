@@ -11,6 +11,7 @@ import suites
 from suites import (
     GUARDS,
     INTEGRATION,
+    LOGS,
     PROPERTIES,
     SUITES,
     TESTS,
@@ -36,6 +37,11 @@ from suites import (
         ("properties/test_engine_money.py", "properties"),
         ("properties/hypothesis_profile.py", "properties"),
         ("propertiesx/test_prefix_only.py", "unit"),
+        ("logs", "logs"),
+        ("logs/test_state_trails.py", "logs"),
+        ("logs/cli/test_paper_run_trails.py", "logs"),
+        ("logsx/test_prefix_only.py", "unit"),
+        ("test_logs.py", "unit"),
         ("engine/test_money.py", "unit"),
         ("test_integration.py", "unit"),
         ("test_guards.py", "unit"),
@@ -63,8 +69,13 @@ def test_the_properties_folder_is_tests_properties() -> None:
     assert expected == PROPERTIES
 
 
-def test_there_are_four_suites_and_unit_comes_first() -> None:
-    assert SUITES == ("unit", "guards", "integration", "properties")
+def test_the_logs_folder_is_tests_logs() -> None:
+    expected = Path(__file__).resolve().parents[1] / "logs"
+    assert expected == LOGS
+
+
+def test_there_are_five_suites_and_unit_comes_first() -> None:
+    assert SUITES == ("unit", "guards", "integration", "properties", "logs")
 
 
 @pytest.mark.parametrize(
@@ -94,13 +105,24 @@ def test_there_are_four_suites_and_unit_comes_first() -> None:
         ("properties", "conftest.py", True),
         ("properties", "properties", False),
         ("properties", "properties/test_engine_money.py", False),
+        ("unit", "logs", True),
+        ("unit", "logs/test_state_trails.py", True),
+        ("guards", "logs", True),
+        ("integration", "logs", True),
+        ("properties", "logs", True),
+        ("logs", "cli", True),
+        ("logs", "cli/test_state.py", True),
+        ("logs", "integration", True),
+        ("logs", "conftest.py", True),
+        ("logs", "logs", False),
+        ("logs", "logs/test_state_trails.py", False),
     ],
 )
 def test_a_run_skips_the_other_suites_files(chosen: str, path: str, *, skipped: bool) -> None:
     assert skips(chosen, TESTS / path) is skipped
 
 
-@pytest.mark.parametrize("chosen", ["unit", "guards", "integration", "properties"])
+@pytest.mark.parametrize("chosen", ["unit", "guards", "integration", "properties", "logs"])
 def test_a_run_walks_down_through_the_folders_above_the_guards(chosen: str) -> None:
     assert skips(chosen, TESTS) is False
     assert skips(chosen, TESTS.parent) is False
@@ -122,6 +144,9 @@ def items(*paths: str) -> list[SimpleNamespace]:
         ("unit", "properties/test_engine_money.py"),
         ("properties", "engine/test_money.py"),
         ("properties", "guards/test_no_float.py"),
+        ("unit", "logs/test_state_trails.py"),
+        ("logs", "cli/test_state.py"),
+        ("logs", "integration/cli/test_paper_run_golden.py"),
     ],
 )
 def test_a_test_from_the_other_suite_is_refused_by_name(chosen: str, stray: str) -> None:
@@ -137,6 +162,7 @@ def test_a_test_from_the_other_suite_is_refused_by_name(chosen: str, stray: str)
         ("guards", "guards/test_lessons.py"),
         ("integration", "integration/cli/test_journeys_installed.py"),
         ("properties", "properties/test_engine_money.py"),
+        ("logs", "logs/test_state_trails.py"),
     ],
 )
 def test_a_run_of_its_own_suite_alone_passes(chosen: str, own: str) -> None:
@@ -176,6 +202,9 @@ def config(chosen: str) -> SimpleNamespace:
         ("unit", "properties", True),
         ("properties", "engine", True),
         ("properties", "properties", None),
+        ("unit", "logs", True),
+        ("logs", "cli", True),
+        ("logs", "logs", None),
     ],
 )
 def test_the_collect_hook_skips_with_true_and_otherwise_leaves_it_to_others(
@@ -215,7 +244,7 @@ def test_a_property_is_a_test_hypothesis_marked(test: object, *, found: bool) ->
     assert is_property(test) is found
 
 
-@pytest.mark.parametrize("chosen", ["unit", "guards", "integration"])
+@pytest.mark.parametrize("chosen", ["unit", "guards", "integration", "logs"])
 def test_a_property_outside_the_properties_suite_is_refused_by_name(chosen: str) -> None:
     mixed = [
         collected("tests/engine/test_money.py::test_plain", SimpleNamespace()),
@@ -231,7 +260,7 @@ def test_a_property_outside_the_properties_suite_is_refused_by_name(chosen: str)
     )
 
 
-@pytest.mark.parametrize("chosen", ["unit", "guards", "integration", "properties"])
+@pytest.mark.parametrize("chosen", ["unit", "guards", "integration", "properties", "logs"])
 def test_a_run_of_plain_tests_passes(chosen: str) -> None:
     refuse_properties(chosen, [collected("tests/x.py::test_plain", SimpleNamespace())])
 
