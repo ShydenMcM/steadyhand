@@ -33,9 +33,11 @@ def test_the_reader_reads_every_workflow(path: Path) -> None:
     assert flow.jobs
 
 
-def test_the_workflows_are_the_four_measured_on_2026_10_22() -> None:
+def test_the_workflows_are_the_four_measured_on_2026_10_22_and_the_logs_suites() -> None:
+    # logs.yml came with the logs suite (#336).
     assert [path.name for path in WORKFLOWS] == [
         "ci.yml",
+        "logs.yml",
         "mutations.yml",
         "record-floors.yml",
         "yahoo-shape.yml",

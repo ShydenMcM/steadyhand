@@ -2,76 +2,29 @@
 
 import sqlite3
 from collections.abc import Iterator
-from contextlib import closing
-from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta, timezone
-from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from cli_world import mode, umask
+from state_world import D1, SETTINGS, account, line, raw, report, rp
 
 from steadyhand import (
-    DATA_BAR_MISSING,
-    IDR,
-    DayReport,
     EngineState,
-    Money,
-    Note,
 )
 from steadyhand_idx.state import (
     BUSY_TIMEOUT_SECONDS,
     MIGRATIONS,
     STATE_FILE,
     Account,
-    AuditLine,
     Outcome,
     Run,
     StateSchemaError,
     StateStore,
 )
 
-D1 = date(2026, 1, 5)
 D2 = date(2026, 1, 6)
 D3 = date(2026, 1, 7)
-SETTINGS = {"account.monthly_contribution_idr": "0", "risk.max_weight": "0.10"}
-
-
-def rp(amount: int) -> Money:
-    return Money(amount, IDR)
-
-
-def account(day: date, cash: int = 10_000_000, strategy: str = "buy-and-hold") -> Account:
-    state = replace(EngineState.opening(rp(cash), D1), last_day=day)
-    return Account(D1, strategy, state, SETTINGS)
-
-
-def report(day: date) -> DayReport:
-    zero = rp(0)
-    return DayReport(
-        day=day,
-        fills=(),
-        rejected=(),
-        cuts=(),
-        queued=(),
-        entitled=(),
-        paid=(),
-        tax=zero,
-        daily_cost=zero,
-        deposit=zero,
-        frozen=(),
-        halt=None,
-        settled=rp(10_000_000),
-        unsettled=zero,
-        holdings_value=zero,
-        value=rp(10_000_000),
-        unit_price=Decimal(1),
-        warnings=(),
-    )
-
-
-def line(day: date, text: str) -> AuditLine:
-    return AuditLine(day, Note(DATA_BAR_MISSING, text))
 
 
 @pytest.fixture
@@ -83,15 +36,6 @@ def store(tmp_path: Path) -> Iterator[StateStore]:
 def saved_through_d2(store: StateStore) -> None:
     assert store.save(account(D1), after=None, report=report(D1), audit=(line(D1, "one"),))
     assert store.save(account(D2), after=D1, report=report(D2), audit=(line(D2, "two"),))
-
-
-def raw(path: Path) -> closing[sqlite3.Connection]:
-    """A second connection to the file, closed when its ``with`` block ends.
-
-    Python 3.13 warns about a connection left for the garbage collector, and ``-W error``
-    fails whichever test is running when it is collected.
-    """
-    return closing(sqlite3.connect(path, isolation_level=None))
 
 
 # The schema.
