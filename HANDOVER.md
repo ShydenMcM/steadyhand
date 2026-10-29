@@ -1,54 +1,52 @@
 # Handover: steadyhand
 
-**Updated:** 2026-10-29 (UTC). Current state only. Older history: `git show 013deb8:HANDOVER.md`.
+**Updated:** 2026-10-29 (UTC), overnight while Shyden sleeps (back about 06:00 WIB). Current state only. Older history: `git show d66cdce:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. EXT stories #222-#245 follow the clean-up queue.
 
-**Shyden is AFK asleep since about 03:40 WIB 2026-10-29** (relayed by shytalk-1e): keep working; park what needs him and ask when he is back.
-
 ## Branches and heads
-- `develop` = 013deb8 (#433 = #362), green by every job on push run 40776756859. Merge green PRs into develop without asking; never `main`.
-- **Closed 2026-10-29:** #341 (PR #428), #337 (every blocker linked; `.superpowers/sdd/337/verify.py`), #320 (PR #431, README), #362 (PR #433, literal-floors reader; floors run 40774892764). Evidence comment per AC on each.
-- **Filed #432** (Estimate 2, P3, now workable): bounds through a parameter. Its plants run only in CI: map each new branch to a plant before the first push.
-- **#317 waits on Shyden:** its CI check needs a read-only board token he creates (a GitHub App cannot read a user-owned board); noted on the ticket.
-- **#336 (P2) parked on Shyden's question** (`.superpowers/sdd/336/question.md`): split about 20 mixed trail tests, or move each whole with a smaller unit copy? Board: Todo. Groundwork: `.superpowers/sdd/336/notes.md`.
-- This handover lands through its own docs PR (`docs/handover-2026-10-29b`).
-- **Commits and merges:** every code commit carries `Gaps checked:`. Every squash merge, docs too, needs `--body-file` with a section and the literal head SHA (the .md exemption also judges against `origin/main`). Run `git commit -F <file>` alone on its line.
+- `develop` = d18bf00, green (push run 40784775572, all 13 jobs). Merge green PRs into develop without asking; never `main`.
+- **Closed 2026-10-29:** #341, #337, #320, #362, #432 (PR #435 → d18bf00; 8 of 8 mutations as predicted; evidence comment per AC).
+- This handover: docs PR on `docs/handover-2026-10-29e` (also the README's Cloudflare note). PR #436 (the previous handover) is closed unmerged, replaced by this one.
+- **Commits and merges:** every code commit carries `Gaps checked:`. Every squash merge, docs too, needs `--body-file` with a section and `--match-head-commit` with the SHA from a file. Run `git commit -F <file>` alone on its line; push before `gh pr create`, in separate calls.
 - `core.hooksPath .githooks`: pre-push refuses anything uncommitted or untracked. Never `--no-verify`.
-- `../steadyhand-272` (#272): develop's `.githooks/pre-push` staged beside an uncommitted `tests/guards/test_no_literal_floor.py`; its next step is merging develop (the merge message needs a section).
+- `../steadyhand-272` (#272): develop's `.githooks/pre-push` staged beside an uncommitted `tests/guards/test_no_literal_floor.py`; next step is merging develop (the message needs a section).
 - Backups (keep 30 days): `377/wip-backup-2026-10-28` (74a0a30, until 2026-11-27); `365/exact-values-backup-2026-10-27` (until 2026-11-26) and `-10-28` (until 2026-11-27); `.superpowers/sdd/365/mutations_head.py`, `pr_body_head.py`, `.superpowers/sdd/378/gaps_checked-current-2026-10-28.py` (until 2026-11-27).
 - **#407 open, held** for five limits rounds at load above 20 (`.superpowers/sdd/407/measure.zsh`).
 
+## Rulings 2026-10-29 (all recorded on their tickets)
+- **#336:** "Split each test": trail assertions move to `logs` on the full input; behaviour assertions stay in unit as written; moved trail checks keep a unit stand-in. AC 2 and AC 3 reworded on the ticket.
+- **#317:** a classic token with only `read:project` (fine-grained tokens cannot read a user-owned board: GitHub docs), also stored as a Dependabot secret of the same name (Dependabot runs get no Actions secrets). Still to measure: an environment branch rule that admits `refs/pull/<n>/merge`; then post Shyden's click list on #317.
+- **#359:** every project may READ repo-template (never write). Form read at `75e741b` (`.superpowers/sdd/359/`). **Parked**, two questions on the ticket: the template has `blank_issues_enabled: true` (AC 1 says off), and the form names `docs/project-board.md` and `scripts/file-story.ts`, which this repo lacks.
+- **Cloudflare environments rule:** N/A, no hosted surface (0 files mention Cloudflare); no story. README notes it.
+
 ## Resume steps
-1. `ListAgents`; `git status --short` clean; `git fetch`; develop's last ci run on its head green by job name.
-2. If this handover's docs PR is open: `~/.claude/scripts/wait-run.sh <repo> <run id> <sha file>` for its ci and mutations runs, `~/.claude/scripts/pr-verdict.sh <pr>`, then merge with `--match-head-commit <literal sha> --body-file` (a sectioned body).
-3. When Shyden is back: ask `.superpowers/sdd/336/question.md` by AskUserQuestion, then plan #336 from the answer (plan reviewed to zero in a scratch worktree, self-approved).
-4. Else the next ticket: #432 (P3, 2), then #359 (3). Read `blocked_by:` first; one branch off `develop`, cut after any pending docs PR merges; In Progress once it exists (`.superpowers/sdd/377/board_status.py <n> "In Progress"`). Extension floors move only via `record-floors.yml` on a scratch ref before the first branch push.
-5. The laptop runs only unit, lint, format and types. Check the text guards statically before pushing; `python3 .superpowers/sdd/365/stand_in_rule.py`.
+1. `ListAgents`; `git status --short` clean; `git fetch`.
+2. This docs PR: wait its ci, merge with `--body-file` (a section) and `--match-head-commit`.
+3. **#336 (P2, 5):** follow `.superpowers/sdd/336/notes.md`: re-run `candidates.py` on develop d18bf00, finish AC 1's per-test classification (test_paper_run, test_paper_commands, journeys, integration, perf; the 3 helper-hidden trail checks), then write the plan with the split ruling, review it to zero in a scratch worktree, branch `336/logs-suite`.
+4. **#317 (5):** measure the PR-ref environment rule, post the click list; the reader, its fail-closed paths and the unit mocks can be built before the token exists.
+5. When Shyden is back: ask #359's two questions.
 
 ## Waiting on Shyden
-- **#336's question** (above): split mixed trail tests, or move whole with smaller unit copies.
-- **#317's token:** a fine-grained read-only Projects token in a branch-restricted environment, or another route.
-- Told 2026-10-29: the gap hook's ".md-only PR needs no section" exemption cannot fire for a PR into develop while develop is ahead of main (it judges against origin/main too).
-- Told 2026-10-28, not ruled: `git-hooks-present.py` does not judge `git pull`, counts a non-executable hook as present, and `git -c core.hooksPath=...` overrides it.
-- #400 and #308: his settings clicks (`main` strict off then `release-cut`; `coverage` on `main`).
-- #394's guard refuses four vi members beyond the ruling's three (told 2026-10-23).
-- #272: constant-name `setattr`; its reader refuses `max(...) == x` (comment 2026-10-27). #308's read-only key.
-- Whether the floors check should narrow to the files floor guards read.
+- **#359:** the two questions above.
+- **#317:** creating the classic token and its two secrets, once the click list is posted.
+- Told 2026-10-29: the gap hook's ".md-only PR needs no section" exemption never fires while develop is ahead of main.
+- Told 2026-10-28, not ruled: `git-hooks-present.py` gaps (`git pull`, a non-executable hook, `-c core.hooksPath`).
+- #400 and #308: his settings clicks. #394's four vi members. #272's `setattr` ruling and #308's key. Whether the floors check narrows to the files floor guards read.
 
 ## Running
 Nothing local. No agent.
 
-## Next on the clean-up queue (all before #222)
-Recorded priorities: #348 P1 (waits on repo-template#27), #336 P2 (parked), #432 P3; the rest unranked until #315. #400 (3) and #308 (2) on his clicks, #315 (2, repo-template#6), #317 (5, his token), #359 (3); #272 (13); #366 (2) after #272; #407 (2) when load allows.
+## Queue
+#348 P1 (repo-template#27), #336 P2 (5, unblocked), #317 (5, building), #359 (3, parked); #400 (3) and #308 (2) his clicks, #315 (2, repo-template#6); #272 (13, ruling); #366 (2) after #272; #407 (2) at load above 20.
 
 ## Progress (2026-10-29, `uv run --locked python .superpowers/sdd/estimates/progress.py`; `post-launch` left out)
-- **Measured:** EXT 4 of 28 stories closed (21 of 184 points). Board open: 36 tickets, 207 points across 35 scored (epic #214 unscored). Closed 2026-10-22 to 2026-10-29: 14 tickets, 62 points (#341, #337, #320 and #362 among them).
-- **By tickets: 14% complete (4 of 28 EXT stories). ETA 2026-11-16, low confidence:** 35 open scored tickets at 2.0 a day is about 18 days.
-- **By effort: 207 points remaining across 35 scored open tickets. ETA 2026-11-21, low confidence:** 8.9 points a day is about 23 days.
-- **Assumed:** last week's pace holds. **Outside waits:** broker account (#242), Web Store review, repo-template#6 (#315), repo-template#27 (#348), the key (#308), #272's ruling, #336's question, #317's token, #400's and #308's settings clicks, load above 20 for #407.
+- **Measured:** EXT 4 of 28 stories closed (21 of 184 points). Board open: 35 tickets, 205 points across 34 scored (epic #214 unscored). Closed 2026-10-22 to 2026-10-29: 15 tickets, 64 points.
+- **By tickets: 14% complete (4 of 28 EXT stories). ETA 2026-11-14, low confidence:** 34 open scored tickets at 2.1 a day is about 16 days.
+- **By effort: 205 points remaining across 34 scored open tickets. ETA 2026-11-21, low confidence:** 9.1 points a day is about 22 days.
+- **Assumed:** last week's pace holds; it will not while much of the queue waits on him. **Outside waits:** broker account (#242), Web Store review, repo-template#6 and #27, #317's token, #359's questions, #272's ruling, #400's and #308's clicks, load for #407.
 
 ## Notes
 - Wi-Fi is unstable: name the network as a possible cause of a failed fetch or push; no retries.
-- `git diff-tree` ignores `--first-parent`: name the two trees.
-- The floors hook wants the line exactly `Floors: none moved`; put any reason on the line before. A commit and a push go in separate commands.
+- Extension floors move only through `record-floors.yml` on a scratch ref before a branch's first push; map every new guard branch to a plant first.
+- The floors hook wants `Floors: none moved` or `Floors: recorded in run <id>`.
