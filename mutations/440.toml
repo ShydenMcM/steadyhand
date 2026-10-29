@@ -1,0 +1,148 @@
+# #440: the exact Node pin proved on planted mutations, predicted before the first run. E1 to E4
+# plant a .nvmrc that is not 26.12.1 (a bare major, a major and minor, the next patch, a v prefix);
+# R1 to R6 weaken the reader: it takes a bare major, drops the newline, reads Unicode digits, takes
+# a leading zero, loses the file's name from its refusal, or returns the pin whatever it reads.
+
+[[mutation]]
+id = "E1"
+why = ".nvmrc names a bare major again, so setup-node fetches the newest 26.x on every run."
+path = ".nvmrc"
+old = "26.12.1"
+new = "26"
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = ["tests/guards/test_supply_chain.py::test_nvmrc_names_node_26_12_1"]
+
+[[mutation]]
+id = "E2"
+why = ".nvmrc names a major and minor, so each run takes the newest patch of 26.12."
+path = ".nvmrc"
+old = "26.12.1"
+new = "26.12"
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = ["tests/guards/test_supply_chain.py::test_nvmrc_names_node_26_12_1"]
+
+[[mutation]]
+id = "E3"
+why = ".nvmrc names another exact release, so Node moved with no pin test changed."
+path = ".nvmrc"
+old = "26.12.1"
+new = "26.12.2"
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = ["tests/guards/test_supply_chain.py::test_nvmrc_names_node_26_12_1"]
+
+[[mutation]]
+id = "E4"
+why = ".nvmrc carries a v prefix, a form the pin test does not read as one exact release."
+path = ".nvmrc"
+old = "26.12.1"
+new = "v26.12.1"
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_nvmrc_names_node_26_12_1",
+    "tests/guards/test_supply_chain.py::test_types_node_follows_the_node_that_ci_runs",
+]
+
+[[mutation]]
+id = "R1"
+why = "The reader takes one to three parts, so a bare major or a major and minor reads as exact."
+path = "tests/guards/test_supply_chain.py"
+old = '(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))\n"'
+new = '(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*)){0,2})\n"'
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[bare-major]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[major-minor]",
+]
+
+[[mutation]]
+id = "R2"
+why = "The newline is optional, so a file with none reads as exact."
+path = "tests/guards/test_supply_chain.py"
+old = '[0-9]*))\n")'
+new = '[0-9]*))\n?")'
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[no-newline]",
+]
+
+[[mutation]]
+id = "R3"
+why = "The major is read with \\d, so fullwidth digits and a leading zero read as a release."
+path = "tests/guards/test_supply_chain.py"
+old = '(?P<version>(?:0|[1-9][0-9]*)\.'
+new = '(?P<version>\d+\.'
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[fullwidth-digits]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[leading-zero]",
+]
+
+[[mutation]]
+id = "R4"
+why = "The major may start with 0, so 026.12.1 reads as a release."
+path = "tests/guards/test_supply_chain.py"
+old = '(?P<version>(?:0|[1-9][0-9]*)\.'
+new = '(?P<version>[0-9]+\.'
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[leading-zero]",
+]
+
+[[mutation]]
+id = "R5"
+why = "The refusal no longer names the file it read, so it is not refused by name."
+path = "tests/guards/test_supply_chain.py"
+old = 'msg = f"{where}: not one exact Node version: {text!r}"'
+new = 'msg = f"not one exact Node version: {text!r}"'
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[bare-major]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[major-minor]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[lts-alias]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[node-alias]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[v-prefix]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[range]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[caret]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[wildcard]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[no-newline]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[two-newlines]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[crlf]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[leading-space]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[trailing-space]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[leading-zero]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[fullwidth-digits]",
+    "tests/guards/test_supply_chain.py::test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name[empty]",
+]
+
+[[mutation]]
+id = "R6"
+why = "The reader returns the pin whatever it reads, so the pin test checks nothing."
+path = "tests/guards/test_supply_chain.py"
+old = 'return found["version"]'
+new = 'return "26.12.1"'
+suite = "guards"
+tests = ["tests/guards/test_supply_chain.py"]
+expect = "red"
+red = [
+    "tests/guards/test_supply_chain.py::test_an_exact_node_version_reads_as_written[zeros]",
+    "tests/guards/test_supply_chain.py::test_an_exact_node_version_reads_as_written[older-line]",
+    "tests/guards/test_supply_chain.py::test_an_exact_node_version_reads_as_written[many-digits]",
+]

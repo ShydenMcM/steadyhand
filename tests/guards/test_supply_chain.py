@@ -329,10 +329,84 @@ def setup_node_inputs() -> list[tuple[str, dict[str, Any]]]:
     return inputs
 
 
-def test_nvmrc_names_node_26() -> None:
-    # Shyden, 2026-10-08, every project: "move them all to 26" (#287). nvm on the laptop and every
-    # setup-node step in CI read this one file, so the two run one Node line.
-    assert NVMRC.read_text(encoding="utf-8") == "26\n"
+EXACT_NODE = re.compile(r"(?P<version>(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))\n")
+"""One exact Node release and one newline: ASCII digits only, since ``\\d`` also reads fullwidth
+and other Unicode digits."""
+
+
+def exact_node(text: str, *, where: str) -> str:
+    """The one exact ``major.minor.patch`` release *text* names; a bare major, a major and minor,
+    an alias, a ``v`` prefix, a range or anything around the version is refused by name (#440)."""
+    found = EXACT_NODE.fullmatch(text)
+    if found is None:
+        msg = f"{where}: not one exact Node version: {text!r}"
+        raise AssertionError(msg)
+    return found["version"]
+
+
+def test_nvmrc_names_node_26_12_1() -> None:
+    # Shyden, 2026-10-29, every project: "Pin exact, every project" (#440). nvm on the laptop and
+    # every setup-node step in CI read this one file; with a bare major, setup-node fetched the
+    # newest 26.x on each run, so a new Node release could turn every open PR red at once. Node
+    # moves by one PR per project through the aligning-versions-across-projects skill, since
+    # Dependabot does not bump .nvmrc.
+    assert exact_node(NVMRC.read_text(encoding="utf-8"), where=".nvmrc") == "26.12.1"
+
+
+@pytest.mark.parametrize(
+    ("text", "version"),
+    [("0.0.0\n", "0.0.0"), ("24.16.0\n", "24.16.0"), ("100.20.3\n", "100.20.3")],
+    ids=["zeros", "older-line", "many-digits"],
+)
+def test_an_exact_node_version_reads_as_written(text: str, version: str) -> None:
+    assert exact_node(text, where=".nvmrc") == version
+
+
+FULLWIDTH_26 = chr(0xFF12) + chr(0xFF16)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "26\n",
+        "26.12\n",
+        "lts/*\n",
+        "node\n",
+        "v26.12.1\n",
+        ">=26.3.0\n",
+        "^26.12.1\n",
+        "26.12.x\n",
+        "26.12.1",
+        "26.12.1\n\n",
+        "26.12.1\r\n",
+        " 26.12.1\n",
+        "26.12.1 \n",
+        "026.12.1\n",
+        f"{FULLWIDTH_26}.12.1\n",
+        "",
+    ],
+    ids=[
+        "bare-major",
+        "major-minor",
+        "lts-alias",
+        "node-alias",
+        "v-prefix",
+        "range",
+        "caret",
+        "wildcard",
+        "no-newline",
+        "two-newlines",
+        "crlf",
+        "leading-space",
+        "trailing-space",
+        "leading-zero",
+        "fullwidth-digits",
+        "empty",
+    ],
+)
+def test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name(text: str) -> None:
+    with pytest.raises(AssertionError, match=r"^\.nvmrc: not one exact Node version: "):
+        exact_node(text, where=".nvmrc")
 
 
 def test_every_setup_node_step_reads_the_nvmrc() -> None:
