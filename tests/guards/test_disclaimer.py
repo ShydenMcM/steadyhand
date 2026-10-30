@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from markdown_text import normalised
-from population import searched, tracked
+from tracked_files import tracked
 
 from steadyhand.disclaimer import DISCLAIMER
 
@@ -74,7 +74,7 @@ def test_every_user_facing_doc_carries_the_disclaimer() -> None:
         if p.relative_to(ROOT / "docs").parts[0] not in INTERNAL
     ]
     assert len(docs) >= USER_DOCS_FLOOR
-    assert searched(missing_disclaimer(docs), of=len(docs), what="user-facing docs") == []
+    assert missing_disclaimer(docs) == []
 
 
 def test_every_strategy_guide_carries_the_disclaimer() -> None:
@@ -83,4 +83,4 @@ def test_every_strategy_guide_carries_the_disclaimer() -> None:
     # Independent of the walk: the guides as git lists them.
     assert guides == tracked(GUIDES, ".md")
     assert len(guides) >= GUIDES_FLOOR
-    assert searched(missing_disclaimer(guides), of=len(guides), what="strategy guides") == []
+    assert missing_disclaimer(guides) == []

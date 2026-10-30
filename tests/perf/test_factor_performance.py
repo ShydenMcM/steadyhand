@@ -11,7 +11,6 @@ import time
 from pathlib import Path
 
 import pytest
-from perf_budget import Check
 
 from steadyhand_idx.factor import find_runs
 from steadyhand_idx.yahoo import evidence, history_from_json
@@ -26,10 +25,10 @@ RECORDING = (
 
 
 @pytest.mark.perf
-def test_bbri_s_whole_history_is_proven_inside_the_budget(within_budget: Check) -> None:
+def test_bbri_s_whole_history_is_proven_inside_the_budget() -> None:
     history = history_from_json(RECORDING)
     started = time.perf_counter()
     (run,) = find_runs(evidence(history))
     elapsed = time.perf_counter() - started
     assert run.factor is not None
-    within_budget(elapsed, BUDGET_SECONDS)
+    assert elapsed < BUDGET_SECONDS, f"took {elapsed:.2f} s, over the {BUDGET_SECONDS} s budget"

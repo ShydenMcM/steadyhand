@@ -7,20 +7,12 @@ from typing import Any
 from ci_workflow import ci
 
 INTEGRATION_RUN = "uv run --locked pytest -W error --suite integration -p no:cacheprovider"
-# The suite again under coverage, unlimited, so the limit never times the tracer (#374).
+# The suite again under coverage, unlimited, so the limit never times the tracer (#374); its data
+# goes to the coverage job (#446).
 INTEGRATION_MEASURED = (
     'mkdir -p "${RUNNER_TEMP}/coverage-report"\n'
-    f'{INTEGRATION_RUN} --cov --cov-report="json:${{RUNNER_TEMP}}/coverage-report/coverage.json"\n'
-    'git rev-parse HEAD > "${RUNNER_TEMP}/coverage-report/sha.txt"\n'
-)
-# The extension's suite runs natively under Node's own coverage, its report naming its commit
-# (#394).
-NATIVE_INTEGRATION = (
-    'NODE_V8_COVERAGE="${RUNNER_TEMP}/node-coverage-raw" npm run test:native'
-    " -- --project integration\n"
-    'node tests/node-coverage-report.ts --raw "${RUNNER_TEMP}/node-coverage-raw"'
-    ' --out "${RUNNER_TEMP}/node-coverage-report" --project integration\n'
-    'git rev-parse HEAD > "${RUNNER_TEMP}/node-coverage-report/sha.txt"\n'
+    'COVERAGE_FILE="${RUNNER_TEMP}/coverage-report/.coverage.${GITHUB_JOB}"'
+    f" {INTEGRATION_RUN} --cov --cov-report=term\n"
 )
 # What runs a suite: pytest's suite option, vitest's project option, or an npm script for either.
 SUITE_RUN = re.compile(r"--suite integration|--project integration|test:integration")
@@ -58,12 +50,11 @@ def test_the_integration_job_runs_the_integration_suite_alone_with_one_limit() -
 def test_the_extension_integration_job_installs_then_runs_its_suite_with_one_limit() -> None:
     steps = job("extension-integration")["steps"]
     npm = [step for step in steps if "npm " in str(step.get("run", ""))]
-    assert [step["run"] for step in npm] == ["npm ci --ignore-scripts", NATIVE_INTEGRATION]
+    assert [step["run"] for step in npm] == ["npm ci --ignore-scripts", "npm run test:integration"]
     assert [step.get("working-directory") for step in npm] == ["extension", "extension"]
     limited = [step for step in steps if "timeout-minutes" in step]
     assert limited == [npm[-1]]
-    # Measured on the laptop on 2026-10-13: 3 s. Native, with its report (#394), on CI on 2026-10-23
-    # (run 39921986342): 5 s.
+    # Measured on the laptop on 2026-10-13: 3 s.
     assert limited[0]["timeout-minutes"] == 1
 
 

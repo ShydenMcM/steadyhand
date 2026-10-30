@@ -21,7 +21,6 @@
     "test": "vitest run --project unit --coverage",
     "test:guards": "vitest run --project guards --mode guards --coverage",
     "test:integration": "vitest run --project integration",
-    "test:native": "vitest run --experimental.viteModuleRunner=false --experimental.nodeLoader=false --configLoader native",
     "build": "node build.ts"
   },
   "devDependencies": {

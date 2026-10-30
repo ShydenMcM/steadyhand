@@ -4,7 +4,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
-from population import ROOT, BlindGuardError, git, searched, tracked
+from tracked_files import ROOT, GitMissingError, git, tracked
 
 
 def test_a_parametrize_over_nothing_fails_rather_than_skips() -> None:
@@ -14,16 +14,6 @@ def test_a_parametrize_over_nothing_fails_rather_than_skips() -> None:
     assert pytest_options["tool"]["pytest"]["ini_options"]["empty_parameter_set_mark"] == (
         "fail_at_collect"
     )
-
-
-def test_a_verdict_over_a_population_is_its_findings() -> None:
-    assert searched({}, of=3, what="modules") == {}
-    assert searched(["x"], of=1, what="modules") == ["x"]
-
-
-def test_a_verdict_over_no_population_is_refused_by_name() -> None:
-    with pytest.raises(BlindGuardError, match=r"^judged no modules: "):
-        searched([], of=0, what="modules")
 
 
 def test_git_lists_this_file_and_its_neighbours() -> None:
@@ -49,5 +39,5 @@ def test_git_lists_a_new_file_and_not_an_ignored_one(tmp_path: Path) -> None:
 
 def test_no_git_on_the_path_is_refused_by_name(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PATH", "")
-    with pytest.raises(BlindGuardError, match=r"^git is not on the path: "):
+    with pytest.raises(GitMissingError, match=r"^git is not on the path: "):
         tracked(ROOT / "tests/guards", ".py")

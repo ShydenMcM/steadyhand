@@ -66,10 +66,14 @@ and format checks, mypy, and the extension's lint, format and type checks, and a
 stops the push, named. It runs no test suite: run the unit suites by hand before each push
 (`uv run --locked pytest`, and `npm test` in `extension/`); CI runs every other suite.
 
-Its `commit-msg` refuses a message without its `Gaps checked:` section (a `- Before:`, an
-`- After:` and a `- New passes:` entry), unless the commit holds only `.md` files. A git hook can
-be skipped, so CI's `gaps-checked` job is the gate: it judges every commit of a pull request, and
-every commit a push lands on `develop` or `main`.
+The testing rules are kept simple (Shyden, 2026-10-30):
+
+- Every unit test runs in under 1 s, the runner's timeout, set in one place for each workspace
+  (`tests/plugins/unit_limits.py`, and the unit project in `extension/vitest.config.ts`). A unit
+  test starts no process and opens no connection.
+- A guard is a plain test that checks a rule across the code. Watch it fail once when you write it.
+- Coverage is one overall figure: CI's `coverage` job joins every Python suite and fails under 99%;
+  the extension's unit and guards runs each fail under 100%.
 
 ## Contributing
 

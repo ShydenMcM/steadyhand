@@ -1,7 +1,0 @@
-{
- "files": {},
- "unmeasured": [
-  "extension/packages/shell/src/content-script.ts",
-  "extension/packages/shell/src/service-worker.ts"
- ]
-}

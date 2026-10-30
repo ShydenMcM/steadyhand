@@ -24,7 +24,7 @@ from typing import Any
 
 import pytest
 import yaml
-from population import searched, tracked
+from tracked_files import tracked
 from workflow_versions import (
     NAMED_MINOR,
     SETUP_UV,
@@ -80,14 +80,13 @@ def test_every_workflow_git_lists_is_read() -> None:
 @pytest.mark.parametrize("path", FILES, ids=[relative(path) for path in FILES])
 def test_every_job_runs_on_the_one_runner_image(path: Path) -> None:
     workflow = load(path)
-    assert searched(runner_findings(workflow), of=len(workflow["jobs"]), what="jobs") == []
+    assert runner_findings(workflow) == []
 
 
 @pytest.mark.parametrize("path", FILES, ids=[relative(path) for path in FILES])
 def test_no_step_runs_python_outside_the_pinned_one(path: Path) -> None:
     workflow = load(path)
-    every = [step for job in workflow["jobs"].values() for step in job.get("steps", [])]
-    assert searched(step_findings(workflow), of=len(every), what="steps") == []
+    assert step_findings(workflow) == []
 
 
 def test_python_is_pinned_once_to_an_exact_patch_version() -> None:
@@ -105,7 +104,7 @@ def test_no_workflow_names_a_python_for_an_action() -> None:
         if str(step.get("uses", "")).lower().startswith(SETUP_UV)
     ]
     keys = [f"{name}{key}" for name, wf in loaded.items() for key in python_version_keys(wf)]
-    assert searched(keys, of=len(set_up), what="setup-uv steps") == []
+    assert keys == []
     assert len(set_up) >= SETUP_UV_FLOOR, f"read {len(set_up)} setup-uv steps"
 
 
@@ -118,7 +117,7 @@ def test_every_minor_a_workflow_names_is_the_pinned_one() -> None:
         for found in NAMED_MINOR.findall(text)
     ]
     wrong = [found for found in named if found != f"{major}.{minor}"]
-    assert searched(wrong, of=len(named), what="named minors") == []
+    assert wrong == []
     assert len(named) >= NAMED_MINORS_FLOOR, f"read {len(named)} named minors"
 
 
@@ -132,5 +131,5 @@ def test_every_package_and_tool_names_the_pinned_minor() -> None:
             relative(path), tomllib.loads(path.read_text(encoding="utf-8")), major, minor
         )
     ]
-    assert searched(found, of=len(files), what="pyproject files") == []
+    assert found == []
     assert len(files) >= PYPROJECTS_FLOOR, f"read {len(files)} pyproject files"

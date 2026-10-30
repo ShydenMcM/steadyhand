@@ -7,14 +7,11 @@ from typing import Any
 from ci_workflow import ci
 
 PROPERTIES_RUN = "uv run --locked pytest -W error --suite properties -p no:cacheprovider"
-# Measured twice, unlimited; the coverage job compares the two runs for wobble (#374).
-PROPERTIES_MEASURED_TWICE = (
-    'mkdir -p "${RUNNER_TEMP}/coverage-report" "${RUNNER_TEMP}/coverage-report-again"\n'
-    f'{PROPERTIES_RUN} --cov --cov-report="json:${{RUNNER_TEMP}}/coverage-report/coverage.json"\n'
-    f"{PROPERTIES_RUN} --cov"
-    ' --cov-report="json:${RUNNER_TEMP}/coverage-report-again/coverage.json"\n'
-    'git rev-parse HEAD | tee "${RUNNER_TEMP}/coverage-report/sha.txt"'
-    ' > "${RUNNER_TEMP}/coverage-report-again/sha.txt"\n'
+# Measured once, unlimited, its data for the coverage job (#446).
+PROPERTIES_MEASURED = (
+    'mkdir -p "${RUNNER_TEMP}/coverage-report"\n'
+    'COVERAGE_FILE="${RUNNER_TEMP}/coverage-report/.coverage.${GITHUB_JOB}"'
+    f" {PROPERTIES_RUN} --cov --cov-report=term\n"
 )
 
 
@@ -37,7 +34,7 @@ def test_the_properties_job_runs_the_properties_suite_alone_with_one_limit() -> 
     steps = job("properties")["steps"]
     assert [step["run"] for step in steps if "pytest" in str(step.get("run", ""))] == [
         PROPERTIES_RUN,
-        PROPERTIES_MEASURED_TWICE,
+        PROPERTIES_MEASURED,
     ]
     limited = [step for step in steps if "timeout-minutes" in step]
     assert [step["run"] for step in limited] == [PROPERTIES_RUN]
@@ -47,7 +44,7 @@ def test_the_properties_job_runs_the_properties_suite_alone_with_one_limit() -> 
 
 
 def test_no_other_job_runs_the_properties_suite() -> None:
-    # A set: the properties job runs the suite three times, once limited and twice measured.
+    # A set: the properties job runs the suite twice, once limited and once measured.
     runners = sorted(
         {
             name

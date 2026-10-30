@@ -15,7 +15,6 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from perf_budget import Check
 from synthetic import START, All, PlainRules, Synthetic
 
 from steadyhand import BuyAndHold, Market, backtest, encode_state, to_json
@@ -87,19 +86,19 @@ def test_a_saved_five_year_state_is_small(account: FiveYears) -> None:
 
 
 @pytest.mark.perf
-def test_one_days_run_on_a_five_year_account_is_inside_the_budget(
-    account: FiveYears, within_budget: Check
-) -> None:
+def test_one_days_run_on_a_five_year_account_is_inside_the_budget(account: FiveYears) -> None:
     day = FIVE_YEARS_END + timedelta(days=1)
     assert day.weekday() == 4
     seconds, ran = timed_run(account, day)
     assert ran == 1
-    within_budget(seconds, ONE_DAY_BUDGET_SECONDS)
+    assert seconds < ONE_DAY_BUDGET_SECONDS, (
+        f"took {seconds:.2f} s, over the {ONE_DAY_BUDGET_SECONDS} s budget"
+    )
 
 
 @pytest.mark.perf
 def test_a_thirty_day_catch_up_on_a_five_year_account_is_inside_the_budget(
-    account: FiveYears, within_budget: Check
+    account: FiveYears,
 ) -> None:
     rules = account.market.rules
     with StateStore(account.config.data_dir / STATE_FILE) as store:
@@ -111,4 +110,6 @@ def test_a_thirty_day_catch_up_on_a_five_year_account_is_inside_the_budget(
         target += timedelta(days=1)
     seconds, ran = timed_run(account, target)
     assert ran == CATCH_UP_CAP
-    within_budget(seconds, CATCH_UP_BUDGET_SECONDS)
+    assert seconds < CATCH_UP_BUDGET_SECONDS, (
+        f"took {seconds:.2f} s, over the {CATCH_UP_BUDGET_SECONDS} s budget"
+    )

@@ -13,8 +13,8 @@ static check covers what that code could name.
 
 import pytest
 from file_reads import RECORDER
-from population import ROOT, searched, tracked
 from test_disclaimer import user_docs
+from tracked_files import ROOT, tracked
 
 from ci_scope import on_fast_path
 
@@ -36,7 +36,7 @@ def test_the_run_opened_no_file_on_the_docs_only_fast_path(request: pytest.Fixtu
     listed = {path.relative_to(ROOT).as_posix() for path in tracked(ROOT, "")}
     opened = RECORDER.opened & listed
     on_it = sorted(path for path in opened if on_fast_path(path))
-    assert searched(on_it, of=len(opened), what="repository files the run opened") == []
+    assert on_it == []
     assert RECORDER.unread == ()
     expected = {path.relative_to(ROOT).as_posix() for path in user_docs(ROOT / "docs")}
     assert "docs/lq45-members.md" in expected
@@ -53,4 +53,4 @@ def test_no_package_code_names_a_file_on_the_fast_path() -> None:
         for path in sources
         if any(name in path.read_text(encoding="utf-8") for name in ("HANDOVER", "superpowers"))
     ]
-    assert searched(naming, of=len(sources), what="package sources") == []
+    assert naming == []

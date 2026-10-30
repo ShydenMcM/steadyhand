@@ -9,8 +9,8 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from population import searched, tracked
 from source_tree import UnreadableSourceError, parse
+from tracked_files import tracked
 
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE = ROOT / "packages/steadyhand/src/steadyhand"
@@ -94,4 +94,4 @@ def test_guarded_engine_modules_contain_no_float() -> None:
         for path in files
         if (uses := float_uses(path.read_text(encoding="utf-8"), path.relative_to(ROOT).as_posix()))
     }
-    assert searched(findings, of=len(files), what="engine modules") == {}
+    assert findings == {}

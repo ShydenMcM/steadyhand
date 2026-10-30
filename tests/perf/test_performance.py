@@ -12,7 +12,6 @@ import time
 from datetime import date, timedelta
 
 import pytest
-from perf_budget import Check
 from synthetic import END, START, All, EqualWeight, PlainRules, Synthetic
 
 from steadyhand import (
@@ -47,12 +46,10 @@ def timed() -> tuple[BacktestResult, float]:
 
 
 @pytest.mark.perf
-def test_ten_years_of_45_stocks_run_inside_the_budget(
-    timed: tuple[BacktestResult, float], within_budget: Check
-) -> None:
+def test_ten_years_of_45_stocks_run_inside_the_budget(timed: tuple[BacktestResult, float]) -> None:
     result, seconds = timed
     assert result.income_impact is not None
-    within_budget(seconds, BUDGET_SECONDS)
+    assert seconds < BUDGET_SECONDS, f"took {seconds:.2f} s, over the {BUDGET_SECONDS} s budget"
 
 
 @pytest.mark.perf
@@ -75,9 +72,7 @@ def test_each_timed_run_did_the_work_it_is_timed_on(
 
 
 @pytest.mark.perf
-def test_a_year_of_dividend_growth_over_45_stocks_runs_inside_its_budget(
-    within_budget: Check,
-) -> None:
+def test_a_year_of_dividend_growth_over_45_stocks_runs_inside_its_budget() -> None:
     source = Synthetic()
     entry = STRATEGIES["dividend-growth"]
     # The default six years of look-back, from 1 January 2017: the synthetic data starts in 2016.
@@ -90,4 +85,6 @@ def test_a_year_of_dividend_growth_over_45_stocks_runs_inside_its_budget(
     # 25 by their pay months, reading six years of dividends for each of the 45.
     assert len(result.run.reports) == 260
     assert len(result.run.final.holdings.portfolio.positions) == 25
-    within_budget(seconds, GROWTH_BUDGET_SECONDS)
+    assert seconds < GROWTH_BUDGET_SECONDS, (
+        f"took {seconds:.2f} s, over the {GROWTH_BUDGET_SECONDS} s budget"
+    )

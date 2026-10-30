@@ -14,7 +14,6 @@ from typing import Any
 
 import pytest
 from ci_workflow import ci
-from population import searched
 
 ROOT = Path(__file__).resolve().parents[2]
 CI = ROOT / ".github/workflows/ci.yml"
@@ -27,15 +26,8 @@ LOCK = {
     "run": "uv run --no-project scripts/lock_fast_path.py",
 }
 UV_VERSION = "${{ env.UV_VERSION }}"
-# Measured on 2026-10-28 (#378, the gaps-checked job added): 12 gated jobs whose later steps
-# number 72, the lock included. Lower each only by a deliberate edit when the workflow shrinks.
-GATED_FLOOR = 12
-# Every job ends by keeping its steps' traces, docs-only or not (#384): the step reads only the
-# runner's temp folder, never a fast-path file, and it is pinned in test_workflow_trace_ci.py.
-TRACE_UPLOAD = "Keep the workflow trace"
 # The one job-level condition allowed: it never skips the job, so its check always reports.
 NEVER_SKIPPED = "${{ !cancelled() }}"
-SKIPPED_STEPS_FLOOR = 72
 
 # PyYAML reads the bare key `on` as the boolean True, so a key may be a bool.
 WORKFLOW = ci()
@@ -52,9 +44,7 @@ def test_the_gated_and_deploy_jobs_are_the_ones_expected() -> None:
     assert "integration" in GATED
     assert "extension-integration" in GATED
     assert "properties" in GATED
-    assert "gaps-checked" in GATED
     assert DEPLOYS == ["deploy-dev"]
-    assert len(GATED) >= GATED_FLOOR
 
 
 def test_no_trigger_filters_by_path() -> None:
@@ -67,7 +57,7 @@ def test_no_trigger_filters_by_path() -> None:
         for key in spec
         if key in {"paths", "paths-ignore"}
     ]
-    assert searched(filtered, of=len(triggers), what="triggers") == []
+    assert filtered == []
 
 
 @pytest.mark.parametrize("name", GATED)
@@ -172,22 +162,18 @@ def test_a_gated_job_reports_and_skips_every_later_step(name: str) -> None:
         for step in later
         if step.get("if") != SKIP
     ]
-    assert searched(unguarded, of=len(later), what=f"later steps of {name}") == []
+    assert unguarded == []
 
 
 def later_steps(name: str) -> list[dict[str, Any]]:
-    """The steps after the checkout, uv and the scope step, the trace upload that ends every job
-    but the coverage job left out."""
+    """The steps after the checkout, uv and the scope step."""
     steps: list[dict[str, Any]] = JOBS[name]["steps"]
-    if name == "coverage":
-        return steps[3:]
-    assert steps[-1].get("name") == TRACE_UPLOAD, name
-    return steps[3:-1]
+    return steps[3:]
 
 
 def test_the_skip_covers_every_later_step_of_every_gated_job() -> None:
     later = [step for name in GATED for step in later_steps(name)]
-    assert len(later) >= SKIPPED_STEPS_FLOOR
+    assert later
     assert sum(step.get("if") == SKIP for step in later) == len(later)
 
 
@@ -199,4 +185,4 @@ def test_a_deploy_job_always_runs_in_full(name: str) -> None:
         for step in steps
         if step.get("id") == "scope" or SKIP in str(step.get("if")) or step == LOCK
     ]
-    assert searched(scoped, of=len(steps), what=f"steps of {name}") == []
+    assert scoped == []

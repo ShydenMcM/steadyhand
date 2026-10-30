@@ -105,7 +105,7 @@ def clone(tmp_path_factory: pytest.TempPathFactory) -> Clone:
     git(ROOT, "clone", "--quiet", "--no-checkout", str(ROOT), str(path))
     git(path, "checkout", "--quiet", "--detach", git(ROOT, "rev-parse", "HEAD").strip())
     # The checkout's uncommitted changes to tracked files are committed in the clone, so the
-    # hook judged is the one on disk here: a planted mutation (mutations/377.toml) reaches it.
+    # hook judged is the one on disk here.
     assert GIT is not None, "git is not on the path"
     # The fast-path files are left out: a full run locks them unreadable (lock_fast_path.py), and
     # git cannot hash a file it cannot read. No check reads them, so the clone needs no change.
@@ -144,7 +144,6 @@ def planted(clone: Clone) -> Iterator[Pushed]:
     for relative, text in PLANTS.values():
         (clone.path / relative).write_text(text, encoding="utf-8")
     git(clone.path, "add", "-A")
-    # The clone's commit-msg hook (#378) refuses a message without its gap check.
     git(clone.path, "commit", "--quiet", "-m", PLANTED_MESSAGE)
     yield push(clone, git(clone.path, "rev-parse", "HEAD").strip())
     git(clone.path, "checkout", "--quiet", "--detach", clone.head)

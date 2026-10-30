@@ -79,13 +79,10 @@ test.each([
   expect(project("unit")?.exclude).toContain(glob);
 });
 
-test("a unit run writes Node's coverage first, then refuses processes", () => {
-  expect(project("unit")?.setupFiles).toEqual([
-    "tests/flush-node-coverage.ts",
-    "tests/no-process.ts",
-  ]);
+test("a unit run refuses processes", () => {
+  expect(project("unit")?.setupFiles).toEqual(["tests/no-process.ts"]);
 });
 
-test.each(["guards", "integration"])("a %s run writes Node's coverage of each worker", (name) => {
-  expect(project(name)?.setupFiles).toEqual(["tests/flush-node-coverage.ts"]);
+test.each(["guards", "integration"])("a %s run has no setup file", (name) => {
+  expect(project(name)?.setupFiles).toBeUndefined();
 });

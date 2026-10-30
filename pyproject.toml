@@ -40,9 +40,6 @@ known-first-party = [
     "steadyhand_idx",
     "ci_scope",
     "lock_fast_path",
-    "workflow_coverage",
-    "workflow_runs",
-    "coverage_gate",
     "run_tool",
     "pre_push",
 ]
@@ -86,8 +83,8 @@ empty_parameter_set_mark = "fail_at_collect"
 branch = true
 # Every tracked Python file (#381, Shyden 2026-10-22: "Move it, re-score"): the packages, the CI
 # scripts and every test, helper and plugin. A file no test imports is reported, never run, and
-# a folder without __init__.py too (below). No total is judged here: the coverage job holds each
-# file's untested statements and branch arms to tests/coverage_record.json (scripts/coverage_gate.py).
+# a folder without __init__.py too (below). No total is judged here: the coverage job joins every
+# suite's data and judges one overall figure (#446).
 source = ["packages/steadyhand/src", "packages/steadyhand-idx/src", "scripts", "tests"]
 # The scripts the integration suite starts as their own programs are measured too (#374), their
 # data joined into the parent run's (coverage.py's subprocess patch).
