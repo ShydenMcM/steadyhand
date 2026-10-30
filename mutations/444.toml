@@ -1,0 +1,51 @@
+# #444: no job reports a required check's name on a run that is not a pull request's, proved on
+# planted mutations predicted before the first run. G1 gives mutations.yml back its one name, G2 a
+# hand-started job a pull-request job's name; G3 drops the ruled trunk-push exclusion, so ci.yml's
+# own pushes clash; G4 narrows the walk to no workflow, seen by the folder check and the blind count.
+
+[[mutation]]
+id = "G1"
+why = "mutations reports its required name on a dispatch too, beside the pull request's own run."
+path = ".github/workflows/mutations.yml"
+old = "    name: ${{ github.event_name == 'pull_request' && 'mutations' || 'mutations (no pull request)' }}\n"
+new = "    name: mutations\n"
+suite = "guards"
+tests = ["tests/guards/test_no_name_clash.py"]
+expect = "red"
+red = ["tests/guards/test_no_name_clash.py::test_no_job_reports_a_pull_request_name_on_any_other_event"]
+
+[[mutation]]
+id = "G2"
+why = "A hand-started job takes a required check's name, so a dispatch reports lint on the head."
+path = ".github/workflows/yahoo-shape.yml"
+old = "    name: shape\n"
+new = "    name: lint\n"
+suite = "guards"
+tests = ["tests/guards/test_no_name_clash.py"]
+expect = "red"
+red = ["tests/guards/test_no_name_clash.py::test_no_job_reports_a_pull_request_name_on_any_other_event"]
+
+[[mutation]]
+id = "G3"
+why = "A push to develop and main is judged after all, against the ruling that leaves it out."
+path = "tests/guards/check_names.py"
+old = "        if not trunk_only:\n            judged.append(event)\n"
+new = "        judged.append(event)\n"
+suite = "guards"
+tests = ["tests/guards/test_no_name_clash.py"]
+expect = "red"
+red = ["tests/guards/test_no_name_clash.py::test_no_job_reports_a_pull_request_name_on_any_other_event"]
+
+[[mutation]]
+id = "G4"
+why = "The walk reads only .yaml files, of which there are none, so the guard judges nothing."
+path = "tests/guards/test_no_name_clash.py"
+old = "    found = [*tracked(WORKFLOWS, \".yml\"), *tracked(WORKFLOWS, \".yaml\")]\n"
+new = "    found = [*tracked(WORKFLOWS, \".yaml\")]\n"
+suite = "guards"
+tests = ["tests/guards/test_no_name_clash.py"]
+expect = "red"
+red = [
+  "tests/guards/test_no_name_clash.py::test_every_workflow_file_on_disk_is_one_the_guard_reads",
+  "tests/guards/test_no_name_clash.py::test_no_job_reports_a_pull_request_name_on_any_other_event",
+]

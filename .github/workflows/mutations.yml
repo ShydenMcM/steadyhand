@@ -8,7 +8,9 @@ name: mutations
 # neither passes at the plan, saying how many paths it judged. A dispatch on a branch runs the one
 # file it names. Each target runs clean first, then each mutation is applied, judged against its
 # prediction and put back (`scripts/run_mutations.py`). The table goes to the job summary and the
-# `mutations-report` artifact. It holds no secret and only reads.
+# `mutations-report` artifact. It holds no secret and only reads. The job reports as the required
+# check `mutations` on a pull request alone: a dispatch on `coverage/<branch>` runs on the pull
+# request's head, so under the same name it would stand beside the pull request's own (#444).
 on:
   pull_request:
     branches: [develop, main]
@@ -46,7 +48,7 @@ defaults:
 
 jobs:
   mutations:
-    name: mutations
+    name: ${{ github.event_name == 'pull_request' && 'mutations' || 'mutations (no pull request)' }}
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     steps:

@@ -50,8 +50,11 @@ def test_it_runs_on_every_pull_request_ci_runs_on_and_on_a_dispatch_naming_one_f
     }
     assert ci()[True]["pull_request"] == {"branches": ["develop", "main"]}
     assert list(workflow()["jobs"]) == ["mutations"]
-    # A required check reports under its job's name on every pull request: no job condition.
-    assert job()["name"] == "mutations"
+    # A required check reports under its job's name on every pull request: no job condition. Any
+    # other event reports under another name, never beside the pull request's own (#444).
+    assert job()["name"] == (
+        "${{ github.event_name == 'pull_request' && 'mutations' || 'mutations (no pull request)' }}"
+    )
 
 
 def test_it_holds_no_key_that_could_push() -> None:
@@ -61,13 +64,14 @@ def test_it_holds_no_key_that_could_push() -> None:
 
 
 def test_every_expression_it_reads_is_one_it_needs() -> None:
-    """Its own four, and the trace upload's four, which every job ends with (#384)."""
+    """Its own five, and the trace upload's four, which every job ends with (#384)."""
     found = re.findall(r"\$\{\{(.*?)\}\}", WORKFLOW.read_text(encoding="utf-8"))
     assert sorted({expression.strip() for expression in found}) == [
         "!cancelled()",
         f"!cancelled() && {PLANNED}",
         "env.UV_VERSION",
         "github.event_name",
+        "github.event_name == 'pull_request' && 'mutations' || 'mutations (no pull request)'",
         "github.job",
         "inputs.file",
         "runner.temp",
