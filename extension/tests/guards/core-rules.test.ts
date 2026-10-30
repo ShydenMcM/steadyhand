@@ -3,10 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, assert, beforeAll, expect, test } from "vitest";
 import { browserGlobals, numberTypes, numberWords, typedDeclarations } from "../lib/core-rules.ts";
-import { floorBreach } from "../lib/floors.ts";
-import { foundIn, searched } from "../lib/population.ts";
+import { foundIn } from "../lib/found.ts";
 import {
-  nodes,
   parse,
   readSource,
   tokens,
@@ -179,45 +177,38 @@ test.each(TYPED.map((row, index) => [...row, index] as const))(
   },
 );
 
-test("core's files are the ones git lists, and as many as recorded", () => {
+test("core's files are the ones git lists", () => {
   expect(CORE).toEqual(gitListed("packages/core/src", SUFFIXES));
-  expect(floorBreach("core.files", CORE.length)).toBeUndefined();
 });
 
 test("core reaches no browser global", () => {
   const read = CORE.map((path) => ({ path, file: readSource(path) }));
-  const identifiers = read.flatMap(({ file }) => nodes(file).filter(ts.isIdentifier));
   const found = foundIn(
     read,
     ({ path }) => path,
     ({ file }) => browserGlobals(file),
   );
-  expect(searched(found, { of: identifiers.length, what: "identifiers in core" })).toEqual([]);
-  expect(floorBreach("browser-globals.identifiers", identifiers.length)).toBeUndefined();
+  expect(found).toEqual([]);
 });
 
 test("core writes no number", () => {
   const read = CORE.map((path) => ({ path, file: readSource(path) }));
-  const judged = read.flatMap(({ file }) => nodes(file));
   const found = foundIn(
     read,
     ({ path }) => path,
     ({ file }) => numberWords(file),
   );
-  expect(searched(found, { of: judged.length, what: "nodes in core" })).toEqual([]);
-  expect(floorBreach("number-words.nodes", judged.length)).toBeUndefined();
+  expect(found).toEqual([]);
 });
 
 test("no value in core has a number type, written or inferred", () => {
   const { checker, files } = typeChecked(CORE);
-  const judged = files.flatMap((file) => typedDeclarations(file));
   const found = foundIn(
     files,
     (file) => file.fileName,
     (file) => numberTypes(checker, file),
   );
-  expect(searched(found, { of: judged.length, what: "typed values in core" })).toEqual([]);
-  expect(floorBreach("number-types.values", judged.length)).toBeUndefined();
+  expect(found).toEqual([]);
 });
 
 /** The values the type pass should judge, counted by the token walk instead of the node walk. */

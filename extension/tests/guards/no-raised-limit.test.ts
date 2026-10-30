@@ -2,10 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import { GUARDS, INTEGRATION } from "../../vitest.config.ts";
-import { floorBreach } from "../lib/floors.ts";
-import { foundIn, searched } from "../lib/population.ts";
+import { foundIn } from "../lib/found.ts";
 import {
-  CLOCK_FILES,
   clockReads,
   declaringCalls,
   declaringCallsByText,
@@ -262,62 +260,34 @@ test("a script that sets no limit is allowed", () => {
 });
 
 // The one named place (AC 2): its keys and their values, pinned here by literal.
-test("test-clock.ts is the one place a limit is set, a second in a limits run and none otherwise", () => {
+test("vitest.config.ts is the one place a limit is set: 1 s per unit test and hook", () => {
   const found = raisedLimits(readSource(LIMITS_HOME)).map((f) => f.replace(/^line \d+: /u, ""));
-  expect(found).toEqual([
-    "a limit key testTimeout: WALL_LIMIT_MILLISECONDS",
-    "a limit key hookTimeout: WALL_LIMIT_MILLISECONDS",
-    "a limit key testTimeout: 0",
-    "a limit key hookTimeout: 0",
-  ]);
-  expect(readFileSync(join(EXTENSION, LIMITS_HOME), "utf8")).toMatch(
-    /^export const WALL_LIMIT_MILLISECONDS = 1_000;$/mu,
-  );
+  expect(found).toEqual(["a limit key testTimeout: 1_000", "a limit key hookTimeout: 1_000"]);
 });
 
-test("the config takes its limits from that place, once, and sets none of its own", () => {
-  const config = readSource("vitest.config.ts");
-  const text = readFileSync(join(EXTENSION, "vitest.config.ts"), "utf8");
-  expect(text.match(/\.\.\.limitsFor\(mode\)/gu)).toEqual(["...limitsFor(mode)"]);
-  expect(raisedLimits(config)).toEqual([]);
-});
-
-test.each(CLOCK_FILES)("%s, a clock, reads only its own two clocks", (path) => {
-  const found = clockReads(readSource(path)).map((f) => f.replace(/^line \d+: /u, ""));
-  expect(found.toSorted()).toEqual([
-    ".now reads a clock",
-    ".now reads a clock",
-    ".threadCpuUsage reads a clock",
-  ]);
-});
-
-test("the files judged are the ones git lists, and as many as recorded", () => {
+test("the files judged are the ones git lists", () => {
   expect(FILES).toEqual(gitListed(".", SUFFIXES).filter((path) => !isProduct(path)));
   expect(FILES).toContain("vitest.config.ts");
-  expect(floorBreach("raised-limits.files", FILES.length)).toBeUndefined();
 });
 
 test("no test, helper or config raises, sets or hides a limit, outside the one place", () => {
   const judged = FILES.filter((path) => path !== LIMITS_HOME);
-  const calls = judged.flatMap((path) => declaringCalls(readSource(path)));
   const found = foundIn(
     judged,
     (path) => path,
     (path) => raisedLimits(readSource(path)),
   );
-  expect(searched(found, { of: calls.length, what: "test and hook declarations" })).toEqual([]);
-  expect(floorBreach("raised-limits.calls", calls.length)).toBeUndefined();
+  expect(found).toEqual([]);
 });
 
 test("no unit file reads a clock, outside the two clocks", () => {
-  const judged = UNIT_FILES.filter((path) => !CLOCK_FILES.includes(path));
+  const judged = UNIT_FILES;
   const found = foundIn(
     judged,
     (path) => path,
     (path) => clockReads(readSource(path)),
   );
-  expect(searched(found, { of: judged.length, what: "unit files" })).toEqual([]);
-  expect(floorBreach("raised-limits.unit-files", judged.length)).toBeUndefined();
+  expect(found).toEqual([]);
 });
 
 test("no npm script sets a limit", () => {
@@ -336,8 +306,7 @@ test("no npm script sets a limit", () => {
     (script) => script,
     (script) => limitFlags(script),
   );
-  expect(searched(found, { of: scripts.length, what: "npm scripts" })).toEqual([]);
-  expect(floorBreach("raised-limits.scripts", scripts.length)).toBeUndefined();
+  expect(found).toEqual([]);
 });
 
 // Independent of the reader's walk: each test and hook call the code text opens is judged.

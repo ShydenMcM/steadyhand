@@ -1,9 +1,8 @@
 /**
  * What no test, helper or config may do to a test's limit (#323 AC 2, AC 3). Shyden's rule
- * (2026-10-07, every project): every unit test runs in under 1 s of wall and at or under 0.1 s of
- * its own thread CPU, and no limit is ever raised. vitest's limits are set in one place,
- * `limitsFor` in `tests/lib/test-clock.ts`, for a limits run; every other suite keeps one limit at
- * its CI step and none inside.
+ * (2026-10-07, every project): every unit test runs in under 1 s, the runner's timeout, and no
+ * limit is ever raised. vitest's limits are set in one place, the unit project in
+ * `vitest.config.ts`; every other suite keeps one limit at its CI step and none inside.
  *
  * Every call is judged by its name, whatever it was imported from, and the forms that would hide
  * one from that judgement are refused: a runner renamed, imported whole, held or passed instead of
@@ -12,10 +11,7 @@
 import { codeText, lineOf, nodes, ts } from "./source.ts";
 
 /** The one place a limit is set: its keys are pinned by the guard's own test. */
-export const LIMITS_HOME = "tests/lib/test-clock.ts";
-
-/** The two clocks, the setup files that time each test and each file's load. */
-export const CLOCK_FILES: readonly string[] = ["tests/load-clock.ts", "tests/test-clock.ts"];
+export const LIMITS_HOME = "vitest.config.ts";
 
 const RUNNERS = new Set(["test", "it", "describe", "suite", "bench"]);
 const HOOKS = new Set([

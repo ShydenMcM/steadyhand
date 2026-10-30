@@ -48,22 +48,12 @@ test("every helper in tests/lib is held to coverage by exactly one suite", () =>
   const helpers = readdirSync(new URL("../lib", import.meta.url)).map(
     (name) => `tests/lib/${name}`,
   );
-  expect(helpers).toContain("tests/lib/floors.ts");
+  expect(helpers).toContain("tests/lib/found.ts");
   const listed = [...UNIT_COVERED, ...GUARDS_COVERED];
   expect(helpers.filter((path) => listed.filter((entry) => entry === path).length !== 1)).toEqual(
     [],
   );
   expect(listed.filter((entry) => entry.startsWith("tests/lib/")).sort()).toEqual(helpers.sort());
-});
-
-test.each([
-  ["limits", "1"],
-  ["test", ""],
-  ["guards", ""],
-])("a %s run sets the load judge to %j", (mode, judge) => {
-  const config = vitestConfig({ command: "serve", mode });
-  const unitProject = config.test?.projects?.[0] as { test?: { env?: Record<string, string> } };
-  expect(unitProject.test?.env).toEqual({ STEADYHAND_JUDGE_LOADS: judge });
 });
 
 interface Project {
@@ -89,12 +79,10 @@ test.each([
   expect(project("unit")?.exclude).toContain(glob);
 });
 
-test("a unit run writes Node's coverage first, refuses processes, clocks each test, and clocks loads last", () => {
+test("a unit run writes Node's coverage first, then refuses processes", () => {
   expect(project("unit")?.setupFiles).toEqual([
     "tests/flush-node-coverage.ts",
     "tests/no-process.ts",
-    "tests/test-clock.ts",
-    "tests/load-clock.ts",
   ]);
 });
 

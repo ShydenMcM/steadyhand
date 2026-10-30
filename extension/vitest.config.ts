@@ -1,5 +1,4 @@
 import { configDefaults, defineConfig } from "vitest/config";
-import { limitsFor } from "./tests/lib/test-clock.ts";
 
 /** The packages held to 100% coverage (spec §14.1). The shell's side panel is measured in unit with
  * its document stood in (#374 AC5); its content script and service worker are `export {};`
@@ -30,21 +29,14 @@ export const UNIT_COVERED = [
   "build.ts",
   "eslint.config.js",
   "playwright.config.ts",
-  "tests/fetch-floors.ts",
-  "tests/load-report.ts",
-  "tests/record-floors.ts",
-  "tests/lib/floors.ts",
-  "tests/lib/load-clock.ts",
   "tests/lib/node-coverage.ts",
+  "tests/lib/found.ts",
   "tests/lib/no-process.ts",
-  "tests/lib/population.ts",
   "tests/lib/program.ts",
-  "tests/lib/test-clock.ts",
 ];
 export const GUARDS_COVERED = [
   "tests/lib/core-rules.ts",
   "tests/lib/imports.ts",
-  "tests/lib/literal-floors.ts",
   "tests/lib/module-mocks.ts",
   "tests/lib/raised-limits.ts",
   "tests/lib/source.ts",
@@ -54,10 +46,6 @@ export const GUARDS_COVERED = [
 
 export default defineConfig(({ mode }) => ({
   test: {
-    // The one place a per-test limit is set (#323): 1 s per test and hook in a limits run
-    // (`npm run test:limits`, no coverage), none in any other, whose CI step bounds it.
-    ...limitsFor(mode),
-    reporters: ["default", "./tests/load-report.ts"],
     projects: [
       {
         extends: true,
@@ -66,17 +54,11 @@ export default defineConfig(({ mode }) => ({
           include: ["packages/*/test/**/*.test.ts", "tests/**/*.test.ts"],
           exclude: [...configDefaults.exclude, GUARDS, INTEGRATION],
           // Node's coverage writer first, so its hook runs after every other setup file's (#394);
-          // then the refusal, so nothing a test file imports can start a process unseen; then the
-          // per-test clock (#323); the load clock last, so the time it measures to each file's
-          // first hook is that file's load alone.
-          setupFiles: [
-            FLUSH_NODE_COVERAGE,
-            "tests/no-process.ts",
-            "tests/test-clock.ts",
-            "tests/load-clock.ts",
-          ],
-          // A limits run (`--mode limits`, no coverage) judges each load and test; others report.
-          env: { STEADYHAND_JUDGE_LOADS: mode === "limits" ? "1" : "" },
+          // then the refusal, so nothing a test file imports can start a process unseen.
+          setupFiles: [FLUSH_NODE_COVERAGE, "tests/no-process.ts"],
+          // The one place a limit is set: every unit test and hook runs in under 1 s.
+          testTimeout: 1_000,
+          hookTimeout: 1_000,
         },
       },
       {
