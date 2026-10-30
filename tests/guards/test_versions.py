@@ -39,11 +39,11 @@ from workflow_versions import (
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
 
-# Measured on 2026-10-26 (#382): 15 jobs in 4 workflow files, 13 of them setting up uv, 4 job
-# names carrying a Python minor, 3 pyproject files. Lower each only by a deliberate edit when the
-# workflows or packages shrink.
-JOBS_FLOOR = 15
-SETUP_UV_FLOOR = 13
+# Measured on 2026-10-30 (#446 removed two workflows and a job): 13 jobs in 2 workflow files, 12 of
+# them setting up uv, 4 job names carrying a Python minor, 3 pyproject files. Lower each only by a
+# deliberate edit when the workflows or packages shrink.
+JOBS_FLOOR = 13
+SETUP_UV_FLOOR = 12
 NAMED_MINORS_FLOOR = 4
 PYPROJECTS_FLOOR = 3
 

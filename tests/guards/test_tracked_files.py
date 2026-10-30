@@ -19,7 +19,7 @@ def test_a_parametrize_over_nothing_fails_rather_than_skips() -> None:
 def test_git_lists_this_file_and_its_neighbours() -> None:
     meta = tracked(ROOT / "tests/guards", ".py")
     assert Path(__file__) in meta
-    assert ROOT / "tests/guards/population.py" in meta
+    assert ROOT / "tests/guards/tracked_files.py" in meta
     assert all(  # runtime population: the files git listed
         path.suffix == ".py" and ROOT / "tests/guards" in path.parents for path in meta
     )
