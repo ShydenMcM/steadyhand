@@ -1,10 +1,10 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, assert, beforeAll, expect, test } from "vitest";
 import { browserGlobals, numberTypes, numberWords, typedDeclarations } from "../lib/core-rules.ts";
 import { foundIn } from "../lib/found.ts";
 import {
+  EXTENSION,
   parse,
   readSource,
   tokens,
@@ -95,6 +95,8 @@ test.each([
 
 /** Each value a type can make a `number` without the word (Shyden, 2026-10-06), and the
  * finding. Each is its own file in one program, so the checker is built once. */
+const DECIMAL = 'import Decimal from "decimal.js";\n';
+
 const TYPED: readonly (readonly [string, string, readonly string[]])[] = [
   ["an unlabelled whole number", "export const fee = 100;", ["line 1: fee: 100"]],
   ["a let", "export let fee = 100;", ["line 1: fee: number"]],
@@ -148,13 +150,36 @@ const TYPED: readonly (readonly [string, string, readonly string[]])[] = [
   ["a string", 'export const s = "100";', []],
   ["an inline index", "export const first = [1n][0];", []],
   ["a repeated field type", "export const pair = { a: 1n, b: 1n };", []],
+  // decimal.js types its settings as `number`, so a context made with its `clone` is allowed,
+  // and nothing else near it is (Shyden, 2026-10-30, #223).
+  [
+    "a decimal.js context",
+    `${DECIMAL}export const D = Decimal.clone({ precision: 28, rounding: Decimal.ROUND_FLOOR });`,
+    [],
+  ],
+  [
+    "a number named beside a decimal.js context",
+    `${DECIMAL}const digits = 28;\nexport const D = Decimal.clone({ precision: digits });`,
+    ["line 2: digits: 28"],
+  ],
+  [
+    "decimal.js settings kept in a name",
+    `${DECIMAL}const settings = { precision: 28 };\nexport const D = Decimal.clone(settings);`,
+    ["line 2: settings: { precision: number; }", "line 2: precision: number"],
+  ],
+  [
+    "settings passed to another clone",
+    "const other = { clone: (x: object) => x };\nexport const o = other.clone({ precision: 28 });",
+    ["line 2: precision: number"],
+  ],
 ];
 
 let fixtures = "";
 let checked: ReturnType<typeof typeChecked> | undefined;
 
 beforeAll(() => {
-  fixtures = mkdtempSync(join(tmpdir(), "steadyhand-types-"));
+  // Inside the extension, so a case can import decimal.js; git lists none of it.
+  fixtures = mkdtempSync(join(EXTENSION, ".steadyhand-types-"));
   const paths = TYPED.map(([, code], index) => {
     const path = join(fixtures, `case-${String(index)}.ts`);
     writeFileSync(path, `${code}\n`);
