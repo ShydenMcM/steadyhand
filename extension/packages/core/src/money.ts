@@ -147,7 +147,8 @@ export class Money {
 
   /** Multiply by `rate` exactly, then round once to a whole minor unit. */
   timesRate(rate: Decimal, rounding: Rounding): Money {
-    if (!(rate instanceof Decimal)) {
+    // A clone's values (`Ratio`'s) are Decimals too, but not instances of the base class.
+    if (!Decimal.isDecimal(rate)) {
       throw new TypeError(`rate must be a Decimal, got ${typeof rate}`);
     }
     if (!rate.isFinite()) {

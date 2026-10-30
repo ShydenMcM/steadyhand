@@ -1,0 +1,141 @@
+{
+  "schema": "1",
+  "bands": [
+    {
+      "from": "2020-03-13",
+      "source": "Kep-00025/BEI/03-2020, Memutuskan 1 and II-A VI.7.1.1",
+      "min_price": "50",
+      "tiers": [
+        {
+          "up_to": "200",
+          "up_percent": "35",
+          "down_percent": "7"
+        },
+        {
+          "up_to": "5000",
+          "up_percent": "25",
+          "down_percent": "7"
+        },
+        {
+          "up_percent": "20",
+          "down_percent": "7"
+        }
+      ]
+    },
+    {
+      "from": "2023-06-05",
+      "source": "Kep-00055/BEI/03-2023, Memutuskan 4.b",
+      "min_price": "50",
+      "tiers": [
+        {
+          "up_to": "200",
+          "up_percent": "35",
+          "down_percent": "15"
+        },
+        {
+          "up_to": "5000",
+          "up_percent": "25",
+          "down_percent": "15"
+        },
+        {
+          "up_percent": "20",
+          "down_percent": "15"
+        }
+      ]
+    },
+    {
+      "from": "2023-09-04",
+      "source": "Kep-00055/BEI/03-2023, Memutuskan 4.c and II-A VI.7.1.2",
+      "min_price": "50",
+      "tiers": [
+        {
+          "up_to": "200",
+          "up_percent": "35",
+          "down_percent": "35"
+        },
+        {
+          "up_to": "5000",
+          "up_percent": "25",
+          "down_percent": "25"
+        },
+        {
+          "up_percent": "20",
+          "down_percent": "20"
+        }
+      ]
+    },
+    {
+      "from": "2025-04-08",
+      "source": "Kep-00003/BEI/04-2025, Memutuskan 2 and II-A VI.6.1",
+      "min_price": "50",
+      "tiers": [
+        {
+          "up_to": "200",
+          "up_percent": "35",
+          "down_percent": "15"
+        },
+        {
+          "up_to": "5000",
+          "up_percent": "25",
+          "down_percent": "15"
+        },
+        {
+          "up_percent": "20",
+          "down_percent": "15"
+        }
+      ]
+    },
+    {
+      "from": "2026-09-28",
+      "source": "Kep-00136/BEI/09-2026, Memutuskan 2-3 and II-A VI.6",
+      "min_price": "1",
+      "tiers": [
+        {
+          "up_to": "10",
+          "up_rupiah": "1",
+          "down_rupiah": "1"
+        },
+        {
+          "up_to": "200",
+          "up_percent": "35",
+          "down_percent": "15"
+        },
+        {
+          "up_to": "5000",
+          "up_percent": "25",
+          "down_percent": "15"
+        },
+        {
+          "up_percent": "20",
+          "down_percent": "15"
+        }
+      ]
+    },
+    {
+      "from": "2027-01-01",
+      "source": "Kep-00136/BEI/09-2026, II-A VI.7.1.1",
+      "min_price": "1",
+      "tiers": [
+        {
+          "up_to": "10",
+          "up_rupiah": "1",
+          "down_rupiah": "1"
+        },
+        {
+          "up_to": "200",
+          "up_percent": "35",
+          "down_percent": "35"
+        },
+        {
+          "up_to": "5000",
+          "up_percent": "25",
+          "down_percent": "25"
+        },
+        {
+          "up_percent": "20",
+          "down_percent": "20"
+        }
+      ]
+    }
+  ]
+}
