@@ -15,30 +15,16 @@ import {
   requireSchema,
   rows,
   RulesFileError,
+  UnsupportedDateError,
   Where,
   type Row,
 } from "./rules-file.ts";
 
 export const HOLIDAYS_FILE = "holidays.json";
 
-/** The note code for a day whose year no release carries yet (spec §4.5). */
-export const MISSING_RULES_YEAR = "missing.rules_year";
+export { MISSING_RULES_YEAR, UnsupportedDateError } from "./rules-file.ts";
 
-/** A day in a year the calendar has no holiday data for: no advice is given until a release
- * carries it. */
-export class UnsupportedDateError extends Error {
-  override name = "UnsupportedDateError";
-  readonly code = MISSING_RULES_YEAR;
-
-  constructor(
-    message: string,
-    readonly year: string,
-  ) {
-    super(message);
-  }
-}
-
-/** One year's IDX non-trading weekdays, the document they come from, and IDX's stated total. */
+/** One year's IDX non-trading weekdays, the contents they come from, and IDX's stated total. */
 export interface HolidayYear {
   readonly year: string;
   readonly source: string;
@@ -119,15 +105,15 @@ const parseYear = (row: Row, where: Where): HolidayYear => {
 
 const TOP_KEYS = new Set(["schema", "year"]);
 
-/** Validate a holidays document: consecutive years, each one's arithmetic checked. */
+/** Validate a holidays contents: consecutive years, each one's arithmetic checked. */
 export const parseHolidays = (value: unknown, file: string = HOLIDAYS_FILE): HolidayYear[] => {
-  const document = asDocument(value, file);
-  requireSchema(document, file, 1n);
-  onlyKeys(document, TOP_KEYS, new Where(file, "top level"));
+  const contents = asDocument(value, file);
+  requireSchema(contents, file, 1n);
+  onlyKeys(contents, TOP_KEYS, new Where(file, "top level"));
   const where = new Where(file, "year");
   const years: HolidayYear[] = [];
   let position = 0n;
-  for (const row of rows(document, "year", where)) {
+  for (const row of rows(contents, "year", where)) {
     position += 1n;
     const later = parseYear(row, where.at(position));
     const earlier = years.at(-1);
@@ -184,7 +170,7 @@ export class IdxCalendar {
     return found;
   }
 
-  /** The IDX document a year's holidays come from. */
+  /** The IDX contents a year's holidays come from. */
   source(year: string): string {
     return this.year(year).source;
   }

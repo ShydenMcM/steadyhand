@@ -7,6 +7,10 @@ import Decimal from "decimal.js";
 /** Python's default context: 28 significant digits. `ratio_down` divides in it, rounding down. */
 const DOWN = Decimal.clone({ precision: 28, rounding: Decimal.ROUND_FLOOR });
 
+/** Rates as the rule files give them, in Python's default context: 28 significant digits,
+ * half-even. */
+export const RuleDecimal = Decimal.clone({ precision: 28, rounding: Decimal.ROUND_HALF_EVEN });
+
 /** The context the engine's ratios are worked out in: 50 significant digits, half-even. */
 export const Ratio = Decimal.clone({ precision: 50, rounding: Decimal.ROUND_HALF_EVEN });
 
