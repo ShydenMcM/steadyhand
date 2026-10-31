@@ -7,9 +7,9 @@
 **Ruling 2026-10-30 (every project):** keep it simple, product work first. Value test before every decision. Do not edit the global layer: send global cuts to repo-template-af.
 
 ## Branches and heads
-- `develop` = 7d0478a. Merge green PRs into develop without asking; never `main`.
+- `develop` = 8377ace (PR #452 squash). Merge green PRs into develop without asking; never `main`.
 - Required checks: develop 11 (incl. `coverage`), main 10.
-- `315-board-priority`: this handover only (#315 AC4). #315's AC1 to AC3 are done and posted on the ticket; close it by hand once this PR merges.
+- #224 closed (PR #452 merged, ACs read against the PR).
 - `../steadyhand-272` still holds 2 uncommitted files (#272 closed as not needed).
 - Backups (keep 30 days): `377/wip-backup-2026-10-28` (to 2026-11-27); `365/exact-values-backup-2026-10-27` (to 2026-11-26), `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29).
 
@@ -31,7 +31,7 @@ A new ticket gets its `Priority` when filed, or board-next refuses.
 
 ## Resume steps
 1. `ListAgents`; `git status --short`; `git fetch`.
-2. Run board-next (above) and start the ticket it names on a branch from `develop`.
+2. board-next said #225 (EXT S4c: sessions.toml and the advice day, P1, 3 points). Its AC5 still asks for a recorded red phase and predicted mutations, which the 2026-10-30 keep-simple ruling dropped (#223/#224 were reworded on Shyden's answer). Ask Shyden before rewording it; then branch `225-sessions-advice-day` from develop and start with the failing tests.
 
 ## Running
 Nothing.
