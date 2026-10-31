@@ -1,8 +1,9 @@
 """Write what the extension's core reads from Python (#223, spec §4.1, §4.2).
 
 The rule files become JSON in ``extension/packages/core/rules/``, each read and checked by
-Python's own reader first, so a file Python refuses is never converted. Whole numbers and dates
-are written as strings: core never holds a ``number``, and reads each as a ``bigint`` or a date.
+Python's own reader first, so a file Python refuses is never converted. Whole numbers, dates and
+times are written as strings: core never holds a ``number``, and reads each as a ``bigint``, a
+date or a time.
 The ratio fixture holds Python's digits for seeded inputs, which core's ratios must give exactly,
 and the rules fixture holds what ``IdxMarketRules`` answers for seeded days, prices and trades,
 which core's rules must give exactly (#224).
@@ -15,7 +16,7 @@ import argparse
 import json
 import random
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 from decimal import ROUND_HALF_EVEN, Context, Decimal
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from steadyhand_idx.bands import BANDS_FILE, parse_bands
 from steadyhand_idx.calendar import HOLIDAYS_FILE, IdxCalendar, parse_holidays
 from steadyhand_idx.fees import FEES_FILE, parse_fees
 from steadyhand_idx.rules import IdxMarketRules
+from steadyhand_idx.sessions import SESSIONS_FILE, parse_sessions
 from steadyhand_idx.ticks import TICKS_FILE, parse_settlement, parse_ticks
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +42,7 @@ READERS: dict[str, tuple[Callable[[Row], object], ...]] = {
     BANDS_FILE: (parse_bands,),
     HOLIDAYS_FILE: (parse_holidays,),
     FEES_FILE: (parse_fees,),
+    SESSIONS_FILE: (parse_sessions,),
 }
 
 SEED = 223
@@ -49,7 +52,7 @@ WIDE = Context(prec=50, rounding=ROUND_HALF_EVEN)
 
 
 def plain(value: object) -> object:
-    """*value* with every whole number and date written as a string, keys in order."""
+    """*value* with every whole number, date and time written as a string, keys in order."""
     if isinstance(value, dict):
         return {str(key): plain(item) for key, item in value.items()}
     if isinstance(value, list):
@@ -58,7 +61,7 @@ def plain(value: object) -> object:
         return value
     if isinstance(value, int):
         return str(value)
-    if isinstance(value, date):
+    if isinstance(value, date | time):
         return value.isoformat()
     return value
 
