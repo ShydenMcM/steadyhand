@@ -81,10 +81,10 @@ export const missingPage = (page: PageKind, symbol?: string): Note => {
 };
 
 /** `missing.history`: the window a stock's history must cover and how many closes it has. */
-export const missingHistory = (symbol: string, window: Covered, closes: bigint): Note =>
+export const missingHistory = (symbol: string, covered: Covered, closes: bigint): Note =>
   note(
     NOTE_CODES.MISSING_HISTORY,
-    `${symbol}: the history from ${window.from} to ${window.to} has ${String(closes)} ` +
+    `${symbol}: the history from ${covered.from} to ${covered.to} has ${String(closes)} ` +
       (closes === 1n ? "close" : "closes"),
   );
 
