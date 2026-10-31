@@ -137,9 +137,7 @@ const RESEARCH: readonly (readonly [string, bigint, readonly Tier[]])[] = [
 ];
 
 test("the periods start where the research says", () => {
-  expect(parseBands(shipped).entries.map(([from]) => from)).toEqual(
-    RESEARCH.map(([from]) => from),
-  );
+  expect(parseBands(shipped).entries.map(([from]) => from)).toEqual(RESEARCH.map(([from]) => from));
 });
 
 test.each(RESEARCH)("the period from %s matches the research", (from, minPrice, tiers) => {
@@ -157,9 +155,12 @@ test.each([
   ["2025-04-08", 5_001n, "20"],
   ["2026-09-28", 10n, "1"],
   ["2026-09-28", 11n, "35"],
-])("on %s a reference of %s moves up by %s: tier edges include the upper bound", (on, reference, up) => {
-  expect(bandTierFor(parseBands(shipped).on(on), reference).up.toString()).toBe(up);
-});
+])(
+  "on %s a reference of %s moves up by %s: tier edges include the upper bound",
+  (on, reference, up) => {
+    expect(bandTierFor(parseBands(shipped).on(on), reference).up.toString()).toBe(up);
+  },
+);
 
 /** The limits as their digits, to compare with Python's. */
 const limits = (on: string, reference: bigint): [string, string] => {
@@ -179,10 +180,13 @@ test("rupiah limits are one either way", () => {
   expect(limits("2026-09-28", 7n)).toEqual(["6", "8"]);
 });
 
-test.each([0n, -1n, true, 200])("a reference of %s is refused: a whole rupiah of at least 1", (reference) => {
-  expect(() => bandTierFor(parseBands(shipped).on("2025-04-08"), reference as bigint)).toThrow(
-    new RangeError(
-      `reference must be a whole number of rupiah of at least 1, got ${String(reference)}`,
-    ),
-  );
-});
+test.each([0n, -1n, true, 200])(
+  "a reference of %s is refused: a whole rupiah of at least 1",
+  (reference) => {
+    expect(() => bandTierFor(parseBands(shipped).on("2025-04-08"), reference as bigint)).toThrow(
+      new RangeError(
+        `reference must be a whole number of rupiah of at least 1, got ${String(reference)}`,
+      ),
+    );
+  },
+);

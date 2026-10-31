@@ -4,9 +4,10 @@ import { bandLimits } from "../src/bands.ts";
 import { Side } from "../src/costs.ts";
 import { parseFees } from "../src/fees.ts";
 import { Currency, IDR, Money } from "../src/money.ts";
-import { UnsupportedDateError } from "../src/rules-file.ts";
+import { RulesFileError, UnsupportedDateError } from "../src/rules-file.ts";
 import { IdxMarketRules, shippedTables, type Instrument } from "../src/rules.ts";
 import { isValidPrice } from "../src/ticks.ts";
+import parity from "./rules.json" with { type: "json" };
 
 // Ported from Python's tests/idx/test_rules.py, one test per case.
 
@@ -25,7 +26,9 @@ test("the rules are in rupiah", () => {
 test("the verified date is 2021, set by the stamp duty", () => {
   expect(rules().verifiedFrom).toBe("2021-01-01");
   rules().requireSupported("2021-01-01");
-  expect(() => rules().requireSupported("2020-12-31")).toThrow(
+  expect(() => {
+    rules().requireSupported("2020-12-31");
+  }).toThrow(
     new UnsupportedDateError(
       "steadyhand's IDX rules are primary-verified from 2021-01-01, the first date of " +
         "fees.json [stamp_duty]; 2020-12-31 is earlier",
@@ -44,15 +47,15 @@ test("the verified date is derived from the files", () => {
   const moved = new IdxMarketRules({ ...shippedTables(), fees: parseFees(document) });
   // The next-latest first date is 13 Mar 2020, shared by three tables; the first listed names it.
   expect(moved.verifiedFrom).toBe("2020-03-13");
-  expect(() => moved.requireSupported("2020-03-12")).toThrow(
-    /first date of tick_sizes\.json \[ticks\];/u,
-  );
+  expect(() => {
+    moved.requireSupported("2020-03-12");
+  }).toThrow(/first date of tick_sizes\.json \[ticks\];/u);
 });
 
 test("a year past the holiday data is refused", () => {
-  expect(() => rules().requireSupported("2028-01-03")).toThrow(
-    /^holidays\.json has no IDX holidays for 2028/u,
-  );
+  expect(() => {
+    rules().requireSupported("2028-01-03");
+  }).toThrow(/^holidays\.json has no IDX holidays for 2028/u);
 });
 
 test.each([
@@ -70,9 +73,9 @@ test.each([
 });
 
 test("another market is refused", () => {
-  expect(() =>
-    rules().lotSize({ symbol: "AAPL", market: "NASDAQ", currency: USD }, TODAY),
-  ).toThrow(new RangeError("AAPL is a NASDAQ USD instrument; these rules are for IDX IDR"));
+  expect(() => rules().lotSize({ symbol: "AAPL", market: "NASDAQ", currency: USD }, TODAY)).toThrow(
+    new RangeError("AAPL is a NASDAQ USD instrument; these rules are for IDX IDR"),
+  );
 });
 
 test("an IDX instrument in another currency is refused", () => {
@@ -123,13 +126,43 @@ test.each([
   // The band property's stand-in cases below, each edge worked by hand from auto_reject.toml and
   // tick_sizes.toml: the band's bottom and top, the bottom raised to the minimum price, then the
   // bottom rounded up and the top rounded down onto the tick grid.
-  ["2021-01-04", 50n, 50n, 67n, "2020-03-13 row, up to 200: +35% / -7%; 46.5 is raised to Rp50, 67.5 floors to 67"],
-  ["2021-01-04", 1_000_000n, 930_000n, 1_200_000n, "the 2020-03-13 row's top tier: +20% / -7%, both edges on the Rp25 grid"],
-  ["2023-06-05", 199n, 170n, 268n, "2023-06-05 row, up to 200: +35% / -15%; 169.15 rounds up to 170, 268.65 floors to 268"],
+  [
+    "2021-01-04",
+    50n,
+    50n,
+    67n,
+    "2020-03-13 row, up to 200: +35% / -7%; 46.5 is raised to Rp50, 67.5 floors to 67",
+  ],
+  [
+    "2021-01-04",
+    1_000_000n,
+    930_000n,
+    1_200_000n,
+    "the 2020-03-13 row's top tier: +20% / -7%, both edges on the Rp25 grid",
+  ],
+  [
+    "2023-06-05",
+    199n,
+    170n,
+    268n,
+    "2023-06-05 row, up to 200: +35% / -15%; 169.15 rounds up to 170, 268.65 floors to 268",
+  ],
   ["2023-06-05", 200n, 170n, 270n, "the same row at 200: exactly 170 and 270"],
   ["2023-09-04", 5_000n, 3_750n, 6_250n, "2023-09-04 row, up to 5,000: +-25%"],
-  ["2023-09-04", 5_001n, 4_010n, 6_000n, "past 5,000 +-20%: 4,000.8 rounds up to 4,010 (tick 10), 6,001.2 down to 6,000"],
-  [TODAY, 4_999n, 4_250n, 6_225n, "2025-04-08 row, up to 5,000 +25% / -15%: 4,249.15 rounds up, 6,248.75 down to 6,225"],
+  [
+    "2023-09-04",
+    5_001n,
+    4_010n,
+    6_000n,
+    "past 5,000 +-20%: 4,000.8 rounds up to 4,010 (tick 10), 6,001.2 down to 6,000",
+  ],
+  [
+    TODAY,
+    4_999n,
+    4_250n,
+    6_225n,
+    "2025-04-08 row, up to 5,000 +25% / -15%: 4,249.15 rounds up, 6,248.75 down to 6,225",
+  ],
   [TODAY, 1_000_000n, 850_000n, 1_200_000n, "the 2025-04-08 row's top tier: +20% / -15%"],
 ])("on %s the band around %s is %s to %s: %s", (on, reference, low, high) => {
   const [lowest, highest] = rules().priceBand(BBCA, rp(reference), on);
@@ -218,5 +251,37 @@ test("trading days answer for every year of holiday data before the rules are ve
   expect(() => rules().isTradingDay("2015-12-31")).toThrow(
     /^holidays\.json has no IDX holidays for 2015/u,
   );
-  expect(() => rules().requireSupported("2020-12-30")).toThrow(/primary-verified from 2021-01-01/u);
+  expect(() => {
+    rules().requireSupported("2020-12-30");
+  }).toThrow(/primary-verified from 2021-01-01/u);
+});
+
+// AC4: Python's `IdxMarketRules` on seeded days, prices and trades (scripts/core_fixtures.py),
+// which core must answer digit for digit.
+test.each(parity)("parity with Python on %# ($day, $preset $side)", (expected) => {
+  const market = new IdxMarketRules(shippedTables(), expected.preset);
+  const side = expected.side === "buy" ? Side.BUY : Side.SELL;
+  const on = expected.day;
+  const [low, high] = market.priceBand(BBCA, rp(BigInt(expected.reference)), on);
+  const gross = rp(BigInt(expected.gross));
+  const costs = market.costs(side, gross, on);
+  expect({
+    ...expected,
+    tick: String(market.roundToTick(BBCA, rp(BigInt(expected.price)), side, on).amount),
+    low: String(low.amount),
+    high: String(high.amount),
+    fee: String(costs.fee.amount),
+    levy: String(costs.levy.amount),
+    tax: String(costs.tax.amount),
+    stamp_duty: String(market.dailyCosts(gross, on).amount),
+    dividend_tax: String(market.dividendTax(gross, on).amount),
+    settles: market.settlementDate(on),
+  }).toEqual(expected);
+});
+
+test("a day that is not an ISO date is refused before it is compared", () => {
+  // "2021-1-5" sorts after "2021-01-01", so a string comparison alone would let it through.
+  expect(() => {
+    rules().requireSupported("2021-1-5");
+  }).toThrow(new RulesFileError('day must be a date such as 2021-01-04, got "2021-1-5"'));
 });

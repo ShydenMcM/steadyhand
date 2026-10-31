@@ -27,7 +27,7 @@ import {
   type FeeSchedule,
 } from "./fees.ts";
 import { IDR, Money, type Currency } from "./money.ts";
-import { UnsupportedDateError, type Dated } from "./rules-file.ts";
+import { asDay, UnsupportedDateError, type Dated } from "./rules-file.ts";
 import { parseSettlement, parseTicks, roundDown, roundUp, type TickRow } from "./ticks.ts";
 
 export const MARKET = "IDX";
@@ -92,7 +92,7 @@ export class IdxMarketRules {
   }
 
   requireSupported(day: string): void {
-    if (day < this.verifiedFrom) {
+    if (asDay(day, "day") < this.verifiedFrom) {
       throw new UnsupportedDateError(
         `steadyhand's IDX rules are primary-verified from ${this.verifiedFrom}, the first date ` +
           `of ${this.setBy}; ${day} is earlier`,

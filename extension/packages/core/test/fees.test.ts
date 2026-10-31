@@ -309,9 +309,9 @@ test.each([
 
 test("every trade's fee is marked an estimate", () => {
   const schedule = fees();
-  expect(tradeCosts(schedule, feePreset(schedule, "custom"), Side.BUY, rp(1n), TODAY).estimate).toBe(
-    true,
-  );
+  expect(
+    tradeCosts(schedule, feePreset(schedule, "custom"), Side.BUY, rp(1n), TODAY).estimate,
+  ).toBe(true);
 });
 
 test("an all-in quote keeps its total when the levy was lower", () => {
@@ -420,9 +420,12 @@ test.each([
   ["2026-05-20", "2027-03-31"], // t-tax.md §4's worked example
   ["2026-12-31", "2027-03-31"],
   ["2027-01-04", "2028-03-31"],
-])("a dividend with ex-date %s is reinvested by %s: the end of March after its year", (exDate, deadline) => {
-  expect(reinvestmentDeadline(fees(), exDate)).toBe(deadline);
-});
+])(
+  "a dividend with ex-date %s is reinvested by %s: the end of March after its year",
+  (exDate, deadline) => {
+    expect(reinvestmentDeadline(fees(), exDate)).toBe(deadline);
+  },
+);
 
 test.each([
   ["2023-06-01", "2024-02-29"], // a leap year
@@ -449,9 +452,12 @@ test.each([
   ["2021-02-17", "2023-12-31"],
   ["2027-03-10", "2029-12-31"], // M4 spec §2's correction: 2027, 2028 and 2029
   ["2026-12-31", "2028-12-31"],
-])("protection for a purchase on %s lasts to %s: three tax years with its own", (purchase, until) => {
-  expect(protectionEnd(fees(), purchase)).toBe(until);
-});
+])(
+  "protection for a purchase on %s lasts to %s: three tax years with its own",
+  (purchase, until) => {
+    expect(protectionEnd(fees(), purchase)).toBe(until);
+  },
+);
 
 test("no protection ends for a purchase the exemption does not cover", () => {
   expect(() => protectionEnd(fees(), "2021-02-16")).toThrow(
@@ -496,6 +502,20 @@ test("an all-in sell quote is checked on every day a covered table changes", () 
     new RulesFileError(
       "fees.json preset 'ajaib': its sell quote is smaller than the costs it says it includes " +
         "on 2022-04-01",
+    ),
+  );
+});
+
+test("the quote check starts on the latest first day of the tables it reads", () => {
+  // With VAT verified only from 2021, the levy's 2020 rows cannot be checked; the first check is
+  // on VAT's first day.
+  const document = documentCopy();
+  rowOf(document.vat, 0).from = "2021-01-01";
+  presetOf(document, "ajaib").buy_percent = "0.04";
+  expect(() => parseFees(document)).toThrow(
+    new RulesFileError(
+      "fees.json preset 'ajaib': its buy quote is smaller than the costs it says it includes " +
+        "on 2021-01-01",
     ),
   );
 });

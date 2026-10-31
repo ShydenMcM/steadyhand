@@ -145,24 +145,49 @@ test("a file read by hand uses its own name", () => {
 const current = (): TickRow => parseTicks(shipped).on("2026-09-25");
 
 test.each([
-  [1n, 1n], [199n, 1n], [200n, 2n], [499n, 2n], [500n, 5n], [1_995n, 5n],
-  [1_999n, 5n], [2_000n, 10n], [4_990n, 10n], [4_999n, 10n], [5_000n, 25n], [1_000_000n, 25n],
+  [1n, 1n],
+  [199n, 1n],
+  [200n, 2n],
+  [499n, 2n],
+  [500n, 5n],
+  [1_995n, 5n],
+  [1_999n, 5n],
+  [2_000n, 10n],
+  [4_990n, 10n],
+  [4_999n, 10n],
+  [5_000n, 25n],
+  [1_000_000n, 25n],
 ])("the tick of %s is %s: every tier boundary on both sides", (price, tick) => {
   expect(tickFor(current(), price)).toBe(tick);
 });
 
 test.each([
-  [199n, true], [200n, true], [201n, false], [4_990n, true], [4_995n, false], [5_000n, true],
-  [5_010n, false], [5_025n, true],
+  [199n, true],
+  [200n, true],
+  [201n, false],
+  [4_990n, true],
+  [4_995n, false],
+  [5_000n, true],
+  [5_010n, false],
+  [5_025n, true],
 ])("validity of %s is %s: the tier of the price itself", (price, valid) => {
   expect(isValidPrice(current(), price)).toBe(valid);
 });
 
 test.each([
-  [1n, 1n, 1n], [199n, 199n, 199n], [200n, 200n, 200n], [201n, 200n, 202n], [499n, 498n, 500n],
-  [501n, 500n, 505n], [1_999n, 1_995n, 2_000n], [2_001n, 2_000n, 2_010n],
-  [4_999n, 4_990n, 5_000n], [5_000n, 5_000n, 5_000n], [5_001n, 5_000n, 5_025n],
-  [5_024n, 5_000n, 5_025n], [2_000_000n, 2_000_000n, 2_000_000n],
+  [1n, 1n, 1n],
+  [199n, 199n, 199n],
+  [200n, 200n, 200n],
+  [201n, 200n, 202n],
+  [499n, 498n, 500n],
+  [501n, 500n, 505n],
+  [1_999n, 1_995n, 2_000n],
+  [2_001n, 2_000n, 2_010n],
+  [4_999n, 4_990n, 5_000n],
+  [5_000n, 5_000n, 5_000n],
+  [5_001n, 5_000n, 5_025n],
+  [5_024n, 5_000n, 5_025n],
+  [2_000_000n, 2_000_000n, 2_000_000n],
 ])("%s rounds down to %s and up to %s, on the grid", (price, down, up) => {
   expect(roundDown(current(), price)).toBe(down);
   expect(roundUp(current(), price)).toBe(up);
@@ -189,10 +214,11 @@ test.each([1n, 199n, 200n, 201n, 499n, 501n, 1_999n, 2_001n, 4_999n, 5_000n, 5_0
   },
 );
 
-test.each([0n, -5n, true, "200", 200])("a price of %s is refused: a whole rupiah of at least 1", (price) => {
-  expect(() => tickFor(current(), price as bigint)).toThrow(
-    new RangeError(
-      `price must be a whole number of rupiah of at least 1, got ${String(price)}`,
-    ),
-  );
-});
+test.each([0n, -5n, true, "200", 200])(
+  "a price of %s is refused: a whole rupiah of at least 1",
+  (price) => {
+    expect(() => tickFor(current(), price as bigint)).toThrow(
+      new RangeError(`price must be a whole number of rupiah of at least 1, got ${String(price)}`),
+    );
+  },
+);
