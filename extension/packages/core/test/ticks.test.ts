@@ -95,6 +95,13 @@ test.each([
     ],
     "the tier boundary 201 must be a multiple of both ticks around it (2 and 1)",
   ],
+  [
+    [
+      { from_price: "1", tick: "1" },
+      { from_price: "499", tick: "5" },
+    ],
+    "the tier boundary 499 must be a multiple of both ticks around it (1 and 5)",
+  ],
 ])("bad tiers %j are refused", (tiers, message) => {
   const document = documentCopy();
   firstRow(document).tiers = tiers;
@@ -103,15 +110,24 @@ test.each([
   );
 });
 
-test("a tier with an unknown key or a zero tick is refused, naming the tier", () => {
+const BAD_TIERS: readonly (readonly [unknown, string])[] = [
+  [{ from_price: "1", tick: "0" }, 'tick must be an integer of at least 1, got "0"'],
+  [{ from_price: "1", tick: "1", x: "1" }, "unknown key 'x'"],
+];
+
+test.each(BAD_TIERS)("a bad tier %j is refused, naming the tier", (tier, message) => {
   const document = documentCopy();
-  firstRow(document).tiers[0] = { from_price: "1", tick: "1", note: "x" };
+  firstRow(document).tiers = [tier];
   expect(() => parseTicks(document)).toThrow(
-    new RulesFileError("tick_sizes.json [[ticks]] row 1, tier 1: unknown key 'note'"),
+    new RulesFileError(`tick_sizes.json [[ticks]] row 1, tier 1: ${message}`),
   );
-  firstRow(document).tiers[0] = { from_price: "1", tick: "0" };
+});
+
+test("a tier that is not a table is refused, naming the tier", () => {
+  const document = documentCopy();
+  firstRow(document).tiers = ["5"];
   expect(() => parseTicks(document)).toThrow(
-    /row 1, tier 1: tick must be an integer of at least 1/u,
+    new RulesFileError("tick_sizes.json [[ticks]] row 1, tier 1 must be an inline table"),
   );
 });
 

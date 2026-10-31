@@ -222,6 +222,22 @@ test("daily costs are the stamp duty", () => {
   expect(rules().dailyCosts(rp(10_000_000n), "2022-01-12").amount).toBe(0n);
 });
 
+// AC2: stamp duty is charged once for the day's orders, on their total, never per order.
+test("an order's costs carry no stamp duty: its total is its fee, levy and tax", () => {
+  const costs = rules().costs(Side.BUY, rp(6_000_000n), "2022-01-12");
+  expect(costs.total.amount).toBe(costs.fee.amount + costs.levy.amount + costs.tax.amount);
+});
+
+test("two orders of 6 million on 2022-01-12 pay the duty once, on their 12 million total", () => {
+  // Each order alone is under the 10 million exemption; the day's total is over it.
+  expect(rules().dailyCosts(rp(6_000_000n), "2022-01-12").amount).toBe(0n);
+  expect(rules().dailyCosts(rp(12_000_000n), "2022-01-12").amount).toBe(10_000n);
+});
+
+test("two orders on 2021-01-04 pay one duty of 10,000, not one each", () => {
+  expect(rules().dailyCosts(rp(2n), "2021-01-04").amount).toBe(10_000n);
+});
+
 test.each([
   ["2026-09-24", "2026-09-28"], // Thursday: across the weekend
   ["2026-03-17", "2026-03-26"], // across Eid al-Fitr's five holidays
