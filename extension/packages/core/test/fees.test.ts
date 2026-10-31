@@ -278,7 +278,7 @@ test.each([
   ["2022-03-31", "0.0430"],
   ["2022-04-01", "0.0433"],
   ["2025-01-01", "0.0433"],
-])("the levy on %s is %s%%, as the research says", (on, levy) => {
+])("the levy on %s is %s percent, as the research says", (on, levy) => {
   const schedule = fees();
   expect(levyWithVat(schedule.levy.on(on), schedule.vat.on(on)).eq(new Decimal(levy))).toBe(true);
 });
