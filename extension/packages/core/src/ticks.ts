@@ -1,7 +1,8 @@
 /**
  * The IDX tick table, board lot and settlement cycle, from `rules/tick_sizes.json` (spec §4.2),
- * read as Python's `steadyhand_idx.ticks` reads them. Prices are whole rupiah (`bigint`). A tier's
- * lower bound is inclusive. Choosing a tier and rounding to it are EXT S4b's (#224).
+ * read and worked as Python's `steadyhand_idx.ticks` does. Prices are whole rupiah (`bigint`). A
+ * tier's lower bound is inclusive and the tier is chosen by the price itself
+ * (docs/research/t-rules.md §1).
  */
 import {
   asDocument,
@@ -85,3 +86,32 @@ export const parseSettlement = (value: unknown, file: string = TICKS_FILE): Date
     (row, where) => getInt(row, "trading_days", where, 1n),
     file,
   );
+
+/** The tick of the tier `price` falls in. */
+export const tickFor = (row: TickRow, price: bigint): bigint => {
+  if (typeof price !== "bigint" || price < 1n) {
+    throw new RangeError(
+      `price must be a whole number of rupiah of at least 1, got ${String(price)}`,
+    );
+  }
+  // The loader requires a first tier from 1, so a price of at least 1 always finds one.
+  const tier = row.tiers.findLast((candidate) => candidate.fromPrice <= price) as TickTier;
+  return tier.tick;
+};
+
+export const isValidPrice = (row: TickRow, price: bigint): boolean =>
+  price % tickFor(row, price) === 0n;
+
+/** The highest valid price at or below `price`. */
+export const roundDown = (row: TickRow, price: bigint): bigint =>
+  price - (price % tickFor(row, price));
+
+/** The lowest valid price at or above `price`.
+ *
+ * Rounding up within a tier never passes the next tier's lower bound, because the loader requires
+ * every lower bound to be a multiple of the tick below it. */
+export const roundUp = (row: TickRow, price: bigint): bigint => {
+  const tick = tickFor(row, price);
+  const remainder = price % tick;
+  return remainder === 0n ? price : price + tick - remainder;
+};
