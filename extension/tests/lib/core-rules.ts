@@ -163,12 +163,40 @@ export const typedDeclarations = (file: ts.SourceFile): ts.Node[] =>
       namedDeclaration(node) !== undefined || (RETURNING.has(node.kind) && !isCallback(node)),
   );
 
-/** Every value in `file` whose type, written or inferred, is or holds a `number`. */
+/** Whether `type` is a decimal.js constructor, whose settings the library types as `number`. */
+const isDecimalConstructor = (type: ts.Type): boolean =>
+  type.getConstructSignatures().length > 0 &&
+  (type.getSymbol()?.getDeclarations() ?? []).some((declaration) =>
+    declaration.getSourceFile().fileName.includes("/node_modules/decimal.js/"),
+  );
+
+/** Whether `node` is a setting written straight into decimal.js's `clone`:
+ * `Decimal.clone({ precision: 28 })`. */
+const isDecimalSetting = (checker: ts.TypeChecker, node: ts.Node): boolean => {
+  if (!ts.isPropertyAssignment(node)) {
+    return false;
+  }
+  const call = node.parent.parent;
+  return (
+    ts.isCallExpression(call) &&
+    call.arguments[0] === node.parent &&
+    ts.isPropertyAccessExpression(call.expression) &&
+    call.expression.name.text === "clone" &&
+    isDecimalConstructor(checker.getTypeAtLocation(call.expression.expression))
+  );
+};
+
+/** Every value in `file` whose type, written or inferred, is or holds a `number`. A decimal.js
+ * context and the settings written into its `clone` are allowed, as the library takes no other
+ * kind (Shyden, 2026-10-30, #223). */
 export const numberTypes = (checker: ts.TypeChecker, file: ts.SourceFile): string[] =>
   typedDeclarations(file).flatMap((node) => {
     const name = namedDeclaration(node);
     if (name !== undefined) {
       const type = checker.getTypeAtLocation(name);
+      if (isDecimalConstructor(type) || isDecimalSetting(checker, node)) {
+        return [];
+      }
       return holdsNumber(checker, type, new Set())
         ? [at(file, node, `${name.text}: ${checker.typeToString(type)}`)]
         : [];
