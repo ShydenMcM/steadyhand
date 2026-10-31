@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import { expect, test } from "vitest";
-import shipped from "../../../rules/fees.json" with { type: "json" };
+import shipped from "../rules/fees.json" with { type: "json" };
 import { parseFees, type FeeSchedule } from "../src/fees.ts";
 import { RulesFileError, type Dated } from "../src/rules-file.ts";
 

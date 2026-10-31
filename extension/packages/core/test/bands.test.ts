@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import shipped from "../../../rules/auto_reject.json" with { type: "json" };
+import shipped from "../rules/auto_reject.json" with { type: "json" };
 import { parseBands, type BandRow, type BandTier } from "../src/bands.ts";
 import { RulesFileError } from "../src/rules-file.ts";
 

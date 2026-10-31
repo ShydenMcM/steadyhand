@@ -2,5 +2,5 @@ dist/
 coverage/
 package-lock.json
 # Written by scripts/core_fixtures.py from Python's readers; CI checks they are current.
-rules/
+packages/core/rules/
 packages/core/test/ratios.json

@@ -178,8 +178,8 @@ let fixtures = "";
 let checked: ReturnType<typeof typeChecked> | undefined;
 
 beforeAll(() => {
-  // Inside the extension, so a case can import decimal.js; git lists none of it.
-  fixtures = mkdtempSync(join(EXTENSION, ".steadyhand-types-"));
+  // Under node_modules, so a case can import decimal.js and no guard walks it.
+  fixtures = mkdtempSync(join(EXTENSION, "node_modules", ".steadyhand-types-"));
   const paths = TYPED.map(([, code], index) => {
     const path = join(fixtures, `case-${String(index)}.ts`);
     writeFileSync(path, `${code}\n`);

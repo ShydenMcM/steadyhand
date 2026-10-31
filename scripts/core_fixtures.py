@@ -1,9 +1,9 @@
 """Write what the extension's core reads from Python (#223, spec §4.1, §4.2).
 
-The rule files become JSON in ``extension/rules/``, each read and checked by Python's own reader
-first, so a file Python refuses is never converted. Whole numbers and dates are written as
-strings: core never holds a ``number``, and reads each as a ``bigint`` or a date. The ratio
-fixture holds Python's digits for seeded inputs, which core's ratios must give exactly.
+The rule files become JSON in ``extension/packages/core/rules/``, each read and checked by
+Python's own reader first, so a file Python refuses is never converted. Whole numbers and dates
+are written as strings: core never holds a ``number``, and reads each as a ``bigint`` or a date.
+The ratio fixture holds Python's digits for seeded inputs, which core's ratios must give exactly.
 
 Run from the repository root: ``uv run --locked python scripts/core_fixtures.py``. CI runs it again
 and fails if a committed file differs (tests/integration/scripts/test_core_fixtures.py).
@@ -26,7 +26,7 @@ from steadyhand_idx.fees import FEES_FILE, parse_fees
 from steadyhand_idx.ticks import TICKS_FILE, parse_settlement, parse_ticks
 
 ROOT = Path(__file__).resolve().parents[1]
-RULES = Path("extension/rules")
+RULES = Path("extension/packages/core/rules")
 RATIOS = Path("extension/packages/core/test/ratios.json")
 
 # Each rule file and the Python readers that must accept it before it is converted.

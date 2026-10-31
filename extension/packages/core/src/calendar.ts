@@ -4,7 +4,7 @@
  * which days a page shows prices for. A year with no holiday data is refused, naming the year,
  * rather than assumed to have no holidays. Days are ISO strings (`2026-09-28`).
  */
-import shipped from "../../../rules/holidays.json" with { type: "json" };
+import shipped from "../rules/holidays.json" with { type: "json" };
 import {
   asDay,
   asDocument,

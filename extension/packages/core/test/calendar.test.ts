@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import shipped from "../../../rules/holidays.json" with { type: "json" };
+import shipped from "../rules/holidays.json" with { type: "json" };
 import {
   IdxCalendar,
   MISSING_RULES_YEAR,

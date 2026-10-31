@@ -1,5 +1,5 @@
 /**
- * Reading the rule files in `extension/rules/` (spec §4.2), ported from Python's
+ * Reading the rule files in `extension/packages/core/rules/` (spec §4.2), ported from Python's
  * `steadyhand_idx._datafile`. `scripts/core_fixtures.py` writes them only after Python's readers
  * accept each file, with every whole number and date written as a string; core checks them again,
  * so a file changed by hand is refused here too, naming where.

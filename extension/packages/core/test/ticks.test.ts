@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import shipped from "../../../rules/tick_sizes.json" with { type: "json" };
+import shipped from "../rules/tick_sizes.json" with { type: "json" };
 import { RulesFileError, UnsupportedDateError } from "../src/rules-file.ts";
 import { parseSettlement, parseTicks, type TickRow } from "../src/ticks.ts";
 
