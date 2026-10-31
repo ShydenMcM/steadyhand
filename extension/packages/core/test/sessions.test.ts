@@ -4,7 +4,9 @@ import { IdxCalendar } from "../src/calendar.ts";
 import { RulesFileError, UnsupportedDateError } from "../src/rules-file.ts";
 import {
   adviceDayAt,
+  closeFinalAt,
   isReviewDay,
+  nextPreOpeningAt,
   parseSessions,
   type AdviceDayRead,
   type ReviewEvery,
@@ -49,6 +51,29 @@ test("every row of the shipped sessions is read as the file states it", () => {
 test("the table is verified from 8 April 2025", () => {
   expect(sessions.first).toBe("2025-04-08");
   expect(() => sessions.on("2025-04-07")).toThrow(UnsupportedDateError);
+});
+
+test("the current row is II-A 2026's: pre-opening from 08:45:00, closing match to 16:01:59", () => {
+  const row = sessions.on("2026-10-30");
+  expect(row.preOpeningFrom).toBe("08:45:00");
+  expect(row.closingMatchUntil).toBe("16:01:59");
+  expect(row.source).toContain("Kep-00136/BEI/09-2026");
+});
+
+test("a trading day's close is final at 16:02:00 WIB", () => {
+  expect(closeFinalAt("2026-10-29", sessions)).toEqual(wib("2026-10-29T16:02:00"));
+});
+
+test("after Thursday the next pre-opening is Friday's at 08:45:00 WIB", () => {
+  expect(nextPreOpeningAt("2026-10-29", calendar, sessions)).toEqual(wib("2026-10-30T08:45:00"));
+});
+
+test("after Friday the next pre-opening is Monday's", () => {
+  expect(nextPreOpeningAt("2026-10-30", calendar, sessions)).toEqual(wib("2026-11-02T08:45:00"));
+});
+
+test("before a holiday the next pre-opening is the day after it", () => {
+  expect(nextPreOpeningAt("2026-08-14", calendar, sessions)).toEqual(wib("2026-08-18T08:45:00"));
 });
 
 test("a row with an unknown key is refused", () => {
@@ -157,14 +182,13 @@ test("a read before the sessions table is verified is refused", () => {
   );
 });
 
-test.each<[ReviewEvery]>([["year"], ["quarter"], ["month"]])(
-  "a strategy's first advice day is a %s review day",
-  (every) => {
-    expect(isReviewDay("2026-10-29", null, every)).toBe(true);
-  },
-);
+const EVERY: readonly ReviewEvery[] = ["year", "quarter", "month"];
 
-test.each<[string, string, ReviewEvery, boolean]>([
+test.each(EVERY)("a strategy's first advice day is a %s review day", (every) => {
+  expect(isReviewDay("2026-10-29", null, every)).toBe(true);
+});
+
+const REVIEWS: readonly (readonly [string, string, ReviewEvery, boolean])[] = [
   ["2027-01-04", "2026-12-30", "year", true],
   ["2026-12-30", "2026-12-29", "year", false],
   ["2026-04-01", "2026-03-31", "quarter", true],
@@ -174,15 +198,31 @@ test.each<[string, string, ReviewEvery, boolean]>([
   ["2026-07-01", "2026-01-05", "quarter", true],
   ["2026-11-02", "2026-10-30", "month", true],
   ["2026-10-30", "2026-10-29", "month", false],
-])("advice day %s after %s is a %s review day: %s", (day, previous, every, review) => {
-  expect(isReviewDay(day, previous, every)).toBe(review);
-});
+];
 
-test("a review day with no read moves to the next advice day, and only that one", () => {
+test.each(REVIEWS)(
+  "advice day %s after %s is a %s review day: %s",
+  (day, previous, every, review) => {
+    expect(isReviewDay(day, previous, every)).toBe(review);
+  },
+);
+
+const MISSED: readonly (readonly [ReviewEvery, string, string, string, string])[] = [
   // 2 November 2026, the month's first trading day, had no read.
-  expect(isReviewDay("2026-11-05", "2026-10-30", "month")).toBe(true);
-  expect(isReviewDay("2026-11-06", "2026-11-05", "month")).toBe(false);
-});
+  ["month", "2026-11-02", "2026-10-30", "2026-11-05", "2026-11-06"],
+  // 1 October 2026, the quarter's first trading day, had no read.
+  ["quarter", "2026-10-01", "2026-09-30", "2026-10-05", "2026-10-06"],
+  // 4 January 2027, the year's first trading day, had no read.
+  ["year", "2027-01-04", "2026-12-30", "2027-01-06", "2027-01-07"],
+];
+
+test.each(MISSED)(
+  "a %s review day %s with no read moves to the next advice day, and only that one",
+  (every, _missed, previous, next, after) => {
+    expect(isReviewDay(next, previous, every)).toBe(true);
+    expect(isReviewDay(after, next, every)).toBe(false);
+  },
+);
 
 test.each([["2026-10-29"], ["2026-10-30"]])(
   "a previous advice day of %s, not before 2026-10-29, is refused",

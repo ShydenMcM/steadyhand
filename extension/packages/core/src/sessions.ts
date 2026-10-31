@@ -45,20 +45,30 @@ export const parseSessions = (value: unknown, file: string = SESSIONS_FILE): Dat
   return dated(contents, "sessions", ["pre_opening_from", "closing_match_until"], parseRow, file);
 };
 
-const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
-
 /** The Jakarta day and time of day (to the second, rounded down) of instant `at`. */
 const inJakarta = (at: Date): { readonly day: string; readonly time: string } => {
-  const local = new Date(at.getTime() + WIB_OFFSET_MS).toISOString();
+  const local = new Date(at.getTime() + 7 * 60 * 60 * 1000).toISOString();
   return { day: local.slice(0, 10), time: local.slice(11, 19) };
 };
 
 /** The instant `time` (`HH:MM:SS`) WIB on `day`. */
 const atJakarta = (day: string, time: string): Date => new Date(`${day}T${time}+07:00`);
 
-/** The first instant a read shows `day`'s close: the second after the closing match ends. */
-const closeFinal = (day: string, sessions: Dated<SessionRow>): Date =>
+/** When trading day `day`'s close is final: the second after its closing-price matching ends
+ * (16:02:00 WIB in the current table). A read from then on shows that day's close. */
+export const closeFinalAt = (day: string, sessions: Dated<SessionRow>): Date =>
   new Date(atJakarta(day, sessions.on(day).closingMatchUntil).getTime() + 1000);
+
+/** When the trading day after `day` starts its pre-opening (08:45:00 WIB in the current table),
+ * after which a page no longer shows `day`'s close. */
+export const nextPreOpeningAt = (
+  day: string,
+  calendar: IdxCalendar,
+  sessions: Dated<SessionRow>,
+): Date => {
+  const next = calendar.nextTradingDay(day);
+  return atJakarta(next, sessions.on(next).preOpeningFrom);
+};
 
 /** What a read at one instant shows. */
 export interface AdviceDayRead {
@@ -79,15 +89,15 @@ export const adviceDayAt = (
   const { day, time } = inJakarta(at);
   if (!calendar.isTradingDay(day)) {
     const next = calendar.nextTradingDay(day);
-    return { adviceDay: calendar.previousTradingDay(day), nextClose: closeFinal(next, sessions) };
+    return { adviceDay: calendar.previousTradingDay(day), nextClose: closeFinalAt(next, sessions) };
   }
   const row = sessions.on(day);
   if (time > row.closingMatchUntil) {
     const next = calendar.nextTradingDay(day);
-    return { adviceDay: day, nextClose: closeFinal(next, sessions) };
+    return { adviceDay: day, nextClose: closeFinalAt(next, sessions) };
   }
   const adviceDay = time < row.preOpeningFrom ? calendar.previousTradingDay(day) : null;
-  return { adviceDay, nextClose: closeFinal(day, sessions) };
+  return { adviceDay, nextClose: closeFinalAt(day, sessions) };
 };
 
 /** How often a strategy reviews: on the first trading day of each year, quarter or month. */
@@ -98,7 +108,7 @@ const periodOf = (day: string, every: ReviewEvery): string => {
     case "year":
       return day.slice(0, 4);
     case "quarter":
-      return `${day.slice(0, 4)}-Q${String(Math.floor((Number(day.slice(5, 7)) - 1) / 3))}`;
+      return `${day.slice(0, 4)}-Q${String((BigInt(day.slice(5, 7)) - 1n) / 3n)}`;
     case "month":
       return day.slice(0, 7);
   }
