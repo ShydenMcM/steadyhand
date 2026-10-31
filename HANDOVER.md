@@ -32,7 +32,7 @@ A new ticket gets its `Priority` when filed, or board-next refuses.
 ## Resume steps
 1. `ListAgents`; `git status --short`; `git fetch`.
 2. board-next said #226 (EXT S5: the broker view, exact Indonesian numbers, freshness, the fixture broker and the scrubber, P1). Read its criteria; a criterion still asking for a recorded red phase or predicted mutations goes to Shyden first (as #223-#225). Branch `226-...` from develop; tests first.
-3. Before any push of extension code: from `extension/`, `node ../.superpowers/sdd/guardcheck.ts core|tests <files>` (guards are CI-only). Stash HANDOVER.md before a push (pre-push refuses a dirty tree).
+3. Extension guards are CI-only; a hook refusal is final (never re-run them by another route). Write core to their rules: no `number` declarations or `Number(...)`, no generic `test.each<...>(`. Stash HANDOVER.md before a push (pre-push refuses a dirty tree).
 4. Before closing any ticket: check EVERY criterion against the merged code and tests, case by case, and say exactly what was checked.
 
 ## Running
