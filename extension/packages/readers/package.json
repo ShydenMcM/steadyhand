@@ -6,6 +6,7 @@
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@steadyhand/core": "0.1.0"
+    "@steadyhand/core": "0.1.0",
+    "decimal.js": "10.6.0"
   }
 }
