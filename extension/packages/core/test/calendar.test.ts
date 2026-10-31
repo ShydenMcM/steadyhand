@@ -255,3 +255,24 @@ test("requireCovered refuses a year without data", () => {
     calendar.requireCovered("2028-01-03");
   }).toThrow(/^holidays\.json has no IDX holidays for 2028/u);
 });
+
+// A day that is not an ISO date never reaches the arithmetic: as an Invalid Date it would read as
+// no weekend and no holiday, so a trading day (#224).
+test.each([
+  ["isTradingDay", (calendar: IdxCalendar) => calendar.isTradingDay("2021-1-5")],
+  [
+    "requireCovered",
+    (calendar: IdxCalendar) => {
+      calendar.requireCovered("2021-1-5");
+    },
+  ],
+  ["nextTradingDay", (calendar: IdxCalendar) => calendar.nextTradingDay("2021-1-5")],
+  ["previousTradingDay", (calendar: IdxCalendar) => calendar.previousTradingDay("2021-1-5")],
+  ["addTradingDays", (calendar: IdxCalendar) => calendar.addTradingDays("2021-1-5", 2n)],
+  ["tradingDays from", (calendar: IdxCalendar) => calendar.tradingDays("2021-1-5", "2021-01-08")],
+  ["tradingDays to", (calendar: IdxCalendar) => calendar.tradingDays("2021-01-04", "2021-1-5")],
+])("%s refuses a day that is not an ISO date", (_, call) => {
+  expect(() => {
+    call(IdxCalendar.shipped());
+  }).toThrow(new RulesFileError('day must be a date such as 2021-01-04, got "2021-1-5"'));
+});

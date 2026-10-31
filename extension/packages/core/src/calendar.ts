@@ -32,7 +32,9 @@ export interface HolidayYear {
   readonly holidays: ReadonlySet<string>;
 }
 
-const midnight = (day: string): Date => new Date(`${day}T00:00:00Z`);
+/** `day` at midnight UTC, once it is known to be an ISO date: an Invalid Date would read as no
+ * weekend and no holiday, so as a trading day. */
+const midnight = (day: string): Date => new Date(`${asDay(day, "day")}T00:00:00Z`);
 
 const isWeekend = (day: string): boolean => [0, 6].includes(midnight(day).getUTCDay());
 
@@ -177,11 +179,11 @@ export class IdxCalendar {
 
   /** Refuse, with `UnsupportedDateError`, unless `day`'s year has holiday data. */
   requireCovered(day: string): void {
-    this.year(yearOf(day));
+    this.year(yearOf(asDay(day, "day")));
   }
 
   isTradingDay(day: string): boolean {
-    const { holidays } = this.year(yearOf(day));
+    const { holidays } = this.year(yearOf(asDay(day, "day")));
     return !isWeekend(day) && !holidays.has(day);
   }
 
@@ -217,7 +219,7 @@ export class IdxCalendar {
 
   /** Every trading day from `start` to `end`, inclusive. */
   tradingDays(start: string, end: string): string[] {
-    if (end < start) {
+    if (asDay(end, "day") < asDay(start, "day")) {
       throw new RangeError(`end ${end} is before start ${start}`);
     }
     const found: string[] = [];
