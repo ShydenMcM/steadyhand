@@ -1,10 +1,10 @@
 import { expect, test } from "vitest";
 import shipped from "../rules/auto_reject.json" with { type: "json" };
-import { parseBands, type BandRow, type BandTier } from "../src/bands.ts";
+import { bandLimits, bandTierFor, parseBands, type BandRow, type BandTier } from "../src/bands.ts";
 import { RulesFileError } from "../src/rules-file.ts";
 
-// Ported from the reading cases of Python's tests/idx/test_bands.py, one test per case. The band
-// arithmetic is EXT S4b's (#224).
+// Ported from Python's tests/idx/test_bands.py, one test per case: the reading cases (#223) and
+// the band arithmetic (#224).
 
 type Document = typeof shipped & Record<string, unknown>;
 
@@ -108,4 +108,81 @@ test("bad documents are refused", () => {
   const document = documentCopy();
   firstRow(document).min_price = "0";
   expect(() => parseBands(document)).toThrow(/min_price must be an integer of at least 1/u);
+});
+
+/** One tier as the research gives it: inclusive upper reference, up, down, in rupiah. */
+type Tier = readonly [bigint | null, string, string, boolean];
+
+const pct = (upTo: bigint | null, up: string, down: string): Tier => [upTo, up, down, false];
+
+const RUPIAH_1: Tier = [10n, "1", "1", true];
+
+// Every period, copied from t-hist.md §4 and t-rules.md §3: (from, minimum price, tiers). A
+// literal pin against the research.
+const RESEARCH: readonly (readonly [string, bigint, readonly Tier[]])[] = [
+  ["2020-03-13", 50n, [pct(200n, "35", "7"), pct(5000n, "25", "7"), pct(null, "20", "7")]],
+  ["2023-06-05", 50n, [pct(200n, "35", "15"), pct(5000n, "25", "15"), pct(null, "20", "15")]],
+  ["2023-09-04", 50n, [pct(200n, "35", "35"), pct(5000n, "25", "25"), pct(null, "20", "20")]],
+  ["2025-04-08", 50n, [pct(200n, "35", "15"), pct(5000n, "25", "15"), pct(null, "20", "15")]],
+  [
+    "2026-09-28",
+    1n,
+    [RUPIAH_1, pct(200n, "35", "15"), pct(5000n, "25", "15"), pct(null, "20", "15")],
+  ],
+  [
+    "2027-01-01",
+    1n,
+    [RUPIAH_1, pct(200n, "35", "35"), pct(5000n, "25", "25"), pct(null, "20", "20")],
+  ],
+];
+
+test("the periods start where the research says", () => {
+  expect(parseBands(shipped).entries.map(([from]) => from)).toEqual(
+    RESEARCH.map(([from]) => from),
+  );
+});
+
+test.each(RESEARCH)("the period from %s matches the research", (from, minPrice, tiers) => {
+  const row = parseBands(shipped).on(from);
+  expect(row.minPrice).toBe(minPrice);
+  expect(
+    row.tiers.map((tier) => [tier.upTo, tier.up.toString(), tier.down.toString(), tier.inRupiah]),
+  ).toEqual(tiers);
+});
+
+test.each([
+  ["2025-04-08", 200n, "35"], // 200 is in the LOWER tier here, unlike the tick table
+  ["2025-04-08", 201n, "25"],
+  ["2025-04-08", 5_000n, "25"],
+  ["2025-04-08", 5_001n, "20"],
+  ["2026-09-28", 10n, "1"],
+  ["2026-09-28", 11n, "35"],
+])("on %s a reference of %s moves up by %s: tier edges include the upper bound", (on, reference, up) => {
+  expect(bandTierFor(parseBands(shipped).on(on), reference).up.toString()).toBe(up);
+});
+
+/** The limits as their digits, to compare with Python's. */
+const limits = (on: string, reference: bigint): [string, string] => {
+  const [low, high] = bandLimits(parseBands(shipped).on(on), reference);
+  return [low.toString(), high.toString()];
+};
+
+test("percentage limits are exact: 1,000 on 2025-04-08", () => {
+  expect(limits("2025-04-08", 1_000n)).toEqual(["850", "1250"]);
+});
+
+test("percentage limits are exact: 155 on 2020-03-13", () => {
+  expect(limits("2020-03-13", 155n)).toEqual(["144.15", "209.25"]);
+});
+
+test("rupiah limits are one either way", () => {
+  expect(limits("2026-09-28", 7n)).toEqual(["6", "8"]);
+});
+
+test.each([0n, -1n, true, 200])("a reference of %s is refused: a whole rupiah of at least 1", (reference) => {
+  expect(() => bandTierFor(parseBands(shipped).on("2025-04-08"), reference as bigint)).toThrow(
+    new RangeError(
+      `reference must be a whole number of rupiah of at least 1, got ${String(reference)}`,
+    ),
+  );
 });
