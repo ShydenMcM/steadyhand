@@ -1,0 +1,20 @@
+# IDX regular-market times, effective-dated, in Jakarta time (WIB, UTC+7). Spec §4.2, §6.2.
+#
+# Two facts per row, from docs/research/t-rules.md §5 (Rule II-A IV.2; the same Monday to Friday):
+# - pre_opening_from: when pre-opening order entry starts. From then on a page shows the new
+#   day's auction and session prices, not the previous trading day's close.
+# - closing_match_until: the last second of matching at the closing price. A price read from the
+#   next second is that day's close.
+#
+# Only primary-verified rows are shipped (spec §9.1). II-A 2025 is the earliest text read with
+# these times. II-A 2023 (Kep-00055/BEI/03-2023, from 3 Apr 2023) had closing-price matching at
+# 16:00:01-16:00:59, but whether Kep-00196/BEI/12-2024 (in force 9 Dec 2024) already moved it was
+# not read, so no row covers the days before 8 Apr 2025.
+
+schema = 1
+
+[[sessions]]
+from = 2025-04-08
+source = "Kep-00003/BEI/04-2025, Rule II-A IV.2 (unchanged in Kep-00136/BEI/09-2026, in force 28 Sep 2026)"
+pre_opening_from = 08:45:00
+closing_match_until = 16:01:59

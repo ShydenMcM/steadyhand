@@ -11,7 +11,7 @@ import tomllib
 from bisect import bisect_right
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal, InvalidOperation
 from importlib import resources
 from itertools import pairwise
@@ -119,6 +119,14 @@ def as_date(value: object, what: str) -> date:
 
 def get_date(row: Row, key: str, where: Where) -> date:
     return as_date(_get(row, key, where), f"{where}: {key}")
+
+
+def get_time(row: Row, key: str, where: Where) -> time:
+    """A TOML local time such as 08:45:00 (TOML gives no offset on a time without a date)."""
+    value = _get(row, key, where)
+    if not isinstance(value, time):
+        raise _wrong(where, key, "a time of day such as 08:45:00", value)
+    return value
 
 
 def get_int(row: Row, key: str, where: Where, *, minimum: int) -> int:

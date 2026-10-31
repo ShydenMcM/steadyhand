@@ -1,0 +1,11 @@
+{
+  "schema": "1",
+  "sessions": [
+    {
+      "from": "2025-04-08",
+      "source": "Kep-00003/BEI/04-2025, Rule II-A IV.2 (unchanged in Kep-00136/BEI/09-2026, in force 28 Sep 2026)",
+      "pre_opening_from": "08:45:00",
+      "closing_match_until": "16:01:59"
+    }
+  ]
+}

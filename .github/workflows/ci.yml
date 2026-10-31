@@ -168,7 +168,7 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         run: |
           unzip -l dist/steadyhand_idx-*.whl > "${RUNNER_TEMP}/idx-wheel.txt"
-          for table in tick_sizes auto_reject fees holidays; do
+          for table in tick_sizes auto_reject fees holidays sessions; do
             grep -q "steadyhand_idx/data/${table}.toml" "${RUNNER_TEMP}/idx-wheel.txt"
           done
       - name: The engine wheel installs and imports with nothing else
