@@ -172,6 +172,12 @@ const TYPED: readonly (readonly [string, string, readonly string[]])[] = [
     "const other = { clone: (x: object) => x };\nexport const o = other.clone({ precision: 28 });",
     ["line 2: precision: number"],
   ],
+  [
+    "settings passed to a constructor of no named type",
+    "declare const Made: (new () => object) & { clone: (x: object) => object };\n" +
+      "export const o = Made.clone({ precision: 28 });",
+    ["line 2: precision: number"],
+  ],
 ];
 
 let fixtures = "";
