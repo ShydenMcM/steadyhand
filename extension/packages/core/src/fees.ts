@@ -1,9 +1,16 @@
 /**
- * IDX trading costs and taxes, from `rules/fees.json` (spec §4.2), read as Python's
- * `steadyhand_idx.fees` reads them. Working out a trade's costs, and refusing an all-in quote
- * smaller than the costs it says it includes, are EXT S4b's (#224).
+ * IDX trading costs and taxes, from `rules/fees.json` (spec §4.2), read and worked as Python's
+ * `steadyhand_idx.fees` does. Every component is worked out exactly as a percentage of the gross
+ * value, the components are summed, and the total is rounded once to the rupiah, against the
+ * trader (spec §4.1). The levy and tax lines of `Costs` are rounded down and the broker line takes
+ * the rest, so the three lines always add up to the rounded total and none of them is negative.
+ * Each sum is worked in Python's default context (`RuleDecimal`), in Python's order, so the digits
+ * match.
  */
 import type Decimal from "decimal.js";
+import { Costs, Side } from "./costs.ts";
+import { IDR, Money, Rounding } from "./money.ts";
+import { RuleDecimal } from "./ratio.ts";
 import {
   asDay,
   asDocument,
@@ -27,6 +34,8 @@ export const FEES_FILE = "fees.json";
 export const INCLUDABLE: ReadonlySet<string> = new Set(["levy", "commission_vat", "sale_tax"]);
 
 const MONTHS = 12n;
+
+const HUNDRED = new RuleDecimal("100");
 
 /** The exchange-side charges per side, in percent of the gross value. */
 export interface Levy {
@@ -154,7 +163,7 @@ export const parseFees = (value: unknown, file: string = FEES_FILE): FeeSchedule
     throw new RulesFileError(`${file} [presets] must be a table with at least one preset`);
   }
   const levyKeys = ["exchange_percent", "clearing_percent", "settlement_percent"];
-  return {
+  const schedule: FeeSchedule = {
     levy: dated(contents, "levy", [...levyKeys, "guarantee_fund_percent"], levy, file),
     vat: dated(contents, "vat", ["rate_percent"], rate, file),
     saleTax: dated(contents, "sale_tax", ["rate_percent"], rate, file),
@@ -169,4 +178,165 @@ export const parseFees = (value: unknown, file: string = FEES_FILE): FeeSchedule
     dividendExemption: dated(contents, "dividend_exemption", COUNTS, exemption, file),
     presets: new Map(Object.entries(presets).map(([name, row]) => [name, preset(name, row, file)])),
   };
+  for (const found of schedule.presets.values()) {
+    checkQuoteCoversWhatItIncludes(schedule, found, file);
+  }
+  return schedule;
+};
+
+/** Every dated table, for working out the first day all of them are verified. */
+export const feeTables = (schedule: FeeSchedule): readonly Dated<unknown>[] => [
+  schedule.levy,
+  schedule.vat,
+  schedule.saleTax,
+  schedule.stampDuty,
+  schedule.dividendTaxRate,
+  schedule.dividendExemption,
+];
+
+/** The levy in percent, VAT included on every part except the guarantee fund. */
+export const levyWithVat = (levy: Levy, vat: Decimal): Decimal => {
+  const taxed = levy.exchange.plus(levy.clearing).plus(levy.settlement);
+  return taxed.plus(taxed.times(vat).div(HUNDRED)).plus(levy.guaranteeFund);
+};
+
+export const feePreset = (schedule: FeeSchedule, name: string): BrokerPreset => {
+  const found = schedule.presets.get(name);
+  if (found === undefined) {
+    const known = [...schedule.presets.keys()].toSorted().join(", ");
+    throw new RangeError(`no broker fee preset named '${name}'; ${FEES_FILE} has ${known}`);
+  }
+  return found;
+};
+
+/** One trade's costs in percent of its gross value, before any rounding. */
+export interface Percentages {
+  readonly fee: Decimal;
+  readonly levy: Decimal;
+  readonly tax: Decimal;
+}
+
+/** The fee, levy and tax on one trade, in percent of its gross value. */
+export const feePercentages = (
+  schedule: FeeSchedule,
+  quote: BrokerPreset,
+  side: Side,
+  on: string,
+): Percentages => {
+  const vat = schedule.vat.on(on);
+  const levy = levyWithVat(schedule.levy.on(on), vat);
+  const tax = side === Side.SELL ? schedule.saleTax.on(on) : new RuleDecimal("0");
+  let commission = side === Side.BUY ? quote.buy : quote.sell;
+  if (quote.includes.has("levy")) {
+    commission = commission.minus(levy);
+  }
+  if (quote.includes.has("sale_tax")) {
+    commission = commission.minus(tax);
+  }
+  if (!quote.includes.has("commission_vat")) {
+    commission = commission.plus(commission.times(vat).div(HUNDRED));
+  }
+  return { fee: commission, levy, tax };
+};
+
+const requireRupiah = (money: Money, name: string): void => {
+  if (!money.currency.equals(IDR) || money.amount < 0n) {
+    throw new RangeError(`${name} must be a non-negative IDR amount, got ${money.toString()}`);
+  }
+};
+
+/** The costs of one trade worth `gross`, rounded once, against the trader. The fee comes from a
+ * broker preset, so it is marked an estimate. */
+export const tradeCosts = (
+  schedule: FeeSchedule,
+  quote: BrokerPreset,
+  side: Side,
+  gross: Money,
+  on: string,
+): Costs => {
+  requireRupiah(gross, "gross");
+  const rates = feePercentages(schedule, quote, side, on);
+  const total = gross.timesRate(
+    rates.fee.plus(rates.levy).plus(rates.tax).div(HUNDRED),
+    Rounding.UP,
+  );
+  const levy = gross.timesRate(rates.levy.div(HUNDRED), Rounding.DOWN);
+  const tax = gross.timesRate(rates.tax.div(HUNDRED), Rounding.DOWN);
+  return new Costs(total.minus(levy).minus(tax), levy, tax, true);
+};
+
+/** Stamp duty on the day's trade confirmation, given the day's buys plus sells. */
+export const dailyCosts = (schedule: FeeSchedule, traded: Money, on: string): Money => {
+  requireRupiah(traded, "traded");
+  const duty = schedule.stampDuty.on(on);
+  return traded.amount <= duty.exemptUpTo ? Money.zero(IDR) : new Money(duty.amount, IDR);
+};
+
+/** The full tax on a gross dividend paid on `on`, rounded up to the rupiah.
+ *
+ * The reinvestment exemption is the engine's claim bookkeeping, not a discount here. */
+export const dividendTax = (schedule: FeeSchedule, gross: Money, on: string): Money => {
+  requireRupiah(gross, "gross");
+  return gross.timesRate(schedule.dividendTaxRate.on(on).div(HUNDRED), Rounding.UP);
+};
+
+const isLeap = (year: bigint): boolean =>
+  year % 4n === 0n && (year % 100n !== 0n || year % 400n === 0n);
+
+/** `year-month-last day`, as an ISO day. */
+const endOfMonth = (year: bigint, month: bigint): string => {
+  const thirty = month === 4n || month === 6n || month === 9n || month === 11n;
+  const february = isLeap(year) ? 29n : 28n;
+  const last = month === 2n ? february : thirty ? 30n : 31n;
+  const two = (value: bigint): string => String(value).padStart(2, "0");
+  return `${String(year).padStart(4, "0")}-${two(month)}-${two(last)}`;
+};
+
+const yearOf = (day: string): bigint => BigInt(day.slice(0, 4));
+
+/** The last day to reinvest a dividend with `exDate`, or `null` if it cannot be exempt.
+ *
+ * The deadline counts from the ex-date's year, which is never later than the year the dividend is
+ * really paid (docs/research/t-pay.md §4), so it errs early. */
+export const reinvestmentDeadline = (schedule: FeeSchedule, exDate: string): string | null => {
+  const exemption = schedule.dividendExemption.on(exDate);
+  return exemption === null ? null : endOfMonth(yearOf(exDate) + 1n, exemption.reinvestByMonth);
+};
+
+/** The last day an investment made on `purchaseDay` must stay held to keep its claim. */
+export const protectionEnd = (schedule: FeeSchedule, purchaseDay: string): string => {
+  const exemption = schedule.dividendExemption.on(purchaseDay);
+  if (exemption === null) {
+    throw new RangeError(`no reinvestment exemption applies to a purchase on ${purchaseDay}`);
+  }
+  return endOfMonth(yearOf(purchaseDay) + exemption.holdTaxYears - 1n, MONTHS);
+};
+
+/** An all-in quote smaller than the levy and tax it claims to contain is a data error, checked on
+ * the first day all three tables answer and on every day one of them changes after it. */
+const checkQuoteCoversWhatItIncludes = (
+  schedule: FeeSchedule,
+  quote: BrokerPreset,
+  file: string,
+): void => {
+  const tables: readonly Dated<unknown>[] = [schedule.levy, schedule.vat, schedule.saleTax];
+  const first = tables.map((table) => table.first).reduce((a, b) => (b > a ? b : a));
+  const days = new Set([first]);
+  for (const table of tables) {
+    for (const [start] of table.entries) {
+      if (start >= first) {
+        days.add(start);
+      }
+    }
+  }
+  for (const day of [...days].toSorted()) {
+    for (const side of [Side.BUY, Side.SELL]) {
+      if (feePercentages(schedule, quote, side, day).fee.isNegative()) {
+        throw new RulesFileError(
+          `${file} preset '${quote.name}': its ${side} quote is smaller than the costs it says ` +
+            `it includes on ${day}`,
+        );
+      }
+    }
+  }
 };
