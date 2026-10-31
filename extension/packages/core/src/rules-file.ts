@@ -156,6 +156,17 @@ export const getDate = (row: Row, key: string, where: Where): string =>
 const PLAIN_DECIMAL = /^\d+(?:\.\d+)?$/u;
 
 /** A rate written as a string (`"0.018"`), so no `number` is ever involved (spec §4.1). */
+const TIME_OF_DAY = /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/u;
+
+/** A time of day such as `08:45:00`, as Python's reader writes a TOML local time. */
+export const getTime = (row: Row, key: string, where: Where): string => {
+  const value = get(row, key, where);
+  if (typeof value !== "string" || !TIME_OF_DAY.test(value)) {
+    throw wrong(where, key, "a time of day such as 08:45:00", value);
+  }
+  return value;
+};
+
 export const getDecimal = (row: Row, key: string, where: Where): Decimal => {
   const value = get(row, key, where);
   if (typeof value !== "string") {
