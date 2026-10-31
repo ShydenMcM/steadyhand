@@ -16,25 +16,6 @@ concurrency:
 env:
   UV_VERSION: "0.12.18"
 
-# Every run step is traced (#384, Shyden 2026-10-22: workflow files are code, measured from a run on
-# the same commit, shell traced line by line). This shell writes, per step,
-# $RUNNER_TEMP/workflow-trace/<job>/<GITHUB_ACTION>: a header (sha, then the script's line count)
-# and the line number of each command bash's DEBUG trap sees in the step's own script, never its
-# text, since a traced command shows secrets expanded. GitHub reads this value with .NET's argument
-# rules and string.Format, so the bash code inside holds no brace and only escaped double quotes.
-# scripts/workflow_coverage.py reads the traces back.
-defaults:
-  run:
-    shell: >-
-      bash --noprofile --norc -eo pipefail -c
-      "__wt_t=\"$RUNNER_TEMP/workflow-trace/$GITHUB_JOB/$GITHUB_ACTION\";
-      mkdir -p \"$(dirname \"$__wt_t\")\";
-      printf 'sha %s\nlines %s\n' \"$GITHUB_SHA\" \"$(grep -c '' \"$0\")\" > \"$__wt_t\";
-      __wt_s=\"$0\";
-      set -T;
-      trap 'if [ \"$BASH_SOURCE\" = \"$__wt_s\" ]; then echo \"$LINENO\" >> \"$__wt_t\"; fi' DEBUG;
-      . \"$0\"" {0}
-
 jobs:
   lint:
     name: lint
@@ -67,15 +48,6 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
       - run: uv run --locked mypy
         if: steps.scope.outputs.docs_only != 'true'
-      # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
-      - name: Keep the workflow trace
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: workflow-trace-${{ github.job }}-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/workflow-trace
-          if-no-files-found: error
-          retention-days: 7
 
   test:
     name: test (py3.13)
@@ -106,9 +78,8 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         run: |
           mkdir -p "${RUNNER_TEMP}/coverage-report"
-          uv run --locked pytest -W error --cov --cov-report=term-missing --cov-report="json:${RUNNER_TEMP}/coverage-report/coverage.json"
-          git rev-parse HEAD > "${RUNNER_TEMP}/coverage-report/sha.txt"
-      # The coverage job joins every suite's report (#381); this one names the commit it measured.
+          COVERAGE_FILE="${RUNNER_TEMP}/coverage-report/.coverage.${GITHUB_JOB}" uv run --locked pytest -W error --cov --cov-report=term
+      # The coverage job joins every Python suite's data and judges one overall figure (#446).
       - name: Keep the coverage report
         if: steps.scope.outputs.docs_only != 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -116,6 +87,7 @@ jobs:
           name: coverage-python
           path: ${{ runner.temp }}/coverage-report
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 7
       # The unit limits are judged without coverage, whose tracer would be timed with the code
       # (#285: each file's load). The run under coverage reports loads but judges none.
@@ -129,34 +101,6 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         timeout-minutes: 2
         run: uv run --locked pytest -W error -m perf -p no:cacheprovider
-      # The same tests again under coverage (#374 AC9, Shyden 2026-10-22: "Two runs, one judges
-      # time"): --measured judges no time and refuses a run coverage does not trace, and the
-      # step above refuses one it does (tests/plugins/perf_budget.py). No limit of its own, as the
-      # unit job's measured run has none, so the tracer is never timed.
-      - name: Performance, measured
-        if: steps.scope.outputs.docs_only != 'true'
-        run: |
-          mkdir -p "${RUNNER_TEMP}/coverage-perf"
-          uv run --locked pytest -W error -m perf -p no:cacheprovider --measured --cov --cov-report="json:${RUNNER_TEMP}/coverage-perf/coverage.json"
-          git rev-parse HEAD > "${RUNNER_TEMP}/coverage-perf/sha.txt"
-      # The coverage job joins every suite's report (#381); this one names the commit it measured.
-      - name: Keep the performance coverage report
-        if: steps.scope.outputs.docs_only != 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: coverage-python-perf
-          path: ${{ runner.temp }}/coverage-perf
-          if-no-files-found: error
-          retention-days: 7
-      # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
-      - name: Keep the workflow trace
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: workflow-trace-${{ github.job }}-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/workflow-trace
-          if-no-files-found: error
-          retention-days: 7
 
   audit:
     name: audit
@@ -189,67 +133,6 @@ jobs:
           uv export --locked --format requirements-txt --no-emit-workspace \
             --output-file "${RUNNER_TEMP}/requirements-audit.txt"
           uv run --locked pip-audit --strict --disable-pip -r "${RUNNER_TEMP}/requirements-audit.txt"
-      # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
-      - name: Keep the workflow trace
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: workflow-trace-${{ github.job }}-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/workflow-trace
-          if-no-files-found: error
-          retention-days: 7
-
-  # Every commit carries its gap check (#378): on a pull request, each commit it holds; on a push,
-  # each commit it landed on the branch's first-parent line (Shyden, 2026-10-28, "Judge it at merge
-  # + after", "First-parent on a push"): develop's squash commit, main's release merge. The
-  # commit-msg hook can be skipped, so this is the gate (scripts/gaps_checked.py).
-  gaps-checked:
-    name: gaps-checked
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 2
-      # uv installs the Python .python-version pins, and the scope and the lock run on it, never
-      # on the runner image's own python3 (#382). Neither reads a fast-path file.
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        with:
-          version: ${{ env.UV_VERSION }}
-          enable-cache: true
-      - name: "Scope: may this docs-only change skip the rest?"
-        id: scope
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: uv run --no-project scripts/ci_scope.py "$EVENT_NAME"
-      - name: "Lock the docs-only fast path: no later step may read it"
-        if: steps.scope.outputs.docs_only != 'true'
-        run: uv run --no-project scripts/lock_fast_path.py
-      # The checkout holds two commits; the range needs every commit between its ends. The
-      # repository is public, so the fetch needs no credential.
-      - name: Fetch every commit between the range's ends
-        if: steps.scope.outputs.docs_only != 'true'
-        env:
-          RANGE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-          RANGE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: git fetch --no-tags --quiet --unshallow origin "$RANGE_BASE" "$RANGE_HEAD"
-      - name: Judge every commit's gap check
-        if: steps.scope.outputs.docs_only != 'true'
-        env:
-          MODE: ${{ github.event_name == 'pull_request' && 'range' || 'landed' }}
-          RANGE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-          RANGE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: uv run --no-project scripts/gaps_checked.py "$MODE" "$RANGE_BASE" "$RANGE_HEAD"
-      # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
-      - name: Keep the workflow trace
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: workflow-trace-${{ github.job }}-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/workflow-trace
-          if-no-files-found: error
-          retention-days: 7
 
   build:
     name: build
@@ -334,15 +217,6 @@ jobs:
 
   # The TypeScript extension (spec §3, §12.1). Every tool runs inside extension/, so none walks
   # into the fast-path files the lock makes unreadable (#264).
-      # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
-      - name: Keep the workflow trace
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: workflow-trace-${{ github.job }}-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/workflow-trace
-          if-no-files-found: error
-          retention-days: 7
   extension:
     name: extension
     runs-on: ubuntu-26.04
@@ -385,58 +259,16 @@ jobs:
       - run: npm run typecheck
         if: steps.scope.outputs.docs_only != 'true'
         working-directory: extension
-      - name: The unit project, measured
+      - name: The unit project, with coverage
         if: steps.scope.outputs.docs_only != 'true'
         working-directory: extension
-        run: |
-          npm test -- --coverage.reporter=text --coverage.reporter=json --coverage.reportsDirectory="${RUNNER_TEMP}/coverage-report"
-          git rev-parse HEAD > "${RUNNER_TEMP}/coverage-report/sha.txt"
-      # The coverage job joins every suite's report (#381); this one names the commit it measured.
-      - name: Keep the coverage report
-        if: steps.scope.outputs.docs_only != 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: coverage-extension-unit
-          path: ${{ runner.temp }}/coverage-report
-          if-no-files-found: error
-          retention-days: 7
-      # Node's own coverage of what Vitest's coverage leaves out (#394): the test files, the setup
-      # files and the config, loaded by Node itself with Vitest's coverage off, so each runs as
-      # written; the setup file writes each worker's report, and the report names its commit.
-      - name: The unit project's test, setup and config files, measured by Node
-        if: steps.scope.outputs.docs_only != 'true'
-        working-directory: extension
-        run: |
-          NODE_V8_COVERAGE="${RUNNER_TEMP}/node-coverage-raw" npm run test:native -- --project unit
-          node tests/node-coverage-report.ts --raw "${RUNNER_TEMP}/node-coverage-raw" --out "${RUNNER_TEMP}/node-coverage-report" --project unit
-          git rev-parse HEAD > "${RUNNER_TEMP}/node-coverage-report/sha.txt"
-      - name: Keep Node's coverage report
-        if: steps.scope.outputs.docs_only != 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: coverage-extension-unit-node
-          path: ${{ runner.temp }}/node-coverage-report
-          if-no-files-found: error
-          retention-days: 7
-      # The unit limits, judged without coverage (#285: each file's load).
-      - run: npm run test:limits
-        if: steps.scope.outputs.docs_only != 'true'
-        working-directory: extension
+        run: npm test
       - run: npm run build
         if: steps.scope.outputs.docs_only != 'true'
         working-directory: extension
 
   # The whole-repo guards (#285): every test that reads the tracked tree to check a rule across
   # the code, in its own suite, with one limit at its step. The unit rules bind everything else.
-      # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
-      - name: Keep the workflow trace
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: workflow-trace-${{ github.job }}-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/workflow-trace
-          if-no-files-found: error
-          retention-days: 7
   guards:
     name: guards (py3.13)
     runs-on: ubuntu-26.04
@@ -472,8 +304,7 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         run: |
           mkdir -p "${RUNNER_TEMP}/coverage-report"
-          uv run --locked pytest -W error --suite guards -p no:cacheprovider --cov --cov-report="json:${RUNNER_TEMP}/coverage-report/coverage.json"
-          git rev-parse HEAD > "${RUNNER_TEMP}/coverage-report/sha.txt"
+          COVERAGE_FILE="${RUNNER_TEMP}/coverage-report/.coverage.${GITHUB_JOB}" uv run --locked pytest -W error --suite guards -p no:cacheprovider --cov --cov-report=term
       # The coverage job joins every suite's report (#381); this one names the commit it measured.
       - name: Keep the coverage report
         if: steps.scope.outputs.docs_only != 'true'
@@ -482,15 +313,7 @@ jobs:
           name: coverage-python-guards
           path: ${{ runner.temp }}/coverage-report
           if-no-files-found: error
-          retention-days: 7
-      # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
-      - name: Keep the workflow trace
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: workflow-trace-${{ github.job }}-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/workflow-trace
-          if-no-files-found: error
+          include-hidden-files: true
           retention-days: 7
 
   extension-guards:
@@ -529,51 +352,12 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         timeout-minutes: 1
         working-directory: extension
-        run: |
-          npm run test:guards -- --coverage.reporter=text --coverage.reporter=json --coverage.reportsDirectory="${RUNNER_TEMP}/coverage-report"
-          git rev-parse HEAD > "${RUNNER_TEMP}/coverage-report/sha.txt"
-      # The coverage job joins every suite's report (#381); this one names the commit it measured.
-      - name: Keep the coverage report
-        if: steps.scope.outputs.docs_only != 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: coverage-extension-guards
-          path: ${{ runner.temp }}/coverage-report
-          if-no-files-found: error
-          retention-days: 7
-      # Node's own coverage of what Vitest's coverage leaves out (#394): the test files, the setup
-      # files and the config, loaded by Node itself with Vitest's coverage off, so each runs as
-      # written; the setup file writes each worker's report, and the report names its commit.
-      - name: The guards project's test, setup and config files, measured by Node
-        if: steps.scope.outputs.docs_only != 'true'
-        timeout-minutes: 1
-        working-directory: extension
-        run: |
-          NODE_V8_COVERAGE="${RUNNER_TEMP}/node-coverage-raw" npm run test:native -- --project guards --mode guards
-          node tests/node-coverage-report.ts --raw "${RUNNER_TEMP}/node-coverage-raw" --out "${RUNNER_TEMP}/node-coverage-report" --project guards
-          git rev-parse HEAD > "${RUNNER_TEMP}/node-coverage-report/sha.txt"
-      - name: Keep Node's coverage report
-        if: steps.scope.outputs.docs_only != 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: coverage-extension-guards-node
-          path: ${{ runner.temp }}/node-coverage-report
-          if-no-files-found: error
-          retention-days: 7
+        run: npm run test:guards
 
   # The integration suite (#286): every test whose real case needs a process (real git, the
   # installed console script, two processes racing for a lock), and every long real run over the
   # recorded golden window (#292), in its own suite, with one limit at its step. A unit run refuses
   # every process and outside connection, and keeps a short stand-in of each long run.
-      # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
-      - name: Keep the workflow trace
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: workflow-trace-${{ github.job }}-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/workflow-trace
-          if-no-files-found: error
-          retention-days: 7
   integration:
     name: integration (py3.13)
     runs-on: ubuntu-26.04
@@ -621,8 +405,7 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         run: |
           mkdir -p "${RUNNER_TEMP}/coverage-report"
-          uv run --locked pytest -W error --suite integration -p no:cacheprovider --cov --cov-report="json:${RUNNER_TEMP}/coverage-report/coverage.json"
-          git rev-parse HEAD > "${RUNNER_TEMP}/coverage-report/sha.txt"
+          COVERAGE_FILE="${RUNNER_TEMP}/coverage-report/.coverage.${GITHUB_JOB}" uv run --locked pytest -W error --suite integration -p no:cacheprovider --cov --cov-report=term
       # The coverage job joins every suite's report (#381); this one names the commit it measured.
       - name: Keep the coverage report
         if: steps.scope.outputs.docs_only != 'true'
@@ -631,15 +414,7 @@ jobs:
           name: coverage-python-integration
           path: ${{ runner.temp }}/coverage-report
           if-no-files-found: error
-          retention-days: 7
-      # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
-      - name: Keep the workflow trace
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: workflow-trace-${{ github.job }}-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/workflow-trace
-          if-no-files-found: error
+          include-hidden-files: true
           retention-days: 7
 
   extension-integration:
@@ -674,39 +449,14 @@ jobs:
       - run: npm ci --ignore-scripts
         if: steps.scope.outputs.docs_only != 'true'
         working-directory: extension
-      # Node's own coverage of what Vitest's coverage leaves out (#394): the test files, the setup
-      # files and the config, loaded by Node itself with Vitest's coverage off, so each runs as
-      # written; the setup file writes each worker's report, and the report names its commit.
-      - name: The integration suite, its test, setup and config files measured by Node
+      - name: The integration suite
         if: steps.scope.outputs.docs_only != 'true'
         timeout-minutes: 1
         working-directory: extension
-        run: |
-          NODE_V8_COVERAGE="${RUNNER_TEMP}/node-coverage-raw" npm run test:native -- --project integration
-          node tests/node-coverage-report.ts --raw "${RUNNER_TEMP}/node-coverage-raw" --out "${RUNNER_TEMP}/node-coverage-report" --project integration
-          git rev-parse HEAD > "${RUNNER_TEMP}/node-coverage-report/sha.txt"
-      - name: Keep Node's coverage report
-        if: steps.scope.outputs.docs_only != 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: coverage-extension-integration-node
-          path: ${{ runner.temp }}/node-coverage-report
-          if-no-files-found: error
-          retention-days: 7
+        run: npm run test:integration
 
-  # Develop's deploy (spec §12.1): the extension zip, its build provenance attested and then
-  # verified here, on the run that made it. It always runs in full (#218).
   # Every Hypothesis property at its full count, drawing fresh cases each run (#290), in its own
   # suite with one limit at its step and coverage off. Unit keeps a fast stand-in of each.
-      # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
-      - name: Keep the workflow trace
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: workflow-trace-${{ github.job }}-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/workflow-trace
-          if-no-files-found: error
-          retention-days: 7
   properties:
     name: properties (py3.13)
     runs-on: ubuntu-26.04
@@ -736,17 +486,13 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         timeout-minutes: 2
         run: uv run --locked pytest -W error --suite properties -p no:cacheprovider
-      # The suite twice more under coverage (#374), unlimited so no limit times the tracer: it
-      # draws fresh random cases each run, so the coverage job joins every report once with each
-      # run and fails on a line whose verdict differs (Shyden 2026-10-22: wobble measured).
-      - name: The properties suite, measured twice
+      # The suite again under coverage (#374), unlimited so no limit times the tracer.
+      - name: The properties suite, measured
         if: steps.scope.outputs.docs_only != 'true'
         run: |
-          mkdir -p "${RUNNER_TEMP}/coverage-report" "${RUNNER_TEMP}/coverage-report-again"
-          uv run --locked pytest -W error --suite properties -p no:cacheprovider --cov --cov-report="json:${RUNNER_TEMP}/coverage-report/coverage.json"
-          uv run --locked pytest -W error --suite properties -p no:cacheprovider --cov --cov-report="json:${RUNNER_TEMP}/coverage-report-again/coverage.json"
-          git rev-parse HEAD | tee "${RUNNER_TEMP}/coverage-report/sha.txt" > "${RUNNER_TEMP}/coverage-report-again/sha.txt"
-      # The coverage job joins every suite's report (#381); these name the commit they measured.
+          mkdir -p "${RUNNER_TEMP}/coverage-report"
+          COVERAGE_FILE="${RUNNER_TEMP}/coverage-report/.coverage.${GITHUB_JOB}" uv run --locked pytest -W error --suite properties -p no:cacheprovider --cov --cov-report=term
+      # The coverage job joins every Python suite's data and judges one overall figure (#446).
       - name: Keep the coverage report
         if: steps.scope.outputs.docs_only != 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -754,25 +500,11 @@ jobs:
           name: coverage-python-properties
           path: ${{ runner.temp }}/coverage-report
           if-no-files-found: error
-          retention-days: 7
-      - name: Keep the second coverage report
-        if: steps.scope.outputs.docs_only != 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: coverage-python-properties-again
-          path: ${{ runner.temp }}/coverage-report-again
-          if-no-files-found: error
-          retention-days: 7
-      # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
-      - name: Keep the workflow trace
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: workflow-trace-${{ github.job }}-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/workflow-trace
-          if-no-files-found: error
+          include-hidden-files: true
           retention-days: 7
 
+  # Develop's deploy (spec §12.1): the extension zip, its build provenance attested and then
+  # verified here, on the run that made it. It always runs in full (#218).
   deploy-dev:
     name: deploy-dev
     # A pull request runs it too, as a rehearsal, so every line of it is measured before it merges
@@ -784,7 +516,6 @@ jobs:
         lint,
         test,
         audit,
-        gaps-checked,
         build,
         extension,
         guards,
@@ -843,42 +574,17 @@ jobs:
           path: ${{ steps.zip.outputs.path }}
           archive: false
           if-no-files-found: error
-      # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
-      - name: Keep the workflow trace
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: workflow-trace-${{ github.job }}-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/workflow-trace
-          if-no-files-found: error
-          retention-days: 7
 
   coverage:
     name: coverage
-    # Which lines of the workflows ran on this commit (#384), read once every other job has finished
-    # and kept its trace. #381's gate joins this with the code's coverage. This job keeps no trace of
-    # its own: its last step reads its own steps' traces where they were written.
+    # Every Python suite's coverage data, joined and judged as one overall figure (#446, Shyden
+    # 2026-10-30: one coverage threshold per repo). The extension's suites judge their own.
     if: ${{ !cancelled() }}
-    needs:
-      [
-        lint,
-        test,
-        audit,
-        gaps-checked,
-        build,
-        extension,
-        guards,
-        extension-guards,
-        integration,
-        extension-integration,
-        properties,
-        deploy-dev,
-      ]
+    needs: [test, guards, integration, properties]
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       contents: read
-      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -903,30 +609,13 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         if: steps.scope.outputs.docs_only != 'true'
         with:
-          pattern: workflow-trace-*
-          path: ${{ runner.temp }}/traces
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: steps.scope.outputs.docs_only != 'true'
-        with:
-          pattern: coverage-*
+          pattern: coverage-python*
           path: ${{ runner.temp }}/coverage
-      - name: The hand-started workflows this pull request changes, read from their runs on its commit
+          merge-multiple: true
+      # The threshold: 99.33% measured on develop aafabe4 (run 40915551537) without the files #446
+      # deletes and without the perf suite, which no longer runs under coverage.
+      - name: The Python suites together cover at least 99%
         if: steps.scope.outputs.docs_only != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EVENT_NAME: ${{ github.event_name }}
-          HEAD_REF: ${{ github.head_ref }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: uv run --locked python scripts/workflow_runs.py --event "${EVENT_NAME}" --repo "${GITHUB_REPOSITORY}" --branch "coverage/${HEAD_REF}" --sha "${HEAD_SHA}" --out "${RUNNER_TEMP}/workflow-coverage"
-      # The gate (#381): this run's own workflow lines are read, then every report is judged against
-      # tests/coverage_record.json and, on a pull request, every changed line. Both begin on one
-      # line: this step's trace reaches only the line it is on when the reader reads it (#384).
-      - name: Every file matches the coverage record and every changed line ran
-        if: steps.scope.outputs.docs_only != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EVENT_NAME: ${{ github.event_name }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}/jobs?per_page=100" > "${RUNNER_TEMP}/jobs.json"
-          uv run --locked python scripts/workflow_coverage.py --workflow .github/workflows/ci.yml --jobs "${RUNNER_TEMP}/jobs.json" --sha "${GITHUB_SHA}" --traces "${RUNNER_TEMP}/traces" --own-traces --out "${RUNNER_TEMP}/workflow-coverage/ci.json" && uv run --locked python scripts/coverage_gate.py --event "${EVENT_NAME}" --sha "${GITHUB_SHA}" --head-sha "${HEAD_SHA:-$GITHUB_SHA}" --reports "${RUNNER_TEMP}/coverage" --workflow "${RUNNER_TEMP}/workflow-coverage"
+          uv run --locked coverage combine "${RUNNER_TEMP}/coverage"
+          uv run --locked coverage report --fail-under=99

@@ -9,7 +9,7 @@ any configured exclusion outright. It reads comments on purpose: the pragma is a
 import tomllib
 from pathlib import Path
 
-from population import tracked
+from tracked_files import tracked
 
 ROOT = Path(__file__).resolve().parents[2]
 PRAGMA = "pragma: no cover"

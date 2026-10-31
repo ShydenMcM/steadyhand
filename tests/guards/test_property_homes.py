@@ -15,9 +15,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from population import searched, tracked
 from source_tree import UnreadableSourceError, parse
 from suites import PROPERTIES, suite_of
+from tracked_files import tracked
 
 ROOT = Path(__file__).resolve().parents[2]
 TESTS = ROOT / "tests"
@@ -239,7 +239,7 @@ def test_no_unit_test_file_imports_hypothesis() -> None:
         for p in walked
         if (lines := hypothesis_imports(p.read_text(), str(p.relative_to(TESTS))))
     }
-    assert searched(offenders, of=len(walked), what="unit test files") == {}, (
+    assert offenders == {}, (
         f"a property and its strategies belong in tests/properties (#290): {offenders}"
     )
 
@@ -257,7 +257,7 @@ def test_every_property_calls_a_unit_stand_in_of_its_name() -> None:
     assert len(found) >= PROPERTIES_FLOOR, f"found {len(found)} properties"
     problems = [home_problem(path, prop, unit_home(path), TESTS) for path, prop in found]
     missing = [problem for problem in problems if problem is not None]
-    assert searched(missing, of=len(found), what="properties") == []
+    assert missing == []
 
 
 # Joined, not a triple-quoted block: a line of this file beginning `def test` would be counted

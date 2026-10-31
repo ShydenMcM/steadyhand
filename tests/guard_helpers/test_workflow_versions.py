@@ -106,7 +106,7 @@ def test_python_run_outside_uv_is_found(script: str) -> None:
     "script",
     [
         pytest.param("uv run --no-project scripts/ci_scope.py push", id="uv-run-a-script"),
-        pytest.param("uv run --locked python scripts/run_mutations.py", id="uv-run-python"),
+        pytest.param("uv run --locked python scripts/ci_scope.py", id="uv-run-python"),
         pytest.param('uv pip install --python "$T/x" a.whl', id="uv-pip-an-environment"),
         pytest.param("echo python3 is not run here", id="python-as-an-argument"),
         pytest.param("ruff check scripts/x.py", id="a-py-file-as-an-argument"),

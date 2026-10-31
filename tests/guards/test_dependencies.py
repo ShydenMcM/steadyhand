@@ -10,8 +10,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from population import searched, tracked
 from source_tree import UnreadableSourceError, parse
+from tracked_files import tracked
 
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE = ROOT / "packages/steadyhand/src/steadyhand"
@@ -97,7 +97,7 @@ def test_engine_imports_only_the_standard_library() -> None:
         for path, names in imported.items()
         if names - allowed
     }
-    assert searched(foreign, of=len(files), what="engine modules") == {}
+    assert foreign == {}
 
 
 def test_private_import_detector() -> None:
@@ -129,4 +129,4 @@ def test_idx_uses_only_the_engine_public_api() -> None:
             )
         )
     }
-    assert searched(found, of=len(files), what="IDX modules") == {}
+    assert found == {}

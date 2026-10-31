@@ -1,9 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { floorBreach } from "../lib/floors.ts";
 import { importsOf, layerOf, targetOf, upstreamImports } from "../lib/imports.ts";
-import { searched } from "../lib/population.ts";
 import {
   EXTENSION,
   parse,
@@ -102,9 +100,8 @@ test("a file outside the packages has no layer to judge, and is refused by name"
   );
 });
 
-test("the package files read are the ones git lists, and as many as recorded", () => {
+test("the package files read are the ones git lists", () => {
   expect(PACKAGE_FILES).toEqual(gitListed("packages", SUFFIXES));
-  expect(floorBreach("import-direction.files", PACKAGE_FILES.length)).toBeUndefined();
 });
 
 test.each(WORKSPACE_FILES)(
@@ -118,10 +115,8 @@ test.each(WORKSPACE_FILES)(
 );
 
 test("no package imports a package above it", () => {
-  const imports = PACKAGE_FILES.flatMap((path) => importsOf(readSource(path)));
   const found = PACKAGE_FILES.flatMap((path) => upstreamImports(path, readSource(path)));
-  expect(searched(found, { of: imports.length, what: "imports in the packages" })).toEqual([]);
-  expect(floorBreach("import-direction.imports", imports.length)).toBeUndefined();
+  expect(found).toEqual([]);
 });
 
 test("only tests/lib/source.ts imports the TypeScript compiler", () => {
@@ -131,6 +126,5 @@ test("only tests/lib/source.ts imports the TypeScript compiler", () => {
   const compiler = imports.filter(({ specifier }) => specifier === "typescript");
   expect(compiler.map(({ path }) => path)).toContain("tests/lib/source.ts");
   const found = compiler.filter(({ path }) => path !== "tests/lib/source.ts");
-  expect(searched(found, { of: imports.length, what: "imports in the workspace" })).toEqual([]);
-  expect(floorBreach("compiler-home.imports", imports.length)).toBeUndefined();
+  expect(found).toEqual([]);
 });

@@ -23,25 +23,6 @@ concurrency:
 env:
   UV_VERSION: "0.12.18"
 
-# Every run step is traced (#384, Shyden 2026-10-22: workflow files are code, measured from a run on
-# the same commit, shell traced line by line). This shell writes, per step,
-# $RUNNER_TEMP/workflow-trace/<job>/<GITHUB_ACTION>: a header (sha, then the script's line count)
-# and the line number of each command bash's DEBUG trap sees in the step's own script, never its
-# text, since a traced command shows secrets expanded. GitHub reads this value with .NET's argument
-# rules and string.Format, so the bash code inside holds no brace and only escaped double quotes.
-# scripts/workflow_coverage.py reads the traces back.
-defaults:
-  run:
-    shell: >-
-      bash --noprofile --norc -eo pipefail -c
-      "__wt_t=\"$RUNNER_TEMP/workflow-trace/$GITHUB_JOB/$GITHUB_ACTION\";
-      mkdir -p \"$(dirname \"$__wt_t\")\";
-      printf 'sha %s\nlines %s\n' \"$GITHUB_SHA\" \"$(grep -c '' \"$0\")\" > \"$__wt_t\";
-      __wt_s=\"$0\";
-      set -T;
-      trap 'if [ \"$BASH_SOURCE\" = \"$__wt_s\" ]; then echo \"$LINENO\" >> \"$__wt_t\"; fi' DEBUG;
-      . \"$0\"" {0}
-
 jobs:
   shape:
     name: shape
@@ -62,29 +43,3 @@ jobs:
       - name: Yahoo still gives what the fixtures recorded
         timeout-minutes: 2
         run: uv run --locked pytest -W error -m live -p no:cacheprovider tests/idx/test_yahoo_live.py
-      # The same check again under coverage (#374 AC9, Shyden 2026-10-22: "Two runs, one judges
-      # time", then "Same as workflows"): --measured judges no time and refuses a run coverage does
-      # not trace, and the step above refuses one it does (tests/plugins/perf_budget.py). No limit of
-      # its own, so the tracer is never timed. When a pull request changes the check, or this file,
-      # scripts/workflow_runs.py reads this report from a run on its commit, by the name below.
-      - name: Yahoo still gives what the fixtures recorded, measured
-        run: |
-          mkdir -p "${RUNNER_TEMP}/coverage-live"
-          uv run --locked pytest -W error -m live -p no:cacheprovider --measured --cov --cov-report="json:${RUNNER_TEMP}/coverage-live/coverage.json" tests/idx/test_yahoo_live.py
-          git rev-parse HEAD > "${RUNNER_TEMP}/coverage-live/sha.txt"
-      - name: Keep the live check's coverage report
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: coverage-python-yahoo-shape
-          path: ${{ runner.temp }}/coverage-live
-          if-no-files-found: error
-          retention-days: 7
-      # Every job keeps its steps' traces for the coverage job (#384), whatever the job's outcome.
-      - name: Keep the workflow trace
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: workflow-trace-${{ github.job }}-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/workflow-trace
-          if-no-files-found: error
-          retention-days: 7

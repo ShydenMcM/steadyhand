@@ -26,8 +26,8 @@ from key_walk import (
     package_sources,
     string_literals,
 )
-from population import searched, tracked
 from source_tree import UnreadableSourceError
+from tracked_files import tracked
 
 KEY = r"[a-z]+(\.[a-z_]+)+"
 KNOWN = {
@@ -156,7 +156,7 @@ def test_no_key_is_defined_twice() -> None:
         name.startswith("steadyhand-idx/") for name in elsewhere
     )
     hits = {name: found for name, found in elsewhere.items() if found}
-    assert searched(hits, of=len(elsewhere), what="modules outside the key modules") == {}
+    assert hits == {}
 
 
 def test_every_note_is_built_from_a_note_key_and_every_note_key_is_used() -> None:

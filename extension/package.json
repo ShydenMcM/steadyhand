@@ -19,13 +19,9 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --project unit --coverage",
-    "test:limits": "vitest run --project unit --mode limits",
     "test:guards": "vitest run --project guards --mode guards --coverage",
     "test:integration": "vitest run --project integration",
-    "test:native": "vitest run --experimental.viteModuleRunner=false --experimental.nodeLoader=false --configLoader native",
-    "build": "node build.ts",
-    "floors:record": "node tests/record-floors.ts",
-    "floors:fetch": "node tests/fetch-floors.ts"
+    "build": "node build.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

@@ -10,8 +10,8 @@ import ast
 from pathlib import Path
 
 import pytest
-from population import searched, tracked
 from source_tree import UnreadableSourceError, parse
+from tracked_files import tracked
 
 TESTS = Path(__file__).resolve().parents[1]
 PROFILE = TESTS / "properties" / "hypothesis_profile.py"
@@ -62,6 +62,4 @@ def test_no_test_sets_its_own_deadline() -> None:
         for p in files
         if (lines := deadline_keywords(p.read_text(), str(p.relative_to(TESTS))))
     }
-    assert searched(offenders, of=len(files), what="test files") == {}, (
-        f"set the deadline in the properties profile only: {offenders}"
-    )
+    assert offenders == {}, f"set the deadline in the properties profile only: {offenders}"

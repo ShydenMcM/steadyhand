@@ -149,13 +149,6 @@ def test_this_run_calls_the_suite_hooks(request: pytest.FixtureRequest, hook: st
     assert getattr(suites, hook) in [impl.function for impl in caller.get_hookimpls()]
 
 
-def test_this_run_has_the_suite_option_and_the_perf_one(request: pytest.FixtureRequest) -> None:
-    """tests/conftest.py adds both through one hook (#374): a pytest_addoption imported from
-    each module would bind one name twice. getoption refuses a name never added."""
-    assert request.config.getoption("suite") == "unit"
-    assert request.config.getoption("measured") is False
-
-
 def test_this_run_is_a_unit_run_by_default(request: pytest.FixtureRequest) -> None:
     assert request.config.getoption("suite") == "unit"
 

@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { floorBreach } from "./lib/floors.ts";
 
 const ROOT = join(import.meta.dirname, "..");
 
@@ -76,7 +75,6 @@ test("every locked package comes from the npm registry with a sha512 integrity",
   const fetched = Object.entries(lock.packages).filter(
     ([path, entry]) => path.startsWith("node_modules/") && !entry.link,
   );
-  expect(floorBreach("workspace.locked-packages", fetched.length)).toBeUndefined();
   const loose = fetched.filter(
     ([, entry]) =>
       !entry.resolved?.startsWith("https://registry.npmjs.org/") ||

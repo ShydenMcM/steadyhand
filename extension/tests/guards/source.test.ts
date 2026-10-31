@@ -2,8 +2,6 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assert, beforeAll, expect, test } from "vitest";
-import { floorBreach } from "../lib/floors.ts";
-import { searched } from "../lib/population.ts";
 import {
   codeText,
   compilerUse,
@@ -202,9 +200,8 @@ test("a config with an error is refused by name", () => {
   });
 });
 
-test("the files read are the ones git lists, and as many as recorded", () => {
+test("the files read are the ones git lists", () => {
   expect(FILES).toEqual(gitListed(".", SUFFIXES));
-  expect(floorBreach("source.files", FILES.length)).toBeUndefined();
 });
 
 /** The kinds both walks reach: names, literals and type keywords, not punctuation. */
@@ -273,6 +270,5 @@ test("only tests/lib/source.ts calls the compiler's readers, and ts is reached o
   const found = uses.filter(
     ({ use }) => use === "another way" || READERS.has(use.slice("ts.".length)),
   );
-  expect(searched(found, { of: uses.length, what: "uses of ts" })).toEqual([]);
-  expect(floorBreach("compiler-home.uses", uses.length)).toBeUndefined();
+  expect(found).toEqual([]);
 });

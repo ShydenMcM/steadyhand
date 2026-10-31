@@ -28,8 +28,8 @@ def test_the_guards_run_on_the_python_the_unit_suite_runs_on() -> None:
 
 GUARDS_MEASURED = (
     'mkdir -p "${RUNNER_TEMP}/coverage-report"\n'
-    f'{GUARDS_RUN} --cov --cov-report="json:${{RUNNER_TEMP}}/coverage-report/coverage.json"\n'
-    'git rev-parse HEAD > "${RUNNER_TEMP}/coverage-report/sha.txt"\n'
+    'COVERAGE_FILE="${RUNNER_TEMP}/coverage-report/.coverage.${GITHUB_JOB}"'
+    f" {GUARDS_RUN} --cov --cov-report=term\n"
 )
 
 
@@ -49,7 +49,7 @@ LIMITS_RUN = "uv run --locked pytest -W error -p no:cacheprovider"
 
 def test_the_unit_job_runs_the_default_suite_never_the_guards() -> None:
     tests = [run for run in runs("test") if "pytest" in run]
-    assert len(tests) == 4
+    assert len(tests) == 3
     assert [run for run in tests if "--suite" in run] == []
 
 

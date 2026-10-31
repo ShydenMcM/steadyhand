@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 import yaml
-from population import searched, tracked
+from tracked_files import tracked
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
@@ -91,7 +91,7 @@ def test_every_action_is_pinned_to_a_full_commit_sha() -> None:
     ]
     assert len(values) >= USES_FLOOR, values
     unpinned = [v for v in values if not v.startswith("./") and PINNED.fullmatch(v) is None]
-    assert searched(unpinned, of=len(values), what="uses") == []
+    assert unpinned == []
 
 
 def test_every_pin_carries_its_release_version_as_a_comment() -> None:
@@ -112,7 +112,7 @@ def test_every_pin_carries_its_release_version_as_a_comment() -> None:
         for value, tail in raw
         if not value.startswith("./") and VERSION_COMMENT.fullmatch(tail) is None
     ]
-    assert searched(missing, of=len(raw), what="uses lines") == []
+    assert missing == []
 
 
 @pytest.mark.parametrize("ecosystem", sorted(ECOSYSTEM_FILES))
@@ -303,9 +303,8 @@ SETUP_NODE = "actions/setup-node@"
 PACKAGE_JSON = ROOT / "extension/package.json"
 NVMRC = ROOT / ".nvmrc"
 MAJOR = re.compile(r"(?P<major>\d+)(?:\.[\dx]+)*")
-# Measured on 2026-10-28 (#377 added the integration job's): five in ci.yml, one each in
-# mutations.yml and record-floors.yml.
-SETUP_NODE_STEPS = 7
+# Measured on 2026-10-30 (#446 removed mutations.yml and record-floors.yml): five, all in ci.yml.
+SETUP_NODE_STEPS = 5
 
 
 def major_of(version: object, *, where: str) -> int:
@@ -426,7 +425,7 @@ def test_every_setup_node_step_reads_the_nvmrc() -> None:
         for where, given in inputs
         if given.get("node-version-file") != ".nvmrc" or "node-version" in given
     ]
-    assert searched(other, of=len(inputs), what="setup-node steps") == []
+    assert other == []
 
 
 def test_types_node_follows_the_node_that_ci_runs() -> None:
@@ -671,7 +670,7 @@ def test_every_ignore_names_a_direct_dependency() -> None:
         for entry in ignored
         if entry["dependency-name"] not in direct_versions()
     ]
-    assert searched(stale, of=len(ignored), what="npm ignore entries") == []
+    assert stale == []
 
 
 @pytest.mark.parametrize(

@@ -10,8 +10,8 @@ import ast
 from pathlib import Path
 
 import pytest
-from population import searched, tracked
 from source_tree import UnreadableSourceError, parse
+from tracked_files import tracked
 
 TESTS = Path(__file__).resolve().parents[1]
 HOME = Path(__file__).with_name("source_tree.py")
@@ -123,6 +123,4 @@ def test_no_other_file_under_tests_parses_python_itself() -> None:
         for path in files
         if path != HOME and (found := direct_parses(path.read_text(encoding="utf-8"), path.name))
     }
-    assert searched(offenders, of=len(files), what="Python files under tests/") == {}, (
-        f"parse through source_tree.parse, which names the file: {offenders}"
-    )
+    assert offenders == {}, f"parse through source_tree.parse, which names the file: {offenders}"

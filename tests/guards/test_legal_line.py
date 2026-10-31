@@ -22,8 +22,8 @@ from pathlib import Path
 import pytest
 from key_walk import ENGINE, IDX
 from lesson_rules import ADVICE_PHRASES, advice_findings, advice_phrases
-from population import searched, tracked
 from source_tree import UnreadableSourceError, parse
+from tracked_files import tracked
 
 from steadyhand.training import Catalogue
 
@@ -226,7 +226,7 @@ def test_only_training_and_the_output_layer_import_training() -> None:
     ]
     assert len(judged) >= IMPORTS_FLOOR, f"judged {len(judged)} import statements"
     found = [f"{name}: {base}" for name, (base, names) in judged if imports_training((base, names))]
-    assert searched(found, of=len(judged), what="import statements") == []
+    assert found == []
 
 
 @pytest.mark.parametrize("module", [name for name, _, _ in sources()])
@@ -272,7 +272,7 @@ def training_imports(modules: list[tuple[str, bool, str]]) -> tuple[int, list[st
 def test_training_imports_nothing_that_decides() -> None:
     checked, found = training_imports(sources())
     assert checked >= TRAINING_IMPORTS_FLOOR, f"read {checked} imports of the training modules"
-    assert searched(found, of=checked, what="imports of the training modules") == []
+    assert found == []
 
 
 def test_a_training_module_importing_what_decides_is_named() -> None:

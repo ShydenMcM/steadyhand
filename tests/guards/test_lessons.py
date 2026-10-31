@@ -17,7 +17,7 @@ from lesson_rules import (
     unexplained,
     unknown,
 )
-from population import searched, tracked
+from tracked_files import tracked
 
 from steadyhand import DISCLAIMER, STRATEGIES
 from steadyhand.training import Catalogue, Level, explain
@@ -68,7 +68,7 @@ def test_no_lesson_explains_a_key_that_does_not_exist(real: Catalogue) -> None:
 def test_every_source_is_a_repo_file(real: Catalogue) -> None:
     sources = sum(len(lesson.sources) for lesson in real.lessons())
     assert sources >= SOURCES_FLOOR
-    assert searched(missing_sources(real, ROOT), of=sources, what="sources") == []
+    assert missing_sources(real, ROOT) == []
 
 
 def test_the_course_opens_with_the_disclaimer(real: Catalogue) -> None:
@@ -79,7 +79,7 @@ def test_no_lesson_carries_advice_phrasing(real: Catalogue) -> None:
     lessons = real.lessons()
     assert len(lessons) >= LESSONS_FLOOR
     # Each lesson's title, summary and body are read.
-    assert searched(advice_findings(real), of=3 * len(lessons), what="lesson texts") == []
+    assert advice_findings(real) == []
 
 
 def test_the_engine_lessons_are_market_neutral(real: Catalogue) -> None:
@@ -91,7 +91,7 @@ def test_the_engine_lessons_are_market_neutral(real: Catalogue) -> None:
         for word in NOT_NEUTRAL
         if word in f"{lesson.title} {lesson.summary} {lesson.body}"
     ]
-    assert searched(found, of=len(engine), what="engine lessons") == []
+    assert found == []
 
 
 def test_every_module_has_lessons(real: Catalogue) -> None:
