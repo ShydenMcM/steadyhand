@@ -1,7 +1,9 @@
 /** Notes: every warning carries a dotted code, as Python's `steadyhand.notes` does (spec §4.5).
  *
  * Python's codes for simulated fills (`fill.*`) are not ported: the extension never fills an
- * order. The `missing.*` codes are new: each names what the user must read or enter. */
+ * order. Nor are paper trading's (`paper.*`) or the backtest data's (`data.prices.restored`,
+ * `universe.survivorship.gap`): the extension does neither (spec §1). The `missing.*` codes are
+ * new: each names what the user must read or enter. */
 
 import type { Covered, Day, PageKind } from "./broker-view.ts";
 
