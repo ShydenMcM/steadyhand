@@ -4,6 +4,9 @@
 
 import {
   adviceDayAt,
+  memoryFor,
+  type Memory,
+  type StoredMemory,
   type CashMovements,
   type CorporateActions,
   type Dated,
@@ -139,13 +142,21 @@ export const recordCorporateActions = (
     })),
   );
 
-/** Keep a strategy's memory with the advice day it was written for (spec §4.3). */
-export const putMemory = (
+/** Keep `strategy`'s memory with the advice day it was written for (spec §4.3, #229 AC1). */
+export const remember = (db: IDBDatabase, strategy: string, stored: StoredMemory): Promise<void> =>
+  putAll(db, STORES.memory, [{ strategy, ...stored }]);
+
+/** The memory `strategy` advises with on `day`: the memory that day began with when it was
+ * advised before, so the advice for a day is the same however often it is asked for. */
+export const rememberedFor = async (
   db: IDBDatabase,
   strategy: string,
   day: Day,
-  memory: unknown,
-): Promise<void> => putAll(db, STORES.memory, [{ strategy, day, memory }]);
+): Promise<Memory> => {
+  const read = db.transaction(STORES.memory, "readonly").objectStore(STORES.memory);
+  const stored = (await requested(read.get(strategy))) as StoredMemory | undefined;
+  return memoryFor(stored, day);
+};
 
 /** Keep one setting. */
 export const putSetting = (db: IDBDatabase, name: string, value: unknown): Promise<void> =>
