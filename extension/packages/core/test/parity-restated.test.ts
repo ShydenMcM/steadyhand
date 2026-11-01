@@ -35,7 +35,8 @@ test.each(CASES)("core restates $name as Python does", (parity) => {
     parity.splits.map((split) => ({ ...split, from: BigInt(split.from), to: BigInt(split.to) })),
     parity.asOf,
   );
-  expect(gross.amount.toString(), `seed ${fixture.seed}, ${parity.name}: ${JSON.stringify(parity)}`).toBe(
-    parity.gross,
-  );
+  expect(
+    gross.amount.toString(),
+    `seed ${fixture.seed}, ${parity.name}: ${JSON.stringify(parity)}`,
+  ).toBe(parity.gross);
 });
