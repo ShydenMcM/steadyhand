@@ -45,6 +45,26 @@ const putAll = (db: IDBDatabase, store: StoreName, rows: readonly object[]): Pro
     };
   });
 
+/** `rows` each given its `entry` (#470): `ref` and the broker's reference where the row has one,
+ * else `#` and its place among the rows of the same read with the same fields, so two equal
+ * deposits on one day are two rows and reading the page again writes the same keys. */
+const entered = <T extends object>(
+  rows: readonly T[],
+  reference: (row: T) => string | undefined,
+): (T & { readonly entry: string })[] => {
+  const seen = new Map<string, bigint>();
+  return rows.map((row) => {
+    const own = reference(row);
+    if (own !== undefined) {
+      return { ...row, entry: `ref ${own}` };
+    }
+    const fields = JSON.stringify(row);
+    const place = (seen.get(fields) ?? 0n) + 1n;
+    seen.set(fields, place);
+    return { ...row, entry: `#${place.toString()}` };
+  });
+};
+
 /** Every row of `store`, in key order. */
 export const rowsOf = (db: IDBDatabase, store: StoreName): Promise<unknown[]> =>
   requested(db.transaction(store, "readonly").objectStore(store).getAll());
@@ -100,33 +120,41 @@ export const recordSeries = (
     },
   ]);
 
-/** Record each dividend a page lists, once: keyed by all its own fields. */
+/** Record each dividend a page lists, once: keyed by its own fields and its entry. */
 export const recordDividends = (db: IDBDatabase, read: Part<Dividends>): Promise<void> =>
   putAll(
     db,
     STORES.dividends,
-    read.value.dividends.map((dividend) => ({
-      symbol: dividend.symbol,
-      exDate: dividend.exDate,
-      paymentDate: dividend.paymentDate,
-      grossPerShare: dividend.grossPerShare.toString(),
-    })),
+    entered(
+      read.value.dividends.map((dividend) => ({
+        symbol: dividend.symbol,
+        exDate: dividend.exDate,
+        paymentDate: dividend.paymentDate,
+        grossPerShare: dividend.grossPerShare.toString(),
+        ...(dividend.reference === undefined ? {} : { reference: dividend.reference }),
+      })),
+      (row) => ("reference" in row ? row.reference : undefined),
+    ),
   );
 
-/** Record each cash movement a page lists, once: keyed by all its own fields. */
+/** Record each cash movement a page lists, once: keyed by its own fields and its entry. */
 export const recordCashMovements = (db: IDBDatabase, read: Part<CashMovements>): Promise<void> =>
   putAll(
     db,
     STORES.cashMovements,
-    read.value.movements.map((movement) => ({
-      day: movement.day,
-      kind: movement.kind,
-      amount: movement.amount.amount.toString(),
-      currency: movement.amount.currency.code,
-    })),
+    entered(
+      read.value.movements.map((movement) => ({
+        day: movement.day,
+        kind: movement.kind,
+        amount: movement.amount.amount.toString(),
+        currency: movement.amount.currency.code,
+        ...(movement.reference === undefined ? {} : { reference: movement.reference }),
+      })),
+      (row) => ("reference" in row ? row.reference : undefined),
+    ),
   );
 
-/** Record each split a page lists, once: keyed by all its own fields. */
+/** Record each split a page lists, once: keyed by its own fields and its entry. */
 export const recordCorporateActions = (
   db: IDBDatabase,
   read: Part<CorporateActions>,
@@ -134,12 +162,16 @@ export const recordCorporateActions = (
   putAll(
     db,
     STORES.corporateActions,
-    read.value.splits.map((split) => ({
-      symbol: split.symbol,
-      exDate: split.exDate,
-      from: split.from.toString(),
-      to: split.to.toString(),
-    })),
+    entered(
+      read.value.splits.map((split) => ({
+        symbol: split.symbol,
+        exDate: split.exDate,
+        from: split.from.toString(),
+        to: split.to.toString(),
+        ...(split.reference === undefined ? {} : { reference: split.reference }),
+      })),
+      (row) => ("reference" in row ? row.reference : undefined),
+    ),
   );
 
 /** Keep `strategy`'s memory with the advice day it was written for (spec §4.3, #229 AC1). */

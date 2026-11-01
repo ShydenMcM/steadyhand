@@ -86,6 +86,9 @@ export interface Dividend {
   readonly paymentDate: Day;
   /** Rupiah per share before tax, exact: IDX dividends are often a fraction of a rupiah. */
   readonly grossPerShare: Decimal;
+  /** The broker's own reference for the row (a transaction number), where its page shows one:
+   * it tells two otherwise identical rows apart (#470). */
+  readonly reference?: string;
 }
 
 /** The dividends a page lists and the period it covers (§7.1: none listed is not "pays none"
@@ -100,6 +103,9 @@ export interface CashMovement {
   readonly kind: "deposit" | "withdrawal";
   /** Always positive: `kind` says which way it moved. */
   readonly amount: Money;
+  /** The broker's own reference for the row (a transaction number), where its page shows one:
+   * it tells two otherwise identical rows apart (#470). */
+  readonly reference?: string;
 }
 
 export interface CashMovements {
@@ -114,6 +120,9 @@ export interface Split {
   readonly exDate: Day;
   readonly from: bigint;
   readonly to: bigint;
+  /** The broker's own reference for the row (a transaction number), where its page shows one:
+   * it tells two otherwise identical rows apart (#470). */
+  readonly reference?: string;
 }
 
 export interface CorporateActions {
