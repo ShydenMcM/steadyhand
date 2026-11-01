@@ -25,6 +25,7 @@ from typing import Any, TypedDict
 
 from steadyhand import IDR, Instrument, Money, Side
 from steadyhand._ratio import ratio_down
+from steadyhand.income import _restated_gross
 from steadyhand.market import PayDates
 from steadyhand.metrics import _rounded
 from steadyhand.notes import TRADE_EXCLUDED, TRADE_FROZEN, Note
@@ -32,7 +33,7 @@ from steadyhand.risk import RiskLimits, RiskManager
 from steadyhand.sizing import CompoundingSizer
 from steadyhand.strategies import BuyAndHold, MonthlySavings
 from steadyhand.strategies.protocol import Strategy
-from steadyhand.types import Order
+from steadyhand.types import CashDividend, Order, Split
 from steadyhand.view import ActionHistory, MarketView, PortfolioView, PriceHistory, Tradable
 from steadyhand_idx._datafile import Row, load_shipped
 from steadyhand_idx.bands import BANDS_FILE, parse_bands
@@ -48,6 +49,7 @@ RATIOS = Path("extension/packages/core/test/ratios.json")
 RULES_CASES = Path("extension/packages/core/test/rules.json")
 PARITY = Path("extension/packages/core/test/parity.json")
 STRATEGY_PARITY = Path("extension/packages/core/test/parity-strategies.json")
+RESTATED_PARITY = Path("extension/packages/core/test/parity-restated.json")
 
 # Each rule file and the Python readers that must accept it before it is converted.
 READERS: dict[str, tuple[Callable[[Row], object], ...]] = {
@@ -378,6 +380,60 @@ def strategy_cases(seed: int = STRATEGY_SEED, journeys: int = STRATEGY_JOURNEYS)
     return {"seed": str(seed), "cases": cases}
 
 
+RESTATED_SEED = 232
+RESTATED_CASES = 300
+# The share counts a drawn split may turn from and into: forward, reverse and odd ratios.
+SPLIT_SHARES = (1, 2, 3, 4, 5, 10)
+
+
+def _restated_case(draw: random.Random, name: str) -> dict[str, Any]:
+    """A dividend, its stock's splits around it and a day it is read for, and the gross Python's
+    ``_restated_gross`` gives on a number of today's shares (#232 AC4)."""
+    stock = Instrument("BBCA", "IDX", IDR)
+    other = Instrument("TLKM", "IDX", IDR)
+    start = date(2024, 1, 1)
+    ex_date = start + timedelta(days=draw.randrange(400))
+    places = draw.choice((0, 1, 2, 4))
+    per_share = Decimal(draw.randrange(1, 10**6)) / 10**places
+    splits = [
+        Split(
+            draw.choice((stock, stock, stock, other)),
+            start + timedelta(days=draw.randrange(800)),
+            *draw.sample(SPLIT_SHARES, 2),
+        )
+        for _ in range(draw.randint(0, 3))
+    ]
+    as_of = ex_date + timedelta(days=draw.randrange(400))
+    shares = draw.choice((1, draw.randrange(1, 10**4), draw.randrange(1, 10**9)))
+    gross = _restated_gross(CashDividend(stock, ex_date, per_share), shares, splits, as_of)
+    return {
+        "name": name,
+        "exDate": ex_date.isoformat(),
+        "grossPerShare": str(per_share),
+        "shares": str(shares),
+        "splits": [
+            {
+                "symbol": split.instrument.symbol,
+                "exDate": split.ex_date.isoformat(),
+                "from": str(split.old_shares),
+                "to": str(split.new_shares),
+            }
+            for split in splits
+        ],
+        "asOf": as_of.isoformat(),
+        "gross": str(gross.amount),
+    }
+
+
+def restated_cases(seed: int = RESTATED_SEED, count: int = RESTATED_CASES) -> ParityCases:
+    """*count* dividends restated by Python from *seed*, for core's ``restatedGross``."""
+    if count < 1:
+        msg = f"the restated parity harness needs a case, got {count}"
+        raise ValueError(msg)
+    draw = random.Random(seed)  # noqa: S311 - seeded test inputs, not secrets
+    return {"seed": str(seed), "cases": [_restated_case(draw, f"case {n}") for n in range(count)]}
+
+
 def text(value: object) -> str:
     return json.dumps(value, indent=2, ensure_ascii=False) + "\n"
 
@@ -396,6 +452,7 @@ def outputs() -> dict[Path, str]:
     files[RULES_CASES] = text(rule_cases())
     files[PARITY] = one_case_a_line(parity_cases())
     files[STRATEGY_PARITY] = one_case_a_line(strategy_cases())
+    files[RESTATED_PARITY] = one_case_a_line(restated_cases())
     return files
 
 
