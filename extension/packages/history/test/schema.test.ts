@@ -11,7 +11,7 @@ test("the database is the extension's own, at the newest version its migrations 
 
 test("a new database has one store per kind, each keyed by its own fields", async () => {
   const db = await openHistory(new IDBFactory());
-  expect(db.version).toBe(1);
+  expect(db.version).toBe(2);
   expect([...db.objectStoreNames].sort()).toEqual([
     "cash-movements",
     "chart-series",
@@ -27,11 +27,11 @@ test("a new database has one store per kind, each keyed by its own fields", asyn
       [...db.objectStoreNames].map((name) => [name, read.objectStore(name).keyPath]),
     ),
   ).toEqual({
-    "cash-movements": ["day", "kind", "amount"],
+    "cash-movements": ["day", "kind", "amount", "entry"],
     "chart-series": ["symbol", "readAt"],
     closes: ["symbol", "day"],
-    "corporate-actions": ["symbol", "exDate", "from", "to"],
-    dividends: ["symbol", "exDate", "paymentDate", "grossPerShare"],
+    "corporate-actions": ["symbol", "exDate", "from", "to", "entry"],
+    dividends: ["symbol", "exDate", "paymentDate", "grossPerShare", "entry"],
     memory: "strategy",
     settings: "name",
   });
@@ -80,7 +80,7 @@ test("a database a newer release wrote is refused by name, not read", async () =
   const newer = await requested(factory.open(DATABASE, VERSION + 1));
   newer.close();
   await expect(openHistory(factory)).rejects.toThrow(
-    new Error("steadyhand-history is at a newer version than this release reads (1)"),
+    new Error("steadyhand-history is at a newer version than this release reads (2)"),
   );
 });
 
@@ -99,4 +99,52 @@ test("a database held open by another tab is refused by name, not waited on", as
   const next = await openHistory(factory, [...MIGRATIONS, store("c"), store("d")]);
   expect([...next.objectStoreNames]).toContain("d");
   next.close();
+});
+
+test("a version 1 database keeps every row, each the first of its kind (#470)", async () => {
+  const factory = new IDBFactory();
+  const old = await openHistory(factory, MIGRATIONS.slice(0, 1));
+  const write = old.transaction(
+    [STORES.dividends, STORES.cashMovements, STORES.corporateActions],
+    "readwrite",
+  );
+  write
+    .objectStore(STORES.cashMovements)
+    .put({ day: "2025-06-02", kind: "deposit", amount: "5000000" });
+  write.objectStore(STORES.dividends).put({
+    symbol: "BBRI",
+    exDate: "2025-03-25",
+    paymentDate: "2025-04-15",
+    grossPerShare: "208.4",
+  });
+  write
+    .objectStore(STORES.corporateActions)
+    .put({ symbol: "BBCA", exDate: "2025-02-03", from: "1", to: "5" });
+  await new Promise<void>((resolve) => {
+    write.oncomplete = () => {
+      resolve();
+    };
+  });
+  old.close();
+  const upgraded = await openHistory(factory);
+  const read = upgraded.transaction(
+    [STORES.dividends, STORES.cashMovements, STORES.corporateActions],
+    "readonly",
+  );
+  expect(await requested(read.objectStore(STORES.cashMovements).getAll())).toEqual([
+    { day: "2025-06-02", kind: "deposit", amount: "5000000", entry: "#1" },
+  ]);
+  expect(await requested(read.objectStore(STORES.dividends).getAll())).toEqual([
+    {
+      symbol: "BBRI",
+      exDate: "2025-03-25",
+      paymentDate: "2025-04-15",
+      grossPerShare: "208.4",
+      entry: "#1",
+    },
+  ]);
+  expect(await requested(read.objectStore(STORES.corporateActions).getAll())).toEqual([
+    { symbol: "BBCA", exDate: "2025-02-03", from: "1", to: "5", entry: "#1" },
+  ]);
+  upgraded.close();
 });

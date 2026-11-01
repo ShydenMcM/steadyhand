@@ -183,9 +183,45 @@ test("dividend rows are recorded once each: reading the page twice changes nothi
   await recordDividends(db, { ...dividends, readAt: wib("2025-06-18T19:00:00") });
   expect(await rowsOf(db, STORES.dividends)).toEqual(once);
   expect(once).toEqual([
-    { symbol: "BBRI", exDate: "2025-03-25", paymentDate: "2025-04-15", grossPerShare: "208.4" },
-    { symbol: "TLKM", exDate: "2025-05-27", paymentDate: "2025-06-13", grossPerShare: "210" },
+    {
+      symbol: "BBRI",
+      exDate: "2025-03-25",
+      paymentDate: "2025-04-15",
+      grossPerShare: "208.4",
+      entry: "#1",
+    },
+    {
+      symbol: "TLKM",
+      exDate: "2025-05-27",
+      paymentDate: "2025-06-13",
+      grossPerShare: "210",
+      entry: "#1",
+    },
   ]);
+});
+
+test("two identical dividend rows in one read are two dividends, read twice or not (#470)", async () => {
+  const twice = dividends.value.dividends[0];
+  if (twice === undefined) {
+    throw new Error("the fixture lists no dividend");
+  }
+  const read = { ...dividends, value: { ...dividends.value, dividends: [twice, twice] } };
+  await recordDividends(db, read);
+  await recordDividends(db, read);
+  expect(
+    (await rowsOf(db, STORES.dividends)).map((row) => (row as { entry: string }).entry),
+  ).toEqual(["#1", "#2"]);
+});
+
+test("a dividend the broker numbers is keyed by its number (#470)", async () => {
+  const numbered = dividends.value.dividends.map((dividend) => ({
+    ...dividend,
+    reference: "DV-1",
+  }));
+  await recordDividends(db, { ...dividends, value: { ...dividends.value, dividends: numbered } });
+  expect(
+    (await rowsOf(db, STORES.dividends)).map((row) => (row as { entry: string }).entry),
+  ).toEqual(["ref DV-1", "ref DV-1"]);
 });
 
 const movements: Part<CashMovements> = {
@@ -204,8 +240,53 @@ test("cash movements are recorded once each: reading the page twice changes noth
   await recordCashMovements(db, movements);
   await recordCashMovements(db, movements);
   expect(await rowsOf(db, STORES.cashMovements)).toEqual([
-    { day: "2025-06-02", kind: "deposit", amount: "5000000", currency: "IDR" },
-    { day: "2025-06-10", kind: "withdrawal", amount: "250000", currency: "IDR" },
+    { day: "2025-06-02", kind: "deposit", amount: "5000000", currency: "IDR", entry: "#1" },
+    { day: "2025-06-10", kind: "withdrawal", amount: "250000", currency: "IDR", entry: "#1" },
+  ]);
+});
+
+const deposit = { day: "2025-06-02", kind: "deposit" as const, amount: rp(1_000_000n) };
+
+test("two equal deposits on one day are both kept, and a second read adds neither (#470)", async () => {
+  const read = { ...movements, value: { ...movements.value, movements: [deposit, deposit] } };
+  await recordCashMovements(db, read);
+  await recordCashMovements(db, read);
+  expect(await rowsOf(db, STORES.cashMovements)).toEqual([
+    { day: "2025-06-02", kind: "deposit", amount: "1000000", currency: "IDR", entry: "#1" },
+    { day: "2025-06-02", kind: "deposit", amount: "1000000", currency: "IDR", entry: "#2" },
+  ]);
+});
+
+test("a movement the broker numbers is keyed by its number (#470)", async () => {
+  const read = {
+    ...movements,
+    value: {
+      ...movements.value,
+      movements: [
+        { ...deposit, reference: "TX-0042" },
+        { ...deposit, reference: "TX-0043" },
+      ],
+    },
+  };
+  await recordCashMovements(db, read);
+  await recordCashMovements(db, read);
+  expect(await rowsOf(db, STORES.cashMovements)).toEqual([
+    {
+      day: "2025-06-02",
+      kind: "deposit",
+      amount: "1000000",
+      currency: "IDR",
+      reference: "TX-0042",
+      entry: "ref TX-0042",
+    },
+    {
+      day: "2025-06-02",
+      kind: "deposit",
+      amount: "1000000",
+      currency: "IDR",
+      reference: "TX-0043",
+      entry: "ref TX-0043",
+    },
   ]);
 });
 
@@ -222,6 +303,19 @@ test("corporate actions are recorded once each: reading the page twice changes n
   await recordCorporateActions(db, actions);
   await recordCorporateActions(db, actions);
   expect(await rowsOf(db, STORES.corporateActions)).toEqual([
-    { symbol: "BBCA", exDate: "2025-02-03", from: "1", to: "5" },
+    { symbol: "BBCA", exDate: "2025-02-03", from: "1", to: "5", entry: "#1" },
   ]);
+});
+
+test("a split the broker numbers is keyed by its number, and an identical one apart (#470)", async () => {
+  const split = { symbol: "BBCA", exDate: "2025-02-03", from: 1n, to: 5n };
+  const read = {
+    ...actions,
+    value: { ...actions.value, splits: [split, split, { ...split, reference: "CA-7" }] },
+  };
+  await recordCorporateActions(db, read);
+  await recordCorporateActions(db, read);
+  expect(
+    (await rowsOf(db, STORES.corporateActions)).map((row) => (row as { entry: string }).entry),
+  ).toEqual(["#1", "#2", "ref CA-7"]);
 });
