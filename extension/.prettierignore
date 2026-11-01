@@ -4,3 +4,4 @@ package-lock.json
 # Written by scripts/core_fixtures.py from Python's readers; CI checks they are current.
 packages/core/rules/
 packages/core/test/ratios.json
+packages/core/test/parity.json
