@@ -405,7 +405,10 @@ def _restated_case(draw: random.Random, name: str) -> dict[str, Any]:
     ]
     as_of = ex_date + timedelta(days=draw.randrange(400))
     shares = draw.choice((1, draw.randrange(1, 10**4), draw.randrange(1, 10**9)))
-    gross = _restated_gross(CashDividend(stock, ex_date, per_share), shares, splits, as_of)
+    # Python's callers pass one stock's own actions; core is handed every split and picks the
+    # dividend stock's, so Python is given the stock's splits alone.
+    own = [split for split in splits if split.instrument == stock]
+    gross = _restated_gross(CashDividend(stock, ex_date, per_share), shares, own, as_of)
     return {
         "name": name,
         "exDate": ex_date.isoformat(),

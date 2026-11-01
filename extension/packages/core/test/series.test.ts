@@ -112,6 +112,20 @@ test("a known split and a market move beyond the band on its day is still an act
   ).toEqual(AGAIN);
 });
 
+test("a known split after both days of a pair restates neither for the band check", () => {
+  // 16 to 17 June is flat in the old shares; restating 16 June alone would read 3,000 to 9,000.
+  expect(
+    series({
+      recorded: [at("2025-06-16", 9_000n), at("2025-06-17", 9_000n), at("2025-06-18", 3_000n)],
+      splits: [split],
+    }),
+  ).toEqual({
+    closes: ["2025-06-16 3000", "2025-06-17 3000", "2025-06-18 3000"],
+    dividendsAdjustedTo: null,
+    missing: [],
+  });
+});
+
 test("an unadjusted chart's closes before a known split are restated too", () => {
   expect(
     series({
