@@ -1,7 +1,7 @@
 import { IDBFactory } from "fake-indexeddb";
 import { expect, test } from "vitest";
 import { forgetEverything, type ExtensionStorage } from "../src/forget.ts";
-import { putMemory, putSetting, rowsOf } from "../src/record.ts";
+import { remember, putSetting, rowsOf } from "../src/record.ts";
 import { DATABASE, openHistory, STORES } from "../src/schema.ts";
 
 // "Forget everything" (spec §6.1, §11, #231 AC5): the database and the extension's storage are
@@ -44,7 +44,8 @@ const fill = async (db: IDBDatabase): Promise<void> => {
       resolve();
     };
   });
-  await putMemory(db, "buy-and-hold", "2025-06-17", { held: ["BBCA"] });
+  const set = new Map([["set", "IDX:BBCA"]]);
+  await remember(db, "buy-and-hold", { day: "2025-06-17", began: set, ended: set });
   await putSetting(db, "fees", "custom");
 };
 
