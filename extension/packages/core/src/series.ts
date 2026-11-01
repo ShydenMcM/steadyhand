@@ -1,0 +1,163 @@
+/** A stock's series (spec §6.3): the daily closes a strategy reads for one stock, in today's
+ * shares.
+ *
+ * The latest chart read wins on every day it holds; the self-recorded closes after its last day
+ * follow. An adjusted chart legitimately differs from raw closes before its latest action, so
+ * only its last day is compared: its close must equal the self-recorded close for that day, if
+ * there is one. A disagreement drops the self-recorded part and asks for the chart again. A
+ * corporate action found by price between self-recorded closes (§6.4) drops everything before it,
+ * the chart included, and asks for the chart once. Closes not yet adjusted for a known split
+ * after them are restated into today's shares, so the series has one share basis throughout. */
+
+import type Decimal from "decimal.js";
+import { actionBetween } from "./actions.ts";
+import type { DailyClose, Day, Split } from "./broker-view.ts";
+import type { IdxCalendar } from "./calendar.ts";
+import { Money } from "./money.ts";
+import { missingPage, type Note } from "./notes.ts";
+import { RuleDecimal } from "./ratio.ts";
+import type { IdxMarketRules } from "./rules.ts";
+
+/** How a broker's chart series is adjusted, as its reader declares (spec §5.2). */
+export type Adjustment = "none" | "splits" | "splits-and-dividends";
+
+export interface ChartRead {
+  readonly adjustment: Adjustment;
+  /** In day order, as the chart shows them. */
+  readonly closes: readonly DailyClose[];
+}
+
+/** A close in today's shares: exact rupiah, which a split restatement can make a fraction of. */
+export interface SeriesClose {
+  readonly day: Day;
+  readonly close: Decimal;
+}
+
+export interface StockSeries {
+  /** In day order. */
+  readonly closes: readonly SeriesClose[];
+  /** The last day the closes are already adjusted for dividends to (a `splits-and-dividends`
+   * chart's last day), or `null`: total return adjusts only for dividends after it. */
+  readonly dividendsAdjustedTo: Day | null;
+  readonly missing: readonly Note[];
+}
+
+export interface SeriesInputs {
+  readonly symbol: string;
+  readonly chart: ChartRead | undefined;
+  /** The closes self-recorded from portfolio and watchlist reads (spec §6.2), in day order. */
+  readonly recorded: readonly DailyClose[];
+  /** Every split of the stock a page has shown. */
+  readonly splits: readonly Split[];
+}
+
+/** `daily` in the shares after every split later than its day, but for those on or before
+ * `adjustedTo`, which the chart it came from already shows adjusted. */
+const inTodaysShares = (
+  daily: DailyClose,
+  splits: readonly Split[],
+  adjustedTo: Day | null,
+): SeriesClose => {
+  let close = new RuleDecimal(daily.close.amount.toString());
+  for (const split of splits) {
+    const later = daily.day < split.exDate;
+    const shown = adjustedTo !== null && split.exDate <= adjustedTo;
+    if (later && !shown) {
+      close = close.times(split.from.toString()).div(split.to.toString());
+    }
+  }
+  return { day: daily.day, close };
+};
+
+/** The chart's closes in today's shares. */
+const chartCloses = (chart: ChartRead, last: DailyClose, splits: readonly Split[]) =>
+  chart.closes.map((daily) =>
+    inTodaysShares(daily, splits, chart.adjustment === "none" ? null : last.day),
+  );
+
+/** `earlier` in the shares of `later`'s day, by every known split between them, rounded down to
+ * whole rupiah: a known split is not a move, so only the market's part is checked. */
+const acrossSplits = (
+  earlier: DailyClose,
+  later: DailyClose,
+  splits: readonly Split[],
+): DailyClose => {
+  let amount = earlier.close.amount;
+  for (const split of splits) {
+    if (earlier.day < split.exDate && split.exDate <= later.day) {
+      amount = (amount * split.from) / split.to;
+    }
+  }
+  return { day: earlier.day, close: new Money(amount, earlier.close.currency) };
+};
+
+/** The self-recorded closes from the last corporate action found by price on, and whether one
+ * was found. */
+const sinceLastAction = (
+  symbol: string,
+  recorded: readonly DailyClose[],
+  splits: readonly Split[],
+  rules: IdxMarketRules,
+  calendar: IdxCalendar,
+): { readonly closes: readonly DailyClose[]; readonly found: boolean } => {
+  let since: DailyClose[] = [];
+  let found = false;
+  let previous: DailyClose | undefined;
+  for (const daily of recorded) {
+    if (
+      previous !== undefined &&
+      actionBetween(symbol, acrossSplits(previous, daily, splits), daily, rules, calendar)
+    ) {
+      since = [];
+      found = true;
+    }
+    since.push(daily);
+    previous = daily;
+  }
+  return { closes: since, found };
+};
+
+export const stockSeries = (
+  inputs: SeriesInputs,
+  rules: IdxMarketRules,
+  calendar: IdxCalendar,
+): StockSeries => {
+  const { symbol, chart, splits } = inputs;
+  const last = chart?.closes.at(-1);
+  if (chart === undefined || last === undefined) {
+    const own = sinceLastAction(symbol, inputs.recorded, splits, rules, calendar);
+    return {
+      closes: own.closes.map((daily) => inTodaysShares(daily, splits, null)),
+      dividendsAdjustedTo: null,
+      missing: own.found ? [missingPage("stock-detail", symbol)] : [],
+    };
+  }
+  const dividendsAdjustedTo = chart.adjustment === "splits-and-dividends" ? last.day : null;
+  const after = inputs.recorded.filter((daily) => daily.day >= last.day);
+  const same = after.find((daily) => daily.day === last.day);
+  if (same !== undefined && !same.close.equals(last.close)) {
+    return {
+      closes: chartCloses(chart, last, splits),
+      dividendsAdjustedTo,
+      missing: [missingPage("stock-detail", symbol)],
+    };
+  }
+  const own = sinceLastAction(symbol, after, splits, rules, calendar);
+  if (own.found) {
+    return {
+      closes: own.closes.map((daily) => inTodaysShares(daily, splits, null)),
+      dividendsAdjustedTo: null,
+      missing: [missingPage("stock-detail", symbol)],
+    };
+  }
+  return {
+    closes: [
+      ...chartCloses(chart, last, splits),
+      ...own.closes
+        .filter((daily) => daily.day > last.day)
+        .map((daily) => inTodaysShares(daily, splits, null)),
+    ],
+    dividendsAdjustedTo,
+    missing: [],
+  };
+};
