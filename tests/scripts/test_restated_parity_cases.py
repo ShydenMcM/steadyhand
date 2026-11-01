@@ -24,7 +24,7 @@ def test_the_committed_cases_restate_by_a_split_and_pass_over_others() -> None:
         splits = case["splits"]
         assert isinstance(splits, list)
         return any(
-            split["symbol"] == symbol and case["exDate"] <= split["exDate"] <= case["asOf"]  # type: ignore[operator]
+            split["symbol"] == symbol and case["exDate"] <= split["exDate"] <= case["asOf"]
             for split in splits
         )
 
