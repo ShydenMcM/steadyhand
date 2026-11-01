@@ -16,6 +16,7 @@ import {
 } from "./rules-file.ts";
 import type { Dated, Row } from "./rules-file.ts";
 import type { IdxCalendar } from "./calendar.ts";
+import shipped from "../rules/sessions.json" with { type: "json" };
 
 export const SESSIONS_FILE = "sessions.json";
 
@@ -44,6 +45,9 @@ export const parseSessions = (value: unknown, file: string = SESSIONS_FILE): Dat
   onlyKeys(contents, new Set(["schema", "sessions"]), new Where(file, "top level"));
   return dated(contents, "sessions", ["pre_opening_from", "closing_match_until"], parseRow, file);
 };
+
+/** The sessions from the release's own rule file. */
+export const shippedSessions = (): Dated<SessionRow> => parseSessions(shipped);
 
 /** The Jakarta day and time of day (to the second, rounded down) of instant `at`. */
 const inJakarta = (at: Date): { readonly day: string; readonly time: string } => {

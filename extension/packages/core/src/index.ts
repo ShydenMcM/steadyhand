@@ -10,3 +10,7 @@ export * from "./notes.ts";
 export * from "./risk.ts";
 export * from "./sizing.ts";
 export * from "./tradable.ts";
+export { IdxCalendar } from "./calendar.ts";
+export { RuleDecimal } from "./ratio.ts";
+export type { Dated } from "./rules-file.ts";
+export { adviceDayAt, shippedSessions, type SessionRow } from "./sessions.ts";
