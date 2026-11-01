@@ -5,3 +5,4 @@ package-lock.json
 packages/core/rules/
 packages/core/test/ratios.json
 packages/core/test/parity.json
+packages/core/test/parity-strategies.json

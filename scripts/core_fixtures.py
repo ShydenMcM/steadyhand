@@ -25,12 +25,15 @@ from typing import Any, TypedDict
 
 from steadyhand import IDR, Instrument, Money, Side
 from steadyhand._ratio import ratio_down
+from steadyhand.market import PayDates
 from steadyhand.metrics import _rounded
 from steadyhand.notes import TRADE_EXCLUDED, TRADE_FROZEN, Note
 from steadyhand.risk import RiskLimits, RiskManager
 from steadyhand.sizing import CompoundingSizer
+from steadyhand.strategies import BuyAndHold, MonthlySavings
+from steadyhand.strategies.protocol import Strategy
 from steadyhand.types import Order
-from steadyhand.view import PortfolioView, Tradable
+from steadyhand.view import ActionHistory, MarketView, PortfolioView, PriceHistory, Tradable
 from steadyhand_idx._datafile import Row, load_shipped
 from steadyhand_idx.bands import BANDS_FILE, parse_bands
 from steadyhand_idx.calendar import HOLIDAYS_FILE, IdxCalendar, parse_holidays
@@ -44,6 +47,7 @@ RULES = Path("extension/packages/core/rules")
 RATIOS = Path("extension/packages/core/test/ratios.json")
 RULES_CASES = Path("extension/packages/core/test/rules.json")
 PARITY = Path("extension/packages/core/test/parity.json")
+STRATEGY_PARITY = Path("extension/packages/core/test/parity-strategies.json")
 
 # Each rule file and the Python readers that must accept it before it is converted.
 READERS: dict[str, tuple[Callable[[Row], object], ...]] = {
@@ -296,6 +300,84 @@ def parity_cases(seed: int = PARITY_SEED, count: int = PARITY_CASES) -> ParityCa
     }
 
 
+STRATEGY_SEED = 229
+STRATEGY_JOURNEYS = 60
+# The instalments a monthly-savings journey may draw: the bounds Settings allows and between.
+INSTALMENT_CHOICES = (1, 2, 3, 12, 24, 120)
+
+
+def _strategy_day(
+    draw: random.Random,
+    strategy: Strategy,
+    day: date,
+    memory: dict[str, str],
+    pay_dates: PayDates,
+) -> dict[str, Any]:
+    """One advice day of a journey: a drawn portfolio and buyable set, the memory the day before
+    ended with, and what Python's strategy decides."""
+    buyable = sorted(draw.sample(PARITY_STOCKS, draw.randint(0, len(PARITY_STOCKS))))
+    held = {symbol: draw.randrange(1, 10**9) for symbol in PARITY_STOCKS if draw.random() < HELD}
+    spendable = draw.choice((0, draw.randrange(10**6), draw.randrange(10**10)))
+    unsettled = draw.choice((0, draw.randrange(10**6)))
+    stock = {symbol: Instrument(symbol, "IDX", IDR) for symbol in PARITY_STOCKS}
+    portfolio = PortfolioView(
+        Money(spendable + unsettled + sum(held.values()), IDR),
+        Money(spendable, IDR),
+        {stock[symbol]: Money(amount, IDR) for symbol, amount in held.items()},
+    )
+    chosen = frozenset(stock[symbol] for symbol in buyable)
+    view = MarketView(
+        PriceHistory([]),
+        day,
+        Tradable(day, chosen, frozenset(), {}, chosen),
+        ActionHistory(),
+        pay_dates,
+    )
+    decision = strategy.decide(view, portfolio, memory)
+    return {
+        "day": day.isoformat(),
+        "buyable": buyable,
+        "holdings": {symbol: str(amount) for symbol, amount in held.items()},
+        "value": str(portfolio.value.amount),
+        "spendable": str(spendable),
+        "memory": dict(memory),
+        "expected": {
+            "weights": dict(sorted((i.symbol, str(w)) for i, w in decision.weights.items())),
+            "memory": dict(decision.memory),
+            "notes": [{"code": n.key, "text": n.text} for n in decision.notes],
+        },
+    }
+
+
+def strategy_cases(seed: int = STRATEGY_SEED, journeys: int = STRATEGY_JOURNEYS) -> ParityCases:
+    """*journeys* runs of buy-and-hold and monthly-savings drawn from *seed* (#229 AC6): each a few
+    advice days, days or months apart, each day starting from the memory the last one ended with,
+    as the extension advises. Every day is a case."""
+    if journeys < 1:
+        msg = f"the strategy parity harness needs a journey, got {journeys}"
+        raise ValueError(msg)
+    draw = random.Random(seed)  # noqa: S311 - seeded test inputs, not secrets
+    pay_dates = PayDates(IdxMarketRules(), 14)
+    cases: list[dict[str, Any]] = []
+    for journey in range(journeys):
+        instalments = draw.choice(INSTALMENT_CHOICES)
+        strategy: Strategy = draw.choice((BuyAndHold(), MonthlySavings(instalments)))
+        day = date(2025, 1, 1) + timedelta(days=draw.randrange(365))
+        memory: dict[str, str] = {}
+        for step in range(draw.randint(1, 6)):
+            case = _strategy_day(draw, strategy, day, memory, pay_dates)
+            case = {
+                "name": f"journey {journey} day {step}",
+                "strategy": strategy.name,
+                "instalments": str(instalments),
+                **case,
+            }
+            cases.append(case)
+            memory = case["expected"]["memory"]
+            day += timedelta(days=draw.choice((0, 1, 3, 20, 31, 45)))
+    return {"seed": str(seed), "cases": cases}
+
+
 def text(value: object) -> str:
     return json.dumps(value, indent=2, ensure_ascii=False) + "\n"
 
@@ -313,6 +395,7 @@ def outputs() -> dict[Path, str]:
     files[RATIOS] = text(ratio_cases())
     files[RULES_CASES] = text(rule_cases())
     files[PARITY] = one_case_a_line(parity_cases())
+    files[STRATEGY_PARITY] = one_case_a_line(strategy_cases())
     return files
 
 
