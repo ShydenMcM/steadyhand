@@ -8,6 +8,7 @@ import {
   isReviewDay,
   nextPreOpeningAt,
   parseSessions,
+  shippedSessions,
   type AdviceDayRead,
   type ReviewEvery,
   type SessionRow,
@@ -36,6 +37,10 @@ const readAt = (wib: string): AdviceDayRead =>
   adviceDayAt(new Date(`${wib}+07:00`), calendar, sessions);
 
 const wib = (time: string): Date => new Date(`${time}+07:00`);
+
+test("the shipped sessions are the release's own file, read", () => {
+  expect(shippedSessions()).toEqual(parseSessions(shipped));
+});
 
 test("every row of the shipped sessions is read as the file states it", () => {
   expect(

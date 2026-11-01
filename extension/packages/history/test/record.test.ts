@@ -1,0 +1,227 @@
+import {
+  IDR,
+  IdxCalendar,
+  Money,
+  RuleDecimal,
+  shippedSessions,
+  type CashMovements,
+  type CorporateActions,
+  type Dividends,
+  type Part,
+  type Portfolio,
+  type Source,
+  type StockDetail,
+  type Watchlist,
+} from "@steadyhand/core";
+import { IDBFactory } from "fake-indexeddb";
+import { beforeEach, expect, test } from "vitest";
+import {
+  recordCashMovements,
+  recordCloses,
+  recordCorporateActions,
+  recordDividends,
+  recordSeries,
+  rowsOf,
+} from "../src/record.ts";
+import { openHistory, STORES } from "../src/schema.ts";
+
+// What a read records (spec §6.2, #231 AC2-AC4), on an in-memory IndexedDB per test. The week of
+// Monday 16 June 2025 has no IDX holiday; Saturday the 21st is not a trading day.
+
+const RULES = { calendar: IdxCalendar.shipped(), sessions: shippedSessions() };
+const rp = (amount: bigint): Money => new Money(amount, IDR);
+const wib = (time: string): Date => new Date(`${time}+07:00`);
+const source = (pageKind: Source["pageKind"]): Source => ({
+  broker: "fixture",
+  pageKind,
+  route: "page",
+});
+
+const portfolioAt = (time: string): Part<Portfolio> => ({
+  source: source("portfolio"),
+  readAt: wib(time),
+  value: {
+    cashAvailable: rp(1_000_000n),
+    cashSettled: rp(1_000_000n),
+    cashUnsettled: rp(0n),
+    holdings: [
+      { symbol: "BBCA", lots: 2n, averagePrice: rp(8_500n), lastPrice: rp(9_025n) },
+      { symbol: "TLKM", lots: 10n, averagePrice: rp(2_900n), lastPrice: rp(2_710n) },
+    ],
+  },
+});
+
+const watchlistAt = (time: string): Part<Watchlist> => ({
+  source: source("watchlist"),
+  readAt: wib(time),
+  value: { stocks: [{ symbol: "BBRI", lastPrice: rp(4_120n) }] },
+});
+
+let db: IDBDatabase;
+
+beforeEach(async () => {
+  db = await openHistory(new IDBFactory());
+  return () => {
+    db.close();
+  };
+});
+
+const closeRow = (symbol: string, day: string, close: bigint, pageKind: Source["pageKind"]) => ({
+  symbol,
+  day,
+  close,
+  currency: "IDR",
+  source: source(pageKind),
+});
+
+test("a portfolio read at 16:02:00 WIB on a trading day records that day's close per holding", async () => {
+  expect(await recordCloses(db, portfolioAt("2025-06-17T16:02:00"), RULES)).toBe("2025-06-17");
+  expect(await rowsOf(db, STORES.closes)).toEqual([
+    closeRow("BBCA", "2025-06-17", 9_025n, "portfolio"),
+    closeRow("TLKM", "2025-06-17", 2_710n, "portfolio"),
+  ]);
+});
+
+test("a watchlist read records that day's close per watched stock", async () => {
+  await recordCloses(db, watchlistAt("2025-06-17T20:00:00"), RULES);
+  expect(await rowsOf(db, STORES.closes)).toEqual([
+    closeRow("BBRI", "2025-06-17", 4_120n, "watchlist"),
+  ]);
+});
+
+test("a read one second before the close is final records no close", async () => {
+  expect(await recordCloses(db, portfolioAt("2025-06-17T16:01:59"), RULES)).toBeNull();
+  expect(await rowsOf(db, STORES.closes)).toEqual([]);
+});
+
+test("a read before the next pre-opening records the previous trading day's close", async () => {
+  expect(await recordCloses(db, portfolioAt("2025-06-18T08:44:59"), RULES)).toBe("2025-06-17");
+});
+
+test("a read from the next pre-opening on, in the session, records no close", async () => {
+  expect(await recordCloses(db, portfolioAt("2025-06-18T08:45:00"), RULES)).toBeNull();
+  expect(await rowsOf(db, STORES.closes)).toEqual([]);
+});
+
+test("a read on a Saturday records Friday's close", async () => {
+  expect(await recordCloses(db, watchlistAt("2025-06-21T11:00:00"), RULES)).toBe("2025-06-20");
+});
+
+test("a stock read twice for the same day is one close, the later read's", async () => {
+  await recordCloses(db, watchlistAt("2025-06-17T16:30:00"), RULES);
+  const later: Part<Watchlist> = {
+    ...watchlistAt("2025-06-17T19:00:00"),
+    value: { stocks: [{ symbol: "BBRI", lastPrice: rp(4_130n) }] },
+  };
+  await recordCloses(db, later, RULES);
+  expect(await rowsOf(db, STORES.closes)).toEqual([
+    closeRow("BBRI", "2025-06-17", 4_130n, "watchlist"),
+  ]);
+});
+
+const detail: Part<StockDetail> = {
+  source: source("stock-detail"),
+  readAt: wib("2025-06-17T19:00:00"),
+  value: {
+    symbol: "BBCA",
+    covered: { from: "2025-06-16", to: "2025-06-17" },
+    closes: [
+      { day: "2025-06-16", close: rp(9_000n) },
+      { day: "2025-06-17", close: rp(9_025n) },
+    ],
+  },
+};
+
+test("a stock detail read records the chart series as shown, with the reader's adjustment", async () => {
+  await recordSeries(db, detail, "splits");
+  expect(await rowsOf(db, STORES.series)).toEqual([
+    {
+      symbol: "BBCA",
+      readAt: "2025-06-17T12:00:00.000Z",
+      adjustment: "splits",
+      covered: { from: "2025-06-16", to: "2025-06-17" },
+      closes: [
+        { day: "2025-06-16", close: 9_000n, currency: "IDR" },
+        { day: "2025-06-17", close: 9_025n, currency: "IDR" },
+      ],
+      source: source("stock-detail"),
+    },
+  ]);
+});
+
+test("each chart series read is kept, by its read instant", async () => {
+  await recordSeries(db, detail, "none");
+  await recordSeries(db, { ...detail, readAt: wib("2025-06-18T19:00:00") }, "none");
+  expect((await rowsOf(db, STORES.series)).length).toBe(2);
+});
+
+const dividends: Part<Dividends> = {
+  source: source("dividends"),
+  readAt: wib("2025-06-17T19:00:00"),
+  value: {
+    covered: { from: "2025-01-01", to: "2025-06-17" },
+    dividends: [
+      {
+        symbol: "BBRI",
+        exDate: "2025-03-25",
+        paymentDate: "2025-04-15",
+        grossPerShare: new RuleDecimal("208.40"),
+      },
+      {
+        symbol: "TLKM",
+        exDate: "2025-05-27",
+        paymentDate: "2025-06-13",
+        grossPerShare: new RuleDecimal("210"),
+      },
+    ],
+  },
+};
+
+test("dividend rows are recorded once each: reading the page twice changes nothing", async () => {
+  await recordDividends(db, dividends);
+  const once = await rowsOf(db, STORES.dividends);
+  await recordDividends(db, { ...dividends, readAt: wib("2025-06-18T19:00:00") });
+  expect(await rowsOf(db, STORES.dividends)).toEqual(once);
+  expect(once).toEqual([
+    { symbol: "BBRI", exDate: "2025-03-25", paymentDate: "2025-04-15", grossPerShare: "208.4" },
+    { symbol: "TLKM", exDate: "2025-05-27", paymentDate: "2025-06-13", grossPerShare: "210" },
+  ]);
+});
+
+const movements: Part<CashMovements> = {
+  source: source("cash-movements"),
+  readAt: wib("2025-06-17T19:00:00"),
+  value: {
+    covered: { from: "2025-06-01", to: "2025-06-17" },
+    movements: [
+      { day: "2025-06-02", kind: "deposit", amount: rp(5_000_000n) },
+      { day: "2025-06-10", kind: "withdrawal", amount: rp(250_000n) },
+    ],
+  },
+};
+
+test("cash movements are recorded once each: reading the page twice changes nothing", async () => {
+  await recordCashMovements(db, movements);
+  await recordCashMovements(db, movements);
+  expect(await rowsOf(db, STORES.cashMovements)).toEqual([
+    { day: "2025-06-02", kind: "deposit", amount: "5000000", currency: "IDR" },
+    { day: "2025-06-10", kind: "withdrawal", amount: "250000", currency: "IDR" },
+  ]);
+});
+
+const actions: Part<CorporateActions> = {
+  source: source("corporate-actions"),
+  readAt: wib("2025-06-17T19:00:00"),
+  value: {
+    covered: { from: "2025-01-01", to: "2025-06-17" },
+    splits: [{ symbol: "BBCA", exDate: "2025-02-03", from: 1n, to: 5n }],
+  },
+};
+
+test("corporate actions are recorded once each: reading the page twice changes nothing", async () => {
+  await recordCorporateActions(db, actions);
+  await recordCorporateActions(db, actions);
+  expect(await rowsOf(db, STORES.corporateActions)).toEqual([
+    { symbol: "BBCA", exDate: "2025-02-03", from: "1", to: "5" },
+  ]);
+});

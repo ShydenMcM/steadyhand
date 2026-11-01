@@ -1,0 +1,152 @@
+/** What a read records (spec §6.2). Every row is plain data, so IndexedDB's structured clone
+ * keeps it whole: money as a `bigint` of minor units with its currency's code, and any key field
+ * as text, since a `bigint` cannot be part of a key. */
+
+import {
+  adviceDayAt,
+  type CashMovements,
+  type CorporateActions,
+  type Dated,
+  type Day,
+  type Dividends,
+  type IdxCalendar,
+  type Part,
+  type Portfolio,
+  type SessionRow,
+  type StockDetail,
+  type Watchlist,
+} from "@steadyhand/core";
+import { failure, requested, STORES, type StoreName } from "./schema.ts";
+
+/** How a broker's chart series is adjusted, as its reader declares (spec §5.2). */
+export type Adjustment = "none" | "splits" | "splits-and-dividends";
+
+/** The tables that say which trading day's close a read shows. */
+export interface ReadRules {
+  readonly calendar: IdxCalendar;
+  readonly sessions: Dated<SessionRow>;
+}
+
+/** Write `rows` to `store` in one transaction, settled when it commits. */
+const putAll = (db: IDBDatabase, store: StoreName, rows: readonly object[]): Promise<void> =>
+  new Promise((resolve, reject) => {
+    const write = db.transaction(store, "readwrite");
+    for (const row of rows) {
+      write.objectStore(store).put(row);
+    }
+    write.oncomplete = () => {
+      resolve();
+    };
+    write.onerror = () => {
+      reject(failure(write.error, `writing ${store}`));
+    };
+  });
+
+/** Every row of `store`, in key order. */
+export const rowsOf = (db: IDBDatabase, store: StoreName): Promise<unknown[]> =>
+  requested(db.transaction(store, "readonly").objectStore(store).getAll());
+
+/** Record the close each stock shows in a portfolio or watchlist read, and return its day.
+ *
+ * A read from the second a trading day's close is final until the next trading day's
+ * pre-opening shows that day's close; a read during a session shows none, records nothing and
+ * returns `null`. A stock read twice for one day keeps the later read's close. */
+export const recordCloses = async (
+  db: IDBDatabase,
+  read: Part<Portfolio> | Part<Watchlist>,
+  rules: ReadRules,
+): Promise<Day | null> => {
+  const day = adviceDayAt(read.readAt, rules.calendar, rules.sessions).adviceDay;
+  if (day === null) {
+    return null;
+  }
+  const shown = "holdings" in read.value ? read.value.holdings : read.value.stocks;
+  await putAll(
+    db,
+    STORES.closes,
+    shown.map((stock) => ({
+      symbol: stock.symbol,
+      day,
+      close: stock.lastPrice.amount,
+      currency: stock.lastPrice.currency.code,
+      source: read.source,
+    })),
+  );
+  return day;
+};
+
+/** Record a stock detail read's chart series as shown, under the instant it was read, with the
+ * adjustment its reader declares. */
+export const recordSeries = (
+  db: IDBDatabase,
+  read: Part<StockDetail>,
+  adjustment: Adjustment,
+): Promise<void> =>
+  putAll(db, STORES.series, [
+    {
+      symbol: read.value.symbol,
+      readAt: read.readAt.toISOString(),
+      adjustment,
+      covered: read.value.covered,
+      closes: read.value.closes.map((daily) => ({
+        day: daily.day,
+        close: daily.close.amount,
+        currency: daily.close.currency.code,
+      })),
+      source: read.source,
+    },
+  ]);
+
+/** Record each dividend a page lists, once: keyed by all its own fields. */
+export const recordDividends = (db: IDBDatabase, read: Part<Dividends>): Promise<void> =>
+  putAll(
+    db,
+    STORES.dividends,
+    read.value.dividends.map((dividend) => ({
+      symbol: dividend.symbol,
+      exDate: dividend.exDate,
+      paymentDate: dividend.paymentDate,
+      grossPerShare: dividend.grossPerShare.toString(),
+    })),
+  );
+
+/** Record each cash movement a page lists, once: keyed by all its own fields. */
+export const recordCashMovements = (db: IDBDatabase, read: Part<CashMovements>): Promise<void> =>
+  putAll(
+    db,
+    STORES.cashMovements,
+    read.value.movements.map((movement) => ({
+      day: movement.day,
+      kind: movement.kind,
+      amount: movement.amount.amount.toString(),
+      currency: movement.amount.currency.code,
+    })),
+  );
+
+/** Record each split a page lists, once: keyed by all its own fields. */
+export const recordCorporateActions = (
+  db: IDBDatabase,
+  read: Part<CorporateActions>,
+): Promise<void> =>
+  putAll(
+    db,
+    STORES.corporateActions,
+    read.value.splits.map((split) => ({
+      symbol: split.symbol,
+      exDate: split.exDate,
+      from: split.from.toString(),
+      to: split.to.toString(),
+    })),
+  );
+
+/** Keep a strategy's memory with the advice day it was written for (spec §4.3). */
+export const putMemory = (
+  db: IDBDatabase,
+  strategy: string,
+  day: Day,
+  memory: unknown,
+): Promise<void> => putAll(db, STORES.memory, [{ strategy, day, memory }]);
+
+/** Keep one setting. */
+export const putSetting = (db: IDBDatabase, name: string, value: unknown): Promise<void> =>
+  putAll(db, STORES.settings, [{ name, value }]);

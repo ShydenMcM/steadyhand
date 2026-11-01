@@ -47,15 +47,28 @@ def test_the_integration_job_runs_the_integration_suite_alone_with_one_limit() -
     assert limited[0]["timeout-minutes"] == 3
 
 
-def test_the_extension_integration_job_installs_then_runs_its_suite_with_one_limit() -> None:
+def test_the_extension_integration_job_runs_its_two_suites_each_with_one_limit() -> None:
     steps = job("extension-integration")["steps"]
     npm = [step for step in steps if "npm " in str(step.get("run", ""))]
-    assert [step["run"] for step in npm] == ["npm ci --ignore-scripts", "npm run test:integration"]
-    assert [step.get("working-directory") for step in npm] == ["extension", "extension"]
+    assert [step["run"] for step in npm] == [
+        "npm ci --ignore-scripts",
+        "npm run test:integration",
+        "npm run test:browser",
+    ]
+    assert [step.get("working-directory") for step in npm] == ["extension"] * 3
     limited = [step for step in steps if "timeout-minutes" in step]
-    assert limited == [npm[-1]]
-    # Measured on the laptop on 2026-10-13: 3 s.
-    assert limited[0]["timeout-minutes"] == 1
+    assert limited == npm[1:]
+    # The integration suite measured on the laptop on 2026-10-13: 3 s. The browser suite runs
+    # only in CI (#231): its limit is set from its first CI run.
+    assert [step["timeout-minutes"] for step in limited] == [1, 2]
+
+
+def test_chromium_is_installed_by_the_locked_playwright_before_the_browser_suite() -> None:
+    steps = job("extension-integration")["steps"]
+    runs = [step.get("run") for step in steps]
+    install = runs.index("npx playwright install --with-deps chromium")
+    assert install < runs.index("npm run test:browser")
+    assert steps[install].get("working-directory") == "extension"
 
 
 def test_no_other_job_runs_an_integration_suite() -> None:
