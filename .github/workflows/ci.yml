@@ -454,6 +454,17 @@ jobs:
         timeout-minutes: 1
         working-directory: extension
         run: npm run test:integration
+      # The browser suite runs in Chromium itself (#231 AC6: the history store in the browser's own
+      # IndexedDB), installed at the version the locked @playwright/test names.
+      - name: Chromium for the browser suite
+        if: steps.scope.outputs.docs_only != 'true'
+        working-directory: extension
+        run: npx playwright install --with-deps chromium
+      - name: The browser suite
+        if: steps.scope.outputs.docs_only != 'true'
+        timeout-minutes: 2
+        working-directory: extension
+        run: npm run test:browser
 
   # Every Hypothesis property at its full count, drawing fresh cases each run (#290), in its own
   # suite with one limit at its step and coverage off. Unit keeps a fast stand-in of each.
