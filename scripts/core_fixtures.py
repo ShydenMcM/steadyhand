@@ -6,7 +6,9 @@ times are written as strings: core never holds a ``number``, and reads each as a
 date or a time.
 The ratio fixture holds Python's digits for seeded inputs, which core's ratios must give exactly,
 and the rules fixture holds what ``IdxMarketRules`` answers for seeded days, prices and trades,
-which core's rules must give exactly (#224).
+which core's rules must give exactly (#224). The parity fixture holds seeded portfolios, weights,
+limits and tradable sets with the orders, cuts and rejections Python's ``CompoundingSizer`` and
+``RiskManager`` give them, which core's sizing and risk must give exactly (#228, spec §14.4).
 
 Run from the repository root: ``uv run --locked python scripts/core_fixtures.py``. CI runs it again
 and fails if a committed file differs (tests/integration/scripts/test_core_fixtures.py).
@@ -19,10 +21,16 @@ from collections.abc import Callable
 from datetime import date, time, timedelta
 from decimal import ROUND_HALF_EVEN, Context, Decimal
 from pathlib import Path
+from typing import Any, TypedDict
 
 from steadyhand import IDR, Instrument, Money, Side
 from steadyhand._ratio import ratio_down
 from steadyhand.metrics import _rounded
+from steadyhand.notes import TRADE_EXCLUDED, TRADE_FROZEN, Note
+from steadyhand.risk import RiskLimits, RiskManager
+from steadyhand.sizing import CompoundingSizer
+from steadyhand.types import Order
+from steadyhand.view import PortfolioView, Tradable
 from steadyhand_idx._datafile import Row, load_shipped
 from steadyhand_idx.bands import BANDS_FILE, parse_bands
 from steadyhand_idx.calendar import HOLIDAYS_FILE, IdxCalendar, parse_holidays
@@ -35,6 +43,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RULES = Path("extension/packages/core/rules")
 RATIOS = Path("extension/packages/core/test/ratios.json")
 RULES_CASES = Path("extension/packages/core/test/rules.json")
+PARITY = Path("extension/packages/core/test/parity.json")
 
 # Each rule file and the Python readers that must accept it before it is converted.
 READERS: dict[str, tuple[Callable[[Row], object], ...]] = {
@@ -143,8 +152,159 @@ def rule_cases() -> list[dict[str, str]]:
     return cases
 
 
+PARITY_SEED = 228
+PARITY_CASES = 300
+PARITY_DAY = date(2025, 6, 2)
+PARITY_STOCKS = ("ASII", "BBCA", "BBRI", "BMRI", "TLKM", "UNVR")
+# Each limit per stock and minimum buy a case may draw: the default, tighter, looser and none.
+MAX_WEIGHTS = ("0.05", "0.10", "0.25", "1")
+FLAGS = ("frozen: suspended", "frozen: on the Special Monitoring Board")
+# How often a drawn stock is held, weighted, in the universe, frozen, and frozen or excluded.
+HELD, WEIGHTED, MEMBER, FROZEN, KEPT_OUT = 0.5, 0.7, 0.85, 0.1, 0.2
+# How often a weight is drawn to put its target on a whole-lot edge, where rounding the target
+# down rather than up decides the lots (a harness without them missed that change, 2026-11-02).
+ON_AN_EDGE = 0.3
+
+
+class ParityCases(TypedDict):
+    seed: str
+    cases: list[dict[str, Any]]
+
+
+def _order(order: Order) -> dict[str, str]:
+    return {
+        "symbol": order.instrument.symbol,
+        "side": order.side.value,
+        "quantity": str(order.quantity),
+        "day": order.placed_on.isoformat(),
+    }
+
+
+def _parity_case(draw: random.Random, rules: IdxMarketRules, name: str) -> dict[str, Any]:
+    """One seeded portfolio and what Python's sizer, then its risk manager, make of it.
+
+    Some stocks are held (a few with an odd lot over), some weighted, some both; some are out of
+    the universe, frozen or excluded; the cash runs from none, or less than none, to more than
+    every target; some weights put a target on a whole-lot edge; and the limits vary, so every
+    cut and rejection comes up across the cases.
+    The sizer only sells what is held, so a case may add orders of its own for the risk manager
+    (``extra``), a sale of a stock not held among them.
+    """
+    stocks = sorted(draw.sample(PARITY_STOCKS, draw.randint(1, len(PARITY_STOCKS))))
+    stock = {symbol: Instrument(symbol, "IDX", IDR) for symbol in stocks}
+    prices = {
+        symbol: draw.choice((draw.randrange(50, 1_000), draw.randrange(1_000, 50_000)))
+        for symbol in stocks
+    }
+    held = {
+        symbol: draw.randrange(1, 300) * 100 + draw.choice((0, 0, 0, 50))
+        for symbol in stocks
+        if draw.random() < HELD
+    }
+    raw = {symbol: draw.randrange(1_000) for symbol in stocks if draw.random() < WEIGHTED}
+    total = sum(raw.values()) or 1
+    scale = Decimal(draw.choice(("0.5", "0.9", "1")))
+    weights = {symbol: Decimal(share) / total * scale for symbol, share in raw.items()}
+    worth = {symbol: prices[symbol] * shares for symbol, shares in held.items()}
+    cash = draw.choice((0, draw.randrange(10**7), draw.randrange(10**10)))
+    value = cash + sum(worth.values())
+    for symbol in weights:
+        if value and draw.random() < ON_AN_EDGE:
+            weights[symbol] = Decimal(draw.randrange(1, 50) * prices[symbol] * 100) / value
+    spendable = draw.choice((cash, cash // 2, 0))
+    limits = {"max_weight": draw.choice(MAX_WEIGHTS), "min_lots": str(draw.randint(1, 3))}
+    members = [symbol for symbol in stocks if draw.random() < MEMBER]
+    reasons: dict[str, dict[str, str]] = {}
+    for symbol in stocks:
+        roll = draw.random()
+        if roll < FROZEN:
+            reasons[symbol] = {"code": TRADE_FROZEN, "text": draw.choice(FLAGS)}
+        elif roll < KEPT_OUT:
+            reasons[symbol] = {"code": TRADE_EXCLUDED, "text": "excluded: the user's own reason"}
+    view = PortfolioView(
+        Money(value, IDR),
+        Money(spendable, IDR),
+        {stock[symbol]: Money(amount, IDR) for symbol, amount in worth.items()},
+    )
+    tradable = Tradable(
+        PARITY_DAY,
+        frozenset(stock[symbol] for symbol in members if symbol not in reasons),
+        frozenset(stock[symbol] for symbol in held if symbol not in reasons),
+        {stock[symbol]: Note(note["code"], note["text"]) for symbol, note in reasons.items()},
+        frozenset(stock[symbol] for symbol in members),
+    )
+    money = {stock[symbol]: Money(price, IDR) for symbol, price in prices.items()}
+    shares = {stock[symbol]: amount for symbol, amount in held.items()}
+    weighted = {stock[symbol]: weight for symbol, weight in weights.items()}
+    sized = CompoundingSizer(rules).size(weighted, view, shares, money, PARITY_DAY)
+    extra = [
+        Order(
+            stock[draw.choice(stocks)],
+            draw.choice(list(Side)),
+            draw.randrange(1, 50) * 100,
+            PARITY_DAY,
+        )
+        for _ in range(draw.choice((0, 0, 1, 2)))
+    ]
+    risk = RiskManager(
+        rules, RiskLimits(Decimal(limits["max_weight"]), min_lots=int(limits["min_lots"]))
+    )
+    checked = risk.check([*sized, *extra], view, tradable, money)
+    return {
+        "name": name,
+        "day": PARITY_DAY.isoformat(),
+        "prices": {symbol: str(price) for symbol, price in prices.items()},
+        "held": {symbol: str(amount) for symbol, amount in held.items()},
+        "weights": {symbol: str(weight) for symbol, weight in weights.items()},
+        "value": str(view.value.amount),
+        "spendable": str(spendable),
+        "holdings": {symbol: str(amount) for symbol, amount in worth.items()},
+        "limits": limits,
+        "extra": [_order(order) for order in extra],
+        "members": members,
+        "reasons": reasons,
+        "expected": {
+            "sized": [_order(order) for order in sized],
+            "orders": [_order(order) for order in checked.orders],
+            "rejected": [
+                {"order": _order(r.order), "code": r.reason.key, "text": r.reason.text}
+                for r in checked.rejected
+            ],
+            "cuts": [
+                {
+                    "order": _order(c.order),
+                    "quantity": str(c.quantity),
+                    "code": c.reason.key,
+                    "text": c.reason.text,
+                }
+                for c in checked.cuts
+            ],
+        },
+    }
+
+
+def parity_cases(seed: int = PARITY_SEED, count: int = PARITY_CASES) -> ParityCases:
+    """*count* cases drawn from *seed*, each with Python's answer (spec §14.4)."""
+    if count < 1:
+        msg = f"the parity harness needs a case, got {count}"
+        raise ValueError(msg)
+    draw = random.Random(seed)  # noqa: S311 - seeded test inputs, not secrets
+    rules = IdxMarketRules()
+    return {
+        "seed": str(seed),
+        "cases": [_parity_case(draw, rules, f"case {n}") for n in range(count)],
+    }
+
+
 def text(value: object) -> str:
     return json.dumps(value, indent=2, ensure_ascii=False) + "\n"
+
+
+def one_case_a_line(document: ParityCases) -> str:
+    """The parity fixture with each case on a line of its own: 57% of the size of indented JSON
+    (measured 2026-11-02), and a changed case is one changed line."""
+    lines = ",\n".join(json.dumps(case, ensure_ascii=False) for case in document["cases"])
+    return f'{{"seed": {json.dumps(document["seed"])}, "cases": [\n{lines}\n]}}\n'
 
 
 def outputs() -> dict[Path, str]:
@@ -152,6 +312,7 @@ def outputs() -> dict[Path, str]:
     files = {path: text(document) for path, document in rule_files().items()}
     files[RATIOS] = text(ratio_cases())
     files[RULES_CASES] = text(rule_cases())
+    files[PARITY] = one_case_a_line(parity_cases())
     return files
 
 
