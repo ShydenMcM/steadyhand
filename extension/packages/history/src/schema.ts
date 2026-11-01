@@ -17,7 +17,22 @@ export const STORES = {
 
 export type StoreName = (typeof STORES)[keyof typeof STORES];
 
-export type Migration = (db: IDBDatabase) => void;
+/** A schema step, given the database and the upgrade's own transaction, which it may read and
+ * write rows through. */
+export type Migration = (db: IDBDatabase, upgrade: IDBTransaction) => void;
+
+/** Rebuild `store` under `keyPath`, each row it held given `entry` "#1": the rows were unique by
+ * the old key, so each is the first of its kind (#470). */
+const rekeyed = (db: IDBDatabase, upgrade: IDBTransaction, store: StoreName, keyPath: string[]) => {
+  const read = upgrade.objectStore(store).getAll();
+  read.onsuccess = () => {
+    db.deleteObjectStore(store);
+    const fresh = db.createObjectStore(store, { keyPath });
+    for (const row of read.result as object[]) {
+      fresh.put({ ...row, entry: "#1" });
+    }
+  };
+};
 
 /** Migration `i` takes the database to version `i + 1`. Never edit one that has shipped: add
  * the next. */
@@ -32,6 +47,19 @@ export const MIGRATIONS: readonly Migration[] = [
     db.createObjectStore(STORES.corporateActions, { keyPath: ["symbol", "exDate", "from", "to"] });
     db.createObjectStore(STORES.memory, { keyPath: "strategy" });
     db.createObjectStore(STORES.settings, { keyPath: "name" });
+  },
+  // #470: two equal deposits on one day are two rows. Each row carries an `entry`: the broker's
+  // reference where the page shows one, else its place among identical rows in the same read.
+  (db, upgrade) => {
+    rekeyed(db, upgrade, STORES.dividends, [
+      "symbol",
+      "exDate",
+      "paymentDate",
+      "grossPerShare",
+      "entry",
+    ]);
+    rekeyed(db, upgrade, STORES.cashMovements, ["day", "kind", "amount", "entry"]);
+    rekeyed(db, upgrade, STORES.corporateActions, ["symbol", "exDate", "from", "to", "entry"]);
   },
 ];
 
@@ -65,8 +93,10 @@ export const openHistory = (
     const request = factory.open(DATABASE, migrations.length);
     let refused = false;
     request.onupgradeneeded = (event) => {
+      // IndexedDB gives every upgrade its own transaction.
+      const upgrade = request.transaction as IDBTransaction;
       for (const migrate of migrations.slice(event.oldVersion)) {
-        migrate(request.result);
+        migrate(request.result, upgrade);
       }
     };
     request.onblocked = () => {

@@ -32,9 +32,16 @@ const fill = async (db: IDBDatabase): Promise<void> => {
       exDate: "2025-03-25",
       paymentDate: "2025-04-15",
       grossPerShare: "208.4",
+      entry: "#1",
     },
-    [STORES.cashMovements]: { day: "2025-06-02", kind: "deposit", amount: "5000000" },
-    [STORES.corporateActions]: { symbol: "BBCA", exDate: "2025-02-03", from: "1", to: "5" },
+    [STORES.cashMovements]: { day: "2025-06-02", kind: "deposit", amount: "5000000", entry: "#1" },
+    [STORES.corporateActions]: {
+      symbol: "BBCA",
+      exDate: "2025-02-03",
+      from: "1",
+      to: "5",
+      entry: "#1",
+    },
   };
   for (const [store, row] of Object.entries(rows)) {
     write.objectStore(store).put(row);
