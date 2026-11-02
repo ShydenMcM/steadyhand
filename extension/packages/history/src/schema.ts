@@ -13,6 +13,8 @@ export const STORES = {
   dividendReads: "dividend-reads",
   cashMovements: "cash-movements",
   corporateActions: "corporate-actions",
+  /** The period each corporate action read covered, for every stock (#480). */
+  corporateActionReads: "corporate-action-reads",
   memory: "memory",
   settings: "settings",
 } as const;
@@ -67,6 +69,11 @@ export const MIGRATIONS: readonly Migration[] = [
   // with no dividend is known to have none (spec §7.1). Dividends recorded before have no period.
   (db) => {
     db.createObjectStore(STORES.dividendReads, { keyPath: ["symbol", "from", "to"] });
+  },
+  // #480: each corporate action read records the period it covers, which lists every stock's
+  // splits, so an action found by price inside it is settled. Splits recorded before have none.
+  (db) => {
+    db.createObjectStore(STORES.corporateActionReads, { keyPath: ["from", "to"] });
   },
 ];
 

@@ -26,6 +26,10 @@ export interface MarketView {
   readonly dividends: ReadonlyMap<string, Dividends>;
   /** Every split a page has shown, to restate dividends in today's shares (spec §6.6). */
   readonly splits: readonly Split[];
+  /** Each stock's last corporate action found by price with no known ratio, by symbol: the day of
+   * the first close after it (spec §6.4, `lastUnknownAction`). A dividend figure crossing it is
+   * missing (§6.6). A stock with none is absent. */
+  readonly unknownActions: ReadonlyMap<string, Day>;
 }
 
 /** A strategy's answer for one advice day: advice's `Decision`, what to remember until the next

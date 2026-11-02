@@ -11,11 +11,12 @@ test("the database is the extension's own, at the newest version its migrations 
 
 test("a new database has one store per kind, each keyed by its own fields", async () => {
   const db = await openHistory(new IDBFactory());
-  expect(db.version).toBe(3);
+  expect(db.version).toBe(4);
   expect([...db.objectStoreNames].sort()).toEqual([
     "cash-movements",
     "chart-series",
     "closes",
+    "corporate-action-reads",
     "corporate-actions",
     "dividend-reads",
     "dividends",
@@ -31,6 +32,7 @@ test("a new database has one store per kind, each keyed by its own fields", asyn
     "cash-movements": ["day", "kind", "amount", "entry"],
     "chart-series": ["symbol", "readAt"],
     closes: ["symbol", "day"],
+    "corporate-action-reads": ["from", "to"],
     "corporate-actions": ["symbol", "exDate", "from", "to", "entry"],
     "dividend-reads": ["symbol", "from", "to"],
     dividends: ["symbol", "exDate", "paymentDate", "grossPerShare", "entry"],
@@ -82,7 +84,7 @@ test("a database a newer release wrote is refused by name, not read", async () =
   const newer = await requested(factory.open(DATABASE, VERSION + 1));
   newer.close();
   await expect(openHistory(factory)).rejects.toThrow(
-    new Error("steadyhand-history is at a newer version than this release reads (3)"),
+    new Error("steadyhand-history is at a newer version than this release reads (4)"),
   );
 });
 
@@ -175,5 +177,27 @@ test("a version 2 database keeps its dividends and starts with no dividend perio
   const read = upgraded.transaction([STORES.dividends, STORES.dividendReads], "readonly");
   expect(await requested(read.objectStore(STORES.dividends).getAll())).toEqual([dividend]);
   expect(await requested(read.objectStore(STORES.dividendReads).getAll())).toEqual([]);
+  upgraded.close();
+});
+
+// #480: splits recorded before reads kept their period have no known period, so an action found
+// by price stays unknown until the corporate action page is read again.
+test("a version 3 database keeps its splits and starts with no corporate action period read", async () => {
+  const factory = new IDBFactory();
+  const old = await openHistory(factory, MIGRATIONS.slice(0, 3));
+  const write = old.transaction(STORES.corporateActions, "readwrite");
+  const split = { symbol: "BBCA", exDate: "2025-02-03", from: "1", to: "5", entry: "#1" };
+  write.objectStore(STORES.corporateActions).put(split);
+  await new Promise<void>((resolve) => {
+    write.oncomplete = () => {
+      resolve();
+    };
+  });
+  old.close();
+  const upgraded = await openHistory(factory);
+  const stores = [STORES.corporateActions, STORES.corporateActionReads];
+  const read = upgraded.transaction(stores, "readonly");
+  expect(await requested(read.objectStore(STORES.corporateActions).getAll())).toEqual([split]);
+  expect(await requested(read.objectStore(STORES.corporateActionReads).getAll())).toEqual([]);
   upgraded.close();
 });

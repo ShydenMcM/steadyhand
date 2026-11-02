@@ -91,6 +91,7 @@ const answer = (parity: Case) => {
       members: new Set(parity.members),
     },
     closes: new Map(Object.entries(parity.closes).map(([symbol, price]) => [symbol, rp(price)])),
+    unknownActions: new Map(),
     dividends: readsOf(parity),
     splits: parity.splits.map((split) => ({
       symbol: split.symbol,
