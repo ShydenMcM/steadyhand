@@ -108,9 +108,19 @@ export interface CashMovement {
   readonly reference?: string;
 }
 
+/** The totals a cash-movement page shows for its period, as the broker states them. */
+export interface CashTotals {
+  readonly deposits: Money;
+  readonly withdrawals: Money;
+}
+
+/** A cash-movement page's rows and the totals it shows for them. Every reader gives the totals:
+ * a read counts only when its rows add up to them (`totalsMismatch`, #474, #477), so a page cut
+ * short never passes as the whole period. */
 export interface CashMovements {
   readonly covered: Covered;
   readonly movements: readonly CashMovement[];
+  readonly totals: CashTotals;
 }
 
 /** A split: every `from` shares held before `exDate` become `to` shares (a reverse split has

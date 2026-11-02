@@ -233,6 +233,7 @@ const movements: Part<CashMovements> = {
       { day: "2025-06-02", kind: "deposit", amount: rp(5_000_000n) },
       { day: "2025-06-10", kind: "withdrawal", amount: rp(250_000n) },
     ],
+    totals: { deposits: rp(5_000_000n), withdrawals: rp(250_000n) },
   },
 };
 
@@ -246,9 +247,13 @@ test("cash movements are recorded once each: reading the page twice changes noth
 });
 
 const deposit = { day: "2025-06-02", kind: "deposit" as const, amount: rp(1_000_000n) };
+const twoDeposits = { deposits: rp(2_000_000n), withdrawals: rp(0n) };
 
 test("two equal deposits on one day are both kept, and a second read adds neither (#470)", async () => {
-  const read = { ...movements, value: { ...movements.value, movements: [deposit, deposit] } };
+  const read = {
+    ...movements,
+    value: { ...movements.value, movements: [deposit, deposit], totals: twoDeposits },
+  };
   await recordCashMovements(db, read);
   await recordCashMovements(db, read);
   expect(await rowsOf(db, STORES.cashMovements)).toEqual([
@@ -266,6 +271,7 @@ test("a movement the broker numbers is keyed by its number (#470)", async () => 
         { ...deposit, reference: "TX-0042" },
         { ...deposit, reference: "TX-0043" },
       ],
+      totals: twoDeposits,
     },
   };
   await recordCashMovements(db, read);
@@ -288,6 +294,17 @@ test("a movement the broker numbers is keyed by its number (#470)", async () => 
       entry: "ref TX-0043",
     },
   ]);
+});
+
+test("a cash read whose rows fall short of its totals is refused and nothing is written (#477)", async () => {
+  const cut = {
+    ...movements,
+    value: { ...movements.value, movements: [deposit], totals: twoDeposits },
+  };
+  await expect(recordCashMovements(db, cut)).rejects.toThrow(
+    "refusing a cash-movement read: deposits: the page shows 2000000, its rows add up to 1000000",
+  );
+  expect(await rowsOf(db, STORES.cashMovements)).toEqual([]);
 });
 
 const actions: Part<CorporateActions> = {
