@@ -9,6 +9,7 @@ import type { Decision } from "./advice.ts";
 import type { Money } from "./money.ts";
 import { missingPage, type Note } from "./notes.ts";
 import { ratioDown, RuleDecimal } from "./ratio.ts";
+import type { StockSeries } from "./series.ts";
 import type { PortfolioView } from "./sizing.ts";
 import type { Tradable } from "./tradable.ts";
 
@@ -30,6 +31,9 @@ export interface MarketView {
    * the first close after it (spec §6.4, `lastUnknownAction`). A dividend figure crossing it is
    * missing (§6.6). A stock with none is absent. */
   readonly unknownActions: ReadonlyMap<string, Day>;
+  /** Each stock's price series in today's shares (spec §6.3), by symbol, for the strategies that
+   * judge total return (§6.5). A stock with no chart and no recorded closes is absent. */
+  readonly series: ReadonlyMap<string, StockSeries>;
 }
 
 /** A strategy's answer for one advice day: advice's `Decision`, what to remember until the next

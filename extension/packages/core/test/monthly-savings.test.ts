@@ -29,6 +29,7 @@ const view = (day: string, buyable: readonly string[]): MarketView => ({
   dividends: new Map(),
   splits: [],
   unknownActions: new Map(),
+  series: new Map(),
 });
 
 const portfolioOf = (

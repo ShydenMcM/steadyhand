@@ -27,6 +27,7 @@ const view = (buyable: readonly string[], sellable: readonly string[] = []): Mar
   dividends: new Map(),
   splits: [],
   unknownActions: new Map(),
+  series: new Map(),
 });
 
 const portfolioOf = (

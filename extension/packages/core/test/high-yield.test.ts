@@ -90,6 +90,7 @@ const view = (
     dividends: reads,
     splits: options.splits ?? [],
     unknownActions: new Map(Object.entries(options.actions ?? {})),
+    series: new Map(),
   };
 };
 

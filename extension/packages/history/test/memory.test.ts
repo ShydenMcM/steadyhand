@@ -60,6 +60,7 @@ test("the advice for a day is the same however often it is asked for", async () 
     dividends: new Map(),
     splits: [],
     unknownActions: new Map(),
+    series: new Map(),
   };
   const portfolio = {
     value: new Money(1_000_000n, IDR),
