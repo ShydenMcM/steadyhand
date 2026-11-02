@@ -72,6 +72,24 @@ const dayWithin = (range: PartValues["dividends"]["covered"], raw: string, where
   return on;
 };
 
+/** Refuse `movements` unless those of `kind` add up to the total the page shows for them: a page
+ * cut short (one of two equal deposits shown) must never be recorded as the whole period (#474). */
+const addsUp = (
+  movements: readonly CashMovement[],
+  kind: CashMovement["kind"],
+  shown: string,
+  label: string,
+): void => {
+  const where = field("jumlah", label);
+  const total = rupiah(shown, where).amount;
+  const sum = movements
+    .filter((movement) => movement.kind === kind)
+    .reduce((running, movement) => running + movement.amount.amount, 0n);
+  if (sum !== total) {
+    throw new Refusal(`${where}: the page shows ${shown}, its rows add up to ${sum.toString()}`);
+  }
+};
+
 /** Whether each kind of split the page names leaves fewer shares. */
 const REVERSE: Readonly<Record<string, boolean>> = {
   "Stock Split": false,
@@ -135,6 +153,7 @@ const READ: { readonly [K in PageKind]: (html: string) => PartValues[K] } = {
   },
   "cash-movements": (html) => {
     const range = period(html);
+    const totals = orRefuse(fieldsTable(html, "jumlah", ["Total Setor", "Total Tarik"])).fields;
     const table = "mutasi";
     const { rows } = orRefuse(columnsTable(html, table, ["Tanggal", "Jenis", "Jumlah"]));
     const kinds: Readonly<Record<string, CashMovement["kind"]>> = {
@@ -154,6 +173,8 @@ const READ: { readonly [K in PageKind]: (html: string) => PartValues[K] } = {
         amount: amount(row.Jumlah, at(table, index, "Jumlah")),
       };
     });
+    addsUp(movements, "deposit", totals["Total Setor"], "Total Setor");
+    addsUp(movements, "withdrawal", totals["Total Tarik"], "Total Tarik");
     return { covered: range, movements };
   },
   "corporate-actions": (html) => {

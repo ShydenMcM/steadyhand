@@ -129,15 +129,21 @@ test("a page naming no kind is refused", () => {
 
 /** The `kind` page with `from` replaced by `to`, exactly once. White space between tags in the
  * saved page is ignored, as the pages are formatted with one element to a line. */
-const changed = (kind: PageKind, from: string, to: string): Snapshot => {
-  const text = page(kind);
+const changed = (kind: PageKind, from: string, to: string): Snapshot =>
+  html(replacedOnce(page(kind), from, to));
+
+/** The `kind` page with each `[from, to]` of `edits` made in turn, each exactly once. */
+const edited = (kind: PageKind, edits: readonly (readonly [string, string])[]): Snapshot =>
+  html(edits.reduce((text, [from, to]) => replacedOnce(text, from, to), page(kind)));
+
+function replacedOnce(text: string, from: string, to: string): string {
   const pattern = new RegExp(
     from.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&").replaceAll("><", ">\\s*<"),
     "gu",
   );
   expect(text.match(pattern)).toHaveLength(1);
-  return html(text.replace(pattern, to));
-};
+  return text.replace(pattern, to);
+}
 
 // Each way a page can change, refused by name (#226 AC2).
 test.each([
@@ -235,8 +241,8 @@ test.each([
   ],
   [
     "cash-movements",
-    "<td>750.000</td>",
-    "<td>-750.000</td>",
+    "<td>Tarik</td><td>750.000</td>",
+    "<td>Tarik</td><td>-750.000</td>",
     'table "mutasi" row 2 "Jumlah": "-750.000" is not a positive amount',
   ],
   [
@@ -361,6 +367,72 @@ test.each([
   const original = /\d{2}\/\d{2}\/\d{4}/u.exec(cells)?.[0] ?? "";
   const snapshot = changed(kind, cells, cells.replace(original, edge));
   expect(FIXTURE_READERS[kind](snapshot, READ_AT)).toHaveProperty("part");
+});
+
+// #474: a cash page counts only when its rows add up to the totals the broker shows for its
+// period, so a page cut short (one of two equal deposits shown) is refused, never recorded short.
+const DEPOSIT_ROW = "<td>05/10/2026</td><td>Setor</td><td>5.000.000</td>";
+const DEPOSIT_TOTAL = "<th>Total Setor</th><td>5.000.000</td>";
+const WITHDRAWAL_TOTAL = "<th>Total Tarik</th><td>750.000</td>";
+const twoEqualDeposits = [
+  [DEPOSIT_ROW, `${DEPOSIT_ROW}</tr><tr>${DEPOSIT_ROW}`],
+  [DEPOSIT_TOTAL, "<th>Total Setor</th><td>10.000.000</td>"],
+] as const;
+
+test("two equal deposits on one day, both shown and in the totals, are two movements", () => {
+  const read = FIXTURE_READERS["cash-movements"](
+    edited("cash-movements", twoEqualDeposits),
+    READ_AT,
+  );
+  const deposit = { day: "2026-10-05", kind: "deposit", amount: rp(5_000_000n) };
+  expect(read).toHaveProperty("part.value.movements", [
+    deposit,
+    deposit,
+    { day: "2026-10-20", kind: "withdrawal", amount: rp(750_000n) },
+  ]);
+});
+
+test("a page cut short to one of two equal deposits is refused", () => {
+  const cut = edited("cash-movements", [twoEqualDeposits[1]]);
+  expect(FIXTURE_READERS["cash-movements"](cut, READ_AT)).toEqual({
+    refused: 'table "jumlah" "Total Setor": the page shows 10.000.000, its rows add up to 5000000',
+  });
+});
+
+test.each([
+  [DEPOSIT_TOTAL, "<th>Total Setor</th><td>5.000.001</td>", "Total Setor", "5.000.001", "5000000"],
+  [DEPOSIT_TOTAL, "<th>Total Setor</th><td>4.999.999</td>", "Total Setor", "4.999.999", "5000000"],
+  [WITHDRAWAL_TOTAL, "<th>Total Tarik</th><td>750.001</td>", "Total Tarik", "750.001", "750000"],
+  [WITHDRAWAL_TOTAL, "<th>Total Tarik</th><td>749.999</td>", "Total Tarik", "749.999", "750000"],
+] as const)(
+  "a cash page whose rows miss %j by one rupiah (%j) is refused",
+  (from, to, label, shown, sum) => {
+    expect(FIXTURE_READERS["cash-movements"](changed("cash-movements", from, to), READ_AT)).toEqual(
+      {
+        refused: `table "jumlah" ${JSON.stringify(label)}: the page shows ${shown}, its rows add up to ${sum}`,
+      },
+    );
+  },
+);
+
+test("a cash page that shows no totals is refused", () => {
+  const bare = changed("cash-movements", '<table id="jumlah">', '<table id="lain">');
+  expect(FIXTURE_READERS["cash-movements"](bare, READ_AT)).toEqual({
+    refused: 'no table "jumlah"',
+  });
+});
+
+test("a cash page with no movements and totals of nothing is read as none", () => {
+  const none = edited("cash-movements", [
+    [`<tr>${DEPOSIT_ROW}</tr>`, ""],
+    ["<tr><td>20/10/2026</td><td>Tarik</td><td>750.000</td></tr>", ""],
+    [DEPOSIT_TOTAL, "<th>Total Setor</th><td>0</td>"],
+    [WITHDRAWAL_TOTAL, "<th>Total Tarik</th><td>0</td>"],
+  ]);
+  expect(FIXTURE_READERS["cash-movements"](none, READ_AT)).toHaveProperty(
+    "part.value.movements",
+    [],
+  );
 });
 
 test("a holding listed twice is refused", () => {
