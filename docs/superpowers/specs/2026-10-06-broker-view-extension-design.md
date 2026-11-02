@@ -147,7 +147,7 @@ Self-recorded closes are not adjusted (the #203 lesson). For each pair of self-r
 ma-trend and momentum-rotation judge a total-return series: the stock's series (§6.3) with every cash dividend in the window, restated in the series' share basis (§6.6), reinvested on its ex-date, the standard factor `1 - dividend / close the trading day before the ex-date` applied to every earlier close. A chart already adjusted for dividends is not adjusted again (§5.2). A stock whose dividends for the window have not been read, or whose series crosses a corporate action without a known ratio, is listed as missing for that strategy.
 
 ### 6.6 Dividends restated in today's shares
-high-yield, dividend-growth and the income figures read dividends per share in today's shares, restated by every split since (as Python's `_restated_gross` does). Splits come from a broker page that shows them (§5.1). A stock with a corporate action found by price (§6.4) and no known ratio is listed as missing for any figure that crosses it.
+high-yield, dividend-growth and the income figures read dividends per share in today's shares, restated by every split since (as Python's `_restated_gross` does). Splits come from a broker page that shows them (§5.1). A stock with a corporate action found by price (§6.4) and no known ratio is listed as missing for any figure that crosses it. A corporate action read whose period covers the closes either side of such an action settles it whatever the page shows: the page lists every stock's splits, so none there means no share change (#480). Each corporate action read records the period it covers. The stock's price series still needs its chart (§6.4).
 
 ## 7. The six strategies
 

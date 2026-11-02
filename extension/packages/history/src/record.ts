@@ -175,25 +175,28 @@ export const recordCashMovements = (db: IDBDatabase, read: Part<CashMovements>):
   );
 };
 
-/** Record each split a page lists, once: keyed by its own fields and its entry. */
+/** Record each split a page lists, once: keyed by its own fields and its entry, and the period
+ * the read covers, in the same transaction (#480). */
 export const recordCorporateActions = (
   db: IDBDatabase,
   read: Part<CorporateActions>,
 ): Promise<void> =>
-  putAll(
-    db,
-    STORES.corporateActions,
-    entered(
-      read.value.splits.map((split) => ({
-        symbol: split.symbol,
-        exDate: split.exDate,
-        from: split.from.toString(),
-        to: split.to.toString(),
-        ...(split.reference === undefined ? {} : { reference: split.reference }),
-      })),
-      (row) => ("reference" in row ? row.reference : undefined),
-    ),
-  );
+  putEach(db, [
+    [STORES.corporateActionReads, [read.value.covered]],
+    [
+      STORES.corporateActions,
+      entered(
+        read.value.splits.map((split) => ({
+          symbol: split.symbol,
+          exDate: split.exDate,
+          from: split.from.toString(),
+          to: split.to.toString(),
+          ...(split.reference === undefined ? {} : { reference: split.reference }),
+        })),
+        (row) => ("reference" in row ? row.reference : undefined),
+      ),
+    ],
+  ]);
 
 /** Keep `strategy`'s memory with the advice day it was written for (spec §4.3, #229 AC1). */
 export const remember = (db: IDBDatabase, strategy: string, stored: StoredMemory): Promise<void> =>

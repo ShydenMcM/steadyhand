@@ -679,8 +679,23 @@ test("judged: a known split on the action's day settles it", () => {
   const split: Split = { symbol: "BBCA", exDate: "2023-06-19", from: 1n, to: 3n };
   const rules = new IdxMarketRules();
   const calendar = IdxCalendar.shipped();
-  expect(lastUnknownAction("BBCA", recorded, [], rules, calendar)).toBe("2023-06-19");
-  const found = lastUnknownAction("BBCA", recorded, [split], rules, calendar);
+  expect(lastUnknownAction("BBCA", recorded, [], [], rules, calendar)).toBe("2023-06-19");
+  const found = lastUnknownAction("BBCA", recorded, [split], [], rules, calendar);
+  expect(found).toBeUndefined();
+  const decision = acted(found === undefined ? {} : { BBCA: found });
+  expect(decision.missing).toEqual([]);
+  expect(weighed(decision.weights)).toEqual({ BBCA: "0.5", BBRI: "0.5" });
+});
+
+test("judged: a corporate action read covering a false alarm settles it (#480 AC5)", () => {
+  // 9,000 to 3,000 is beyond any band, but the corporate action page read for June 2023 lists no
+  // split of BBCA, so its shares did not change and its dividends need no restating.
+  const at = (day: Day, amount: bigint): DailyClose => ({ day, close: rp(amount) });
+  const recorded = [at("2023-06-16", 9_000n), at("2023-06-19", 3_000n)];
+  const read = { from: "2023-06-01", to: "2023-06-30" };
+  const rules = new IdxMarketRules();
+  const calendar = IdxCalendar.shipped();
+  const found = lastUnknownAction("BBCA", recorded, [], [read], rules, calendar);
   expect(found).toBeUndefined();
   const decision = acted(found === undefined ? {} : { BBCA: found });
   expect(decision.missing).toEqual([]);

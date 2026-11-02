@@ -353,6 +353,34 @@ test("corporate actions are recorded once each: reading the page twice changes n
   ]);
 });
 
+// #480: the page lists every stock's splits, so the period a read covers settles an action found
+// by price inside it, split or none.
+test("a corporate action read records its period once, however often the page is read", async () => {
+  await recordCorporateActions(db, actions);
+  await recordCorporateActions(db, { ...actions, readAt: wib("2025-06-18T19:00:00") });
+  expect(await rowsOf(db, STORES.corporateActionReads)).toEqual([
+    { from: "2025-01-01", to: "2025-06-17" },
+  ]);
+});
+
+test("a corporate action read listing no split still records the period it covers", async () => {
+  await recordCorporateActions(db, { ...actions, value: { ...actions.value, splits: [] } });
+  expect(await rowsOf(db, STORES.corporateActions)).toEqual([]);
+  expect(await rowsOf(db, STORES.corporateActionReads)).toEqual([
+    { from: "2025-01-01", to: "2025-06-17" },
+  ]);
+});
+
+test("corporate action reads of two periods are two periods", async () => {
+  await recordCorporateActions(db, actions);
+  const earlier = { from: "2019-01-01", to: "2024-12-31" };
+  await recordCorporateActions(db, { ...actions, value: { ...actions.value, covered: earlier } });
+  expect(await rowsOf(db, STORES.corporateActionReads)).toEqual([
+    earlier,
+    { from: "2025-01-01", to: "2025-06-17" },
+  ]);
+});
+
 test("a split the broker numbers is keyed by its number, and an identical one apart (#470)", async () => {
   const split = { symbol: "BBCA", exDate: "2025-02-03", from: 1n, to: 5n };
   const read = {

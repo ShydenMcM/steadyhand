@@ -11,7 +11,7 @@
 
 import type Decimal from "decimal.js";
 import { actionBetween } from "./actions.ts";
-import type { DailyClose, Day, Split, StockDetail } from "./broker-view.ts";
+import type { Covered, DailyClose, Day, Split, StockDetail } from "./broker-view.ts";
 import type { IdxCalendar } from "./calendar.ts";
 import { Money } from "./money.ts";
 import { missingPage, type Note } from "./notes.ts";
@@ -118,15 +118,36 @@ const sinceLastAction = (
 };
 
 /** The day of the last corporate action found by price (spec §6.4) in `symbol`'s self-recorded
- * closes that no known split explains, dated by the first close after it, or `undefined`. A
- * dividend figure crossing it cannot be restated in today's shares (§6.6). */
+ * closes that neither a known split explains nor a corporate action read settles, dated by the
+ * first close after it, or `undefined`. A read whose period covers the closes either side of the
+ * action settles it whatever it shows: the page lists every stock's splits, so none there means
+ * no share change (#480 AC5). A dividend figure crossing an unsettled one cannot be restated in
+ * today's shares (§6.6). */
 export const lastUnknownAction = (
   symbol: string,
   recorded: readonly DailyClose[],
   splits: readonly Split[],
+  actionReads: readonly Covered[],
   rules: IdxMarketRules,
   calendar: IdxCalendar,
-): Day | undefined => sinceLastAction(symbol, recorded, splits, rules, calendar).found;
+): Day | undefined => {
+  let found: Day | undefined;
+  let previous: DailyClose | undefined;
+  for (const daily of recorded) {
+    if (
+      previous !== undefined &&
+      actionBetween(symbol, acrossSplits(previous, daily, splits), daily, rules, calendar)
+    ) {
+      const before = previous.day;
+      const settled = actionReads.some((read) => read.from <= before && daily.day <= read.to);
+      if (!settled) {
+        found = daily.day;
+      }
+    }
+    previous = daily;
+  }
+  return found;
+};
 
 export const stockSeries = (
   inputs: SeriesInputs,
