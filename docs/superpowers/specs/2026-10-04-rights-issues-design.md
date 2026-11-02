@@ -8,7 +8,7 @@
 On a rights issue's ex-date, the engine judges the day's close, and fills at that day's open, against the band around the **theoretical ex-rights price** the exchange uses, not the previous close. Rights issues come from a file the operator supplies, beside the LQ45 members file. A held stock with a rights issue is frozen and flagged with a new note. Without the file, nothing changes.
 
 ### 1.1 Out of scope
-- **Bonus shares** (BRPT 2022-12-20, SIDO 2021-09-28): a split-class action that Yahoo reports correctly and our split reader refuses. Ticket #207 (decision 1).
+- **Bonus shares** (BRPT 2022-12-20, SIDO 2021-09-28): a split-class action that Yahoo reports correctly and the split reader refuses. Ticket #207 (decision 1).
 - **Modelling the rights themselves**: exercising, selling or valuing the rights a holder receives. The core spec freezes the stock instead (§5 step 2), and this spec keeps that.
 - **Total-return price adjustment for rights issues** (M7's `adjusted_closes` covers splits and dividends). A strategy that reads a price series across a rights ex-date sees the drop. M7's spec decides whether it needs more.
 - **Finding rights issues automatically.** Yahoo carries ARTO's issue only as an unreported price factor and TPIA's not at all (#203), so its data cannot find every issue.

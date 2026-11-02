@@ -5225,7 +5225,7 @@ def download_history(ticker: str, start: date, end: date) -> YahooHistory:  # pr
             actions=True,
         )
         splits = handle.splits
-    except Exception as error:  # a network library's failures are not ours to enumerate
+    except Exception as error:  # a network library's failures are not this code's to enumerate
         msg = f"{ticker}: the request to Yahoo failed: {error}"
         raise DataUnavailableError(msg) from error
     return history_from_frames(ticker, frame, splits)
@@ -6509,7 +6509,7 @@ def test_bad_exclusions_are_refused(tmp_path: Path, text: str, message: str) -> 
 
 Both files are supplied by the user, and steadyhand ships neither. IDX's Terms of Use bar
 redistributing its data for commercial use without written permission, and Apache-2.0 would pass
-on rights we do not hold (docs/research/t-lq45.md §5). docs/lq45-members.md tells a user where IDX
+on rights it does not hold (docs/research/t-lq45.md §5). docs/lq45-members.md tells a user where IDX
 publishes each list; nothing here downloads anything.
 """
 
@@ -6643,7 +6643,7 @@ Expected: `16 failed, 4 errors`. The four errors are tests whose `membership` fi
 
 Both files are supplied by the user, and steadyhand ships neither. IDX's Terms of Use bar
 redistributing its data for commercial use without written permission, and Apache-2.0 would pass
-on rights we do not hold (docs/research/t-lq45.md §5). docs/lq45-members.md tells a user where IDX
+on rights it does not hold (docs/research/t-lq45.md §5). docs/lq45-members.md tells a user where IDX
 publishes each list; nothing here downloads anything.
 """
 

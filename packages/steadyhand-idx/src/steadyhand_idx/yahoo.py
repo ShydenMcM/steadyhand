@@ -614,6 +614,6 @@ def download_history(
             actions=True,
         )
         splits = handle.splits
-    except Exception as error:  # a network library's failures are not ours to enumerate
+    except Exception as error:  # a network library's failures are not this code's to enumerate
         raise failure_of(ticker, error) from error
     return history_from_frames(ticker, frame, splits)
