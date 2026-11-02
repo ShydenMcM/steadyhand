@@ -22,15 +22,13 @@
  * action page is listed until a split read settles it. */
 
 import type Decimal from "decimal.js";
-import type { Day, Dividends } from "./broker-view.ts";
 import { missingPage, note, NOTE_CODES, type Note } from "./notes.ts";
 import { ratioDown, RuleDecimal } from "./ratio.ts";
-import { restatedPerShare } from "./restated.ts";
+import { paidBy, trailingYield, type PaidDividend } from "./restated.ts";
 import type { PortfolioView } from "./sizing.ts";
 import {
-  plus,
+  keepAndTopUp,
   readSet,
-  weightOf,
   writeSet,
   type MarketView,
   type Memory,
@@ -62,14 +60,7 @@ export interface DividendGrowth extends Strategy {
 /** A stock a review judges, with its dividends read. */
 interface Judged {
   readonly symbol: string;
-  readonly paid: readonly Paid[];
-}
-
-/** A dividend as the strategy reads it: per share in today's shares. */
-interface Paid {
-  readonly exDate: Day;
-  readonly paymentDate: Day;
-  readonly perShare: Decimal;
+  readonly paid: readonly PaidDividend[];
 }
 
 const larger = (first: bigint, second: bigint): bigint => (first > second ? first : second);
@@ -78,37 +69,6 @@ const atLeastOne = (value: bigint, setting: string): void => {
   if (value < 1n) {
     throw new RangeError(`${setting} must be at least 1, got ${value.toString()}`);
   }
-};
-
-/** The start of the trailing yield's window, which breaks a tie: 365 calendar days before
- * `day`, so the dividends of the last 365 days count. */
-const trailingStart = (day: Day): Day => {
-  const moved = new Date(`${day}T00:00:00Z`);
-  moved.setUTCDate(moved.getUTCDate() - 365);
-  return moved.toISOString().slice(0, 10);
-};
-
-/** The dividends `read` lists with an ex-date by `day`, restated in `day`'s shares. A dividend
- * announced for later has not been paid yet. */
-const paidBy = (view: MarketView, read: Dividends): Paid[] =>
-  read.dividends
-    .filter((dividend) => dividend.exDate <= view.day)
-    .map((dividend) => ({
-      exDate: dividend.exDate,
-      paymentDate: dividend.paymentDate,
-      perShare: restatedPerShare(dividend, view.splits, view.day),
-    }));
-
-/** The stock's dividends of the last 365 days over its close, or 0 with no close to divide by. */
-const trailingYield = (view: MarketView, symbol: string, paid: readonly Paid[]): Decimal => {
-  const since = trailingStart(view.day);
-  const total = paid
-    .filter((dividend) => dividend.exDate > since)
-    .reduce((sum, dividend) => sum.plus(dividend.perShare), new RuleDecimal(0));
-  const lastClose = view.closes.get(symbol);
-  return lastClose === undefined || lastClose.amount === 0n
-    ? new RuleDecimal(0)
-    : total.div(lastClose.amount.toString());
 };
 
 const tooFew = (count: bigint): string => {
@@ -135,7 +95,7 @@ export const dividendGrowth = (
 
   /** Whether `paid` passes the dividend test in `year`: a dividend in every year of the
    * look-back, and the last year's total at least the first's. */
-  const passes = (paid: readonly Paid[], year: bigint): boolean => {
+  const passes = (paid: readonly PaidDividend[], year: bigint): boolean => {
     const totalIn = (paidIn: bigint): Decimal =>
       paid
         .filter((dividend) => dividend.exDate.startsWith(paidIn.toString()))
@@ -164,7 +124,7 @@ export const dividendGrowth = (
             .map((dividend) => dividend.paymentDate.slice(5, 7)),
         ),
       ],
-      trailing: trailingYield(view, judged.symbol, judged.paid),
+      trailing: trailingYield(judged.paid, view.day, view.closes.get(judged.symbol)),
     }));
     const crowding = new Map<string, bigint>();
     const crowded = (month: string): bigint => crowding.get(month) ?? 0n;
@@ -212,7 +172,7 @@ export const dividendGrowth = (
         missing.push(missingPage("corporate-actions", symbol));
       }
       if (!unread && !crossed) {
-        judged.push({ symbol, paid: paidBy(view, read) });
+        judged.push({ symbol, paid: paidBy(read, view.splits, view.day) });
       }
     }
     if (missing.length > 0) {
@@ -257,25 +217,7 @@ export const dividendGrowth = (
     }
     const chosen = readSet(set, NAME);
     const target = ratioDown(1n, larger(minStocks, BigInt(chosen.length)));
-    const weights = new Map<string, Decimal>();
-    const reasons = new Map<string, string>();
-    for (const symbol of portfolio.holdings.keys()) {
-      weights.set(symbol, weightOf(portfolio, symbol));
-      reasons.set(symbol, `${NAME}: held until the next review`);
-    }
-    const buying = chosen.filter((symbol) => view.tradable.buyable.has(symbol));
-    if (buying.length > 0) {
-      const each = ratioDown(
-        portfolio.spendable.amount / BigInt(buying.length),
-        portfolio.value.amount,
-      );
-      for (const symbol of buying) {
-        const held = weights.get(symbol) ?? new RuleDecimal(0);
-        const room = RuleDecimal.max(new RuleDecimal(target).minus(held), 0);
-        weights.set(symbol, plus(held, RuleDecimal.min(each, room)));
-        reasons.set(symbol, `${NAME}: picked at the last review, topped up to its share`);
-      }
-    }
+    const { weights, reasons } = keepAndTopUp(NAME, view, portfolio, chosen, target);
     return { weights, reasons, missing: [], memory, notes: [] };
   };
 
