@@ -1,9 +1,9 @@
 import { expect, test } from "vitest";
-import type { DailyClose, Split } from "../src/broker-view.ts";
+import type { DailyClose, Day, Split, StockDetail } from "../src/broker-view.ts";
 import { IdxCalendar } from "../src/calendar.ts";
 import { IDR, Money } from "../src/money.ts";
 import { IdxMarketRules } from "../src/rules.ts";
-import { stockSeries, type ChartRead, type SeriesInputs } from "../src/series.ts";
+import { chartReach, stockSeries, type ChartRead, type SeriesInputs } from "../src/series.ts";
 
 // A stock's series (spec §6.3, #232 AC1), in today's shares; actions found by price drop what
 // came before (§6.4, AC2). The week of 16 June 2025 has no holiday.
@@ -164,4 +164,32 @@ test("an empty chart is no chart", () => {
   expect(series({ chart: chart([]), recorded: [at("2025-06-17", 9_000n)] }).closes).toEqual([
     "2025-06-17 9000",
   ]);
+});
+
+// #230 AC2, spec §7.1: a chart window is missing when no chart reaching its start was read, and
+// ineligible when the chart reaches it but the stock had not started trading by then.
+const reached = (from: Day, firstClose: Day | null): StockDetail => ({
+  symbol: "BBCA",
+  covered: { from, to: "2025-06-30" },
+  closes: firstClose === null ? [] : [{ day: firstClose, close: new Money(9_000n, IDR) }],
+});
+
+test("missing: no chart read for the window", () => {
+  expect(chartReach(undefined, "2025-01-02")).toBe("missing");
+});
+
+test("missing: a chart whose range starts after the window's start", () => {
+  expect(chartReach(reached("2025-01-03", "2025-01-03"), "2025-01-02")).toBe("missing");
+});
+
+test("ineligible: a chart whose range starts before the window but whose first close is after it", () => {
+  expect(chartReach(reached("2024-12-02", "2025-01-03"), "2025-01-02")).toBe("ineligible");
+});
+
+test("ineligible: a chart reaching the window's start with no close at all", () => {
+  expect(chartReach(reached("2024-12-02", null), "2025-01-02")).toBe("ineligible");
+});
+
+test("a chart whose range and first close are on the window's start covers it", () => {
+  expect(chartReach(reached("2025-01-02", "2025-01-02"), "2025-01-02")).toBe("covers");
 });

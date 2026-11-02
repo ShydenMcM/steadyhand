@@ -11,7 +11,7 @@
 
 import type Decimal from "decimal.js";
 import { actionBetween } from "./actions.ts";
-import type { DailyClose, Day, Split } from "./broker-view.ts";
+import type { DailyClose, Day, Split, StockDetail } from "./broker-view.ts";
 import type { IdxCalendar } from "./calendar.ts";
 import { Money } from "./money.ts";
 import { missingPage, type Note } from "./notes.ts";
@@ -160,4 +160,19 @@ export const stockSeries = (
     dividendsAdjustedTo,
     missing: [],
   };
+};
+
+/** How far a chart read reaches back towards `start`, a window's first day (spec §7.1, M7
+ * decision 4): `missing` when no chart was read or its range starts after `start`, so the facts
+ * are unread; `ineligible` when its range reaches `start` but its first close comes after it,
+ * so the stock was not trading then; else `covers`. */
+export const chartReach = (
+  detail: StockDetail | undefined,
+  start: Day,
+): "missing" | "ineligible" | "covers" => {
+  if (detail === undefined || detail.covered.from > start) {
+    return "missing";
+  }
+  const first = detail.closes[0];
+  return first === undefined || first.day > start ? "ineligible" : "covers";
 };

@@ -46,6 +46,7 @@ const EXPECTED: { readonly [K in PageKind]: PartValues[K] } = {
     ],
   },
   dividends: {
+    symbol: "BBCA",
     covered: { from: "2025-01-01", to: "2026-10-31" },
     dividends: [
       {
@@ -55,7 +56,7 @@ const EXPECTED: { readonly [K in PageKind]: PartValues[K] } = {
         grossPerShare: new Decimal("227.5"),
       },
       {
-        symbol: "TLKM",
+        symbol: "BBCA",
         exDate: "2026-06-02",
         paymentDate: "2026-06-25",
         grossPerShare: new Decimal("214"),
@@ -234,6 +235,7 @@ test.each([
   ],
   ["dividends", '<table id="dividen">', '<table id="d">', 'no table "dividen"'],
   ["dividends", '<table id="periode">', '<table id="p">', 'no table "periode"'],
+  ["dividends", '<table id="saham">', '<table id="kode">', 'no table "saham"'],
   [
     "cash-movements",
     "<td>Tarik</td>",
@@ -341,7 +343,7 @@ test("a close outside the range the chart covers is refused", () => {
 // dividend, cash-movement and corporate-action pages refuse it as the chart does.
 test.each([
   ["dividends", "<td>BBCA</td><td>20/03/2026</td>", "dividen", 1, "Tanggal Ex", "31/12/2024"],
-  ["dividends", "<td>TLKM</td><td>02/06/2026</td>", "dividen", 2, "Tanggal Ex", "01/11/2026"],
+  ["dividends", "<td>BBCA</td><td>02/06/2026</td>", "dividen", 2, "Tanggal Ex", "01/11/2026"],
   ["cash-movements", "<td>05/10/2026</td><td>Setor</td>", "mutasi", 1, "Tanggal", "30/09/2026"],
   ["cash-movements", "<td>20/10/2026</td><td>Tarik</td>", "mutasi", 2, "Tanggal", "01/11/2026"],
   ["corporate-actions", "<td>BBCA</td><td>13/10/2021</td>", "aksi", 1, "Tanggal Ex", "31/12/2020"],
@@ -359,7 +361,7 @@ test.each([
 
 test.each([
   ["dividends", "<td>BBCA</td><td>20/03/2026</td>", "01/01/2025"],
-  ["dividends", "<td>TLKM</td><td>02/06/2026</td>", "31/10/2026"],
+  ["dividends", "<td>BBCA</td><td>02/06/2026</td>", "31/10/2026"],
   ["cash-movements", "<td>05/10/2026</td><td>Setor</td>", "01/10/2026"],
   ["cash-movements", "<td>20/10/2026</td><td>Tarik</td>", "31/10/2026"],
   ["corporate-actions", "<td>BBCA</td><td>13/10/2021</td>", "01/01/2021"],
@@ -440,5 +442,19 @@ test("a holding listed twice is refused", () => {
   const snapshot = changed("portfolio", "<td>TLKM</td>", "<td>BBCA</td>");
   expect(FIXTURE_READERS.portfolio(snapshot, READ_AT)).toEqual({
     refused: 'table "portofolio" row 2 "Kode": BBCA is listed twice',
+  });
+});
+
+// #230 AC3, spec §5.1: a dividend page is one stock's, so a read with no dividend in a year says
+// that stock paid none then (ineligible), not that it was unread (missing). A row of another
+// stock means the page was misread.
+test("the dividends page refuses a row of a stock other than its own", () => {
+  const snapshot = changed(
+    "dividends",
+    "<td>BBCA</td><td>02/06/2026</td>",
+    "<td>TLKM</td><td>02/06/2026</td>",
+  );
+  expect(FIXTURE_READERS.dividends(snapshot, READ_AT)).toEqual({
+    refused: 'table "dividen" row 2 "Kode": TLKM is not BBCA, the stock this page shows',
   });
 });

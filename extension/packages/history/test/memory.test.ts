@@ -56,6 +56,9 @@ test("the advice for a day is the same however often it is asked for", async () 
       reasons: new Map(),
       members: new Set(["BBCA", "TLKM"]),
     },
+    closes: new Map(),
+    dividends: new Map(),
+    splits: [],
   };
   const portfolio = {
     value: new Money(1_000_000n, IDR),
