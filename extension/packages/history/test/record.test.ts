@@ -159,6 +159,7 @@ const dividends: Part<Dividends> = {
   source: source("dividends"),
   readAt: wib("2025-06-17T19:00:00"),
   value: {
+    symbol: "BBRI",
     covered: { from: "2025-01-01", to: "2025-06-17" },
     dividends: [
       {
@@ -168,7 +169,7 @@ const dividends: Part<Dividends> = {
         grossPerShare: new RuleDecimal("208.40"),
       },
       {
-        symbol: "TLKM",
+        symbol: "BBRI",
         exDate: "2025-05-27",
         paymentDate: "2025-06-13",
         grossPerShare: new RuleDecimal("210"),
@@ -191,12 +192,40 @@ test("dividend rows are recorded once each: reading the page twice changes nothi
       entry: "#1",
     },
     {
-      symbol: "TLKM",
+      symbol: "BBRI",
       exDate: "2025-05-27",
       paymentDate: "2025-06-13",
       grossPerShare: "210",
       entry: "#1",
     },
+  ]);
+});
+
+// #230 AC3, spec §7.1: a dividend read records the period it covers for its stock, so a year
+// inside it with no dividend is known to have none, and a year outside it is unread.
+test("a dividend read records its stock's period once, however often the page is read", async () => {
+  await recordDividends(db, dividends);
+  await recordDividends(db, { ...dividends, readAt: wib("2025-06-18T19:00:00") });
+  expect(await rowsOf(db, STORES.dividendReads)).toEqual([
+    { symbol: "BBRI", from: "2025-01-01", to: "2025-06-17" },
+  ]);
+});
+
+test("a dividend read listing no dividend still records the period it covers", async () => {
+  await recordDividends(db, { ...dividends, value: { ...dividends.value, dividends: [] } });
+  expect(await rowsOf(db, STORES.dividends)).toEqual([]);
+  expect(await rowsOf(db, STORES.dividendReads)).toEqual([
+    { symbol: "BBRI", from: "2025-01-01", to: "2025-06-17" },
+  ]);
+});
+
+test("dividend reads of two periods are two periods", async () => {
+  await recordDividends(db, dividends);
+  const earlier = { from: "2019-01-01", to: "2024-12-31" };
+  await recordDividends(db, { ...dividends, value: { ...dividends.value, covered: earlier } });
+  expect(await rowsOf(db, STORES.dividendReads)).toEqual([
+    { symbol: "BBRI", ...earlier },
+    { symbol: "BBRI", from: "2025-01-01", to: "2025-06-17" },
   ]);
 });
 

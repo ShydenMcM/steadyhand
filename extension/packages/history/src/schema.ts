@@ -9,6 +9,8 @@ export const STORES = {
   closes: "closes",
   series: "chart-series",
   dividends: "dividends",
+  /** The period each dividend read covered, by stock (spec §7.1). */
+  dividendReads: "dividend-reads",
   cashMovements: "cash-movements",
   corporateActions: "corporate-actions",
   memory: "memory",
@@ -60,6 +62,11 @@ export const MIGRATIONS: readonly Migration[] = [
     ]);
     rekeyed(db, upgrade, STORES.cashMovements, ["day", "kind", "amount", "entry"]);
     rekeyed(db, upgrade, STORES.corporateActions, ["symbol", "exDate", "from", "to", "entry"]);
+  },
+  // #230: each dividend read records the period it covers for its stock, so a year inside it
+  // with no dividend is known to have none (spec §7.1). Dividends recorded before have no period.
+  (db) => {
+    db.createObjectStore(STORES.dividendReads, { keyPath: ["symbol", "from", "to"] });
   },
 ];
 

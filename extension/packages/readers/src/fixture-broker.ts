@@ -45,6 +45,15 @@ const at = (table: string, row: number, column: string): string =>
 const field = (table: string, label: string): string =>
   `table ${JSON.stringify(table)} ${JSON.stringify(label)}`;
 
+/** The stock code `raw` names, refused unless it is `own`, the stock the page shows. */
+const ownStock = (own: string, raw: string, where: string): string => {
+  const code = symbol(raw, where);
+  if (code !== own) {
+    throw new Refusal(`${where}: ${code} is not ${own}, the stock this page shows`);
+  }
+  return code;
+};
+
 /** The rows' symbols, each once. */
 const unique = <T extends { readonly symbol: string }>(
   rows: readonly T[],
@@ -122,17 +131,21 @@ const READ: { readonly [K in PageKind]: (html: string) => PartValues[K] } = {
     return { symbol: symbol(code, field("saham", "Kode")), covered: range, closes };
   },
   dividends: (html) => {
+    // The page is one stock's (spec §5.1), so a year it lists no dividend in is a year that
+    // stock paid none (§7.1); a row of another stock means the page was misread.
+    const code = orRefuse(fieldsTable(html, "saham", ["Kode"])).fields.Kode;
+    const own = symbol(code, field("saham", "Kode"));
     const range = period(html);
     const table = "dividen";
     const labels = ["Kode", "Tanggal Ex", "Tanggal Bayar", "Dividen per Saham"] as const;
     const { rows } = orRefuse(columnsTable(html, table, labels));
     const dividends = rows.map((row, index) => ({
-      symbol: symbol(row.Kode, at(table, index, "Kode")),
+      symbol: ownStock(own, row.Kode, at(table, index, "Kode")),
       exDate: dayWithin(range, row["Tanggal Ex"], at(table, index, "Tanggal Ex")),
       paymentDate: day(row["Tanggal Bayar"], at(table, index, "Tanggal Bayar")),
       grossPerShare: perShare(row["Dividen per Saham"], at(table, index, "Dividen per Saham")),
     }));
-    return { covered: range, dividends };
+    return { symbol: own, covered: range, dividends };
   },
   "cash-movements": (html) => {
     const range = period(html);

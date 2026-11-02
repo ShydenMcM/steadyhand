@@ -11,12 +11,13 @@ test("the database is the extension's own, at the newest version its migrations 
 
 test("a new database has one store per kind, each keyed by its own fields", async () => {
   const db = await openHistory(new IDBFactory());
-  expect(db.version).toBe(2);
+  expect(db.version).toBe(3);
   expect([...db.objectStoreNames].sort()).toEqual([
     "cash-movements",
     "chart-series",
     "closes",
     "corporate-actions",
+    "dividend-reads",
     "dividends",
     "memory",
     "settings",
@@ -31,6 +32,7 @@ test("a new database has one store per kind, each keyed by its own fields", asyn
     "chart-series": ["symbol", "readAt"],
     closes: ["symbol", "day"],
     "corporate-actions": ["symbol", "exDate", "from", "to", "entry"],
+    "dividend-reads": ["symbol", "from", "to"],
     dividends: ["symbol", "exDate", "paymentDate", "grossPerShare", "entry"],
     memory: "strategy",
     settings: "name",
@@ -80,7 +82,7 @@ test("a database a newer release wrote is refused by name, not read", async () =
   const newer = await requested(factory.open(DATABASE, VERSION + 1));
   newer.close();
   await expect(openHistory(factory)).rejects.toThrow(
-    new Error("steadyhand-history is at a newer version than this release reads (2)"),
+    new Error("steadyhand-history is at a newer version than this release reads (3)"),
   );
 });
 
@@ -146,5 +148,32 @@ test("a version 1 database keeps every row, each the first of its kind (#470)", 
   expect(await requested(read.objectStore(STORES.corporateActions).getAll())).toEqual([
     { symbol: "BBCA", exDate: "2025-02-03", from: "1", to: "5", entry: "#1" },
   ]);
+  upgraded.close();
+});
+
+// #230: dividends recorded before reads kept their period have no known period, so they count
+// as unread until the page is read again: never a year "known" to have no dividend.
+test("a version 2 database keeps its dividends and starts with no dividend period read", async () => {
+  const factory = new IDBFactory();
+  const old = await openHistory(factory, MIGRATIONS.slice(0, 2));
+  const write = old.transaction(STORES.dividends, "readwrite");
+  const dividend = {
+    symbol: "BBRI",
+    exDate: "2025-03-25",
+    paymentDate: "2025-04-15",
+    grossPerShare: "208.4",
+    entry: "#1",
+  };
+  write.objectStore(STORES.dividends).put(dividend);
+  await new Promise<void>((resolve) => {
+    write.oncomplete = () => {
+      resolve();
+    };
+  });
+  old.close();
+  const upgraded = await openHistory(factory);
+  const read = upgraded.transaction([STORES.dividends, STORES.dividendReads], "readonly");
+  expect(await requested(read.objectStore(STORES.dividends).getAll())).toEqual([dividend]);
+  expect(await requested(read.objectStore(STORES.dividendReads).getAll())).toEqual([]);
   upgraded.close();
 });
