@@ -330,6 +330,39 @@ test("a close outside the range the chart covers is refused", () => {
   });
 });
 
+// #473: a dated row outside the period a page declares means the period was misread, so the
+// dividend, cash-movement and corporate-action pages refuse it as the chart does.
+test.each([
+  ["dividends", "<td>BBCA</td><td>20/03/2026</td>", "dividen", 1, "Tanggal Ex", "31/12/2024"],
+  ["dividends", "<td>TLKM</td><td>02/06/2026</td>", "dividen", 2, "Tanggal Ex", "01/11/2026"],
+  ["cash-movements", "<td>05/10/2026</td><td>Setor</td>", "mutasi", 1, "Tanggal", "30/09/2026"],
+  ["cash-movements", "<td>20/10/2026</td><td>Tarik</td>", "mutasi", 2, "Tanggal", "01/11/2026"],
+  ["corporate-actions", "<td>BBCA</td><td>13/10/2021</td>", "aksi", 1, "Tanggal Ex", "31/12/2020"],
+  ["corporate-actions", "<td>GOTO</td><td>15/07/2026</td>", "aksi", 2, "Tanggal Ex", "01/11/2026"],
+] as const)(
+  "the %s page refuses %j moved to a day outside its period",
+  (kind, cells, table, row, column, outside) => {
+    const original = /\d{2}\/\d{2}\/\d{4}/u.exec(cells)?.[0] ?? "";
+    const snapshot = changed(kind, cells, cells.replace(original, outside));
+    expect(FIXTURE_READERS[kind](snapshot, READ_AT)).toEqual({
+      refused: `table "${table}" row ${String(row)} "${column}": ${outside} is outside the period covered`,
+    });
+  },
+);
+
+test.each([
+  ["dividends", "<td>BBCA</td><td>20/03/2026</td>", "01/01/2025"],
+  ["dividends", "<td>TLKM</td><td>02/06/2026</td>", "31/10/2026"],
+  ["cash-movements", "<td>05/10/2026</td><td>Setor</td>", "01/10/2026"],
+  ["cash-movements", "<td>20/10/2026</td><td>Tarik</td>", "31/10/2026"],
+  ["corporate-actions", "<td>BBCA</td><td>13/10/2021</td>", "01/01/2021"],
+  ["corporate-actions", "<td>GOTO</td><td>15/07/2026</td>", "31/10/2026"],
+] as const)("the %s page accepts %j moved to its period's edge %s", (kind, cells, edge) => {
+  const original = /\d{2}\/\d{2}\/\d{4}/u.exec(cells)?.[0] ?? "";
+  const snapshot = changed(kind, cells, cells.replace(original, edge));
+  expect(FIXTURE_READERS[kind](snapshot, READ_AT)).toHaveProperty("part");
+});
+
 test("a holding listed twice is refused", () => {
   const snapshot = changed("portfolio", "<td>TLKM</td>", "<td>BBCA</td>");
   expect(FIXTURE_READERS.portfolio(snapshot, READ_AT)).toEqual({

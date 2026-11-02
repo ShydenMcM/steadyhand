@@ -4,7 +4,15 @@
  * the first real broker; browser tests serve its pages locally in place of a broker's site.
  * Its labels are Indonesian, as a broker's are, and its numbers are written the Indonesian way.
  */
-import type { CashMovement, Flag, Holding, PageKind, PartValues, Split } from "@steadyhand/core";
+import type {
+  CashMovement,
+  Day,
+  Flag,
+  Holding,
+  PageKind,
+  PartValues,
+  Split,
+} from "@steadyhand/core";
 import {
   amount,
   covered,
@@ -54,6 +62,16 @@ const period = (html: string): PartValues["dividends"]["covered"] => {
   return covered(fields.Dari, fields.Sampai, 'table "periode"');
 };
 
+/** The day `raw` names, refused when it falls outside `range`: a dated row outside the period a
+ * page declares means the period was misread (#473). */
+const dayWithin = (range: PartValues["dividends"]["covered"], raw: string, where: string): Day => {
+  const on = day(raw, where);
+  if (on < range.from || on > range.to) {
+    throw new Refusal(`${where}: ${raw} is outside the period covered`);
+  }
+  return on;
+};
+
 /** Whether each kind of split the page names leaves fewer shares. */
 const REVERSE: Readonly<Record<string, boolean>> = {
   "Stock Split": false,
@@ -96,14 +114,10 @@ const READ: { readonly [K in PageKind]: (html: string) => PartValues[K] } = {
     const range = period(html);
     const table = "harga";
     const { rows } = orRefuse(columnsTable(html, table, ["Tanggal", "Penutupan"]));
-    const closes = rows.map((row, index) => {
-      const where = at(table, index, "Tanggal");
-      const on = day(row.Tanggal, where);
-      if (on < range.from || on > range.to) {
-        throw new Refusal(`${where}: ${row.Tanggal} is outside the period covered`);
-      }
-      return { day: on, close: price(row.Penutupan, at(table, index, "Penutupan")) };
-    });
+    const closes = rows.map((row, index) => ({
+      day: dayWithin(range, row.Tanggal, at(table, index, "Tanggal")),
+      close: price(row.Penutupan, at(table, index, "Penutupan")),
+    }));
     return { symbol: symbol(code, field("saham", "Kode")), covered: range, closes };
   },
   dividends: (html) => {
@@ -113,7 +127,7 @@ const READ: { readonly [K in PageKind]: (html: string) => PartValues[K] } = {
     const { rows } = orRefuse(columnsTable(html, table, labels));
     const dividends = rows.map((row, index) => ({
       symbol: symbol(row.Kode, at(table, index, "Kode")),
-      exDate: day(row["Tanggal Ex"], at(table, index, "Tanggal Ex")),
+      exDate: dayWithin(range, row["Tanggal Ex"], at(table, index, "Tanggal Ex")),
       paymentDate: day(row["Tanggal Bayar"], at(table, index, "Tanggal Bayar")),
       grossPerShare: perShare(row["Dividen per Saham"], at(table, index, "Dividen per Saham")),
     }));
@@ -135,7 +149,7 @@ const READ: { readonly [K in PageKind]: (html: string) => PartValues[K] } = {
         );
       }
       return {
-        day: day(row.Tanggal, at(table, index, "Tanggal")),
+        day: dayWithin(range, row.Tanggal, at(table, index, "Tanggal")),
         kind,
         amount: amount(row.Jumlah, at(table, index, "Jumlah")),
       };
@@ -162,7 +176,7 @@ const READ: { readonly [K in PageKind]: (html: string) => PartValues[K] } = {
       }
       return {
         symbol: symbol(row.Kode, at(table, index, "Kode")),
-        exDate: day(row["Tanggal Ex"], at(table, index, "Tanggal Ex")),
+        exDate: dayWithin(range, row["Tanggal Ex"], at(table, index, "Tanggal Ex")),
         from,
         to,
       };
