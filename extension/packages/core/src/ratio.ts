@@ -7,6 +7,9 @@ import Decimal from "decimal.js";
 /** Python's default context: 28 significant digits. `ratio_down` divides in it, rounding down. */
 const DOWN = Decimal.clone({ precision: 28, rounding: Decimal.ROUND_FLOOR });
 
+/** Python's default context rounding up, for `rupiahUp`. */
+const UP = Decimal.clone({ precision: 28, rounding: Decimal.ROUND_CEIL });
+
 /** Rates as the rule files give them, in Python's default context: 28 significant digits,
  * half-even. */
 export const RuleDecimal = Decimal.clone({ precision: 28, rounding: Decimal.ROUND_HALF_EVEN });
@@ -24,6 +27,11 @@ export const ratioDown = (part: bigint | Decimal, whole: bigint | Decimal): Deci
   }
   return new Ratio(new DOWN(part.toString()).div(divisor));
 };
+
+/** The whole rupiah `weight` of a portfolio worth `value` needs, rounded up, as Python's
+ * `strategies._top_up._rupiah_up`. */
+export const rupiahUp = (weight: Decimal, value: bigint): bigint =>
+  BigInt(new UP(weight.toString()).times(value.toString()).ceil().toFixed(0));
 
 /** `value` to eight places, half-even, however large its whole part: Python's `RATIO_PLACES`
  * (0.00000001). */

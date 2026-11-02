@@ -458,9 +458,10 @@ const between = (buyable: readonly string[], chosen = "IDX:ASII IDX:BBCA", minSt
 };
 
 test("between reviews it keeps every holding and tops up its picks to their target", () => {
-  // 60 / 2 = 30 each, 3%. ASII 40% -> 43%. BBCA 49% takes only 1%, up to its target of 50%.
+  // BBCA, with less room, is filled first: 60 / 2 = 30 offered, 1% (10) taken, up to its target
+  // of 50%. ASII is offered the 50 left: 40% -> 45% (#486), as Python's test gives.
   const decision = between(["ASII", "BBCA", "TLKM"]);
-  expect(weighed(decision.weights)).toEqual({ ASII: "0.43", BBCA: "0.5", TLKM: "0.05" });
+  expect(weighed(decision.weights)).toEqual({ ASII: "0.45", BBCA: "0.5", TLKM: "0.05" });
   expect(decision.reasons.get("TLKM")).toBe("dividend-growth: held until the next review");
   expect(decision.reasons.get("ASII")).toBe(
     "dividend-growth: picked at the last review, topped up to its share",

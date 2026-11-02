@@ -8,7 +8,7 @@ import type { Day, Dividends, Split, Watchlist } from "./broker-view.ts";
 import type { Decision } from "./advice.ts";
 import type { Money } from "./money.ts";
 import { missingPage, type Note } from "./notes.ts";
-import { ratioDown, RuleDecimal } from "./ratio.ts";
+import { ratioDown, rupiahUp, RuleDecimal } from "./ratio.ts";
 import type { StockSeries } from "./series.ts";
 import type { PortfolioView } from "./sizing.ts";
 import type { Tradable } from "./tradable.ts";
@@ -60,8 +60,45 @@ export const weightOf = (portfolio: PortfolioView, symbol: string): Decimal => {
 export const plus = (weight: Decimal | undefined, more: Decimal): Decimal =>
   new RuleDecimal(weight ?? 0).plus(more);
 
+/** Each of `buying` at its weight after the portfolio's spendable cash is shared out by
+ * water-filling, as Python's `strategies._top_up.top_up` (#486). The stocks with the least room
+ * below `target` are filled first, ties by symbol. Each is offered an equal part of the cash still
+ * unspent, rounded down to the rupiah, and takes no more than its room, so what one stock cannot
+ * take goes to the rest, and cash stays idle only when every stock is at `target`. A stock filled
+ * to its room uses the rupiah that room needs, rounded up, so no rupiah is offered twice. */
+export const topUp = (
+  portfolio: PortfolioView,
+  buying: readonly string[],
+  target: Decimal,
+): Map<string, Decimal> => {
+  const order = [...buying]
+    .sort()
+    .map((symbol) => {
+      const held = weightOf(portfolio, symbol);
+      return { symbol, held, room: RuleDecimal.max(new RuleDecimal(target).minus(held), 0) };
+    })
+    .sort((first, second) => first.room.comparedTo(second.room));
+  const value = portfolio.value.amount;
+  const weights = new Map<string, Decimal>();
+  let unspent = portfolio.spendable.amount;
+  let left = BigInt(order.length);
+  for (const { symbol, held, room } of order) {
+    const offered = unspent / left;
+    const share = ratioDown(offered, value);
+    if (share.lessThanOrEqualTo(room)) {
+      weights.set(symbol, plus(held, share));
+      unspent -= offered;
+    } else {
+      weights.set(symbol, plus(held, room));
+      unspent -= rupiahUp(room, value);
+    }
+    left -= 1n;
+  }
+  return weights;
+};
+
 /** Between reviews, as Python's reviewing strategies do: every holding keeps its weight, and new
- * cash is shared equally among the picks it can buy, each topped up to no more than `target`. */
+ * cash goes to the picks it can buy, each topped up to no more than `target` (`topUp`). */
 export const keepAndTopUp = (
   strategy: string,
   view: MarketView,
@@ -76,17 +113,9 @@ export const keepAndTopUp = (
     reasons.set(symbol, `${strategy}: held until the next review`);
   }
   const buying = picks.filter((symbol) => view.tradable.buyable.has(symbol));
-  if (buying.length > 0) {
-    const each = ratioDown(
-      portfolio.spendable.amount / BigInt(buying.length),
-      portfolio.value.amount,
-    );
-    for (const symbol of buying) {
-      const held = weights.get(symbol) ?? new RuleDecimal(0);
-      const room = RuleDecimal.max(new RuleDecimal(target).minus(held), 0);
-      weights.set(symbol, plus(held, RuleDecimal.min(each, room)));
-      reasons.set(symbol, `${strategy}: picked at the last review, topped up to its share`);
-    }
+  for (const [symbol, weight] of topUp(portfolio, buying, target)) {
+    weights.set(symbol, weight);
+    reasons.set(symbol, `${strategy}: picked at the last review, topped up to its share`);
   }
   return { weights, reasons };
 };

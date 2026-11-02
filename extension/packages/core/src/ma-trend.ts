@@ -4,8 +4,8 @@
  * Every advice day it judges afresh, with no memory. A stock is in an uptrend when the simple
  * average of its last `fast_days` total-return closes (§6.5) is strictly above the average of its
  * last `slow_days`. N is the number of universe members that day. A held stock in an uptrend keeps
- * its weight; new cash is shared equally among the uptrend stocks it can buy that are below 1/N,
- * each topped up to no more than 1/N, so a stock not held is targeted at 1/N when the cash allows.
+ * its weight; new cash goes to the uptrend stocks it can buy, each to no more than 1/N, the ones
+ * with least room first (`topUp`), so a stock not held reaches 1/N when the cash allows.
  * A downtrend, or leaving the universe, sells the whole holding. The rest is cash.
  *
  * Missing versus ineligible (spec §7.1): it judges every universe stock it can buy or holds, and
@@ -17,7 +17,7 @@ import { missingHistory, missingPage, type Note } from "./notes.ts";
 import { ratioDown, RuleDecimal } from "./ratio.ts";
 import type { SeriesClose } from "./series.ts";
 import type { PortfolioView } from "./sizing.ts";
-import { plus, weightOf, type MarketView, type Memory, type Strategy } from "./strategy.ts";
+import { topUp, weightOf, type MarketView, type Memory, type Strategy } from "./strategy.ts";
 import { totalReturn } from "./total-return.ts";
 
 const NAME = "ma-trend";
@@ -126,18 +126,9 @@ export const maTrend = (
       // With no member, nothing trends: 1/N is worked out only when a stock does.
       if (trending.length > 0) {
         const target = ratioDown(1n, BigInt(members.size));
-        const buying = trending.filter(
-          (symbol) => buyable.has(symbol) && weightOf(portfolio, symbol).lessThan(target),
-        );
-        if (buying.length > 0) {
-          const each = ratioDown(
-            portfolio.spendable.amount / BigInt(buying.length),
-            portfolio.value.amount,
-          );
-          for (const symbol of buying) {
-            const held = weightOf(portfolio, symbol);
-            weights.set(symbol, plus(held, RuleDecimal.min(each, target.minus(held))));
-          }
+        const buying = trending.filter((symbol) => buyable.has(symbol));
+        for (const [symbol, weight] of topUp(portfolio, buying, target)) {
+          weights.set(symbol, weight);
         }
       }
       return { weights, reasons, missing: [], memory, notes: [] };
