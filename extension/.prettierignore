@@ -7,3 +7,4 @@ packages/core/test/ratios.json
 packages/core/test/parity.json
 packages/core/test/parity-strategies.json
 packages/core/test/parity-restated.json
+packages/core/test/parity-dividend-growth.json

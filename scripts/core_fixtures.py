@@ -18,6 +18,7 @@ import argparse
 import json
 import random
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date, time, timedelta
 from decimal import ROUND_HALF_EVEN, Context, Decimal
 from pathlib import Path
@@ -31,9 +32,9 @@ from steadyhand.metrics import _rounded
 from steadyhand.notes import TRADE_EXCLUDED, TRADE_FROZEN, Note
 from steadyhand.risk import RiskLimits, RiskManager
 from steadyhand.sizing import CompoundingSizer
-from steadyhand.strategies import BuyAndHold, MonthlySavings
+from steadyhand.strategies import BuyAndHold, DividendGrowthStrategy, MonthlySavings
 from steadyhand.strategies.protocol import Strategy
-from steadyhand.types import CashDividend, Order, Split
+from steadyhand.types import Bar, CashDividend, Order, Split
 from steadyhand.view import ActionHistory, MarketView, PortfolioView, PriceHistory, Tradable
 from steadyhand_idx._datafile import Row, load_shipped
 from steadyhand_idx.bands import BANDS_FILE, parse_bands
@@ -50,6 +51,7 @@ RULES_CASES = Path("extension/packages/core/test/rules.json")
 PARITY = Path("extension/packages/core/test/parity.json")
 STRATEGY_PARITY = Path("extension/packages/core/test/parity-strategies.json")
 RESTATED_PARITY = Path("extension/packages/core/test/parity-restated.json")
+GROWTH_PARITY = Path("extension/packages/core/test/parity-dividend-growth.json")
 
 # Each rule file and the Python readers that must accept it before it is converted.
 READERS: dict[str, tuple[Callable[[Row], object], ...]] = {
@@ -380,6 +382,161 @@ def strategy_cases(seed: int = STRATEGY_SEED, journeys: int = STRATEGY_JOURNEYS)
     return {"seed": str(seed), "cases": cases}
 
 
+GROWTH_SEED = 230
+GROWTH_JOURNEYS = 30
+# The gaps between a journey's advice days: the same day, the next, a month or more within a
+# year, and into the next year, where a review falls.
+GROWTH_STEPS = (0, 1, 30, 200, 365)
+
+
+def _growth_actions(draw: random.Random, day: date) -> dict[str, list[CashDividend | Split]]:
+    """Every stock's dividends and splits for a journey starting on *day*."""
+    actions: dict[str, list[CashDividend | Split]] = {}
+    for symbol in PARITY_STOCKS:
+        stock = Instrument(symbol, "IDX", IDR)
+        level = Decimal(draw.randrange(5, 500))
+        record: list[CashDividend | Split] = []
+        each_year = draw.choice((1, 1, 2))
+        for year in range(day.year - 4, day.year + 2):
+            if draw.random() < 0.08:  # noqa: PLR2004 - a year with no dividend
+                level = level * Decimal(draw.choice(("0.97", "1", "1.05")))
+                continue
+            for _ in range(each_year):
+                ex_date = date(year, 1, 1) + timedelta(days=draw.randrange(365))
+                share = (level * Decimal(draw.choice(("0.9", "1", "1")))).quantize(Decimal("0.01"))
+                record.append(CashDividend(stock, ex_date, share))
+            level = level * Decimal(draw.choice(("0.9", "1", "1.02", "1.05", "1.1")))
+        if draw.random() < 0.3:  # noqa: PLR2004 - a split somewhere in the record
+            ex_date = date(day.year - 4, 1, 1) + timedelta(days=draw.randrange(365 * 6))
+            record.append(Split(stock, ex_date, *draw.sample(SPLIT_SHARES, 2)))
+        actions[symbol] = record
+    return actions
+
+
+@dataclass(frozen=True, slots=True)
+class _GrowthJourney:
+    """What stays the same across a dividend-growth journey's days."""
+
+    strategy: DividendGrowthStrategy
+    actions: dict[str, list[CashDividend | Split]]
+    pay_dates: PayDates
+
+
+def _growth_day(
+    draw: random.Random, journey: _GrowthJourney, day: date, memory: dict[str, str]
+) -> dict[str, Any]:
+    """One advice day of a dividend-growth journey: a drawn universe, buyable set, portfolio and
+    closes, every stock's record, and what Python's strategy decides."""
+    strategy, actions, pay_dates = journey.strategy, journey.actions, journey.pay_dates
+    members = sorted(draw.sample(PARITY_STOCKS, draw.randint(3, len(PARITY_STOCKS))))
+    buyable = sorted(symbol for symbol in members if draw.random() < 0.8)  # noqa: PLR2004
+    held = {symbol: draw.randrange(1, 10**9) for symbol in PARITY_STOCKS if draw.random() < HELD}
+    spendable = draw.choice((0, draw.randrange(10**6), draw.randrange(10**10)))
+    closes = {
+        symbol: draw.randrange(50, 50_000)
+        for symbol in PARITY_STOCKS
+        if draw.random() < 0.9  # noqa: PLR2004
+    }
+    stock = {symbol: Instrument(symbol, "IDX", IDR) for symbol in PARITY_STOCKS}
+    portfolio = PortfolioView(
+        Money(spendable + sum(held.values()), IDR),
+        Money(spendable, IDR),
+        {stock[symbol]: Money(amount, IDR) for symbol, amount in held.items()},
+    )
+    price_of = {symbol: Money(price, IDR) for symbol, price in closes.items()}
+    bars = [
+        Bar(stock[symbol], day, price, price, price, price, 1_000)
+        for symbol, price in price_of.items()
+    ]
+    view = MarketView(
+        PriceHistory(bars),
+        day,
+        Tradable(
+            day,
+            frozenset(stock[symbol] for symbol in buyable),
+            frozenset(),
+            {},
+            frozenset(stock[symbol] for symbol in members),
+        ),
+        ActionHistory([action for record in actions.values() for action in record]),
+        pay_dates,
+    )
+    decision = strategy.decide(view, portfolio, memory)
+    # Between reviews it reads no dividends, so only a review day carries the record.
+    read = memory.get("year") != str(day.year)
+    every = [action for record in actions.values() for action in record] if read else []
+    dividends = [action for action in every if isinstance(action, CashDividend)]
+    splits = [action for action in every if isinstance(action, Split)]
+    return {
+        "day": day.isoformat(),
+        "members": members,
+        "buyable": buyable,
+        "holdings": {symbol: str(amount) for symbol, amount in held.items()},
+        "value": str(portfolio.value.amount),
+        "spendable": str(spendable),
+        "closes": {symbol: str(price) for symbol, price in closes.items()},
+        "dividends": [
+            {
+                "symbol": dividend.instrument.symbol,
+                "exDate": dividend.ex_date.isoformat(),
+                "paymentDate": pay_dates.of(dividend.ex_date).isoformat(),
+                "grossPerShare": str(dividend.per_share),
+            }
+            for dividend in dividends
+        ],
+        "splits": [
+            {
+                "symbol": split.instrument.symbol,
+                "exDate": split.ex_date.isoformat(),
+                "from": str(split.old_shares),
+                "to": str(split.new_shares),
+            }
+            for split in splits
+        ],
+        "read": read,
+        "memory": dict(memory),
+        "expected": {
+            "weights": dict(sorted((i.symbol, str(w)) for i, w in decision.weights.items())),
+            "memory": dict(decision.memory),
+            "notes": [{"code": n.key, "text": n.text} for n in decision.notes],
+        },
+    }
+
+
+def growth_cases(seed: int = GROWTH_SEED, journeys: int = GROWTH_JOURNEYS) -> ParityCases:
+    """*journeys* runs of dividend-growth drawn from *seed* (#230 AC5): each a few advice days,
+    each day starting from the memory the last one ended with, with settings drawn small enough
+    that a review sometimes has more passers than ``max_stocks`` and sometimes fewer than
+    ``min_stocks``. Every day is a case."""
+    if journeys < 1:
+        msg = f"the dividend-growth parity harness needs a journey, got {journeys}"
+        raise ValueError(msg)
+    draw = random.Random(seed)  # noqa: S311 - seeded test inputs, not secrets
+    pay_dates = PayDates(IdxMarketRules(), 14)
+    cases: list[dict[str, Any]] = []
+    for journey in range(journeys):
+        min_stocks = draw.randint(1, 2)
+        strategy = DividendGrowthStrategy(
+            min_stocks, draw.randint(min_stocks, min_stocks + 1), draw.randint(1, 3)
+        )
+        day = date(2024, 1, 1) + timedelta(days=draw.randrange(365))
+        journey_days = _GrowthJourney(strategy, _growth_actions(draw, day), pay_dates)
+        memory: dict[str, str] = {}
+        for step in range(draw.randint(1, 4)):
+            case = _growth_day(draw, journey_days, day, memory)
+            case = {
+                "name": f"journey {journey} day {step}",
+                "minStocks": str(strategy.min_stocks),
+                "maxStocks": str(strategy.max_stocks),
+                "growthYears": str(strategy.growth_years),
+                **case,
+            }
+            cases.append(case)
+            memory = case["expected"]["memory"]
+            day += timedelta(days=draw.choice(GROWTH_STEPS))
+    return {"seed": str(seed), "cases": cases}
+
+
 RESTATED_SEED = 232
 RESTATED_CASES = 300
 # The share counts a drawn split may turn from and into: forward, reverse and odd ratios.
@@ -456,6 +613,7 @@ def outputs() -> dict[Path, str]:
     files[PARITY] = one_case_a_line(parity_cases())
     files[STRATEGY_PARITY] = one_case_a_line(strategy_cases())
     files[RESTATED_PARITY] = one_case_a_line(restated_cases())
+    files[GROWTH_PARITY] = one_case_a_line(growth_cases())
     return files
 
 
