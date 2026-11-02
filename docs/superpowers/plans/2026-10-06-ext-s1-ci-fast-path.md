@@ -1118,7 +1118,7 @@ jobs:
             rm -rf "${RUNNER_TEMP}/verify"
             uv venv "${RUNNER_TEMP}/verify"
             # PyPI first: uv takes each name from the first index that has it, so real
-            # dependencies (yfinance) come from PyPI and only our dev builds, which PyPI lacks,
+            # dependencies (yfinance) come from PyPI and only the project's dev builds, which PyPI lacks,
             # from TestPyPI. Anyone can upload to TestPyPI, so it must never be asked first.
             if uv pip install --refresh --python "${RUNNER_TEMP}/verify" \
                 --index https://pypi.org/simple/ \
