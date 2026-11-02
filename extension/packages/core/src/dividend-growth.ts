@@ -40,8 +40,6 @@ const NAME = "dividend-growth";
 const SET = "set";
 /** The memory key holding the calendar year it last reviewed. */
 const YEAR = "year";
-/** The window of the trailing yield that breaks a tie: the dividends of the last 365 days. */
-const TRAILING_DAYS = 365;
 
 /** The strategy Settings starts with (core §8). */
 export const DEFAULT_STRATEGY = NAME;
@@ -79,10 +77,11 @@ const atLeastOne = (value: bigint, setting: string): void => {
   }
 };
 
-/** The day `TRAILING_DAYS` calendar days before `day`. */
+/** The start of the trailing yield's window, which breaks a tie: 365 calendar days before
+ * `day`, so the dividends of the last 365 days count. */
 const trailingStart = (day: Day): Day => {
   const moved = new Date(`${day}T00:00:00Z`);
-  moved.setUTCDate(moved.getUTCDate() - TRAILING_DAYS);
+  moved.setUTCDate(moved.getUTCDate() - 365);
   return moved.toISOString().slice(0, 10);
 };
 
