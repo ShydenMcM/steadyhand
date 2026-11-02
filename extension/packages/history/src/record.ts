@@ -5,6 +5,7 @@
 import {
   adviceDayAt,
   memoryFor,
+  totalsMismatch,
   type Memory,
   type StoredMemory,
   type CashMovements,
@@ -137,9 +138,15 @@ export const recordDividends = (db: IDBDatabase, read: Part<Dividends>): Promise
     ),
   );
 
-/** Record each cash movement a page lists, once: keyed by its own fields and its entry. */
-export const recordCashMovements = (db: IDBDatabase, read: Part<CashMovements>): Promise<void> =>
-  putAll(
+/** Record each cash movement a page lists, once: keyed by its own fields and its entry. A read
+ * whose rows do not add up to the totals its page shows is refused and nothing is written,
+ * whichever reader made it (#477): a page cut short must never be recorded as the whole period. */
+export const recordCashMovements = (db: IDBDatabase, read: Part<CashMovements>): Promise<void> => {
+  const mismatch = totalsMismatch(read.value);
+  if (mismatch !== undefined) {
+    return Promise.reject(new Error(`refusing a cash-movement read: ${mismatch}`));
+  }
+  return putAll(
     db,
     STORES.cashMovements,
     entered(
@@ -153,6 +160,7 @@ export const recordCashMovements = (db: IDBDatabase, read: Part<CashMovements>):
       (row) => ("reference" in row ? row.reference : undefined),
     ),
   );
+};
 
 /** Record each split a page lists, once: keyed by its own fields and its entry. */
 export const recordCorporateActions = (

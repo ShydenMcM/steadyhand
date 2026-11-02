@@ -4,6 +4,7 @@
  * the first real broker; browser tests serve its pages locally in place of a broker's site.
  * Its labels are Indonesian, as a broker's are, and its numbers are written the Indonesian way.
  */
+import { totalsMismatch } from "@steadyhand/core";
 import type {
   CashMovement,
   Day,
@@ -70,24 +71,6 @@ const dayWithin = (range: PartValues["dividends"]["covered"], raw: string, where
     throw new Refusal(`${where}: ${raw} is outside the period covered`);
   }
   return on;
-};
-
-/** Refuse `movements` unless those of `kind` add up to the total the page shows for them: a page
- * cut short (one of two equal deposits shown) must never be recorded as the whole period (#474). */
-const addsUp = (
-  movements: readonly CashMovement[],
-  kind: CashMovement["kind"],
-  shown: string,
-  label: string,
-): void => {
-  const where = field("jumlah", label);
-  const total = rupiah(shown, where).amount;
-  const sum = movements
-    .filter((movement) => movement.kind === kind)
-    .reduce((running, movement) => running + movement.amount.amount, 0n);
-  if (sum !== total) {
-    throw new Refusal(`${where}: the page shows ${shown}, its rows add up to ${sum.toString()}`);
-  }
 };
 
 /** Whether each kind of split the page names leaves fewer shares. */
@@ -173,9 +156,19 @@ const READ: { readonly [K in PageKind]: (html: string) => PartValues[K] } = {
         amount: amount(row.Jumlah, at(table, index, "Jumlah")),
       };
     });
-    addsUp(movements, "deposit", totals["Total Setor"], "Total Setor");
-    addsUp(movements, "withdrawal", totals["Total Tarik"], "Total Tarik");
-    return { covered: range, movements };
+    const read = {
+      covered: range,
+      movements,
+      totals: {
+        deposits: rupiah(totals["Total Setor"], field("jumlah", "Total Setor")),
+        withdrawals: rupiah(totals["Total Tarik"], field("jumlah", "Total Tarik")),
+      },
+    };
+    const mismatch = totalsMismatch(read);
+    if (mismatch !== undefined) {
+      throw new Refusal(`table "jumlah": ${mismatch}`);
+    }
+    return read;
   },
   "corporate-actions": (html) => {
     const range = period(html);

@@ -68,6 +68,7 @@ const EXPECTED: { readonly [K in PageKind]: PartValues[K] } = {
       { day: "2026-10-05", kind: "deposit", amount: rp(5_000_000n) },
       { day: "2026-10-20", kind: "withdrawal", amount: rp(750_000n) },
     ],
+    totals: { deposits: rp(5_000_000n), withdrawals: rp(750_000n) },
   },
   "corporate-actions": {
     covered: { from: "2021-01-01", to: "2026-10-31" },
@@ -395,21 +396,21 @@ test("two equal deposits on one day, both shown and in the totals, are two movem
 test("a page cut short to one of two equal deposits is refused", () => {
   const cut = edited("cash-movements", [twoEqualDeposits[1]]);
   expect(FIXTURE_READERS["cash-movements"](cut, READ_AT)).toEqual({
-    refused: 'table "jumlah" "Total Setor": the page shows 10.000.000, its rows add up to 5000000',
+    refused: 'table "jumlah": deposits: the page shows 10000000, its rows add up to 5000000',
   });
 });
 
 test.each([
-  [DEPOSIT_TOTAL, "<th>Total Setor</th><td>5.000.001</td>", "Total Setor", "5.000.001", "5000000"],
-  [DEPOSIT_TOTAL, "<th>Total Setor</th><td>4.999.999</td>", "Total Setor", "4.999.999", "5000000"],
-  [WITHDRAWAL_TOTAL, "<th>Total Tarik</th><td>750.001</td>", "Total Tarik", "750.001", "750000"],
-  [WITHDRAWAL_TOTAL, "<th>Total Tarik</th><td>749.999</td>", "Total Tarik", "749.999", "750000"],
+  [DEPOSIT_TOTAL, "<th>Total Setor</th><td>5.000.001</td>", "deposits", "5000001", "5000000"],
+  [DEPOSIT_TOTAL, "<th>Total Setor</th><td>4.999.999</td>", "deposits", "4999999", "5000000"],
+  [WITHDRAWAL_TOTAL, "<th>Total Tarik</th><td>750.001</td>", "withdrawals", "750001", "750000"],
+  [WITHDRAWAL_TOTAL, "<th>Total Tarik</th><td>749.999</td>", "withdrawals", "749999", "750000"],
 ] as const)(
   "a cash page whose rows miss %j by one rupiah (%j) is refused",
   (from, to, label, shown, sum) => {
     expect(FIXTURE_READERS["cash-movements"](changed("cash-movements", from, to), READ_AT)).toEqual(
       {
-        refused: `table "jumlah" ${JSON.stringify(label)}: the page shows ${shown}, its rows add up to ${sum}`,
+        refused: `table "jumlah": ${label}: the page shows ${shown}, its rows add up to ${sum}`,
       },
     );
   },
