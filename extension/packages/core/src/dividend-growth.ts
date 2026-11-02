@@ -16,7 +16,10 @@
  * holds, and each needs a dividend read covering 1 January of Y - growth_years - 1 to the advice
  * day. A stock without one is missing: it is listed with the page to open and nothing is
  * ordered, and the memory is kept so the next advice day reviews again. A stock whose read
- * covers that and fails the test is ineligible: it is simply not picked. */
+ * covers that and fails the test is ineligible: it is simply not picked. A stock with a corporate
+ * action found by price and no known ratio after the window's first day is missing too (spec
+ * §6.6): its dividends before the action cannot be restated in today's shares, so the corporate
+ * action page is listed until a split read settles it. */
 
 import type Decimal from "decimal.js";
 import type { Day, Dividends } from "./broker-view.ts";
@@ -198,9 +201,17 @@ export const dividendGrowth = (
     const missing: Note[] = [];
     for (const symbol of reachable.filter((held) => view.tradable.members.has(held))) {
       const read = view.dividends.get(symbol);
-      if (read === undefined || read.covered.from > windowStart || read.covered.to < view.day) {
+      const unread =
+        read === undefined || read.covered.from > windowStart || read.covered.to < view.day;
+      const action = view.unknownActions.get(symbol);
+      const crossed = action !== undefined && action > windowStart;
+      if (unread) {
         missing.push(missingPage("dividends", symbol));
-      } else {
+      }
+      if (crossed) {
+        missing.push(missingPage("corporate-actions", symbol));
+      }
+      if (!unread && !crossed) {
         judged.push({ symbol, paid: paidBy(view, read) });
       }
     }

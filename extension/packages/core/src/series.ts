@@ -91,17 +91,17 @@ const acrossSplits = (
   return { day: earlier.day, close: new Money(amount, earlier.close.currency) };
 };
 
-/** The self-recorded closes from the last corporate action found by price on, and whether one
- * was found. */
+/** The self-recorded closes from the last corporate action found by price on, and that action's
+ * day: the day of the first close after it, or `undefined` when none was found. */
 const sinceLastAction = (
   symbol: string,
   recorded: readonly DailyClose[],
   splits: readonly Split[],
   rules: IdxMarketRules,
   calendar: IdxCalendar,
-): { readonly closes: readonly DailyClose[]; readonly found: boolean } => {
+): { readonly closes: readonly DailyClose[]; readonly found: Day | undefined } => {
   let since: DailyClose[] = [];
-  let found = false;
+  let found: Day | undefined;
   let previous: DailyClose | undefined;
   for (const daily of recorded) {
     if (
@@ -109,13 +109,24 @@ const sinceLastAction = (
       actionBetween(symbol, acrossSplits(previous, daily, splits), daily, rules, calendar)
     ) {
       since = [];
-      found = true;
+      found = daily.day;
     }
     since.push(daily);
     previous = daily;
   }
   return { closes: since, found };
 };
+
+/** The day of the last corporate action found by price (spec §6.4) in `symbol`'s self-recorded
+ * closes that no known split explains, dated by the first close after it, or `undefined`. A
+ * dividend figure crossing it cannot be restated in today's shares (§6.6). */
+export const lastUnknownAction = (
+  symbol: string,
+  recorded: readonly DailyClose[],
+  splits: readonly Split[],
+  rules: IdxMarketRules,
+  calendar: IdxCalendar,
+): Day | undefined => sinceLastAction(symbol, recorded, splits, rules, calendar).found;
 
 export const stockSeries = (
   inputs: SeriesInputs,
@@ -129,7 +140,7 @@ export const stockSeries = (
     return {
       closes: own.closes.map((daily) => inTodaysShares(daily, splits, null)),
       dividendsAdjustedTo: null,
-      missing: own.found ? [missingPage("stock-detail", symbol)] : [],
+      missing: own.found !== undefined ? [missingPage("stock-detail", symbol)] : [],
     };
   }
   const dividendsAdjustedTo = chart.adjustment === "splits-and-dividends" ? last.day : null;
@@ -143,7 +154,7 @@ export const stockSeries = (
     };
   }
   const own = sinceLastAction(symbol, after, splits, rules, calendar);
-  if (own.found) {
+  if (own.found !== undefined) {
     return {
       closes: own.closes.map((daily) => inTodaysShares(daily, splits, null)),
       dividendsAdjustedTo: null,

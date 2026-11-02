@@ -3,7 +3,13 @@ import type { DailyClose, Day, Split, StockDetail } from "../src/broker-view.ts"
 import { IdxCalendar } from "../src/calendar.ts";
 import { IDR, Money } from "../src/money.ts";
 import { IdxMarketRules } from "../src/rules.ts";
-import { chartReach, stockSeries, type ChartRead, type SeriesInputs } from "../src/series.ts";
+import {
+  chartReach,
+  lastUnknownAction,
+  stockSeries,
+  type ChartRead,
+  type SeriesInputs,
+} from "../src/series.ts";
 
 // A stock's series (spec §6.3, #232 AC1), in today's shares; actions found by price drop what
 // came before (§6.4, AC2). The week of 16 June 2025 has no holiday.
@@ -192,4 +198,36 @@ test("ineligible: a chart reaching the window's start with no close at all", () 
 
 test("a chart whose range and first close are on the window's start covers it", () => {
   expect(chartReach(reached("2025-01-02", "2025-01-02"), "2025-01-02")).toBe("covers");
+});
+
+// The last corporate action found by price with no known ratio (spec §6.4, §6.6, #480 AC2 and
+// AC3), which the market view carries for the dividend figures.
+
+const unknown = (recorded: readonly DailyClose[], splits: readonly Split[] = []) =>
+  lastUnknownAction("BBCA", recorded, splits, RULES, CALENDAR);
+
+test("no unknown action: closes the bands allow", () => {
+  expect(unknown([at("2025-06-17", 9_000n), at("2025-06-18", 9_500n)])).toBeUndefined();
+});
+
+test("no unknown action: no closes at all", () => {
+  expect(unknown([])).toBeUndefined();
+});
+
+test("an unknown action is dated by the first close after it", () => {
+  expect(unknown([at("2025-06-17", 9_000n), at("2025-06-18", 3_000n)])).toBe("2025-06-18");
+});
+
+test("a known split on the action's day settles it", () => {
+  expect(unknown([at("2025-06-17", 9_000n), at("2025-06-18", 3_000n)], [split])).toBeUndefined();
+});
+
+test("a known split and a move beyond the band on its day stays unknown", () => {
+  expect(unknown([at("2025-06-17", 9_000n), at("2025-06-18", 2_500n)], [split])).toBe("2025-06-18");
+});
+
+test("with two unknown actions, the later one's day", () => {
+  expect(
+    unknown([at("2025-06-16", 9_000n), at("2025-06-17", 3_000n), at("2025-06-18", 1_000n)]),
+  ).toBe("2025-06-18");
 });

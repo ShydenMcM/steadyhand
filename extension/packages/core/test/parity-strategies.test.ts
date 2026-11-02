@@ -63,6 +63,7 @@ const answer = (parity: Case) => {
     closes: new Map(),
     dividends: new Map(),
     splits: [],
+    unknownActions: new Map(),
   };
   const portfolio: PortfolioView = {
     value: rp(parity.value),

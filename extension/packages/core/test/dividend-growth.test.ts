@@ -1,9 +1,12 @@
 import { expect, test } from "vitest";
-import type { Covered, Day, Dividend, Dividends, Split } from "../src/broker-view.ts";
+import type { Covered, DailyClose, Day, Dividend, Dividends, Split } from "../src/broker-view.ts";
+import { IdxCalendar } from "../src/calendar.ts";
 import { DEFAULT_STRATEGY, DIVIDEND_GROWTH, dividendGrowth } from "../src/dividend-growth.ts";
 import { IDR, Money } from "../src/money.ts";
 import { missingPage, note, NOTE_CODES } from "../src/notes.ts";
 import { ratioDown, RuleDecimal } from "../src/ratio.ts";
+import { IdxMarketRules } from "../src/rules.ts";
+import { lastUnknownAction } from "../src/series.ts";
 import type { PortfolioView } from "../src/sizing.ts";
 import type { MarketView, Memory } from "../src/strategy.ts";
 
@@ -71,6 +74,8 @@ interface ViewOptions {
    * to the advice day. */
   readonly covered?: Readonly<Record<string, Covered | null>>;
   readonly splits?: readonly Split[];
+  /** Each stock's last corporate action found by price with no known ratio (spec §6.4, §6.6). */
+  readonly actions?: Readonly<Record<string, Day>>;
 }
 
 const view = (
@@ -104,6 +109,7 @@ const view = (
     ),
     dividends: reads,
     splits: options.splits ?? [],
+    unknownActions: new Map(Object.entries(options.actions ?? {})),
   };
 };
 
@@ -624,4 +630,76 @@ test("a memory with a year but no set is refused", () => {
   expect(() => growth().decide(view("2025-03-03", []), portfolioOf(0n), memory)).toThrow(
     new Error("dividend-growth's memory has a year but no set"),
   );
+});
+
+// A dividend figure crossing a corporate action found by price with no known ratio (spec §6.4,
+// §6.6, #480): the dividends before the action cannot be restated in today's shares, so the stock
+// is missing until a corporate action read gives the ratio.
+
+/** BBCA and BBRI both pass; `actions` gives the stocks' unknown actions. */
+const acted = (
+  actions: Readonly<Record<string, Day>>,
+  covered: Covered | null = { from: "2015-01-01", to: REVIEW },
+) =>
+  growth().decide(
+    view(REVIEW, ["BBCA", "BBRI"], [...paid("BBCA"), ...paid("BBRI")], {
+      covered: { BBCA: covered },
+      actions,
+    }),
+    portfolioOf(1_000_000n),
+    NONE,
+  );
+
+test("missing: an unknown action inside the dividend window lists the corporate action page", () => {
+  const decision = acted({ BBCA: "2023-06-19" });
+  expect(decision.missing).toEqual([missingPage("corporate-actions", "BBCA")]);
+  expect(decision.missing[0]?.text).toBe("open the corporate action page for BBCA");
+  expect(decision.weights.size).toBe(0);
+});
+
+test("missing: an unknown action on the window's first trading day", () => {
+  // The window opens on 1 January 2022; 3 January is its first trading day.
+  expect(acted({ BBCA: "2022-01-03" }).missing).toEqual([missingPage("corporate-actions", "BBCA")]);
+});
+
+test("missing: an unknown action on the advice day", () => {
+  expect(acted({ BBCA: REVIEW }).missing).toEqual([missingPage("corporate-actions", "BBCA")]);
+});
+
+test("judged: an unknown action before the dividend window does not cross it", () => {
+  const decision = acted({ BBCA: "2021-12-30" });
+  expect(decision.missing).toEqual([]);
+  expect(weighed(decision.weights)).toEqual({ BBCA: "0.5", BBRI: "0.5" });
+});
+
+test("judged: a known split on the action's day settles it", () => {
+  // 9,000 to 3,000 is beyond any band, but a 1-for-3 split read for that day explains it.
+  const at = (day: Day, amount: bigint): DailyClose => ({ day, close: rp(amount) });
+  const recorded = [at("2023-06-16", 9_000n), at("2023-06-19", 3_000n)];
+  const split: Split = { symbol: "BBCA", exDate: "2023-06-19", from: 1n, to: 3n };
+  const rules = new IdxMarketRules();
+  const calendar = IdxCalendar.shipped();
+  expect(lastUnknownAction("BBCA", recorded, [], rules, calendar)).toBe("2023-06-19");
+  const found = lastUnknownAction("BBCA", recorded, [split], rules, calendar);
+  expect(found).toBeUndefined();
+  const decision = acted(found === undefined ? {} : { BBCA: found });
+  expect(decision.missing).toEqual([]);
+  expect(weighed(decision.weights)).toEqual({ BBCA: "0.5", BBRI: "0.5" });
+});
+
+test("missing: a stock with no dividend read and an unknown action lists both pages", () => {
+  expect(acted({ BBCA: "2023-06-19" }, null).missing).toEqual([
+    missingPage("dividends", "BBCA"),
+    missingPage("corporate-actions", "BBCA"),
+  ]);
+});
+
+test("a stock it need not judge is not missing for an unknown action", () => {
+  // UNVR is a member it can neither buy nor sell.
+  const decision = growth().decide(
+    view(REVIEW, ["BBCA"], paid("BBCA"), { members: ["UNVR"], actions: { UNVR: "2023-06-19" } }),
+    portfolioOf(0n),
+    NONE,
+  );
+  expect(decision.missing).toEqual([]);
 });
