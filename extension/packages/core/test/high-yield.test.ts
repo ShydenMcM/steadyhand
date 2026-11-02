@@ -334,15 +334,16 @@ test.each([
 // Between reviews (AC4): holdings are kept and new cash goes to the picks, up to 1/yield_stocks.
 
 test("between reviews it keeps its holdings and tops its picks up to 1/yield_stocks", () => {
-  // Worth 1,000: 400 cash, BBCA 450, ASII 150. Each pick may take 400 / 2 = 200 (0.2): BBCA has
-  // room for 0.05 to reach 0.5, TLKM takes all 0.2. ASII is no pick and is kept.
+  // Worth 1,000: 400 cash, BBCA 450, ASII 150. BBCA, with less room, is offered 400 / 2 = 200
+  // and takes 0.05 (50) to reach 0.5; TLKM is offered the 350 left and takes it all (#486). ASII
+  // is no pick and is kept.
   const held = portfolioOf(400n, { ASII: 150n, BBCA: 450n });
   const decision = highYield(2n).decide(
     view("2025-02-03", ["BBCA", "TLKM"]),
     held,
     remembered("2025-1"),
   );
-  expect(weighed(decision.weights)).toEqual({ ASII: "0.15", BBCA: "0.5", TLKM: "0.2" });
+  expect(weighed(decision.weights)).toEqual({ ASII: "0.15", BBCA: "0.5", TLKM: "0.35" });
   expect(Object.fromEntries(decision.reasons)).toEqual({
     ASII: "high-yield: held until the next review",
     BBCA: "high-yield: picked at the last review, topped up to its share",

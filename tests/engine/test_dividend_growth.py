@@ -353,9 +353,10 @@ def between(
 
 
 def test_between_reviews_it_keeps_every_holding_and_tops_up_its_picks_to_their_target() -> None:
-    # 60 // 2 = 30 each, 3%. ASII 40% -> 43%. BBCA 49% takes only 1%, up to its target of 50%.
+    # BBCA, with less room, is filled first: 60 // 2 = 30 offered, 1% (10) taken, up to its
+    # target of 50%. ASII is offered the 50 left: 40% -> 45% (#486).
     assert between({ASII, BBCA, TLKM}) == {
-        ASII: Decimal("0.43"),
+        ASII: Decimal("0.45"),
         BBCA: Decimal("0.5"),
         TLKM: Decimal("0.05"),
     }

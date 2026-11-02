@@ -9,7 +9,7 @@ equal parts of 1 / max(``min_stocks``, number held); with more candidates than t
 them one at a time to spread the months they pay in, then by trailing yield, then by market and
 symbol. Everything else is sold. Fewer than ``min_stocks`` leaves the rest in cash, with a note.
 Between reviews it keeps its holdings and puts new cash into the stocks it picked, never above
-the review's target.
+the review's target, filling those with least room first (``_top_up``).
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from steadyhand._ratio import ratio_down
 from steadyhand._validate import require_int
 from steadyhand.notes import STRATEGY_TOO_FEW_QUALIFIED, Note
 from steadyhand.strategies._sets import read_set, write_set
+from steadyhand.strategies._top_up import top_up
 from steadyhand.strategies.protocol import Decision, Memory
 from steadyhand.types import Instrument
 from steadyhand.view import MarketView, PortfolioView
@@ -141,11 +142,7 @@ class DividendGrowthStrategy:
         target = ratio_down(1, max(self._min, len(chosen)))
         weights = {stock: portfolio.weight(stock) for stock in portfolio.holdings}
         buying = chosen & view.tradable.buyable
-        if buying:
-            each = ratio_down(portfolio.spendable.amount // len(buying), portfolio.value.amount)
-            for stock in buying:
-                held = weights.get(stock, Decimal(0))
-                weights[stock] = held + min(each, max(target - held, Decimal(0)))
+        weights.update(top_up(portfolio, buying, target))
         return Decision(weights, dict(memory))
 
 
