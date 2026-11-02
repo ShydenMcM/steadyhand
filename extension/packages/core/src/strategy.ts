@@ -56,6 +56,37 @@ export const weightOf = (portfolio: PortfolioView, symbol: string): Decimal => {
 export const plus = (weight: Decimal | undefined, more: Decimal): Decimal =>
   new RuleDecimal(weight ?? 0).plus(more);
 
+/** Between reviews, as Python's reviewing strategies do: every holding keeps its weight, and new
+ * cash is shared equally among the picks it can buy, each topped up to no more than `target`. */
+export const keepAndTopUp = (
+  strategy: string,
+  view: MarketView,
+  portfolio: PortfolioView,
+  picks: readonly string[],
+  target: Decimal,
+): { readonly weights: Map<string, Decimal>; readonly reasons: Map<string, string> } => {
+  const weights = new Map<string, Decimal>();
+  const reasons = new Map<string, string>();
+  for (const symbol of portfolio.holdings.keys()) {
+    weights.set(symbol, weightOf(portfolio, symbol));
+    reasons.set(symbol, `${strategy}: held until the next review`);
+  }
+  const buying = picks.filter((symbol) => view.tradable.buyable.has(symbol));
+  if (buying.length > 0) {
+    const each = ratioDown(
+      portfolio.spendable.amount / BigInt(buying.length),
+      portfolio.value.amount,
+    );
+    for (const symbol of buying) {
+      const held = weights.get(symbol) ?? new RuleDecimal(0);
+      const room = RuleDecimal.max(new RuleDecimal(target).minus(held), 0);
+      weights.set(symbol, plus(held, RuleDecimal.min(each, room)));
+      reasons.set(symbol, `${strategy}: picked at the last review, topped up to its share`);
+    }
+  }
+  return { weights, reasons };
+};
+
 /** A set of stocks as a strategy remembers it, as Python's `write_set`: `IDX:SYMBOL` entries in
  * order, separated by spaces, so the same set is always the same text. */
 export const writeSet = (symbols: Iterable<string>): string =>

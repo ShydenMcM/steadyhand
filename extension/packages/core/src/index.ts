@@ -6,6 +6,7 @@ export * from "./buy-and-hold.ts";
 export * from "./broker-view.ts";
 export * from "./cash.ts";
 export * from "./dividend-growth.ts";
+export * from "./high-yield.ts";
 export * from "./freshness.ts";
 export * from "./indonesian-number.ts";
 export * from "./money.ts";

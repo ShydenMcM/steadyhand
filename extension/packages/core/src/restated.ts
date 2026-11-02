@@ -3,7 +3,7 @@
  * day it is read for, and an amount is worked in whole numbers and rounded down once. */
 
 import type Decimal from "decimal.js";
-import type { Day, Dividend, Split } from "./broker-view.ts";
+import type { Day, Dividend, Dividends, Split } from "./broker-view.ts";
 import { IDR, Money } from "./money.ts";
 import { RuleDecimal } from "./ratio.ts";
 
@@ -53,4 +53,46 @@ export const restatedPerShare = (
 ): Decimal => {
   const [old, now] = splitRatio(dividend.symbol, dividend.exDate, splits, asOf);
   return new RuleDecimal(dividend.grossPerShare).times(old.toString()).div(now.toString());
+};
+
+/** A dividend as a strategy reads it: per share in the shares of the day it is read for. */
+export interface PaidDividend {
+  readonly exDate: Day;
+  readonly paymentDate: Day;
+  readonly perShare: Decimal;
+}
+
+/** The dividends `read` lists with an ex-date by `day`, restated in `day`'s shares. A dividend
+ * announced for later has not been paid yet. */
+export const paidBy = (read: Dividends, splits: readonly Split[], day: Day): PaidDividend[] =>
+  read.dividends
+    .filter((dividend) => dividend.exDate <= day)
+    .map((dividend) => ({
+      exDate: dividend.exDate,
+      paymentDate: dividend.paymentDate,
+      perShare: restatedPerShare(dividend, splits, day),
+    }));
+
+/** The day before the trailing yield's window: 365 calendar days before `day`, so the dividends
+ * of the 365 days up to `day` count. */
+const trailingStart = (day: Day): Day => {
+  const moved = new Date(`${day}T00:00:00Z`);
+  moved.setUTCDate(moved.getUTCDate() - 365);
+  return moved.toISOString().slice(0, 10);
+};
+
+/** The trailing yield on `day`: the dividends of `paid` with an ex-date in the 365 days up to
+ * `day`, over `lastClose`, or 0 with no close to divide by. */
+export const trailingYield = (
+  paid: readonly PaidDividend[],
+  day: Day,
+  lastClose: Money | undefined,
+): Decimal => {
+  const since = trailingStart(day);
+  const total = paid
+    .filter((dividend) => dividend.exDate > since)
+    .reduce((sum, dividend) => sum.plus(dividend.perShare), new RuleDecimal(0));
+  return lastClose === undefined || lastClose.amount === 0n
+    ? new RuleDecimal(0)
+    : total.div(lastClose.amount.toString());
 };
