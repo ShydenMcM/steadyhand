@@ -4,8 +4,9 @@
  * place. */
 
 import type Decimal from "decimal.js";
-import type { Day, Watchlist } from "./broker-view.ts";
+import type { Day, Dividends, Split, Watchlist } from "./broker-view.ts";
 import type { Decision } from "./advice.ts";
+import type { Money } from "./money.ts";
 import { missingPage, type Note } from "./notes.ts";
 import { ratioDown, RuleDecimal } from "./ratio.ts";
 import type { PortfolioView } from "./sizing.ts";
@@ -14,11 +15,17 @@ import type { Tradable } from "./tradable.ts";
 /** What a strategy keeps from one advice day to the next, as text, as Python's `Memory`. */
 export type Memory = ReadonlyMap<string, string>;
 
-/** The market as a strategy sees it on its advice day. Strategies that read prices or
- * dividends add them in their own stories (EXT S7b, S8b). */
+/** The market as a strategy sees it on its advice day. */
 export interface MarketView {
   readonly day: Day;
   readonly tradable: Tradable;
+  /** Each stock's close on the advice day, from the watchlist and portfolio reads. */
+  readonly closes: ReadonlyMap<string, Money>;
+  /** Each stock's dividend read, by symbol: its rows and the period it covers (spec §7.1). A
+   * stock with no read is absent. */
+  readonly dividends: ReadonlyMap<string, Dividends>;
+  /** Every split a page has shown, to restate dividends in today's shares (spec §6.6). */
+  readonly splits: readonly Split[];
 }
 
 /** A strategy's answer for one advice day: advice's `Decision`, what to remember until the next

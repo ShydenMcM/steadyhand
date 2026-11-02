@@ -34,6 +34,7 @@ const fill = async (db: IDBDatabase): Promise<void> => {
       grossPerShare: "208.4",
       entry: "#1",
     },
+    [STORES.dividendReads]: { symbol: "BBRI", from: "2025-01-01", to: "2025-06-17" },
     [STORES.cashMovements]: { day: "2025-06-02", kind: "deposit", amount: "5000000", entry: "#1" },
     [STORES.corporateActions]: {
       symbol: "BBCA",

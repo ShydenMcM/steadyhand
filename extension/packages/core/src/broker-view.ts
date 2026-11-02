@@ -91,9 +91,11 @@ export interface Dividend {
   readonly reference?: string;
 }
 
-/** The dividends a page lists and the period it covers (§7.1: none listed is not "pays none"
- * outside that period). */
+/** The dividends one stock's page lists and the period it covers (§5.1, §7.1): inside that
+ * period, a year with none listed is a year the stock paid none; outside it, nothing is known. */
 export interface Dividends {
+  /** The stock the page shows; every row is its. */
+  readonly symbol: string;
   readonly covered: Covered;
   readonly dividends: readonly Dividend[];
 }

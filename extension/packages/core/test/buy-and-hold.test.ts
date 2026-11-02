@@ -23,6 +23,9 @@ const view = (buyable: readonly string[], sellable: readonly string[] = []): Mar
     reasons: new Map(),
     members: new Set(buyable),
   },
+  closes: new Map(),
+  dividends: new Map(),
+  splits: [],
 });
 
 const portfolioOf = (

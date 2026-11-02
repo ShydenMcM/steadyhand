@@ -31,20 +31,30 @@ export interface ReadRules {
   readonly sessions: Dated<SessionRow>;
 }
 
-/** Write `rows` to `store` in one transaction, settled when it commits. */
-const putAll = (db: IDBDatabase, store: StoreName, rows: readonly object[]): Promise<void> =>
+/** Write each store's rows in one transaction, settled when it commits. */
+const putEach = (
+  db: IDBDatabase,
+  writes: readonly (readonly [StoreName, readonly object[]])[],
+): Promise<void> =>
   new Promise((resolve, reject) => {
-    const write = db.transaction(store, "readwrite");
-    for (const row of rows) {
-      write.objectStore(store).put(row);
+    const stores = writes.map(([store]) => store);
+    const write = db.transaction(stores, "readwrite");
+    for (const [store, rows] of writes) {
+      for (const row of rows) {
+        write.objectStore(store).put(row);
+      }
     }
     write.oncomplete = () => {
       resolve();
     };
     write.onerror = () => {
-      reject(failure(write.error, `writing ${store}`));
+      reject(failure(write.error, `writing ${stores.join(" and ")}`));
     };
   });
+
+/** Write `rows` to `store` in one transaction, settled when it commits. */
+const putAll = (db: IDBDatabase, store: StoreName, rows: readonly object[]): Promise<void> =>
+  putEach(db, [[store, rows]]);
 
 /** `rows` each given its `entry` (#470): `ref` and the broker's reference where the row has one,
  * else `#` and its place among the rows of the same read with the same fields, so two equal
@@ -121,22 +131,25 @@ export const recordSeries = (
     },
   ]);
 
-/** Record each dividend a page lists, once: keyed by its own fields and its entry. */
+/** Record each dividend a page lists, once: keyed by its own fields and its entry, and the
+ * period the read covers for its stock, in the same transaction (spec §7.1). */
 export const recordDividends = (db: IDBDatabase, read: Part<Dividends>): Promise<void> =>
-  putAll(
-    db,
-    STORES.dividends,
-    entered(
-      read.value.dividends.map((dividend) => ({
-        symbol: dividend.symbol,
-        exDate: dividend.exDate,
-        paymentDate: dividend.paymentDate,
-        grossPerShare: dividend.grossPerShare.toString(),
-        ...(dividend.reference === undefined ? {} : { reference: dividend.reference }),
-      })),
-      (row) => ("reference" in row ? row.reference : undefined),
-    ),
-  );
+  putEach(db, [
+    [STORES.dividendReads, [{ symbol: read.value.symbol, ...read.value.covered }]],
+    [
+      STORES.dividends,
+      entered(
+        read.value.dividends.map((dividend) => ({
+          symbol: dividend.symbol,
+          exDate: dividend.exDate,
+          paymentDate: dividend.paymentDate,
+          grossPerShare: dividend.grossPerShare.toString(),
+          ...(dividend.reference === undefined ? {} : { reference: dividend.reference }),
+        })),
+        (row) => ("reference" in row ? row.reference : undefined),
+      ),
+    ],
+  ]);
 
 /** Record each cash movement a page lists, once: keyed by its own fields and its entry. A read
  * whose rows do not add up to the totals its page shows is refused and nothing is written,

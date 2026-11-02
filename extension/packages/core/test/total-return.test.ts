@@ -19,6 +19,7 @@ const dividend = (exDate: string, gross: string, symbol = "BBCA"): Dividend => (
   grossPerShare: new RuleDecimal(gross),
 });
 const read = (dividends: Dividend[], from = "2025-01-01", to = "2025-06-30"): Dividends => ({
+  symbol: "BBCA",
   covered: { from, to },
   dividends,
 });

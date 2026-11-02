@@ -60,6 +60,9 @@ const answer = (parity: Case) => {
       reasons: new Map(),
       members: new Set(parity.buyable),
     },
+    closes: new Map(),
+    dividends: new Map(),
+    splits: [],
   };
   const portfolio: PortfolioView = {
     value: rp(parity.value),
