@@ -9,7 +9,7 @@ see_also = ["backtest.report", "risk.backtests_mislead"]
 sources = ["docs/superpowers/specs/2026-09-24-steadyhand-core-design.md §5"]
 +++
 
-A **backtest** asks: if I had run this strategy over these past years, what would have happened?
+A **backtest** asks: had this strategy run over these past years, what would have happened?
 
 steadyhand answers it by stepping through the trading days one at a time. On each day it:
 

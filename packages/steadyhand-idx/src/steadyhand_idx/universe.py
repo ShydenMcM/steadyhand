@@ -2,7 +2,7 @@
 
 Both files are supplied by the user, and steadyhand ships neither. IDX's Terms of Use bar
 redistributing its data for commercial use without written permission, and Apache-2.0 would pass
-on rights we do not hold (docs/research/t-lq45.md §5). docs/lq45-members.md tells a user where IDX
+on rights it does not hold (docs/research/t-lq45.md §5). docs/lq45-members.md tells a user where IDX
 publishes each list; nothing here downloads anything.
 """
 

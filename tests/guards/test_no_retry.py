@@ -1,7 +1,7 @@
 """No retry anywhere in the packages (#179).
 
 Shyden's rule (2026-10-02): a retry is not a fix. It turns a real failure into a pass and hides
-the cause; where the cause is outside our control, fail fast and say so by name. A *retry* here
+the cause; where the cause is beyond the code's reach, fail fast and say so by name. A *retry* here
 is a loop holding a ``try`` whose handler swallows the failure (no ``raise``) while the ``try``
 body uses nothing that changes from one pass to the next: neither the loop's target nor a name
 the loop assigns outside the ``try``. So the same call is simply made again. A loop that

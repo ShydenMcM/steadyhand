@@ -50,7 +50,7 @@ A backtest refuses to start before your first record, and names the first date i
 ```csv
 symbol,from,to,reason
 ABCD,2024-01-02,2024-06-28,Special Monitoring Board
-WXYZ,2025-01-02,,I do not want to own it
+WXYZ,2025-01-02,,Not wanted in the portfolio
 ```
 
 `to` is inclusive and may be left empty. Every row needs a reason, which the daily report shows. No file means no exclusions.

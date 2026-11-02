@@ -239,7 +239,7 @@ The scan reads the built JavaScript through a tokenizer, not a regex, so a forbi
 
 ### 12.2 Release
 - **Reproducible:** the same source builds a byte-identical zip; CI builds twice and compares.
-- **Chrome Web Store verified uploads:** uploads signed with our key (developer.chrome.com/blog/verified-uploads-cws, from 7 May 2025). Signing and upload happen only in a GitHub release environment that needs Shyden's approval, from a reviewed tag on `main`, with provenance attested.
+- **Chrome Web Store verified uploads:** uploads signed with the project's key (developer.chrome.com/blog/verified-uploads-cws, from 7 May 2025). Signing and upload happen only in a GitHub release environment that needs Shyden's approval, from a reviewed tag on `main`, with provenance attested.
 - **A pinned GitHub release zip** for users who want no automatic update.
 - **Shyden's admin part:** the Chrome Web Store developer account, hardware-key two-factor on its Google account, the signing key held only in the release environment, and the release environment's required reviewer.
 

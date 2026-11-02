@@ -83,7 +83,7 @@ const unwrapped = (): (readonly [string, boolean])[] =>
     ...ENTRY_POINTS.map(([label, owner, name]) => [label, refuses(owner, name) === label] as const),
   ].filter(([, holds]) => !holds);
 
-// A callback the refused call never reaches; a mock, so no line of ours waits on it.
+// A callback the refused call never reaches; a mock, so no line of the suite waits on it.
 const ignore = vi.fn();
 
 const PLANTS: readonly (readonly [string, string, () => unknown])[] = [

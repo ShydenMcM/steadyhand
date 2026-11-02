@@ -27,7 +27,7 @@
 
 ## Review Focus
 
-1. **A large amount times a rate** (`Money(10**40 + 1, IDR).times(Decimal("0.0015"), Rounding.UP)`): Decimal's default 28-digit context would round the product *before* our explicit rounding. The expected result is exact (`15 * 10**36 + 1`). Pinned in Task 3 (`test_huge_amounts_are_exact`).
+1. **A large amount times a rate** (`Money(10**40 + 1, IDR).times(Decimal("0.0015"), Rounding.UP)`): Decimal's default 28-digit context would round the product *before* the explicit rounding. The expected result is exact (`15 * 10**36 + 1`). Pinned in Task 3 (`test_huge_amounts_are_exact`).
 2. **A `bool` or `float` where an `int` is expected** (`Money(True, IDR)`, `Money(1.5, IDR)`, `Order(..., quantity=True, ...)`, `Money * 1.5`): `bool` is a subclass of `int`, so a lazy `isinstance` check accepts it. Each is refused with a message naming the type. Pinned in Tasks 3 and 4.
 3. **A `datetime` where a `date` is expected**: `datetime` is a subclass of `date`, and comparing the two raises later, far from the cause. It is refused where it enters (bars, orders, fills, portfolio operations). Pinned in Tasks 4 and 5.
 4. **A back-dated portfolio operation** (a fill dated before the last recorded movement): refused with `ChronologyError`, and the original portfolio is unchanged. Pinned in Task 5.
@@ -3254,7 +3254,7 @@ def test_data_unavailable_keeps_the_callers_message() -> None:
 - [ ] **Step 3: Run against the stubs**
 
 Run: `uv run pytest tests/engine/test_protocols.py`
-Expected: 3 failed, 2 passed. The three tests with a "not an instance" assertion fail, because an empty protocol matches everything. Two pass against the stub, for the reason given: `test_a_minimal_class_satisfies_market_rules`, because anything satisfies an empty protocol (its real check is mypy's, in step 5), and `test_data_unavailable_keeps_the_callers_message`, because an exception class keeping its message is Python's behaviour, not ours. That test pins the type's existence and base class.
+Expected: 3 failed, 2 passed. The three tests with a "not an instance" assertion fail, because an empty protocol matches everything. Two pass against the stub, for the reason given: `test_a_minimal_class_satisfies_market_rules`, because anything satisfies an empty protocol (its real check is mypy's, in step 5), and `test_data_unavailable_keeps_the_callers_message`, because an exception class keeping its message is Python's behaviour, not steadyhand's. That test pins the type's existence and base class.
 
 - [ ] **Step 4: Implement**
 
