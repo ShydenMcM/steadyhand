@@ -8,6 +8,7 @@ export * from "./cash.ts";
 export * from "./dividend-growth.ts";
 export * from "./high-yield.ts";
 export * from "./ma-trend.ts";
+export * from "./momentum-rotation.ts";
 export * from "./freshness.ts";
 export * from "./indonesian-number.ts";
 export * from "./money.ts";
