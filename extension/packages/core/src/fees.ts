@@ -10,6 +10,7 @@
 import type Decimal from "decimal.js";
 import { Costs, Side } from "./costs.ts";
 import { IDR, Money, Rounding } from "./money.ts";
+import { endOfMonth } from "./months.ts";
 import { RuleDecimal } from "./ratio.ts";
 import {
   asDay,
@@ -278,18 +279,6 @@ export const dailyCosts = (schedule: FeeSchedule, traded: Money, on: string): Mo
 export const dividendTax = (schedule: FeeSchedule, gross: Money, on: string): Money => {
   requireRupiah(gross, "gross");
   return gross.timesRate(schedule.dividendTaxRate.on(on).div(HUNDRED), Rounding.UP);
-};
-
-const isLeap = (year: bigint): boolean =>
-  year % 4n === 0n && (year % 100n !== 0n || year % 400n === 0n);
-
-/** `year-month-last day`, as an ISO day. */
-const endOfMonth = (year: bigint, month: bigint): string => {
-  const thirty = month === 4n || month === 6n || month === 9n || month === 11n;
-  const february = isLeap(year) ? 29n : 28n;
-  const last = month === 2n ? february : thirty ? 30n : 31n;
-  const two = (value: bigint): string => String(value).padStart(2, "0");
-  return `${String(year).padStart(4, "0")}-${two(month)}-${two(last)}`;
 };
 
 const yearOf = (day: string): bigint => BigInt(day.slice(0, 4));
