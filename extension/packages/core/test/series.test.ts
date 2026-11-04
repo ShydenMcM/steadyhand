@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import type { Covered, DailyClose, Day, Split, StockDetail } from "../src/broker-view.ts";
+import type { Covered, DailyClose, Day, Split } from "../src/broker-view.ts";
 import { IdxCalendar } from "../src/calendar.ts";
 import { IDR, Money } from "../src/money.ts";
 import { IdxMarketRules } from "../src/rules.ts";
@@ -9,7 +9,9 @@ import {
   stockSeries,
   type ChartRead,
   type SeriesInputs,
+  type StockSeries,
 } from "../src/series.ts";
+import { RuleDecimal } from "../src/ratio.ts";
 
 // A stock's series (spec §6.3, #232 AC1), in today's shares; actions found by price drop what
 // came before (§6.4, AC2). The week of 16 June 2025 has no holiday.
@@ -17,11 +19,15 @@ import {
 const RULES = new IdxMarketRules();
 const CALENDAR = IdxCalendar.shipped();
 const at = (day: string, amount: bigint): DailyClose => ({ day, close: new Money(amount, IDR) });
+/** The range every chart read below covers, unless a test says otherwise. */
+const JUNE: Covered = { from: "2025-06-02", to: "2025-06-30" };
 const chart = (
   closes: DailyClose[],
   adjustment: ChartRead["adjustment"] = "splits",
+  covered: Covered = JUNE,
 ): ChartRead => ({
   adjustment,
+  covered,
   closes,
 });
 const series = (inputs: Partial<SeriesInputs>) => {
@@ -172,16 +178,59 @@ test("an empty chart is no chart", () => {
   ]);
 });
 
-// #230 AC2, spec §7.1: a chart window is missing when no chart reaching its start was read, and
-// ineligible when the chart reaches it but the stock had not started trading by then.
-const reached = (from: Day, firstClose: Day | null): StockDetail => ({
-  symbol: "BBCA",
-  covered: { from, to: "2025-06-30" },
-  closes: firstClose === null ? [] : [{ day: firstClose, close: new Money(9_000n, IDR) }],
+// #490 AC1: the series carries the range its chart read covers, for the windows strategies judge.
+const covered = (inputs: Partial<SeriesInputs>) =>
+  stockSeries(
+    { symbol: "BBCA", chart: undefined, recorded: [], splits: [], ...inputs },
+    RULES,
+    CALENDAR,
+  ).covered;
+
+test("with no chart, the series covers no chart range", () => {
+  expect(covered({ recorded: [at("2025-06-16", 9_000n)] })).toBeNull();
 });
 
-test("missing: no chart read for the window", () => {
+test("the series carries its chart read's range", () => {
+  expect(covered({ chart: chart([at("2025-06-16", 9_000n)]) })).toEqual(JUNE);
+});
+
+test("a chart read with no close still carries its range", () => {
+  expect(covered({ chart: chart([]) })).toEqual(JUNE);
+});
+
+test("a chart whose last close disagrees with the recorded one keeps its range", () => {
+  expect(
+    covered({
+      chart: chart([at("2025-06-16", 9_000n)]),
+      recorded: [at("2025-06-16", 9_100n)],
+    }),
+  ).toEqual(JUNE);
+});
+
+test("an action found by price after the chart drops the chart's range with the chart", () => {
+  expect(
+    covered({
+      chart: chart([at("2025-06-16", 9_000n)]),
+      recorded: [at("2025-06-16", 9_000n), at("2025-06-17", 9_000n), at("2025-06-18", 1_800n)],
+    }),
+  ).toBeNull();
+});
+
+// #230 AC2, #490 AC4, spec §7.1: a chart window is missing when no chart reaching its start was
+// read, and ineligible when the chart reaches it but the stock had not started trading by then.
+const reached = (from: Day | null, firstClose: Day | null): StockSeries => ({
+  closes: firstClose === null ? [] : [{ day: firstClose, close: new RuleDecimal(9_000) }],
+  covered: from === null ? null : { from, to: "2025-06-30" },
+  dividendsAdjustedTo: null,
+  missing: [],
+});
+
+test("missing: no series for the window", () => {
   expect(chartReach(undefined, "2025-01-02")).toBe("missing");
+});
+
+test("missing: a series of self-recorded closes alone, with no chart range", () => {
+  expect(chartReach(reached(null, "2024-12-02"), "2025-01-02")).toBe("missing");
 });
 
 test("missing: a chart whose range starts after the window's start", () => {

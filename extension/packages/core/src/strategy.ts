@@ -6,6 +6,7 @@
 import type Decimal from "decimal.js";
 import type { Day, Dividends, Split, Watchlist } from "./broker-view.ts";
 import type { Decision } from "./advice.ts";
+import type { IdxCalendar } from "./calendar.ts";
 import type { Money } from "./money.ts";
 import { missingPage, type Note } from "./notes.ts";
 import { ratioDown, rupiahUp, RuleDecimal } from "./ratio.ts";
@@ -34,6 +35,8 @@ export interface MarketView {
   /** Each stock's price series in today's shares (spec §6.3), by symbol, for the strategies that
    * judge total return (§6.5). A stock with no chart and no recorded closes is absent. */
   readonly series: ReadonlyMap<string, StockSeries>;
+  /** The IDX trading days, to find where a window of trading days starts (spec §7.1). */
+  readonly calendar: IdxCalendar;
 }
 
 /** A strategy's answer for one advice day: advice's `Decision`, what to remember until the next

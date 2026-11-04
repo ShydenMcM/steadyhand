@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import type { Covered, Day, Dividend, Dividends } from "../src/broker-view.ts";
+import { IdxCalendar } from "../src/calendar.ts";
 import { MA_TREND, maTrend } from "../src/ma-trend.ts";
 import { IDR, Money } from "../src/money.ts";
 import { missingHistory, missingPage, type Note } from "../src/notes.ts";
@@ -17,6 +18,7 @@ import type { MarketView, Memory } from "../src/strategy.ts";
 
 const STOCKS = ["ASII", "BBCA", "BBRI", "TLKM", "UNVR"] as const;
 const SMALL = maTrend(2n, 4n);
+const CALENDAR = IdxCalendar.shipped();
 
 const rp = (amount: bigint): Money => new Money(amount, IDR);
 
@@ -27,7 +29,8 @@ const dayOf = (index: bigint): Day => {
   return `2024-${month}-${date}`;
 };
 
-/** A series of `closes`, the first on 1 January 2024, unadjusted for dividends. */
+/** A series of `closes`, the first on 1 January 2024, unadjusted for dividends, from a chart
+ * whose range starts on its first close. */
 const seriesOf = (closes: readonly string[]): StockSeries => {
   const daily: SeriesClose[] = [];
   let index = 0n;
@@ -35,7 +38,9 @@ const seriesOf = (closes: readonly string[]): StockSeries => {
     daily.push({ day: dayOf(index), close: new RuleDecimal(close) });
     index += 1n;
   }
-  return { closes: daily, dividendsAdjustedTo: null, missing: [] };
+  const first = daily[0];
+  const covered = first === undefined ? null : { from: first.day, to: dayOf(index - 1n) };
+  return { closes: daily, covered, dividendsAdjustedTo: null, missing: [] };
 };
 
 /** `count` closes of `close`. */
@@ -91,6 +96,7 @@ const view = (day: Day, buyable: readonly string[], options: ViewOptions = {}): 
     splits: [],
     unknownActions: new Map(),
     series: new Map(Object.entries(options.series ?? {})),
+    calendar: CALENDAR,
   };
 };
 
@@ -358,5 +364,91 @@ test("missing: every judged stock is listed, in symbol order, with the rest read
   expect([weighed(found.weights), found.missing]).toEqual([
     {},
     [missingPage("stock-detail", "BBRI"), missingPage("stock-detail", "TLKM")],
+  ]);
+});
+
+// Ineligible (#490 AC2, AC5, spec §7.1): a stock whose chart reaches back to the start of its
+// slow_days window, but whose first close comes after it, was not trading then. It is not in an
+// uptrend, and the other stocks still get orders. These use real trading days: the advice day is
+// Monday 8 January 2024, so the 4-day window starts on Wednesday 3 January (1 January is a
+// holiday, 6 and 7 a weekend).
+
+const MONDAY = "2024-01-08";
+/** A series of `closes`, each a day and its close, from a chart whose range starts on `from`. */
+const listed = (from: Day, closes: readonly (readonly [Day, string])[]): StockSeries => ({
+  closes: closes.map(([day, close]) => ({ day, close: new RuleDecimal(close) })),
+  covered: { from, to: MONDAY },
+  dividendsAdjustedTo: null,
+  missing: [],
+});
+/** BBRI, in an uptrend over the whole window. */
+const BBRI_UP = listed("2023-12-01", [
+  ["2024-01-03", "100"],
+  ["2024-01-04", "100"],
+  ["2024-01-05", "110"],
+  [MONDAY, "110"],
+]);
+/** BBCA, listed on 4 January, inside the window: its chart reaches back to December. */
+const NEW_LISTING = listed("2023-12-01", [
+  ["2024-01-04", "100"],
+  ["2024-01-05", "110"],
+  [MONDAY, "120"],
+]);
+const SHORT = "ma-trend: not in an uptrend, its history is shorter than 4 trading days";
+
+test("ineligible: a listing inside the window is not bought, and the others still are", () => {
+  const found = decided(MONDAY, ["BBCA", "BBRI"], { series: { BBCA: NEW_LISTING, BBRI: BBRI_UP } });
+  expect([weighed(found.weights), Object.fromEntries(found.reasons), found.missing]).toEqual([
+    { BBRI: "0.5" },
+    { BBRI: UP },
+    [],
+  ]);
+});
+
+test("ineligible: a listing already held is sold, with a reason naming its short history", () => {
+  const found = decided(
+    MONDAY,
+    ["BBCA", "BBRI"],
+    { series: { BBCA: NEW_LISTING, BBRI: BBRI_UP } },
+    portfolioOf(500_000n, { BBCA: 500_000n }),
+  );
+  expect([weighed(found.weights), Object.fromEntries(found.reasons), found.missing]).toEqual([
+    { BBRI: "0.5" },
+    { BBCA: SHORT, BBRI: UP },
+    [],
+  ]);
+});
+
+test("ineligible needs no dividend read: it is not judged by total return", () => {
+  const options = { series: { BBCA: NEW_LISTING, BBRI: BBRI_UP }, covered: { BBCA: null } };
+  const found = decided(MONDAY, ["BBCA", "BBRI"], options);
+  expect([weighed(found.weights), found.missing]).toEqual([{ BBRI: "0.5" }, []]);
+});
+
+test("a listing on the window's first day is judged: 3 January opens its 4 closes", () => {
+  const found = decided(MONDAY, ["BBRI"], { series: { BBRI: BBRI_UP } });
+  expect([weighed(found.weights), found.missing]).toEqual([{ BBRI: "1" }, []]);
+});
+
+test("missing: a chart whose range ends short of the window's start is still missing history", () => {
+  const series = listed("2024-01-04", [
+    ["2024-01-04", "100"],
+    ["2024-01-05", "110"],
+    [MONDAY, "120"],
+  ]);
+  expect(gaps({ series: { BBCA: series } }, MONDAY)).toEqual([
+    missingHistory("BBCA", { from: "2024-01-04", to: MONDAY }, 3n),
+  ]);
+});
+
+test("missing: a chart covering the window with too few closes in it is still missing history", () => {
+  // Trading from 2 January, but with no close on 3 or 5 January.
+  const series = listed("2023-12-01", [
+    ["2024-01-02", "100"],
+    ["2024-01-04", "110"],
+    [MONDAY, "120"],
+  ]);
+  expect(gaps({ series: { BBCA: series } }, MONDAY)).toEqual([
+    missingHistory("BBCA", { from: "2024-01-02", to: MONDAY }, 3n),
   ]);
 });

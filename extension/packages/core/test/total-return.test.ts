@@ -9,6 +9,7 @@ import { totalReturn } from "../src/total-return.ts";
 const close = (day: string, amount: string) => ({ day, close: new RuleDecimal(amount) });
 const SERIES: StockSeries = {
   closes: [close("2025-06-16", "1000"), close("2025-06-17", "1000"), close("2025-06-18", "950")],
+  covered: null,
   dividendsAdjustedTo: null,
   missing: [],
 };

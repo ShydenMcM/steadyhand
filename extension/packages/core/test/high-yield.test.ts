@@ -1,11 +1,15 @@
 import { expect, test } from "vitest";
 import type { Covered, Day, Dividend, Dividends, Split } from "../src/broker-view.ts";
+import { IdxCalendar } from "../src/calendar.ts";
 import { HIGH_YIELD, highYield } from "../src/high-yield.ts";
 import { IDR, Money } from "../src/money.ts";
 import { missingPage, note, NOTE_CODES } from "../src/notes.ts";
 import { ratioDown, RuleDecimal } from "../src/ratio.ts";
 import type { PortfolioView } from "../src/sizing.ts";
 import type { MarketView, Memory } from "../src/strategy.ts";
+
+/** The shipped IDX trading days, read once. */
+const CALENDAR = IdxCalendar.shipped();
 
 // Hand-computed examples, one test per case, written from spec §7.2 before the code: there is no
 // Python reference for high-yield (#233 AC1).
@@ -90,6 +94,7 @@ const view = (
     dividends: reads,
     splits: options.splits ?? [],
     unknownActions: new Map(Object.entries(options.actions ?? {})),
+    calendar: CALENDAR,
     series: new Map(),
   };
 };

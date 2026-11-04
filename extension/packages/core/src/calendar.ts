@@ -129,6 +129,13 @@ export const parseHolidays = (value: unknown, file: string = HOLIDAYS_FILE): Hol
   return years;
 };
 
+/** Refuse a count of trading days that is not a bigint of at least 1. */
+const requireCount = (count: bigint): void => {
+  if (typeof count !== "bigint" || count < 1n) {
+    throw new RangeError(`count must be a bigint of at least 1, got ${String(count)}`);
+  }
+};
+
 /** Which days the IDX regular market is open, for the years it has holiday data. */
 export class IdxCalendar {
   private readonly years: ReadonlyMap<string, HolidayYear>;
@@ -204,15 +211,24 @@ export class IdxCalendar {
   /** The `count`-th trading day after `day` (`count` of at least 1). `day` itself need not be a
    * trading day: the count starts on the day after it. */
   addTradingDays(day: string, count: bigint): string {
-    if (typeof count !== "bigint" || count < 1n) {
-      throw new RangeError(`count must be a bigint of at least 1, got ${String(count)}`);
-    }
+    requireCount(count);
     let found = day;
     for (let left = count; left > 0n;) {
       found = dayAfter(found);
       if (this.isTradingDay(found)) {
         left -= 1n;
       }
+    }
+    return found;
+  }
+
+  /** The first of the last `count` trading days on or before `end` (`count` of at least 1):
+   * where a window of `count` trading days ending on `end` starts. */
+  windowStart(end: string, count: bigint): string {
+    requireCount(count);
+    let found = this.isTradingDay(end) ? end : this.previousTradingDay(end);
+    for (let left = count - 1n; left > 0n; left -= 1n) {
+      found = this.previousTradingDay(found);
     }
     return found;
   }

@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import type { Covered, Day, Dividend, Dividends } from "../src/broker-view.ts";
+import { IdxCalendar } from "../src/calendar.ts";
 import { MOMENTUM_ROTATION, momentumRotation } from "../src/momentum-rotation.ts";
 import { IDR, Money } from "../src/money.ts";
 import { missingHistory, missingPage, note, NOTE_CODES } from "../src/notes.ts";
@@ -8,11 +9,14 @@ import type { SeriesClose, StockSeries } from "../src/series.ts";
 import type { PortfolioView } from "../src/sizing.ts";
 import type { MarketView, Memory } from "../src/strategy.ts";
 
+/** The shipped IDX trading days, read once. */
+const CALENDAR = IdxCalendar.shipped();
+
 // Hand-computed examples, one test per case, written from spec §7.2 before the code: there is no
 // Python reference for momentum-rotation (#235 AC1).
 //
-// Most tests use `momentum_months` 2 and `skip_months` 1, so a stock needs 23 × 2 + 1 = 47
-// total-return closes, and the advice day is Friday 31 May 2024. Its momentum runs from the close
+// Most tests use `momentum_months` 2 and `skip_months` 1, and the advice day is Friday 31 May 2024.
+// Its momentum runs from the close
 // on the last trading day on or before Sunday 31 March (Good Friday, 29 March, is a holiday, so
 // Thursday 28 March) to the close on the last trading day on or before 30 April (April has no
 // 31st). Every close is 100 unless a test sets it, so a stock's momentum is its 30 April close over
@@ -59,16 +63,19 @@ const tradingDays = (until: Day): Day[] =>
     .filter((entry) => entry.trading)
     .map((entry) => entry.day);
 
-/** A series closing at 100 on each of `days` except where `set` says, unadjusted for dividends. */
+/** A series closing at 100 on each of `days` except where `set` says, unadjusted for dividends,
+ * from a chart whose range starts on `from`, by default its first close. */
 const seriesOn = (
   days: readonly Day[],
   set: Readonly<Record<string, string>> = {},
+  from: Day | undefined = days[0],
 ): StockSeries => {
   const closes: SeriesClose[] = days.map((day) => ({
     day,
     close: new RuleDecimal(set[day] ?? "100"),
   }));
-  return { closes, dividendsAdjustedTo: null, missing: [] };
+  const covered = from === undefined ? null : { from, to: DAY };
+  return { closes, covered, dividendsAdjustedTo: null, missing: [] };
 };
 
 /** A series on every trading day of 2023 and 2024 up to `until`. */
@@ -108,6 +115,7 @@ const view = (day: Day, buyable: readonly string[], options: ViewOptions = {}): 
     splits: [],
     unknownActions: new Map(),
     series: new Map(Object.entries(options.series ?? {})),
+    calendar: CALENDAR,
   };
 };
 
@@ -375,35 +383,94 @@ const withBbca = (series: StockSeries, options: ViewOptions = {}) =>
     LAST_MONTH,
   );
 
-test("47 closes are enough with 2 momentum months", () => {
-  const days = tradingDays(DAY).slice(-47);
-  expect(days[0]).toBe("2024-03-27");
-  const decision = withBbca(seriesOn(days));
-  expect([weighed(decision.weights), decision.missing]).toEqual([{ ASII: "0.5", BBCA: "0.5" }, []]);
+// Ranked once its chart proves it traded at the window's start, 31 March (#490 AC3, AC5, ruled
+// 2026-11-04): no count of closes is needed.
+
+const NOT_TRADING = "momentum-rotation: not ranked, it had not started trading by 2024-03-31";
+/** BBCA, listed on 1 April, inside the window: its chart reaches back to 1 March. */
+const NEW_LISTING = seriesOn(
+  tradingDays(DAY).filter((day) => day >= "2024-04-01"),
+  {},
+  "2024-03-01",
+);
+
+test("a listing on the window's first trading day is ranked, with that day's close", () => {
+  // 28 March, the last trading day on or before 31 March, to 30 April: 100 to 150.
+  const days = tradingDays(DAY).filter((day) => day >= "2024-03-28");
+  const decision = ONE.decide(
+    view(DAY, ["ASII", "BBCA"], {
+      series: { ASII: seriesTo(DAY), BBCA: seriesOn(days, { "2024-04-30": "150" }, "2024-03-01") },
+    }),
+    CASH,
+    NONE,
+  );
+  expect([weighed(decision.weights), decision.missing]).toEqual([{ BBCA: "1" }, []]);
 });
 
-test("46 closes are missing history: nothing is ordered and the memory is kept", () => {
-  const days = tradingDays(DAY).slice(-46);
-  expect(days[0]).toBe("2024-03-28");
-  const decision = withBbca(seriesOn(days));
-  expect(decision).toEqual({
-    weights: new Map(),
-    reasons: new Map(),
-    missing: [missingHistory("BBCA", { from: "2024-03-28", to: DAY }, 46n)],
-    memory: LAST_MONTH,
-    notes: [],
-  });
+test("ineligible: a listing inside the window is not ranked, and the others still are", () => {
+  const decision = withBbca(NEW_LISTING);
+  expect([
+    weighed(decision.weights),
+    Object.fromEntries(decision.reasons),
+    decision.missing,
+    decision.memory,
+    decision.notes,
+  ]).toEqual([
+    { ASII: "0.5" },
+    { ASII: among(2n), BBCA: NOT_TRADING },
+    [],
+    new Map([
+      ["set", "IDX:ASII"],
+      ["month", "2024-05"],
+    ]),
+    [
+      note(
+        NOTE_CODES.STRATEGY_TOO_FEW_QUALIFIED,
+        "Only 1 stock could be ranked by momentum; the rest is held as cash until more can.",
+      ),
+    ],
+  ]);
 });
 
-test("enough closes that all fall after the window's start are missing history", () => {
+test("ineligible: a listing already held is sold, with a reason naming the window's start", () => {
+  const decision = SMALL.decide(
+    view(DAY, ["ASII", "BBCA"], { series: { ASII: seriesTo(DAY), BBCA: NEW_LISTING } }),
+    portfolioOf(500_000n, { BBCA: 500_000n }),
+    LAST_MONTH,
+  );
+  expect([weighed(decision.weights), Object.fromEntries(decision.reasons)]).toEqual([
+    { ASII: "0.5" },
+    { ASII: among(2n), BBCA: NOT_TRADING },
+  ]);
+});
+
+test("ineligible needs no dividend read: it is not judged by total return", () => {
+  const decision = withBbca(NEW_LISTING, { covered: { BBCA: { from: "2024-05-01", to: DAY } } });
+  expect([weighed(decision.weights), decision.missing]).toEqual([{ ASII: "0.5" }, []]);
+});
+
+test("a chart whose range starts after the window's start is missing history, however long", () => {
   // 15 April to 31 May, every calendar day: 47 closes, none on or before 31 March.
   const days = calendar(DAY)
     .map((entry) => entry.day)
     .filter((day) => day >= "2024-04-15");
   expect(BigInt(days.length)).toBe(47n);
   const decision = withBbca(seriesOn(days));
-  expect(decision.missing).toEqual([missingHistory("BBCA", { from: "2024-04-15", to: DAY }, 47n)]);
-  expect(decision.weights).toEqual(new Map());
+  expect(decision).toEqual({
+    weights: new Map(),
+    reasons: new Map(),
+    missing: [missingHistory("BBCA", { from: "2024-04-15", to: DAY }, 47n)],
+    memory: LAST_MONTH,
+    notes: [],
+  });
+});
+
+test("self-recorded closes with no chart range are missing history, however long", () => {
+  const days = tradingDays(DAY);
+  const decision = withBbca({ ...seriesOn(days), covered: null });
+  expect(decision.missing).toEqual([
+    missingHistory("BBCA", { from: "2023-01-02", to: DAY }, BigInt(days.length)),
+  ]);
 });
 
 test("a stock with no series is missing its chart", () => {
@@ -443,25 +510,6 @@ test("a stock that left the universe needs no series", () => {
     NONE,
   );
   expect([weighed(decision.weights), decision.missing]).toEqual([{ ASII: "0.5" }, []]);
-});
-
-test("by default it needs 277 closes", () => {
-  const days = tradingDays(DAY);
-  const short = days.slice(-276);
-  const first = short[0] ?? DAY;
-  const strategy = momentumRotation();
-  const without = strategy.decide(
-    view(DAY, ["BBCA"], { series: { BBCA: seriesOn(short) } }),
-    CASH,
-    NONE,
-  );
-  expect(without.missing).toEqual([missingHistory("BBCA", { from: first, to: DAY }, 276n)]);
-  const enough = strategy.decide(
-    view(DAY, ["BBCA"], { series: { BBCA: seriesOn(days.slice(-277)) } }),
-    CASH,
-    NONE,
-  );
-  expect([weighed(enough.weights), enough.missing]).toEqual([{ BBCA: "0.1" }, []]);
 });
 
 // Reviews (AC5) and between them (AC4).

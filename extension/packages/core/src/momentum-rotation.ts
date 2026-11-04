@@ -10,17 +10,18 @@
  * Between reviews it keeps its holdings and puts new cash into its picks, never above
  * 1/`momentumStocks`.
  *
- * Missing versus ineligible (spec §7.1): a review judges every universe stock it can buy or holds,
- * and each needs 23 × `momentumMonths` + 1 total-return closes, the first on or before the
- * window's start. A stock with no series, a series asking for its chart again, an unread dividend
- * window or too short a history is missing: nothing is ordered, and the memory is kept so the
- * next advice day reviews again. */
+ * Missing versus ineligible (spec §7.1, ruled on #490): a review judges every universe stock it can
+ * buy or holds, and ranks one once its chart proves it traded at the window's start. A stock whose
+ * chart reaches the start but whose first close comes after it was not trading then: it is
+ * ineligible, not ranked, and the others still are. A stock with no series, a series asking for
+ * its chart again, an unread dividend window or no chart reaching the start is missing: nothing
+ * is ordered, and the memory is kept so the next advice day reviews again. */
 
 import type Decimal from "decimal.js";
 import { monthsBefore } from "./months.ts";
 import { missingHistory, missingPage, note, NOTE_CODES, type Note } from "./notes.ts";
 import { ratioDown, RuleDecimal } from "./ratio.ts";
-import type { SeriesClose } from "./series.ts";
+import { chartReach } from "./series.ts";
 import type { PortfolioView } from "./sizing.ts";
 import {
   keepAndTopUp,
@@ -78,46 +79,49 @@ export const momentumRotation = (
       `skip_months must be below momentum_months, got ${skipMonths.toString()} and ${momentumMonths.toString()}`,
     );
   }
-  const needed = 23n * momentumMonths + 1n;
   const target = ratioDown(1n, momentumStocks);
   const strongest = `the ${momentumStocks.toString()} strongest by momentum`;
 
-  /** `symbol`'s window on `view`'s day, or the gaps that keep it from being ranked. */
+  /** `symbol`'s window on `view`'s day, `ineligible`, or the gaps that keep it from being ranked. */
   const judge = (
     view: MarketView,
     symbol: string,
-  ): { readonly ranked: Ranked | null; readonly missing: readonly Note[] } => {
+  ): { readonly ranked: Ranked | "ineligible" | null; readonly missing: readonly Note[] } => {
     const series = view.series.get(symbol);
     const first = series?.closes[0];
     if (series === undefined || first === undefined) {
       return { ranked: null, missing: [missingPage("stock-detail", symbol)] };
     }
+    const startDay = monthsBefore(view.day, momentumMonths);
+    const reach = chartReach(series, startDay);
+    if (reach === "ineligible") {
+      return { ranked: "ineligible", missing: [] };
+    }
     const found = totalReturn(symbol, series, view.dividends.get(symbol), view.splits, view.day);
     if (found.missing.length > 0) {
       return { ranked: null, missing: found.missing };
     }
-    const held = BigInt(found.closes.length);
-    const short = [missingHistory(symbol, { from: first.day, to: view.day }, held)];
-    if (held < needed) {
-      return { ranked: null, missing: short };
+    if (reach === "missing") {
+      const held = BigInt(found.closes.length);
+      return {
+        ranked: null,
+        missing: [missingHistory(symbol, { from: first.day, to: view.day }, held)],
+      };
     }
-    const startDay = monthsBefore(view.day, momentumMonths);
     const endDay = monthsBefore(view.day, skipMonths);
-    let start: SeriesClose | undefined;
-    // Set from a close on or before `startDay` whenever `start` is, which is all that is read.
+    // The chart covers the window's start, so its first close is on or before `startDay` and both
+    // are set from a close; the end is on or after the start.
+    let start: Decimal = new RuleDecimal(0);
     let end: Decimal = new RuleDecimal(0);
     for (const daily of found.closes) {
       if (daily.day <= startDay) {
-        start = daily;
+        start = daily.close;
       }
       if (daily.day <= endDay) {
         end = daily.close;
       }
     }
-    if (start === undefined) {
-      return { ranked: null, missing: short };
-    }
-    return { ranked: { symbol, start: start.close, end }, missing: [] };
+    return { ranked: { symbol, start, end }, missing: [] };
   };
 
   const tooFew = (count: bigint): string => {
@@ -134,11 +138,14 @@ export const momentumRotation = (
       .filter((symbol) => members.has(symbol))
       .sort();
     const ranked: Ranked[] = [];
+    const ineligible: string[] = [];
     const missing: Note[] = [];
     for (const symbol of reachable) {
       const judged = judge(view, symbol);
       missing.push(...judged.missing);
-      if (judged.ranked !== null) {
+      if (judged.ranked === "ineligible") {
+        ineligible.push(symbol);
+      } else if (judged.ranked !== null) {
         ranked.push(judged.ranked);
       }
     }
@@ -158,6 +165,10 @@ export const momentumRotation = (
     const reasons = new Map<string, string>();
     for (const symbol of portfolio.holdings.keys()) {
       reasons.set(symbol, `${NAME}: no longer in the universe`);
+    }
+    const startDay = monthsBefore(view.day, momentumMonths);
+    for (const symbol of ineligible) {
+      reasons.set(symbol, `${NAME}: not ranked, it had not started trading by ${startDay}`);
     }
     for (const stock of ranked) {
       reasons.set(stock.symbol, `${NAME}: not among ${strongest}`);

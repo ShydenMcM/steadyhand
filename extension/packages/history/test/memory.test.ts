@@ -1,8 +1,11 @@
-import { IDR, Money, monthlySavings, storedAfter } from "@steadyhand/core";
+import { IdxCalendar, IDR, Money, monthlySavings, storedAfter } from "@steadyhand/core";
 import { IDBFactory } from "fake-indexeddb";
 import { beforeEach, expect, test } from "vitest";
 import { remember, rememberedFor, rowsOf } from "../src/record.ts";
 import { openHistory, STORES } from "../src/schema.ts";
+
+/** The shipped IDX trading days, read once. */
+const CALENDAR = IdxCalendar.shipped();
 
 // Strategy memory in the store (#229 AC1): kept with the advice day it was written for, so
 // advising again that day starts from the memory the day began with.
@@ -60,6 +63,7 @@ test("the advice for a day is the same however often it is asked for", async () 
     dividends: new Map(),
     splits: [],
     unknownActions: new Map(),
+    calendar: CALENDAR,
     series: new Map(),
   };
   const portfolio = {

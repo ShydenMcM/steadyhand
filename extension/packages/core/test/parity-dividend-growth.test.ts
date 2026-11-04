@@ -1,11 +1,15 @@
 import { expect, test } from "vitest";
 import type { Dividends } from "../src/broker-view.ts";
+import { IdxCalendar } from "../src/calendar.ts";
 import { dividendGrowth } from "../src/dividend-growth.ts";
 import { IDR, Money } from "../src/money.ts";
 import { RuleDecimal } from "../src/ratio.ts";
 import type { PortfolioView } from "../src/sizing.ts";
 import type { MarketView } from "../src/strategy.ts";
 import fixture from "./parity-dividend-growth.json" with { type: "json" };
+
+/** The shipped IDX trading days, read once. */
+const CALENDAR = IdxCalendar.shipped();
 
 // The parity harness for dividend-growth (#230 AC5, spec §14.4): journeys of advice days that
 // Python's dividend-growth decided (`scripts/core_fixtures.py`), each day from the memory the
@@ -92,6 +96,7 @@ const answer = (parity: Case) => {
     },
     closes: new Map(Object.entries(parity.closes).map(([symbol, price]) => [symbol, rp(price)])),
     unknownActions: new Map(),
+    calendar: CALENDAR,
     series: new Map(),
     dividends: readsOf(parity),
     splits: parity.splits.map((split) => ({

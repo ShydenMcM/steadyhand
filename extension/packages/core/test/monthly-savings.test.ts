@@ -1,10 +1,14 @@
 import type Decimal from "decimal.js";
 import { expect, test } from "vitest";
+import { IdxCalendar } from "../src/calendar.ts";
 import { monthlySavings } from "../src/monthly-savings.ts";
 import { IDR, Money } from "../src/money.ts";
 import { ratioDown, RuleDecimal } from "../src/ratio.ts";
 import type { PortfolioView } from "../src/sizing.ts";
 import { plus, weightOf, type MarketView, type Memory } from "../src/strategy.ts";
+
+/** The shipped IDX trading days, read once. */
+const CALENDAR = IdxCalendar.shipped();
 
 // Ported from Python's tests/engine/test_monthly_savings.py, one test per case (M6 spec §5), with
 // the extension's bounds on `instalments` (12 by default, from 1 to 120, #229 AC4).
@@ -29,6 +33,7 @@ const view = (day: string, buyable: readonly string[]): MarketView => ({
   dividends: new Map(),
   splits: [],
   unknownActions: new Map(),
+  calendar: CALENDAR,
   series: new Map(),
 });
 

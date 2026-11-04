@@ -11,7 +11,7 @@
 
 import type Decimal from "decimal.js";
 import { actionBetween } from "./actions.ts";
-import type { Covered, DailyClose, Day, Split, StockDetail } from "./broker-view.ts";
+import type { Covered, DailyClose, Day, Split } from "./broker-view.ts";
 import type { IdxCalendar } from "./calendar.ts";
 import { Money } from "./money.ts";
 import { missingPage, type Note } from "./notes.ts";
@@ -23,6 +23,8 @@ export type Adjustment = "none" | "splits" | "splits-and-dividends";
 
 export interface ChartRead {
   readonly adjustment: Adjustment;
+  /** The days the chart's range spans: a stock with no close in part of it was not trading then. */
+  readonly covered: Covered;
   /** In day order, as the chart shows them. */
   readonly closes: readonly DailyClose[];
 }
@@ -36,6 +38,9 @@ export interface SeriesClose {
 export interface StockSeries {
   /** In day order. */
   readonly closes: readonly SeriesClose[];
+  /** The range of the chart read the closes start with, or `null` with none: no chart was read,
+   * or a corporate action found by price after it dropped it. */
+  readonly covered: Covered | null;
   /** The last day the closes are already adjusted for dividends to (a `splits-and-dividends`
    * chart's last day), or `null`: total return adjusts only for dividends after it. */
   readonly dividendsAdjustedTo: Day | null;
@@ -160,6 +165,7 @@ export const stockSeries = (
     const own = sinceLastAction(symbol, inputs.recorded, splits, rules, calendar);
     return {
       closes: own.closes.map((daily) => inTodaysShares(daily, splits, null)),
+      covered: chart?.covered ?? null,
       dividendsAdjustedTo: null,
       missing: own.found !== undefined ? [missingPage("stock-detail", symbol)] : [],
     };
@@ -170,6 +176,7 @@ export const stockSeries = (
   if (same !== undefined && !same.close.equals(last.close)) {
     return {
       closes: chartCloses(chart, last, splits),
+      covered: chart.covered,
       dividendsAdjustedTo,
       missing: [missingPage("stock-detail", symbol)],
     };
@@ -178,6 +185,7 @@ export const stockSeries = (
   if (own.found !== undefined) {
     return {
       closes: own.closes.map((daily) => inTodaysShares(daily, splits, null)),
+      covered: null,
       dividendsAdjustedTo: null,
       missing: [missingPage("stock-detail", symbol)],
     };
@@ -189,22 +197,23 @@ export const stockSeries = (
         .filter((daily) => daily.day > last.day)
         .map((daily) => inTodaysShares(daily, splits, null)),
     ],
+    covered: chart.covered,
     dividendsAdjustedTo,
     missing: [],
   };
 };
 
-/** How far a chart read reaches back towards `start`, a window's first day (spec §7.1, M7
- * decision 4): `missing` when no chart was read or its range starts after `start`, so the facts
- * are unread; `ineligible` when its range reaches `start` but its first close comes after it,
- * so the stock was not trading then; else `covers`. */
+/** How far `series`'s chart read reaches back towards `start`, a window's first day (spec §7.1,
+ * M7 decision 4): `missing` when there is no series or chart range, or its range starts after
+ * `start`, so the facts are unread; `ineligible` when its range reaches `start` but its first
+ * close comes after it, so the stock was not trading then; else `covers`. */
 export const chartReach = (
-  detail: StockDetail | undefined,
+  series: StockSeries | undefined,
   start: Day,
 ): "missing" | "ineligible" | "covers" => {
-  if (detail === undefined || detail.covered.from > start) {
+  if (series === undefined || series.covered === null || series.covered.from > start) {
     return "missing";
   }
-  const first = detail.closes[0];
+  const first = series.closes[0];
   return first === undefined || first.day > start ? "ineligible" : "covers";
 };
