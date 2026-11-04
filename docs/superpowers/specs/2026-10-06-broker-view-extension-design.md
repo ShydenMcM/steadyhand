@@ -117,7 +117,7 @@ Every part carries its source (broker, page kind, route) and the instant it was 
 ### 5.2 Rules every reader follows
 - A reader is a pure function from a snapshot (HTML text, pasted text or file bytes) to one part of the broker view, or a refusal naming what it did not recognise.
 - **Fail closed:** an unknown label, a missing column, a changed layout or a number it cannot parse exactly is refused by name. Indonesian formats are parsed exactly (`1.234.567` is one million and more; `1.234,50` is one thousand and more with a decimal comma), and a number whose format is ambiguous in that broker's locale is refused.
-- **One test per saved real page**, using pages Shyden saves from his own account, with personal details replaced by a scrubber that a test proves leaves no account number, name or email in the fixture.
+- **One test per saved real page**, using pages Shyden saves from his own account, with personal details replaced by a scrubber that a test proves leaves no personal detail in the fixture: the holder's names, address and account numbers (given), and emails, phone numbers, NIK, NPWP, SID and any other run of ten or more digits, such as an RDN or securities account number (by shape, #460).
 - **Each broker reader declares its chart's adjustment** (none, splits, or splits and dividends), established from the broker's documentation or measured on saved pages around a known split and ex-date. A reader whose adjustment is not established refuses its chart (§6.5).
 - **Pasted text and export files** go through the reader for that broker's format; each format is its own module with its own saved fixtures.
 
