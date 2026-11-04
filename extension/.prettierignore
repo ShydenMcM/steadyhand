@@ -9,3 +9,4 @@ packages/core/test/parity-strategies.json
 packages/core/test/parity-restated.json
 packages/core/test/parity-dividend-growth.json
 packages/core/test/parity-income.json
+packages/core/test/parity-halts.json

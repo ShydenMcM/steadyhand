@@ -1,12 +1,12 @@
-/** Risk limits on orders (spec §4.4, §8), ported from Python's `RiskLimits` and
- * `RiskManager.check`. Halts and the unit value are EXT S12's. */
+/** Risk limits on orders and the halts they judge (spec §4.4, §8), ported from Python's
+ * `RiskLimits`, `RiskManager.check`, `RiskManager.halt` and `UnitValue`. */
 
 import Decimal from "decimal.js";
 import type { Day } from "./broker-view.ts";
 import { Side } from "./costs.ts";
 import { Money, Rounding } from "./money.ts";
 import { NOTE_CODES, note, type Note } from "./notes.ts";
-import { RuleDecimal } from "./ratio.ts";
+import { Ratio, ratioDown, RuleDecimal } from "./ratio.ts";
 import type { IdxMarketRules } from "./rules.ts";
 import { instrument, priceOf, type Order, type PortfolioView } from "./sizing.ts";
 import { whyNot, type Tradable } from "./tradable.ts";
@@ -66,6 +66,109 @@ export class RiskLimits {
     }
   }
 }
+
+/** Ordering stopped on `day`, for `cause`, a note under the key of the limit reached. It lasts
+ * until the user resumes it. */
+export interface Halt {
+  readonly day: Day;
+  readonly cause: Note;
+}
+
+/** The portfolio as a fund: `units` outstanding, each worth `price` at the last valuation, and
+ * the highest price yet. Before the first deposit there are no units and the price is 1. A
+ * deposit buys units at the price, so it never looks like a gain; a withdrawal sells them. */
+export class UnitValue {
+  readonly units: Decimal;
+  readonly price: Decimal;
+  readonly highWater: Decimal;
+
+  constructor(
+    units: Decimal = new Ratio(0),
+    price: Decimal = new Ratio(1),
+    highWater: Decimal = new Ratio(1),
+  ) {
+    for (const [field, value] of [
+      ["units", units],
+      ["price", price],
+      ["highWater", highWater],
+    ] as const) {
+      if (!value.isFinite()) {
+        throw new RangeError(`${field} must be a finite decimal, got ${value.toString()}`);
+      }
+      if (value.isNegative() && !value.isZero()) {
+        throw new RangeError(`${field} cannot be negative, got ${value.toString()}`);
+      }
+    }
+    this.units = units;
+    this.price = price;
+    this.highWater = highWater;
+  }
+
+  /** How far the price is below the high-water mark, as a share of it. */
+  get drawdown(): Decimal {
+    return new RuleDecimal(1).minus(ratioDown(this.price, this.highWater));
+  }
+
+  /** The price per unit when the portfolio is worth `value`. Nothing changes before units. */
+  revalue(value: Money): UnitValue {
+    if (this.units.isZero()) {
+      return this;
+    }
+    const price = ratioDown(value.amount, this.units);
+    return new UnitValue(this.units, price, Decimal.max(this.highWater, price));
+  }
+
+  /** Buy units with `amount` at the current price, which the deposit leaves unchanged. A
+   * negative amount is a withdrawal. */
+  deposit(amount: Money): UnitValue {
+    if (this.price.isZero()) {
+      throw new RangeError("no units can be bought at a price of 0");
+    }
+    const units = new RuleDecimal(this.units).plus(ratioDown(amount.amount, this.price));
+    return new UnitValue(units, this.price, this.highWater);
+  }
+}
+
+/** A halt when `after` breaches a limit, reaching it included; else `null`. `before` is the unit
+ * value at the previous read: the previous trading day's, or, when `since` is given, the latest
+ * earlier read's, on `since`, and the note gives that span (spec §8, decision 21). */
+export const haltOn = (
+  limits: RiskLimits,
+  before: UnitValue,
+  after: UnitValue,
+  day: Day,
+  since?: Day,
+): Halt | null => {
+  if (before.units.gt(0)) {
+    const fall = new RuleDecimal(1).minus(ratioDown(after.price, before.price));
+    if (fall.gte(limits.dailyLoss)) {
+      const where =
+        since === undefined
+          ? ","
+          : ` from ${since} to ${day}, with no read on the trading days between;`;
+      return {
+        day,
+        cause: note(
+          NOTE_CODES.RISK_HALT_DAILY_LOSS,
+          `daily loss limit: the unit value fell ${percent(fall)}${where} the limit is ` +
+            percent(limits.dailyLoss),
+        ),
+      };
+    }
+  }
+  const drawdown = after.drawdown;
+  if (after.units.gt(0) && drawdown.gte(limits.maxDrawdown)) {
+    return {
+      day,
+      cause: note(
+        NOTE_CODES.RISK_HALT_DRAWDOWN,
+        `drawdown kill switch: the unit value is ${percent(drawdown)} below its high-water ` +
+          `mark, the limit is ${percent(limits.maxDrawdown)}`,
+      ),
+    };
+  }
+  return null;
+};
 
 export interface Rejected {
   readonly order: Order;

@@ -32,7 +32,7 @@ from steadyhand.market import PayDates
 from steadyhand.metrics import _rounded
 from steadyhand.notes import TRADE_EXCLUDED, TRADE_FROZEN, Note
 from steadyhand.portfolio import Portfolio
-from steadyhand.risk import RiskLimits, RiskManager
+from steadyhand.risk import RiskLimits, RiskManager, UnitValue
 from steadyhand.sizing import CompoundingSizer
 from steadyhand.strategies import BuyAndHold, DividendGrowthStrategy, MonthlySavings
 from steadyhand.strategies.protocol import Strategy
@@ -55,6 +55,7 @@ STRATEGY_PARITY = Path("extension/packages/core/test/parity-strategies.json")
 RESTATED_PARITY = Path("extension/packages/core/test/parity-restated.json")
 GROWTH_PARITY = Path("extension/packages/core/test/parity-dividend-growth.json")
 INCOME_PARITY = Path("extension/packages/core/test/parity-income.json")
+HALT_PARITY = Path("extension/packages/core/test/parity-halts.json")
 
 # Each rule file and the Python readers that must accept it before it is converted.
 READERS: dict[str, tuple[Callable[[Row], object], ...]] = {
@@ -688,6 +689,94 @@ def income_cases(seed: int = INCOME_SEED, count: int = INCOME_CASES) -> ParityCa
     return {"seed": str(seed), "cases": [_income_case(draw, f"case {n}") for n in range(count)]}
 
 
+HALT_SEED = 236
+HALT_JOURNEYS = 60
+# Each draw's daily move of the market value, as a factor: mostly small, with falls large enough
+# to reach a daily loss limit and runs of small falls that reach a drawdown.
+# How often a run changes its kind of move, and how many of its cash movements are deposits.
+HALT_SWITCH = 0.2
+HALT_DEPOSITS = 0.6
+HALT_MOVES = (
+    (Decimal("0.97"), Decimal("1.03")),
+    (Decimal("0.90"), Decimal("0.97")),
+    (Decimal("0.96"), Decimal("1.00")),
+)
+
+
+def _halt_journey(draw: random.Random, name: str) -> dict[str, Any]:
+    """After-close reads on trading days, some days skipped, with deposits and withdrawals on
+    calendar days between them, and the unit value and the first halt Python's `UnitValue` and
+    `RiskManager.halt` give (spec §8, #236). A move dated on a read's day is in that read."""
+    calendar = IdxCalendar.shipped()
+    limits = RiskLimits(
+        daily_loss=draw.choice((Decimal("0.03"), Decimal("0.05"), Decimal("0.1"))),
+        max_drawdown=draw.choice((Decimal("0.15"), Decimal("0.25"))),
+    )
+    manager = RiskManager(IdxMarketRules(), limits)
+    day = calendar.next_trading_day(date(2023, 1, 2) + timedelta(days=draw.randrange(900)))
+    market = draw.choice((10**6, 10**8, draw.randrange(1, 10**11)))
+    reads = [{"day": day.isoformat(), "value": str(market)}]
+    movements: list[dict[str, str]] = []
+    units = UnitValue().deposit(Money(market, IDR))
+    halt: dict[str, str] | None = None
+    low, high = draw.choice(HALT_MOVES)
+    for _ in range(draw.randrange(3, 16)):
+        if draw.random() < HALT_SWITCH:
+            low, high = draw.choice(HALT_MOVES)
+        previous = day
+        day = calendar.add_trading_days(day, draw.choice((1, 1, 1, 2, 3)))
+        factor = low + (high - low) * Decimal(draw.randrange(10**6)) / Decimal(10**6)
+        market = int(market * factor)
+        net = 0
+        for _ in range(draw.choice((0, 0, 1, 2))):
+            on = previous + timedelta(days=draw.randrange(1, (day - previous).days + 1))
+            if draw.random() < HALT_DEPOSITS:
+                amount = draw.randrange(1, max(2, market // 5))
+                kind = "deposit"
+                net += amount
+            else:
+                amount = draw.randrange(1, max(2, market // 10))
+                kind = "withdrawal"
+                net -= amount
+            movements.append({"day": on.isoformat(), "kind": kind, "amount": str(amount)})
+        value = market + net
+        reads.append({"day": day.isoformat(), "value": str(value)})
+        after = units.revalue(Money(market, IDR))
+        if halt is None:
+            found = manager.halt(units, after, day)
+            if found is not None:
+                gap = calendar.previous_trading_day(day) != previous
+                halt = {"day": day.isoformat(), "code": found.cause.key}
+                if not gap:
+                    halt["text"] = found.cause.text
+        units = after.deposit(Money(net, IDR))
+        market = value
+    return {
+        "name": name,
+        "dailyLoss": str(limits.daily_loss),
+        "maxDrawdown": str(limits.max_drawdown),
+        "reads": reads,
+        "movements": movements,
+        "units": str(units.units),
+        "price": str(units.price),
+        "highWater": str(units.high_water),
+        "halt": halt,
+    }
+
+
+def halt_cases(seed: int = HALT_SEED, journeys: int = HALT_JOURNEYS) -> ParityCases:
+    """*journeys* runs of after-close reads drawn from *seed*, each with Python's unit value and
+    first halt, for core's ``riskState``."""
+    if journeys < 1:
+        msg = f"the halt parity harness needs a journey, got {journeys}"
+        raise ValueError(msg)
+    draw = random.Random(seed)  # noqa: S311 - seeded test inputs, not secrets
+    return {
+        "seed": str(seed),
+        "cases": [_halt_journey(draw, f"journey {n}") for n in range(journeys)],
+    }
+
+
 def text(value: object) -> str:
     return json.dumps(value, indent=2, ensure_ascii=False) + "\n"
 
@@ -709,6 +798,7 @@ def outputs() -> dict[Path, str]:
     files[RESTATED_PARITY] = one_case_a_line(restated_cases())
     files[GROWTH_PARITY] = one_case_a_line(growth_cases())
     files[INCOME_PARITY] = one_case_a_line(income_cases())
+    files[HALT_PARITY] = one_case_a_line(halt_cases())
     return files
 
 

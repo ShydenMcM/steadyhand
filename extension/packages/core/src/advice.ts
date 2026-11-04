@@ -7,7 +7,7 @@
 
 import type Decimal from "decimal.js";
 import type { Day, Portfolio, Watchlist } from "./broker-view.ts";
-import type { Costs } from "./costs.ts";
+import { Side, type Costs } from "./costs.ts";
 import { Money } from "./money.ts";
 import { RuleDecimal } from "./ratio.ts";
 import type { Note } from "./notes.ts";
@@ -41,11 +41,17 @@ export interface Advice {
   /** Charged once on the day's orders together. */
   readonly stampDuty: Money;
   readonly missing: readonly Note[];
+  /** What stopped every buy: the halt in force and each fact a halt needs that is missing
+   * (spec §8). Empty when buys may be given. */
+  readonly stops: readonly Note[];
 }
 
 export interface AdviceInputs {
   readonly rules: IdxMarketRules;
   readonly limits: RiskLimits;
+  /** `buyStops` of the risk state: while any is listed, every buy is rejected with the first,
+   * and sells are still given. */
+  readonly stops: readonly Note[];
   readonly decision: Decision;
   readonly portfolio: HeldView;
   readonly tradable: Tradable;
@@ -72,7 +78,7 @@ const checkWeights = (weights: ReadonlyMap<string, Decimal>): void => {
 };
 
 export const advise = (inputs: AdviceInputs): Advice => {
-  const { rules, decision, portfolio, prices, day } = inputs;
+  const { rules, decision, portfolio, prices, day, stops } = inputs;
   const nothing = Money.zero(portfolio.value.currency);
   if (decision.missing.length > 0) {
     return {
@@ -82,11 +88,22 @@ export const advise = (inputs: AdviceInputs): Advice => {
       cuts: [],
       stampDuty: nothing,
       missing: decision.missing,
+      stops,
     };
   }
   checkWeights(decision.weights);
   const sized = sizeOrders(rules, decision.weights, portfolio, portfolio.held, prices, day);
-  const checked = checkOrders(rules, inputs.limits, sized, portfolio, inputs.tradable, prices);
+  const [stop] = stops;
+  const stopped: Rejected[] = [];
+  const allowed: Order[] = [];
+  for (const order of sized) {
+    if (stop !== undefined && order.side === Side.BUY) {
+      stopped.push({ order, reason: stop });
+    } else {
+      allowed.push(order);
+    }
+  }
+  const checked = checkOrders(rules, inputs.limits, allowed, portfolio, inputs.tradable, prices);
   let traded = nothing;
   const orders = checked.orders.map((order): AdvisedOrder => {
     const reason = decision.reasons.get(order.symbol);
@@ -99,7 +116,8 @@ export const advise = (inputs: AdviceInputs): Advice => {
     return { order, limitPrice, costs: rules.costs(order.side, gross, day), reason };
   });
   const stampDuty = orders.length === 0 ? nothing : rules.dailyCosts(traded, day);
-  return { day, orders, rejected: checked.rejected, cuts: checked.cuts, stampDuty, missing: [] };
+  const rejected = [...checked.rejected, ...stopped];
+  return { day, orders, rejected, cuts: checked.cuts, stampDuty, missing: [], stops };
 };
 
 /** The advice day's close of each holding and each watched stock: its last price on pages read

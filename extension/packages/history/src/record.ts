@@ -53,7 +53,7 @@ const putEach = (
   });
 
 /** Write `rows` to `store` in one transaction, settled when it commits. */
-const putAll = (db: IDBDatabase, store: StoreName, rows: readonly object[]): Promise<void> =>
+export const putAll = (db: IDBDatabase, store: StoreName, rows: readonly object[]): Promise<void> =>
   putEach(db, [[store, rows]]);
 
 /** `rows` each given its `entry` (#470): `ref` and the broker's reference where the row has one,
@@ -151,7 +151,8 @@ export const recordDividends = (db: IDBDatabase, read: Part<Dividends>): Promise
     ],
   ]);
 
-/** Record each cash movement a page lists, once: keyed by its own fields and its entry. A read
+/** Record each cash movement a page lists, once: keyed by its own fields and its entry, and the
+ * period the read covers, in the same transaction (#236). A read
  * whose rows do not add up to the totals its page shows is refused and nothing is written,
  * whichever reader made it (#477): a page cut short must never be recorded as the whole period. */
 export const recordCashMovements = (db: IDBDatabase, read: Part<CashMovements>): Promise<void> => {
@@ -159,20 +160,22 @@ export const recordCashMovements = (db: IDBDatabase, read: Part<CashMovements>):
   if (mismatch !== undefined) {
     return Promise.reject(new Error(`refusing a cash-movement read: ${mismatch}`));
   }
-  return putAll(
-    db,
-    STORES.cashMovements,
-    entered(
-      read.value.movements.map((movement) => ({
-        day: movement.day,
-        kind: movement.kind,
-        amount: movement.amount.amount.toString(),
-        currency: movement.amount.currency.code,
-        ...(movement.reference === undefined ? {} : { reference: movement.reference }),
-      })),
-      (row) => ("reference" in row ? row.reference : undefined),
-    ),
-  );
+  return putEach(db, [
+    [STORES.cashMovementReads, [read.value.covered]],
+    [
+      STORES.cashMovements,
+      entered(
+        read.value.movements.map((movement) => ({
+          day: movement.day,
+          kind: movement.kind,
+          amount: movement.amount.amount.toString(),
+          currency: movement.amount.currency.code,
+          ...(movement.reference === undefined ? {} : { reference: movement.reference }),
+        })),
+        (row) => ("reference" in row ? row.reference : undefined),
+      ),
+    ],
+  ]);
 };
 
 /** Record each split a page lists, once: keyed by its own fields and its entry, and the period
