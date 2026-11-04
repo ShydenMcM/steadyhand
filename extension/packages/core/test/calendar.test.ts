@@ -121,6 +121,34 @@ test.each([[0n], [-1n], [true as unknown as bigint]])("a count of %s is refused"
   );
 });
 
+// #490: a window of trading days ending on a day, as ma-trend's slow average reads it.
+test("windowStart is the day itself for a window of one trading day", () => {
+  expect(calendar.windowStart("2026-03-26", 1n)).toBe("2026-03-26");
+});
+
+test("windowStart counts back over trading days only", () => {
+  expect(calendar.windowStart("2026-03-26", 2n)).toBe("2026-03-25");
+});
+
+test("windowStart crosses holidays and weekends", () => {
+  // Eid 2026: 18-20 and 23-24 March are holidays, 21-22 a weekend.
+  expect(calendar.windowStart("2026-03-26", 3n)).toBe("2026-03-17");
+});
+
+test("windowStart from a non-trading day starts its count on the trading day before it", () => {
+  expect(calendar.windowStart("2026-03-22", 1n)).toBe("2026-03-17");
+});
+
+test("windowStart counting past the first year is refused", () => {
+  expect(() => calendar.windowStart("2016-01-04", 2n)).toThrow(/no IDX holidays for 2015/u);
+});
+
+test.each([[0n], [-1n], [true as unknown as bigint]])("a window of %s days is refused", (count) => {
+  expect(() => calendar.windowStart("2026-03-17", count)).toThrow(
+    new RangeError(`count must be a bigint of at least 1, got ${String(count)}`),
+  );
+});
+
 test("tradingDays is inclusive", () => {
   expect(calendar.tradingDays("2026-09-25", "2026-09-28")).toEqual(["2026-09-25", "2026-09-28"]);
 });
@@ -269,6 +297,7 @@ test.each([
   ["nextTradingDay", (calendar: IdxCalendar) => calendar.nextTradingDay("2021-1-5")],
   ["previousTradingDay", (calendar: IdxCalendar) => calendar.previousTradingDay("2021-1-5")],
   ["addTradingDays", (calendar: IdxCalendar) => calendar.addTradingDays("2021-1-5", 2n)],
+  ["windowStart", (calendar: IdxCalendar) => calendar.windowStart("2021-1-5", 2n)],
   ["tradingDays from", (calendar: IdxCalendar) => calendar.tradingDays("2021-1-5", "2021-01-08")],
   ["tradingDays to", (calendar: IdxCalendar) => calendar.tradingDays("2021-01-04", "2021-1-5")],
 ])("%s refuses a day that is not an ISO date", (_, call) => {

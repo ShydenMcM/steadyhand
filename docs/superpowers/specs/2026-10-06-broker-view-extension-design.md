@@ -159,8 +159,8 @@ Each keeps its Python or M7 rule; this section states what it reads in the broke
 | monthly-savings | `instalments` (12, 1-120): spends cash less a reserve for the instalments still due, first advice day of each month (M6 §5). | portfolio, watchlist | none |
 | dividend-growth | `min_stocks` 15, `max_stocks` 25, `growth_years` 5; yearly review (M6 §6). | + dividends | `growth_years` + 1 calendar years of dividends per universe stock |
 | high-yield | `yield_stocks` 10, `paid_years` 3; quarterly reviews; equal 1/10; too few: cash and `strategy.too_few_qualified` (M7 decision 5). | + dividends | the `paid_years` calendar years before this one, and this year to date, of dividends per universe stock |
-| ma-trend | `fast_days` 50 < `slow_days` 200; daily; a slot of 1/N per uptrend stock (M7 decisions 2, 6). | + series, dividends | `slow_days` total-return closes per universe stock |
-| momentum-rotation | `momentum_stocks` 10, `momentum_months` 12, `skip_months` 1; monthly reviews (M7 decision 7). | + series, dividends | 23 × `momentum_months` + 1 trading days of total-return closes per universe stock |
+| ma-trend | `fast_days` 50 < `slow_days` 200; daily; a slot of 1/N per uptrend stock (M7 decisions 2, 6). | + series, dividends | `slow_days` total-return closes per universe stock; a stock with fewer whose chart reaches the window's start but whose first close is later is ineligible, not missing (ShydenMcM/steadyhand#490) |
+| momentum-rotation | `momentum_stocks` 10, `momentum_months` 12, `skip_months` 1; monthly reviews (M7 decision 7). | + series, dividends | a chart read reaching back to `momentum_months` before the advice day, and total-return closes from then on, per universe stock; a chart reaching it whose first close is later makes the stock ineligible, not missing (ShydenMcM/steadyhand#490, ruled 2026-11-04) |
 
 The default strategy stays `dividend-growth` (core §8).
 
@@ -311,7 +311,7 @@ Later stories, filed now without a release date: Indonesian; screenshots; income
 
 ## 17. Risks
 
-- **The broker page may draw its chart on a canvas**, with no numbers in the HTML. Then ma-trend and momentum-rotation can only use self-recorded closes: ma-trend's 200 trading days take about ten months of after-close reads, and momentum-rotation's 277 (23 × 12 + 1) about thirteen. The first sample pages settle it; if so, Shyden is asked before the strategies ship.
+- **The broker page may draw its chart on a canvas**, with no numbers in the HTML. Then ma-trend and momentum-rotation can only use self-recorded closes: ma-trend's 200 trading days take about ten months of after-close reads, and momentum-rotation ranks no stock at all, since it needs a chart read to prove a stock traded at its window's start (ShydenMcM/steadyhand#490). The first sample pages settle it; if so, Shyden is asked before the strategies ship.
 - **The broker's agreement may forbid automated reading.** Then that broker gets the paste and export route only (decision 4), and the other broker is tried.
 - **The broker may show only one cash figure**, not both cash available to buy and cash balance. The reader then refuses until Shyden decides what that figure stands for.
 - **The broker may show no split ratios.** Then a stock with a split inside a window stays missing for every figure that crosses it (§6.6), and Shyden is asked how to supply ratios.

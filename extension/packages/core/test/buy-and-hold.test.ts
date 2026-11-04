@@ -1,9 +1,13 @@
 import type Decimal from "decimal.js";
 import { expect, test } from "vitest";
 import { buyAndHold } from "../src/buy-and-hold.ts";
+import { IdxCalendar } from "../src/calendar.ts";
 import { IDR, Money } from "../src/money.ts";
 import type { PortfolioView } from "../src/sizing.ts";
 import { weightOf, type MarketView, type Memory } from "../src/strategy.ts";
+
+/** The shipped IDX trading days, read once. */
+const CALENDAR = IdxCalendar.shipped();
 
 // Ported from Python's tests/engine/test_buy_and_hold.py, one test per case (M3 spec §6.6). The
 // Decision checks are advice's (`advice.test.ts`); the types refuse a float weight, a non-text
@@ -27,6 +31,7 @@ const view = (buyable: readonly string[], sellable: readonly string[] = []): Mar
   dividends: new Map(),
   splits: [],
   unknownActions: new Map(),
+  calendar: CALENDAR,
   series: new Map(),
 });
 

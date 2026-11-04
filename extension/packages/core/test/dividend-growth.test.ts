@@ -10,6 +10,9 @@ import { lastUnknownAction } from "../src/series.ts";
 import type { PortfolioView } from "../src/sizing.ts";
 import type { MarketView, Memory } from "../src/strategy.ts";
 
+/** The shipped IDX trading days, read once. */
+const CALENDAR = IdxCalendar.shipped();
+
 // Ported from Python's tests/engine/test_dividend_growth.py, one test per case (M6 spec §6), with
 // the extension's missing versus ineligible (spec §7.1, #230 AC2 to AC4).
 //
@@ -110,6 +113,7 @@ const view = (
     dividends: reads,
     splits: options.splits ?? [],
     unknownActions: new Map(Object.entries(options.actions ?? {})),
+    calendar: CALENDAR,
     series: new Map(),
   };
 };

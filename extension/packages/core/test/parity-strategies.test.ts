@@ -1,11 +1,15 @@
 import { expect, test } from "vitest";
 import { buyAndHold } from "../src/buy-and-hold.ts";
+import { IdxCalendar } from "../src/calendar.ts";
 import { IDR, Money } from "../src/money.ts";
 import { monthlySavings } from "../src/monthly-savings.ts";
 import { RuleDecimal } from "../src/ratio.ts";
 import type { PortfolioView } from "../src/sizing.ts";
 import type { MarketView, Strategy } from "../src/strategy.ts";
 import fixture from "./parity-strategies.json" with { type: "json" };
+
+/** The shipped IDX trading days, read once. */
+const CALENDAR = IdxCalendar.shipped();
 
 // The parity harness for strategies (#229 AC6, spec §14.4): journeys of advice days that
 // Python's buy-and-hold and monthly-savings decided (`scripts/core_fixtures.py`), each day from
@@ -64,6 +68,7 @@ const answer = (parity: Case) => {
     dividends: new Map(),
     splits: [],
     unknownActions: new Map(),
+    calendar: CALENDAR,
     series: new Map(),
   };
   const portfolio: PortfolioView = {
