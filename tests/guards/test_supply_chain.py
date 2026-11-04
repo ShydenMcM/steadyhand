@@ -301,7 +301,7 @@ def test_sub_path_actions_are_grouped_above_the_patch_group() -> None:
 
 SETUP_NODE = "actions/setup-node@"
 PACKAGE_JSON = ROOT / "extension/package.json"
-NVMRC = ROOT / ".nvmrc"
+NODE_DOCKERFILE = ROOT / ".github/node/Dockerfile"
 MAJOR = re.compile(r"(?P<major>\d+)(?:\.[\dx]+)*")
 # Measured on 2026-10-30 (#446 removed mutations.yml and record-floors.yml): five, all in ci.yml.
 SETUP_NODE_STEPS = 5
@@ -328,71 +328,87 @@ def setup_node_inputs() -> list[tuple[str, dict[str, Any]]]:
     return inputs
 
 
-EXACT_NODE = re.compile(r"(?P<version>(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))\n")
-"""One exact Node release and one newline: ASCII digits only, since ``\\d`` also reads fullwidth
-and other Unicode digits."""
+EXACT_NODE = re.compile(
+    r"FROM node:(?P<version>(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))\n"
+)
+"""The one line of the Node Dockerfile: the official image at one exact release, and a newline.
+ASCII digits only, since ``\\d`` also reads fullwidth and other Unicode digits."""
 
 
 def exact_node(text: str, *, where: str) -> str:
-    """The one exact ``major.minor.patch`` release *text* names; a bare major, a major and minor,
-    an alias, a ``v`` prefix, a range or anything around the version is refused by name (#440)."""
+    """The one exact ``major.minor.patch`` release *text*'s single ``FROM node:`` line names; a
+    bare major, a major and minor, an alias, a digest, a suffix, another image, a second line or
+    anything around it is refused by name (#440, #443)."""
     found = EXACT_NODE.fullmatch(text)
     if found is None:
-        msg = f"{where}: not one exact Node version: {text!r}"
+        msg = f"{where}: not one exact `FROM node:x.y.z` line: {text!r}"
         raise AssertionError(msg)
     return found["version"]
 
 
-def test_nvmrc_names_node_26_12_1() -> None:
-    # Shyden, 2026-10-29, every project: "Pin exact, every project" (#440). nvm on the laptop and
-    # every setup-node step in CI read this one file; with a bare major, setup-node fetched the
-    # newest 26.x on each run, so a new Node release could turn every open PR red at once. Node
-    # moves by one PR per project through the aligning-versions-across-projects skill, since
-    # Dependabot does not bump .nvmrc.
-    assert exact_node(NVMRC.read_text(encoding="utf-8"), where=".nvmrc") == "26.12.1"
+def test_the_node_dockerfile_names_node_26_12_1() -> None:
+    # Shyden, 2026-10-29, every project: "Pin exact, every project" (#440); amended 2026-10-30,
+    # "Pin + Dependabot via Docker" (#443, as shyden-labs/repo-template#143): the one file
+    # Dependabot's docker ecosystem bumps, read by every setup-node step in CI.
+    text = NODE_DOCKERFILE.read_text(encoding="utf-8")
+    assert exact_node(text, where=".github/node/Dockerfile") == "26.12.1"
 
 
 @pytest.mark.parametrize(
     ("text", "version"),
-    [("0.0.0\n", "0.0.0"), ("24.16.0\n", "24.16.0"), ("100.20.3\n", "100.20.3")],
+    [
+        ("FROM node:0.0.0\n", "0.0.0"),
+        ("FROM node:24.16.0\n", "24.16.0"),
+        ("FROM node:100.20.3\n", "100.20.3"),
+    ],
     ids=["zeros", "older-line", "many-digits"],
 )
 def test_an_exact_node_version_reads_as_written(text: str, version: str) -> None:
-    assert exact_node(text, where=".nvmrc") == version
+    assert exact_node(text, where="Dockerfile") == version
 
 
 FULLWIDTH_26 = chr(0xFF12) + chr(0xFF16)
+DIGEST = "sha256:" + "0" * 64
 
 
 @pytest.mark.parametrize(
     "text",
     [
-        "26\n",
-        "26.12\n",
-        "lts/*\n",
-        "node\n",
-        "v26.12.1\n",
-        ">=26.3.0\n",
-        "^26.12.1\n",
-        "26.12.x\n",
-        "26.12.1",
-        "26.12.1\n\n",
-        "26.12.1\r\n",
-        " 26.12.1\n",
-        "26.12.1 \n",
-        "026.12.1\n",
-        f"{FULLWIDTH_26}.12.1\n",
+        "FROM node:26\n",
+        "FROM node:26.12\n",
+        "FROM node:lts\n",
+        "FROM node:latest\n",
+        f"FROM node@{DIGEST}\n",
+        f"FROM node:26.12.1@{DIGEST}\n",
+        "FROM node:26.12.1\nFROM node:26.12.1\n",
+        "FROM python:3.13.0\n",
+        "FROM docker.io/library/node:26.12.1\n",
+        "FROM node:26.12.1-alpine\n",
+        "FROM node:v26.12.1\n",
+        "from node:26.12.1\n",
+        "FROM node:26.12.1",
+        "FROM node:26.12.1\n\n",
+        "FROM node:26.12.1\r\n",
+        " FROM node:26.12.1\n",
+        "FROM node:26.12.1 \n",
+        "FROM node:026.12.1\n",
+        f"FROM node:{FULLWIDTH_26}.12.1\n",
+        "26.12.1\n",
         "",
     ],
     ids=[
         "bare-major",
         "major-minor",
         "lts-alias",
-        "node-alias",
+        "latest",
+        "digest",
+        "tag-and-digest",
+        "second-from",
+        "another-image",
+        "another-registry-path",
+        "alpine-suffix",
         "v-prefix",
-        "range",
-        "caret",
-        "wildcard",
+        "lowercase-from",
         "no-newline",
         "two-newlines",
         "crlf",
@@ -400,15 +416,48 @@ FULLWIDTH_26 = chr(0xFF12) + chr(0xFF16)
         "trailing-space",
         "leading-zero",
         "fullwidth-digits",
+        "bare-version",
         "empty",
     ],
 )
-def test_an_nvmrc_that_is_not_one_exact_version_is_refused_by_name(text: str) -> None:
-    with pytest.raises(AssertionError, match=r"^\.nvmrc: not one exact Node version: "):
-        exact_node(text, where=".nvmrc")
+def test_a_node_dockerfile_that_is_not_one_exact_line_is_refused_by_name(text: str) -> None:
+    with pytest.raises(
+        AssertionError, match=r"^Dockerfile: not one exact `FROM node:x\.y\.z` line: "
+    ):
+        exact_node(text, where="Dockerfile")
 
 
-def test_every_setup_node_step_reads_the_nvmrc() -> None:
+NODE_READ_RUN = (
+    "version=$(sed -nE 's/^FROM node:([0-9]+\\.[0-9]+\\.[0-9]+)$/\\1/p' .github/node/Dockerfile)\n"
+    'test -n "$version"\n'
+    'echo "version=$version" >> "$GITHUB_OUTPUT"\n'
+)
+"""The read step's whole script, the same in every job: it fails the job unless the Dockerfile
+holds an exact ``FROM node:x.y.z`` line."""
+NODE_VERSION = "${{ steps.node.outputs.version }}"
+
+
+def node_setup_findings(steps: list[dict[str, Any]]) -> list[str]:
+    """Each way a job's setup-node steps take Node from anywhere but the read step just before
+    them: a version named in the step, a version file, or no read step (or another script, or
+    another condition) right before it."""
+    findings: list[str] = []
+    for at, step in enumerate(steps):
+        if not str(step.get("uses", "")).startswith(SETUP_NODE):
+            continue
+        given = step.get("with", {})
+        if "node-version-file" in given:
+            findings.append(f"step {at}: a node-version-file")
+        if given.get("node-version") != NODE_VERSION:
+            findings.append(f"step {at}: node-version {given.get('node-version')!r}")
+        before = steps[at - 1] if at > 0 else {}
+        read = (before.get("id"), before.get("run"), before.get("if"))
+        if read != ("node", NODE_READ_RUN, step.get("if")):
+            findings.append(f"step {at}: no read step before it")
+    return findings
+
+
+def test_every_setup_node_step_takes_node_from_the_read_step_before_it() -> None:
     # Counted another way: every `uses` anywhere in the workflows, so a step the job walk missed
     # (a reusable workflow, a new nesting) makes the two counts differ.
     uses = [
@@ -417,22 +466,81 @@ def test_every_setup_node_step_reads_the_nvmrc() -> None:
         for value in uses_values(yaml.safe_load(path.read_text(encoding="utf-8")))
         if value.startswith(SETUP_NODE)
     ]
-    inputs = setup_node_inputs()
-    assert len(inputs) == len(uses) == SETUP_NODE_STEPS, (inputs, uses)
-    # A version named in the step itself would run a Node the laptop does not (#287).
-    other = [
-        (where, given)
-        for where, given in inputs
-        if given.get("node-version-file") != ".nvmrc" or "node-version" in given
+    assert len(setup_node_inputs()) == len(uses) == SETUP_NODE_STEPS, uses
+    findings = [
+        f"{path.name} job {name}: {finding}"
+        for path in workflow_files()
+        for name, job in yaml.safe_load(path.read_text(encoding="utf-8")).get("jobs", {}).items()
+        for finding in node_setup_findings(job.get("steps", []))
     ]
-    assert other == []
+    assert findings == []
+
+
+SETUP = f"{SETUP_NODE}949feb2413d6458794dcd2491c4babbbce0c15c1"
+READ: dict[str, Any] = {"id": "node", "run": NODE_READ_RUN}
+TAKEN: dict[str, Any] = {"uses": SETUP, "with": {"node-version": NODE_VERSION}}
+
+
+@pytest.mark.parametrize(
+    ("steps", "found"),
+    [
+        ([READ, TAKEN], []),
+        (
+            [{**READ, "if": "x"}, {**TAKEN, "if": "x"}],
+            [],
+        ),
+        (
+            [READ, {"uses": SETUP, "with": {"node-version": "26.12.1"}}],
+            ["step 1: node-version '26.12.1'"],
+        ),
+        (
+            [READ, {"uses": SETUP, "with": {"node-version-file": "node-version.txt"}}],
+            ["step 1: a node-version-file", "step 1: node-version None"],
+        ),
+        ([{"uses": "actions/checkout@x"}, TAKEN], ["step 1: no read step before it"]),
+        ([TAKEN], ["step 0: no read step before it"]),
+        (
+            [{**READ, "run": "echo version=26.12.1 >> $GITHUB_OUTPUT\n"}, TAKEN],
+            ["step 1: no read step before it"],
+        ),
+        ([{**READ, "if": "x"}, TAKEN], ["step 1: no read step before it"]),
+    ],
+    ids=[
+        "read-then-setup",
+        "both-under-one-condition",
+        "literal-version",
+        "version-file",
+        "another-step-before",
+        "first-step",
+        "another-script",
+        "another-condition",
+    ],
+)
+def test_each_other_node_setup_is_found(steps: list[dict[str, Any]], found: list[str]) -> None:
+    assert node_setup_findings(steps) == found
+
+
+def test_dependabot_bumps_the_node_dockerfile_but_never_a_major() -> None:
+    assert update_for("docker", "/.github/node") == {
+        "package-ecosystem": "docker",
+        "directory": "/.github/node",
+        "target-branch": "develop",
+        "schedule": {"interval": "weekly"},
+        "commit-message": {"prefix": "chore(deps)"},
+        "ignore": [{"dependency-name": "node", "update-types": ["version-update:semver-major"]}],
+    }
 
 
 def test_types_node_follows_the_node_that_ci_runs() -> None:
     # Types for a newer Node than CI runs let tsc accept an API that then fails on CI (#268).
     pinned = json.loads(PACKAGE_JSON.read_text(encoding="utf-8"))["devDependencies"]["@types/node"]
-    runtime = NVMRC.read_text(encoding="utf-8").strip()
-    assert major_of(pinned, where="@types/node") == major_of(runtime, where=".nvmrc")
+    runtime = exact_node(NODE_DOCKERFILE.read_text(encoding="utf-8"), where="Dockerfile")
+    assert major_of(pinned, where="@types/node") == major_of(runtime, where="Dockerfile")
+
+
+def test_dependabot_s_types_node_comment_names_the_dockerfile() -> None:
+    text = (ROOT / ".github/dependabot.yml").read_text(encoding="utf-8")
+    assert "(.github/node/Dockerfile, read before" in text
 
 
 def test_dependabot_never_moves_types_node_past_the_runtime() -> None:
@@ -634,7 +742,8 @@ def ceilings(name: str) -> list[str]:
     return found
 
 
-# Ignored for a reason of their own, not a peer's range: @types/node moves with .nvmrc (#270).
+# Ignored for a reason of their own, not a peer's range: @types/node moves with the Node
+# Dockerfile (#270, #443).
 OWN_IGNORES = {"@types/node": [held_back("@types/node", "26.0.0")]}
 
 
