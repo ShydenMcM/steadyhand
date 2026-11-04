@@ -26,15 +26,17 @@ from typing import Any, TypedDict
 
 from steadyhand import IDR, Instrument, Money, Side
 from steadyhand._ratio import ratio_down
-from steadyhand.income import _restated_gross
+from steadyhand.corporate import PAY_LAG_TRADING_DAYS
+from steadyhand.income import _restated_gross, _share, payment_calendar, run_rate
 from steadyhand.market import PayDates
 from steadyhand.metrics import _rounded
 from steadyhand.notes import TRADE_EXCLUDED, TRADE_FROZEN, Note
+from steadyhand.portfolio import Portfolio
 from steadyhand.risk import RiskLimits, RiskManager, UnitValue
 from steadyhand.sizing import CompoundingSizer
 from steadyhand.strategies import BuyAndHold, DividendGrowthStrategy, MonthlySavings
 from steadyhand.strategies.protocol import Strategy
-from steadyhand.types import Bar, CashDividend, Order, Split
+from steadyhand.types import Bar, CashDividend, Costs, Fill, Order, Split
 from steadyhand.view import ActionHistory, MarketView, PortfolioView, PriceHistory, Tradable
 from steadyhand_idx._datafile import Row, load_shipped
 from steadyhand_idx.bands import BANDS_FILE, parse_bands
@@ -52,6 +54,7 @@ PARITY = Path("extension/packages/core/test/parity.json")
 STRATEGY_PARITY = Path("extension/packages/core/test/parity-strategies.json")
 RESTATED_PARITY = Path("extension/packages/core/test/parity-restated.json")
 GROWTH_PARITY = Path("extension/packages/core/test/parity-dividend-growth.json")
+INCOME_PARITY = Path("extension/packages/core/test/parity-income.json")
 HALT_PARITY = Path("extension/packages/core/test/parity-halts.json")
 
 # Each rule file and the Python readers that must accept it before it is converted.
@@ -595,6 +598,97 @@ def restated_cases(seed: int = RESTATED_SEED, count: int = RESTATED_CASES) -> Pa
     return {"seed": str(seed), "cases": [_restated_case(draw, f"case {n}") for n in range(count)]}
 
 
+INCOME_SEED = 237
+INCOME_CASES = 150
+INCOME_STOCKS = ("BBCA", "BBRI", "TLKM", "ASII", "UNVR")
+INCOME_BOUGHT = date(2022, 1, 3)
+# How many of the holdings also split inside the window.
+INCOME_SPLITS = 0.3
+
+
+def _income_case(draw: random.Random, name: str) -> dict[str, Any]:
+    """Holdings with dividends around the trailing year and splits after some of them, and the
+    run rate, goal share and payment calendar Python's ``run_rate``, ``_share`` and
+    ``payment_calendar`` give (spec §9, #237). Each dividend's payment date is the one Python
+    models, which core reads from the broker instead."""
+    rules = IdxMarketRules()
+    calendar = IdxCalendar.shipped()
+    as_of = date(2023, 6, 1) + timedelta(days=draw.randrange(700))
+    book = Portfolio.empty(IDR)
+    history: dict[Instrument, list[CashDividend | Split]] = {}
+    stocks: list[dict[str, Any]] = []
+    for symbol in sorted(draw.sample(INCOME_STOCKS, draw.randrange(0, 4))):
+        stock = Instrument(symbol, "IDX", IDR)
+        shares = draw.choice((1, draw.randrange(1, 10**4), draw.randrange(1, 10**7)))
+        order = Order(stock, Side.BUY, shares, INCOME_BOUGHT)
+        fill = Fill(order, INCOME_BOUGHT, shares, Money(1, IDR), Costs.zero(IDR))
+        book = book.deposit(Money(shares, IDR), INCOME_BOUGHT).apply_fill(fill, INCOME_BOUGHT)
+        actions: list[CashDividend | Split] = []
+        for _ in range(draw.randrange(0, 5)):
+            ex_date = as_of - timedelta(days=draw.randrange(-30, 450))
+            cents = draw.choice((draw.randrange(1, 100), draw.randrange(1, 50_000)))
+            actions.append(CashDividend(stock, ex_date, Decimal(cents) / 100))
+        if draw.random() < INCOME_SPLITS:
+            ex_date = as_of - timedelta(days=draw.randrange(0, 400))
+            actions.append(Split(stock, ex_date, 1, draw.choice((2, 5, 10))))
+        history[stock] = actions
+        stocks.append(
+            {
+                "symbol": symbol,
+                "shares": str(shares),
+                "dividends": [
+                    {
+                        "exDate": action.ex_date.isoformat(),
+                        "paymentDate": calendar.add_trading_days(
+                            action.ex_date, PAY_LAG_TRADING_DAYS
+                        ).isoformat(),
+                        "perShare": str(action.per_share),
+                    }
+                    for action in actions
+                    if isinstance(action, CashDividend)
+                ],
+                "splits": [
+                    {
+                        "exDate": action.ex_date.isoformat(),
+                        "from": "1",
+                        "to": str(action.new_shares),
+                    }
+                    for action in actions
+                    if isinstance(action, Split)
+                ],
+            }
+        )
+    rate = run_rate(book, history, rules, as_of, PAY_LAG_TRADING_DAYS)
+    months = payment_calendar(rate, rules)
+    target = Money(draw.randrange(1, 10**9), IDR)
+    return {
+        "name": name,
+        "asOf": as_of.isoformat(),
+        "target": str(target.amount),
+        "stocks": stocks,
+        "holdings": [
+            [str(holding.annual_gross.amount), str(holding.monthly_take_home.amount)]
+            for holding in rate.holdings
+        ],
+        "annualGross": str(rate.annual_gross.amount),
+        "monthlyTakeHome": str(rate.monthly_take_home.amount),
+        "share": str(_share(rate.monthly_take_home, target)),
+        "months": [str(month.amount) for month in months.months],
+        "emptyMonths": str(months.empty_months),
+        "evenness": None if months.evenness is None else str(months.evenness),
+    }
+
+
+def income_cases(seed: int = INCOME_SEED, count: int = INCOME_CASES) -> ParityCases:
+    """*count* portfolios drawn from *seed*, each with Python's run rate, goal share and payment
+    calendar, for core's ``runRate``, ``goalProgress`` and ``paymentCalendar``."""
+    if count < 1:
+        msg = f"the income parity harness needs a case, got {count}"
+        raise ValueError(msg)
+    draw = random.Random(seed)  # noqa: S311 - seeded test inputs, not secrets
+    return {"seed": str(seed), "cases": [_income_case(draw, f"case {n}") for n in range(count)]}
+
+
 HALT_SEED = 236
 HALT_JOURNEYS = 60
 # Each draw's daily move of the market value, as a factor: mostly small, with falls large enough
@@ -703,6 +797,7 @@ def outputs() -> dict[Path, str]:
     files[STRATEGY_PARITY] = one_case_a_line(strategy_cases())
     files[RESTATED_PARITY] = one_case_a_line(restated_cases())
     files[GROWTH_PARITY] = one_case_a_line(growth_cases())
+    files[INCOME_PARITY] = one_case_a_line(income_cases())
     files[HALT_PARITY] = one_case_a_line(halt_cases())
     return files
 
