@@ -240,10 +240,17 @@ jobs:
       - name: "Lock the docs-only fast path: no later step may read it"
         if: steps.scope.outputs.docs_only != 'true'
         run: uv run --no-project scripts/lock_fast_path.py
+      # The exact Node CI runs, from the one file Dependabot bumps (#443).
+      - id: node
+        if: steps.scope.outputs.docs_only != 'true'
+        run: |
+          version=$(sed -nE 's/^FROM node:([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' .github/node/Dockerfile)
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.scope.outputs.docs_only != 'true'
         with:
-          node-version-file: .nvmrc
+          node-version: ${{ steps.node.outputs.version }}
           cache: npm
           cache-dependency-path: extension/package-lock.json
       # No install script runs: a dependency's postinstall is code nobody reviewed.
@@ -339,10 +346,17 @@ jobs:
       - name: "Lock the docs-only fast path: no later step may read it"
         if: steps.scope.outputs.docs_only != 'true'
         run: uv run --no-project scripts/lock_fast_path.py
+      # The exact Node CI runs, from the one file Dependabot bumps (#443).
+      - id: node
+        if: steps.scope.outputs.docs_only != 'true'
+        run: |
+          version=$(sed -nE 's/^FROM node:([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' .github/node/Dockerfile)
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.scope.outputs.docs_only != 'true'
         with:
-          node-version-file: .nvmrc
+          node-version: ${{ steps.node.outputs.version }}
           cache: npm
           cache-dependency-path: extension/package-lock.json
       - run: npm ci --ignore-scripts
@@ -384,10 +398,17 @@ jobs:
       - run: uv sync --locked
         if: steps.scope.outputs.docs_only != 'true'
       # The pre-push hook's case runs the extension's lint, format and types in a clone (#377).
+      # The exact Node CI runs, from the one file Dependabot bumps (#443).
+      - id: node
+        if: steps.scope.outputs.docs_only != 'true'
+        run: |
+          version=$(sed -nE 's/^FROM node:([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' .github/node/Dockerfile)
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.scope.outputs.docs_only != 'true'
         with:
-          node-version-file: .nvmrc
+          node-version: ${{ steps.node.outputs.version }}
           cache: npm
           cache-dependency-path: extension/package-lock.json
       # No install script runs: a dependency's postinstall is code nobody reviewed.
@@ -440,10 +461,17 @@ jobs:
       - name: "Lock the docs-only fast path: no later step may read it"
         if: steps.scope.outputs.docs_only != 'true'
         run: uv run --no-project scripts/lock_fast_path.py
+      # The exact Node CI runs, from the one file Dependabot bumps (#443).
+      - id: node
+        if: steps.scope.outputs.docs_only != 'true'
+        run: |
+          version=$(sed -nE 's/^FROM node:([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' .github/node/Dockerfile)
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.scope.outputs.docs_only != 'true'
         with:
-          node-version-file: .nvmrc
+          node-version: ${{ steps.node.outputs.version }}
           cache: npm
           cache-dependency-path: extension/package-lock.json
       - run: npm ci --ignore-scripts
@@ -547,9 +575,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The exact Node CI runs, from the one file Dependabot bumps (#443).
+      - id: node
+        run: |
+          version=$(sed -nE 's/^FROM node:([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' .github/node/Dockerfile)
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version-file: .nvmrc
+          node-version: ${{ steps.node.outputs.version }}
           cache: npm
           cache-dependency-path: extension/package-lock.json
       - run: npm ci --ignore-scripts

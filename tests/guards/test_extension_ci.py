@@ -68,16 +68,17 @@ def test_each_script_runs_the_tool_the_spec_names(script: str, command: str) -> 
     assert manifest()["scripts"].get(script) == command
 
 
-def test_node_comes_from_setup_node_reading_the_nvmrc() -> None:
-    # The version itself and the engines range are pinned in test_supply_chain.py (#287).
+def test_node_comes_from_setup_node_reading_the_node_dockerfile() -> None:
+    # The version itself, the read step and the engines range are pinned in test_supply_chain.py
+    # (#287, #443).
     setup = [
         step
         for step in job()["steps"]
         if str(step.get("uses", "")).startswith("actions/setup-node@")
     ]
     assert len(setup) == 1
-    assert setup[0]["with"]["node-version-file"] == ".nvmrc"
-    assert "node-version" not in setup[0]["with"]
+    assert setup[0]["with"]["node-version"] == "${{ steps.node.outputs.version }}"
+    assert "node-version-file" not in setup[0]["with"]
 
 
 def guards_job() -> dict[str, Any]:

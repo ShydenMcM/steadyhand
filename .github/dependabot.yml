@@ -36,7 +36,8 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "chore(deps)"
-    # @types/node describes the Node that CI runs (.nvmrc, read by setup-node), so a new major
+    # @types/node describes the Node that CI runs (.github/node/Dockerfile, read before
+    # setup-node), so a new major
     # would let tsc accept an API CI's Node lacks (#270). It moves with the runtime, by hand.
     ignore:
       - dependency-name: "@types/node"
@@ -64,3 +65,17 @@ updates:
       npm-minor-and-patch:
         update-types: ["minor", "patch"]
         exclude-patterns: ["vitest", "@vitest/*"]
+
+  # The exact Node CI runs (#443, as shyden-labs/repo-template#143): Dependabot opens one pull
+  # request per Node release. A new major moves by hand, with @types/node, through the
+  # aligning-versions-across-projects skill.
+  - package-ecosystem: "docker"
+    directory: "/.github/node"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
