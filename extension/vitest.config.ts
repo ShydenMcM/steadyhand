@@ -56,7 +56,9 @@ export default defineConfig(({ mode }) => ({
       },
       {
         extends: true,
-        test: { name: "guards", include: [GUARDS] },
+        // One file at a time (#496): two guards that parse every file ran past 5 s in CI while the
+        // other guard files, the type-checking one among them, shared the runner's cores.
+        test: { name: "guards", include: [GUARDS], fileParallelism: false },
       },
       {
         extends: true,
