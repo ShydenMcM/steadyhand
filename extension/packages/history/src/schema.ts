@@ -17,6 +17,16 @@ export const STORES = {
   corporateActionReads: "corporate-action-reads",
   memory: "memory",
   settings: "settings",
+  /** The portfolio's value on each trading day an after-close read showed (spec §8). */
+  valuations: "valuations",
+  /** The period each cash-movement read covered (spec §8). */
+  cashMovementReads: "cash-movement-reads",
+  /** Deposits and withdrawals the user typed, kept as typed. */
+  typedMovements: "typed-movements",
+  /** Each period the user said is complete: every entry typed, or none. */
+  answered: "answered",
+  /** Each resume of a halt, by the instant it was made. */
+  resumes: "resumes",
 } as const;
 
 export type StoreName = (typeof STORES)[keyof typeof STORES];
@@ -74,6 +84,15 @@ export const MIGRATIONS: readonly Migration[] = [
   // splits, so an action found by price inside it is settled. Splits recorded before have none.
   (db) => {
     db.createObjectStore(STORES.corporateActionReads, { keyPath: ["from", "to"] });
+  },
+  // #236: the risk halts' record (spec §8). Cash-movement reads made before have no period, so
+  // the time since the last read is asked about again.
+  (db) => {
+    db.createObjectStore(STORES.valuations, { keyPath: "day" });
+    db.createObjectStore(STORES.cashMovementReads, { keyPath: ["from", "to"] });
+    db.createObjectStore(STORES.typedMovements, { keyPath: "typedAt" });
+    db.createObjectStore(STORES.answered, { keyPath: ["from", "to"] });
+    db.createObjectStore(STORES.resumes, { keyPath: "at" });
   },
 ];
 

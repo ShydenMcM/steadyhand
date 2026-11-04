@@ -11,8 +11,10 @@ test("the database is the extension's own, at the newest version its migrations 
 
 test("a new database has one store per kind, each keyed by its own fields", async () => {
   const db = await openHistory(new IDBFactory());
-  expect(db.version).toBe(4);
+  expect(db.version).toBe(5);
   expect([...db.objectStoreNames].sort()).toEqual([
+    "answered",
+    "cash-movement-reads",
     "cash-movements",
     "chart-series",
     "closes",
@@ -21,7 +23,10 @@ test("a new database has one store per kind, each keyed by its own fields", asyn
     "dividend-reads",
     "dividends",
     "memory",
+    "resumes",
     "settings",
+    "typed-movements",
+    "valuations",
   ]);
   const read = db.transaction([...db.objectStoreNames], "readonly");
   expect(
@@ -29,6 +34,8 @@ test("a new database has one store per kind, each keyed by its own fields", asyn
       [...db.objectStoreNames].map((name) => [name, read.objectStore(name).keyPath]),
     ),
   ).toEqual({
+    answered: ["from", "to"],
+    "cash-movement-reads": ["from", "to"],
     "cash-movements": ["day", "kind", "amount", "entry"],
     "chart-series": ["symbol", "readAt"],
     closes: ["symbol", "day"],
@@ -37,7 +44,10 @@ test("a new database has one store per kind, each keyed by its own fields", asyn
     "dividend-reads": ["symbol", "from", "to"],
     dividends: ["symbol", "exDate", "paymentDate", "grossPerShare", "entry"],
     memory: "strategy",
+    resumes: "at",
     settings: "name",
+    "typed-movements": "typedAt",
+    valuations: "day",
   });
   expect(Object.values(STORES).sort()).toEqual([...db.objectStoreNames].sort());
   db.close();
@@ -84,7 +94,7 @@ test("a database a newer release wrote is refused by name, not read", async () =
   const newer = await requested(factory.open(DATABASE, VERSION + 1));
   newer.close();
   await expect(openHistory(factory)).rejects.toThrow(
-    new Error("steadyhand-history is at a newer version than this release reads (4)"),
+    new Error("steadyhand-history is at a newer version than this release reads (5)"),
   );
 });
 
