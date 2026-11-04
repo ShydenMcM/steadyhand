@@ -3,7 +3,14 @@ import type { Portfolio, Watchlist } from "../src/broker-view.ts";
 import { advise, closesFrom, type Decision } from "../src/advice.ts";
 import { Side } from "../src/costs.ts";
 import { IDR, Money } from "../src/money.ts";
-import { missingDeposits, missingHistory, missingPage } from "../src/notes.ts";
+import {
+  missingDeposits,
+  missingHistory,
+  missingPage,
+  NOTE_CODES,
+  note,
+  type Note,
+} from "../src/notes.ts";
 import { RuleDecimal } from "../src/ratio.ts";
 import { RiskLimits } from "../src/risk.ts";
 import { IdxMarketRules } from "../src/rules.ts";
@@ -47,10 +54,11 @@ const decision = (over: Partial<Decision> = {}): Decision => ({
   ...over,
 });
 
-const run = (spendable: bigint, chosen: Decision = decision()) =>
+const run = (spendable: bigint, chosen: Decision = decision(), stops: readonly Note[] = []) =>
   advise({
     rules: RULES,
     limits: new RiskLimits(),
+    stops,
     decision: chosen,
     portfolio: {
       value: rp(100_000_000n),
@@ -192,6 +200,7 @@ test("a day with no orders pays no stamp duty, even before the exemption existed
   const advice = advise({
     rules: RULES,
     limits: new RiskLimits(),
+    stops: [],
     decision: decision({ weights: new Map() }),
     portfolio: {
       value: rp(100_000_000n),
@@ -247,4 +256,72 @@ test("a watchlist listing a stock twice is refused by name", () => {
   expect(() => closesFrom(portfolio(2_500n), twice)).toThrow(
     new Error("the watchlist lists BBCA twice"),
   );
+});
+
+// EXT S12 (#236, spec §8): a halt, or a fact a halt needs that is missing, stops every buy;
+// sells are still given.
+
+const HALT = note(
+  NOTE_CODES.RISK_HALT_DAILY_LOSS,
+  "daily loss limit: the unit value fell 6.00%, the limit is 5.00%",
+);
+
+const SELLING = decision({
+  weights: new Map([["BBCA", new RuleDecimal("0.1")]]),
+});
+
+const sellable = (stops: readonly Note[]) =>
+  advise({
+    rules: RULES,
+    limits: new RiskLimits(),
+    stops,
+    decision: SELLING,
+    portfolio: {
+      value: rp(100_000_000n),
+      spendable: rp(50_000_000n),
+      holdings: new Map([["TLKM", rp(5_000_000n)]]),
+      held: new Map([["TLKM", 2_000n]]),
+    },
+    tradable: {
+      ...TRADABLE,
+      reasons: new Map(),
+      buyable: new Set(["BBCA", "BBRI", "TLKM"]),
+      sellable: new Set(["TLKM"]),
+    },
+    prices: PRICES,
+    day: DAY,
+  });
+
+test("with nothing stopping it, the same day buys BBCA and sells TLKM", () => {
+  const advice = sellable([]);
+  expect(advice.orders.map((advised) => [advised.order.symbol, advised.order.side])).toEqual([
+    ["TLKM", Side.SELL],
+    ["BBCA", Side.BUY],
+  ]);
+  expect(advice.stops).toEqual([]);
+});
+
+test("a halt stops every buy, each rejected with the halt's note, and still sells", () => {
+  const advice = sellable([HALT]);
+  expect(advice.orders.map((advised) => [advised.order.symbol, advised.order.side])).toEqual([
+    ["TLKM", Side.SELL],
+  ]);
+  expect(advice.rejected.map((rejected) => [rejected.order.symbol, rejected.reason])).toEqual([
+    ["BBCA", HALT],
+  ]);
+  expect(advice.stops).toEqual([HALT]);
+});
+
+test("missing deposits stop every buy the same way, the first stop given as the reason", () => {
+  const gap = missingDeposits("2025-05-30");
+  const advice = sellable([gap, HALT]);
+  expect(advice.orders.map((advised) => advised.order.side)).toEqual([Side.SELL]);
+  expect(advice.rejected.map((rejected) => rejected.reason)).toEqual([gap]);
+  expect(advice.stops).toEqual([gap, HALT]);
+});
+
+test("a strategy missing data under a halt still lists the halt", () => {
+  const gap = missingPage("watchlist");
+  const advice = run(50_000_000n, decision({ missing: [gap] }), [HALT]);
+  expect([advice.orders, advice.missing, advice.stops]).toEqual([[], [gap], [HALT]]);
 });

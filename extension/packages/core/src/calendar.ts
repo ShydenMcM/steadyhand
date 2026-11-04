@@ -38,7 +38,8 @@ const midnight = (day: string): Date => new Date(`${asDay(day, "day")}T00:00:00Z
 
 const isWeekend = (day: string): boolean => [0, 6].includes(midnight(day).getUTCDay());
 
-const dayAfter = (day: string): string => {
+/** The calendar day after `day`. */
+export const dayAfter = (day: string): string => {
   const moved = midnight(day);
   moved.setUTCDate(moved.getUTCDate() + 1);
   return moved.toISOString().slice(0, 10);
