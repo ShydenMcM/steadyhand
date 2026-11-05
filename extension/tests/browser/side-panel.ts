@@ -1,4 +1,4 @@
-import { type Browser, type BrowserContext, type Page, chromium } from "@playwright/test";
+import { type Browser, type Page, chromium } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { findImage, type Picture, type Point } from "../lib/find-image.ts";
@@ -105,31 +105,28 @@ const panelIn = async (browser: Browser, path: string): Promise<Page> => {
   );
 };
 
-/** Open the extension's side panel with a real click, as a person does, and return its page,
- * with *time* as its clock from its first script. *browser* is the suite's own browser, reached
- * again over DevTools so the panel (which the browser opened, not Playwright) can be driven. */
+/** Open the extension's side panel with a real click, as a person does, and return its page with
+ * *time* as its clock. The panel is reached over DevTools after the click: a connection made
+ * before it never hears of the page the browser opens (measured on CI 2026-11-06, PR #509), so
+ * the clock is set on the open panel and the panel reloaded under it. */
 export const openSidePanel = async (
   path: string,
   time: Date,
-): Promise<{ panel: Page; devtools: Browser; context: BrowserContext }> => {
-  const devtools = await chromium.connectOverCDP(
-    `http://127.0.0.1:${String(PANEL_DEBUGGING_PORT)}`,
-  );
-  const [context] = devtools.contexts();
-  if (context === undefined) {
-    throw new Error("the browser reached over DevTools has no context to open the panel in");
-  }
-  await context.clock.install({ time });
+): Promise<{ panel: Page; devtools: Browser }> => {
   const tile = { name: "the extension's tile", picture: pictureOf(TILE) };
   const first = await lookFor([
     tile,
     { name: "Edge's extensions button", picture: pictureOf(EXTENSIONS_BUTTON) },
   ]);
+  click(first.at);
   if (first.name !== tile.name) {
-    click(first.at);
     click((await lookFor([tile])).at);
-  } else {
-    click(first.at);
   }
-  return { panel: await panelIn(devtools, path), devtools, context };
+  const devtools = await chromium.connectOverCDP(
+    `http://127.0.0.1:${String(PANEL_DEBUGGING_PORT)}`,
+  );
+  const panel = await panelIn(devtools, path);
+  await panel.clock.install({ time });
+  await panel.reload();
+  return { panel, devtools };
 };
