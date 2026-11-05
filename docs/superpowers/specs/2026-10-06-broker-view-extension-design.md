@@ -65,7 +65,7 @@ extension/
 ```
 
 - **Language and checks:** TypeScript in `strict` mode with `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`; ESLint with typescript-eslint's strict, type-checked rules; Prettier. `tsc --noEmit` runs in CI, because the bundler strips types without checking them.
-- **Tests:** Vitest for core, readers and history; Playwright loading the built extension in Chromium (§14).
+- **Tests:** Vitest for core, readers and history; Playwright loading the built extension in Chromium, Google Chrome and Microsoft Edge, the same suite on each (§14, #501).
 - **Bundler:** esbuild, one bundle per entry point (content script, side panel, service worker). A test builds twice and compares the zips byte for byte (§12.2).
 - **Dependencies:** as few as possible, each pinned exactly in `package-lock.json`. Core takes one runtime dependency, `decimal.js` (MIT), for decimal arithmetic matching Python's `Decimal` (§4.1). Dependabot gains the `npm` ecosystem for `extension/`, targeting `develop`.
 - **The dependency rule is a test:** a meta-guard reads every import in each package and refuses one that points upstream (core importing history, readers or shell; any package importing shell), and refuses any browser global (`window`, `document`, `chrome`, `indexedDB`) in core.
@@ -271,7 +271,7 @@ Re-established from Shyden's global rules before the first feature story:
 Each guard carries the population it judged inside its verdict, a floor at the measured figure, an independent cross-check, and a mutation per form that goes red.
 
 ### 14.3 Browser tests
-Playwright launches Chromium with the built extension. Fixture broker pages, served locally, stand in for the broker; the real saved pages feed reader unit tests only. Journeys: read portfolio and watchlist, get orders; a missing page named; paste a portfolio; type a deposit; a halt and its resume; forget everything.
+Playwright launches Chromium, Google Chrome and Microsoft Edge in turn, each with the built extension and the same tests (#501). Fixture broker pages, served locally, stand in for the broker; the real saved pages feed reader unit tests only. Journeys: read portfolio and watchlist, get orders; a missing page named; paste a portfolio; type a deposit; a halt and its resume; forget everything.
 
 ### 14.4 Parity with Python
 Until the port is done, a CI step generates cases from a fixed seed (universe, closes, dividends, holdings, cash, memory, settings), runs Python's strategy, sizer and risk manager and TypeScript's on each, and requires identical orders, notes and memory. It covers buy-and-hold, monthly-savings, dividend-growth, sizing, risk and the income run rate. The step is removed when the port is finished, with Shyden's agreement.

@@ -47,27 +47,32 @@ def test_the_integration_job_runs_the_integration_suite_alone_with_one_limit() -
     assert limited[0]["timeout-minutes"] == 3
 
 
-def test_the_extension_integration_job_runs_its_two_suites_each_with_one_limit() -> None:
+BROWSERS = ("chromium", "chrome", "msedge")
+
+
+def test_the_extension_integration_job_runs_its_suites_each_with_one_limit() -> None:
     steps = job("extension-integration")["steps"]
     npm = [step for step in steps if "npm " in str(step.get("run", ""))]
     assert [step["run"] for step in npm] == [
         "npm ci --ignore-scripts",
         "npm run test:integration",
-        "npm run test:browser",
+        *(f"npm run test:browser -- --project={browser}" for browser in BROWSERS),
     ]
-    assert [step.get("working-directory") for step in npm] == ["extension"] * 3
+    assert [step.get("working-directory") for step in npm] == ["extension"] * 5
     limited = [step for step in steps if "timeout-minutes" in step]
     assert limited == npm[1:]
     # The integration suite measured on the laptop on 2026-10-13: 3 s. The browser suite runs
-    # only in CI (#231): its limit is set from its first CI run.
-    assert [step["timeout-minutes"] for step in limited] == [1, 2]
+    # only in CI (#231): its limit is set from its first CI run, the same on each browser (#501).
+    assert [step["timeout-minutes"] for step in limited] == [1, 2, 2, 2]
 
 
-def test_chromium_is_installed_by_the_locked_playwright_before_the_browser_suite() -> None:
+def test_every_browser_is_installed_by_the_locked_playwright_before_the_browser_suite() -> None:
+    # One suite, run unchanged on every browser the extension supports (#501): Chromium, Google
+    # Chrome and Microsoft Edge, each run on its own so each prints its own total.
     steps = job("extension-integration")["steps"]
     runs = [step.get("run") for step in steps]
-    install = runs.index("npx playwright install --with-deps chromium")
-    assert install < runs.index("npm run test:browser")
+    install = runs.index("npx playwright install --with-deps " + " ".join(BROWSERS))
+    assert install < runs.index("npm run test:browser -- --project=chromium")
     assert steps[install].get("working-directory") == "extension"
 
 

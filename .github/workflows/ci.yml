@@ -482,17 +482,28 @@ jobs:
         timeout-minutes: 1
         working-directory: extension
         run: npm run test:integration
-      # The browser suite runs in Chromium itself (#231 AC6: the history store in the browser's own
-      # IndexedDB), installed at the version the locked @playwright/test names.
-      - name: Chromium for the browser suite
+      # The one browser suite runs unchanged on each browser the extension supports (#501): Chromium
+      # at the version the locked @playwright/test names, Google Chrome and Microsoft Edge stable.
+      # A step per browser prints that browser's own total; tests/guards/one-suite keeps them equal.
+      - name: Chromium, Chrome and Edge for the browser suite
         if: steps.scope.outputs.docs_only != 'true'
         working-directory: extension
-        run: npx playwright install --with-deps chromium
-      - name: The browser suite
+        run: npx playwright install --with-deps chromium chrome msedge
+      - name: The browser suite on Chromium
         if: steps.scope.outputs.docs_only != 'true'
         timeout-minutes: 2
         working-directory: extension
-        run: npm run test:browser
+        run: npm run test:browser -- --project=chromium
+      - name: The browser suite on Chrome
+        if: steps.scope.outputs.docs_only != 'true'
+        timeout-minutes: 2
+        working-directory: extension
+        run: npm run test:browser -- --project=chrome
+      - name: The browser suite on Edge
+        if: steps.scope.outputs.docs_only != 'true'
+        timeout-minutes: 2
+        working-directory: extension
+        run: npm run test:browser -- --project=msedge
 
   # Every Hypothesis property at its full count, drawing fresh cases each run (#290), in its own
   # suite with one limit at its step and coverage off. Unit keeps a fast stand-in of each.
