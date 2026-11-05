@@ -34,12 +34,6 @@ import type { Reader, Snapshot } from "./reader.ts";
 /** The name every fixture part's source gives as its broker. */
 export const FIXTURE_BROKER = "fixture";
 
-/** The folder of the fixture broker's pages, one `<page kind>.html` each. */
-export const FIXTURE_PAGES = new URL("../fixtures/fixture-broker/", import.meta.url);
-
-/** The file name of the fixture page of `kind`, under `FIXTURE_PAGES`. */
-export const fixturePagePath = (kind: PageKind): string => `${kind}.html`;
-
 const at = (table: string, row: number, column: string): string =>
   `table ${JSON.stringify(table)} row ${String(row + 1)} ${JSON.stringify(column)}`;
 const field = (table: string, label: string): string =>

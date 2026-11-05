@@ -1,7 +1,7 @@
 import { IdxCalendar, IDR, Money, monthlySavings, storedAfter } from "@steadyhand/core";
 import { IDBFactory } from "fake-indexeddb";
 import { beforeEach, expect, test } from "vitest";
-import { remember, rememberedFor, rowsOf } from "../src/record.ts";
+import { remember, rememberedFor, rowsOf, storedMemory } from "../src/record.ts";
 import { openHistory, STORES } from "../src/schema.ts";
 
 /** The shipped IDX trading days, read once. */
@@ -31,6 +31,16 @@ test("memory is kept with its advice day, what the day began with and ended with
   expect(await rowsOf(db, STORES.memory)).toEqual([
     { strategy: "buy-and-hold", day: "2025-06-17", began, ended },
   ]);
+});
+
+test("a strategy with nothing stored has no stored memory", async () => {
+  expect(await storedMemory(db, "buy-and-hold")).toBeUndefined();
+});
+
+test("stored memory reads back as kept, without the strategy's name", async () => {
+  await remember(db, "buy-and-hold", { day: "2025-06-17", began, ended });
+  await remember(db, "dividend-growth", { day: "2025-06-16", began: ended, ended: began });
+  expect(await storedMemory(db, "buy-and-hold")).toEqual({ day: "2025-06-17", began, ended });
 });
 
 test("advising again on the same day starts from the memory that day began with", async () => {

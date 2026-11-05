@@ -207,14 +207,21 @@ export const remember = (db: IDBDatabase, strategy: string, stored: StoredMemory
 
 /** The memory `strategy` advises with on `day`: the memory that day began with when it was
  * advised before, so the advice for a day is the same however often it is asked for. */
-export const rememberedFor = async (
+export const rememberedFor = async (db: IDBDatabase, strategy: string, day: Day): Promise<Memory> =>
+  memoryFor(await storedMemory(db, strategy), day);
+
+/** `strategy`'s memory as last kept, or `undefined` before its first advice. */
+export const storedMemory = async (
   db: IDBDatabase,
   strategy: string,
-  day: Day,
-): Promise<Memory> => {
+): Promise<StoredMemory | undefined> => {
   const read = db.transaction(STORES.memory, "readonly").objectStore(STORES.memory);
-  const stored = (await requested(read.get(strategy))) as StoredMemory | undefined;
-  return memoryFor(stored, day);
+  const row = (await requested(read.get(strategy))) as
+    (StoredMemory & { readonly strategy: string }) | undefined;
+  if (row === undefined) {
+    return undefined;
+  }
+  return { day: row.day, began: row.began, ended: row.ended };
 };
 
 /** Keep one setting. */
