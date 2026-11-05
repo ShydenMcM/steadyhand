@@ -8,6 +8,7 @@ import no_process
 import pytest
 import suites
 import unit_limits
+import unsynced_sqlite
 from cli_world import Cli
 from stood_in_git import FakeGit, stand_in
 from suites import pytest_ignore_collect, pytest_itemcollected
@@ -29,15 +30,17 @@ def pytest_configure(config: pytest.Config) -> None:
 
     A unit run records nothing: CI's lock makes those files unreadable before every job, which
     covers it from outside the process (Shyden, 2026-10-12, #285). A unit run instead refuses every
-    process and outside connection, from before the first test module is imported (#286), and holds
-    each test to 1 s of wall when coverage is not tracing it (#323). A
-    properties run loads the one Hypothesis profile, which draws every property's full count (#290).
+    process and outside connection, from before the first test module is imported (#286), holds
+    each test to 1 s of wall when coverage is not tracing it (#323), and opens SQLite without the
+    disk sync a COMMIT would wait on (#506). A properties run loads the one Hypothesis profile,
+    which draws every property's full count (#290).
     """
     suite = config.getoption("suite")
     if suite == "guards":
         file_reads.install()
     if suite == "unit":
         no_process.install()
+        unsynced_sqlite.install()
         config.pluginmanager.register(no_process, "no-process")
         config.pluginmanager.register(unit_limits, "unit-limits")
     if suite == "properties":
