@@ -22,6 +22,7 @@ export * from "./strategy.ts";
 export * from "./tradable.ts";
 export { dayAfter, IdxCalendar } from "./calendar.ts";
 export { RuleDecimal } from "./ratio.ts";
+export { lastUnknownAction } from "./series.ts";
 export { IdxMarketRules } from "./rules.ts";
 export type { Dated } from "./rules-file.ts";
 export { adviceDayAt, shippedSessions, type SessionRow } from "./sessions.ts";
