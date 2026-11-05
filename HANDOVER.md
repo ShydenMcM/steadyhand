@@ -19,7 +19,7 @@
 - Backups (keep 30 days): `377/wip-backup-2026-10-28` (to 2026-11-27); `365/exact-values-backup-2026-10-27` (to 2026-11-26), `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29).
 
 ## Running
-- PR #509 head fbd36959 (CI run 42128058483): `extension-integration` RED on Edge only; Chromium and Chrome PASS the journey in the real side panel. A local waiter (dies with /clear) fetches the Edge job log (job 127597262163) once the run completes: re-run `gh run view 42128058483 --job 127597262163 --log` and grep the Edge step. Then fix Edge (fresh TDD per rules), push, verdict, mutation on probe branch, merge, ACs, close #503.
+- PR #509 head 51006f3 (Edge puzzle picture re-cut at rest; the old one was hovered, grey 222 vs white 255) (in `.superpowers/sdd/503-head.txt`). On fbd3695 Chromium and Chrome PASSED the journey in the real side panel; Edge failed: "screen shows none of these exactly once (tile: 0, Edge's extensions button: 0)". c43ae2d saves the screen on failure and CI uploads `extension/test-results/` as artifact `browser-suite-failure` (fast-path guard widened for `failure() && <skip>` uploads, Shyden 2026-11-06). A local waiter (dies with /clear) downloads it to `.superpowers/sdd/503/fail-c43ae2d/`; else `gh run download <run> -n browser-suite-failure -D .superpowers/sdd/503/fail-c43ae2d`. Then look at `screen-at-failure.png`, fix Edge (test first), push, verdict, mutation on probe branch, merge, ACs, close #503.
 
 ## #503 (P0, est 13, In Progress): real side panel by its toolbar button
 - Shyden 2026-11-05: an OS mouse click on CI's virtual screen (Xvfb + xdotool) counts as real input (on the ticket).
