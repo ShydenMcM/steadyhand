@@ -1,18 +1,8 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { PACKAGE as CORE } from "@steadyhand/core";
 import { expect, test } from "vitest";
 import { FIXTURE_READERS as FIXTURE_SOURCE } from "../src/fixture-broker.ts";
 import { pageKindOf as kindSource } from "../src/html-table.ts";
-import { BUILT_ON, FIXTURE_READERS, PACKAGE, pageKindOf } from "../src/index.ts";
-
-test("readers names itself", () => {
-  expect(PACKAGE).toBe("@steadyhand/readers");
-});
-
-test("readers is built on core alone, reached through the workspace", () => {
-  expect(BUILT_ON).toEqual([CORE]);
-  expect(CORE).toBe("@steadyhand/core");
-});
+import { FIXTURE_READERS, pageKindOf } from "../src/index.ts";
 
 test("readers gives the panel the page-kind check and the fixture broker's readers", () => {
   expect(pageKindOf).toBe(kindSource);

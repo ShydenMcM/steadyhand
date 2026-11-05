@@ -1,6 +1,3 @@
-/** The package's own name. The layers above read it to show they reach core through the workspace. */
-export const PACKAGE = "@steadyhand/core";
-
 export * from "./advice.ts";
 export * from "./buy-and-hold.ts";
 export * from "./broker-view.ts";

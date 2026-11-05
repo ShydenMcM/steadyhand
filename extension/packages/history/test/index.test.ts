@@ -1,19 +1,9 @@
-import { PACKAGE as CORE } from "@steadyhand/core";
 import { expect, test } from "vitest";
 import * as history from "../src/index.ts";
 import * as market from "../src/market.ts";
 import * as record from "../src/record.ts";
 import * as risk from "../src/risk.ts";
 import * as schema from "../src/schema.ts";
-
-test("history names itself", () => {
-  expect(history.PACKAGE).toBe("@steadyhand/history");
-});
-
-test("history is built on core alone, reached through the workspace", () => {
-  expect(history.BUILT_ON).toEqual([CORE]);
-  expect(CORE).toBe("@steadyhand/core");
-});
 
 // The panel records each read and reads the record back through the package (#238).
 test.each([

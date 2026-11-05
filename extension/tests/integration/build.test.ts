@@ -44,10 +44,12 @@ test.each(ENTRY_POINTS)("%s is one self-contained script, no module syntax left"
   expect(text).not.toContain("require(");
 });
 
-test.each(["@steadyhand/core", "@steadyhand/readers", "@steadyhand/history"])(
-  "the side panel bundle carries %s, which it imports through the workspace",
+// esbuild heads each module it bundles with a comment naming its path, so a workspace package the
+// panel imports but the bundle left out (a bare import Chrome cannot load) has no such line.
+test.each(["core", "readers", "history"])(
+  "the side panel bundle carries @steadyhand/%s's code, which it imports through the workspace",
   async (name) => {
-    expect(await bundle("side-panel")).toContain(`"${name}"`);
+    expect(await bundle("side-panel")).toMatch(new RegExp(`^ {2}// packages/${name}/src/`, "m"));
   },
 );
 
