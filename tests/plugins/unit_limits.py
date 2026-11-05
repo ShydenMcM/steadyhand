@@ -3,7 +3,7 @@
 The global rule (Shyden, every project): a unit test runs in under 1 s, the runner's timeout, and
 no limit is ever raised. This is the one place that sets it, on a unit run only, and only when
 coverage is not tracing it, since its tracer would be timed with the code. A test marked ``perf``
-or ``live`` is another suite, with one limit at its own CI step.
+is another suite, with one limit at its own CI step.
 """
 
 import sys
@@ -12,11 +12,11 @@ import pytest
 
 # The most wall-clock time one unit test may take, in seconds: pytest-timeout's limit.
 WALL_LIMIT_SECONDS = 1
-OTHER_SUITES = frozenset({"perf", "live"})
+OTHER_SUITES = frozenset({"perf"})
 
 
 def held(markers: frozenset[str]) -> bool:
-    """Whether a test with *markers* is a unit test: ``perf`` and ``live`` are other suites."""
+    """Whether a test with *markers* is a unit test: ``perf`` is another suite."""
     return not markers & OTHER_SUITES
 
 

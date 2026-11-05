@@ -1,7 +1,7 @@
 """Coverage skips no shipped code (#374; Shyden 2026-10-22, "Count them as unrun").
 
 Spec §10.5 asks for 100% branch coverage. The one function that talks to Yahoo, once excluded,
-is tested with yfinance stood in, its real network run kept in the yahoo-shape workflow. A line
+is tested with yfinance stood in (its hand-run live check was removed by #502). A line
 told to skip would count as unrun in the coverage gate anyway; this guard refuses the pragma and
 any configured exclusion outright. It reads comments on purpose: the pragma is a comment.
 """

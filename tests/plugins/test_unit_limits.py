@@ -14,10 +14,10 @@ def test_the_limit_is_one_second() -> None:
 
 @pytest.mark.parametrize(
     ("markers", "expected"),
-    [((), True), (("parametrize",), True), (("perf",), False), (("live",), False)],
-    ids=["unmarked", "parametrized", "perf", "live"],
+    [((), True), (("parametrize",), True), (("perf",), False), (("live",), True)],
+    ids=["unmarked", "parametrized", "perf", "live-retired-by-502"],
 )
-def test_perf_and_live_tests_are_other_suites_and_never_held(
+def test_a_perf_test_alone_is_another_suite_and_never_held(
     markers: tuple[str, ...], *, expected: bool
 ) -> None:
     assert held(frozenset(markers)) is expected
@@ -61,12 +61,12 @@ def test_an_untraced_run_sets_the_wall_limit_on_every_unit_test_and_no_other(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(unit_limits, "under_coverage", lambda: False)
-    unit, perf, live = _Item("slow"), _Item("perf"), _Item("live")
-    unit_limits.pytest_collection_modifyitems([unit, perf, live])  # type: ignore[list-item]
+    unit, perf = _Item("slow"), _Item("perf")
+    unit_limits.pytest_collection_modifyitems([unit, perf])  # type: ignore[list-item]
     assert len(unit.added) == 1
     assert unit.added[0].name == "timeout"
     assert unit.added[0].args == (WALL_LIMIT_SECONDS,)
-    assert (perf.added, live.added) == ([], [])
+    assert perf.added == []
 
 
 def test_a_traced_run_sets_no_wall_limit(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -33,7 +33,7 @@ def test_a_shorter_call_does_not_match_a_longer_answer() -> None:
 
 RUN_7 = {
     "workflow-trace-shape-0/shape/__run": "trace",
-    "coverage-python-yahoo-shape/coverage.json": "{}",
+    "coverage-python-shape/coverage.json": "{}",
 }
 
 
@@ -57,7 +57,7 @@ def test_a_download_by_pattern_keeps_each_matching_artifact_in_its_own_folder(
 
 
 def test_a_download_by_name_unpacks_that_artifact_alone_into_the_folder(tmp_path: Path) -> None:
-    assert download(tmp_path, "--name", "coverage-python-yahoo-shape").returncode == 0
+    assert download(tmp_path, "--name", "coverage-python-shape").returncode == 0
     assert written(tmp_path) == ["coverage.json"]
 
 

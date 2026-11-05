@@ -10,8 +10,8 @@ Each entry point is wrapped where every route to it passes: the ``Popen`` method
 own name, and a socket's ``connect`` and every name lookup. A wrapped call is refused by name
 before anything starts, and a refusal the test swallowed still fails it.
 
-Tests marked ``perf`` or ``live`` are other suites (CI's perf step, the yahoo-shape workflow),
-which the unit run leaves out by its default ``-m``; they run unarmed when chosen by marker.
+Tests marked ``perf`` are another suite (CI's perf step), which the unit run leaves out by its
+default ``-m``; they run unarmed when chosen by marker.
 """
 
 import _posixsubprocess
@@ -74,7 +74,7 @@ ENTRY_POINTS: tuple[tuple[str, object, str], ...] = (
 )
 """Every way a test could start a process or reach out: (label, owner, attribute)."""
 
-PERF_OR_LIVE = frozenset({"perf", "live"})
+PERF = frozenset({"perf"})
 
 _armed = [False]
 _refused: list[str] = []
@@ -112,7 +112,7 @@ def install() -> None:
 
 def armed_for(markers: Iterable[str]) -> bool:
     """Whether a test with these markers is held to the unit rule."""
-    return not PERF_OR_LIVE.intersection(markers)
+    return not PERF.intersection(markers)
 
 
 def take_refused() -> list[str]:

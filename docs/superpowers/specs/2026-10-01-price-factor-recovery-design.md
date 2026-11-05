@@ -197,7 +197,7 @@ TDD throughout, at 100% branch coverage, with each guard proven by a mutation th
 - **A true factor of 2 or more** stays refused, or in a one-tier span is read as f/2. The largest measured factor is 1.6028; the property test bounds the claim to [1, 2).
 - **The window's edges.** Float noise at p1 moved the lower edge once (TINS, §3.5). The start now rounds, and the property test draws noisy prices so that an edge effect of this kind goes red.
 - **The inference-only grids are unverified.** A wrong row can only leave a run unproven, never prove a wrong factor (§4.2, §4.4).
-- **Yahoo changes how it adjusts.** The daily yahoo-shape workflow and the BBRI recording test would show it.
+- **Yahoo changes how it adjusts.** The BBRI recording test would show it on a new recording. (The yahoo-shape live check was removed by #502: the extension reads the broker page.)
 - **The migration re-reads every cached range once.** That is a one-off cost on the first run after upgrading.
 
 ## Spec review log
