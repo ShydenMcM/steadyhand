@@ -40,10 +40,11 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
 
 # Measured on 2026-10-30 (#446 removed two workflows and a job): 13 jobs in 2 workflow files, 12 of
-# them setting up uv, 4 job names carrying a Python minor, 3 pyproject files. Lower each only by a
-# deliberate edit when the workflows or packages shrink.
-JOBS_FLOOR = 13
-SETUP_UV_FLOOR = 12
+# them setting up uv, 4 job names carrying a Python minor, 3 pyproject files. Lowered on 2026-11-05
+# (#502 removed the yahoo-shape workflow, one job setting up uv): 12 jobs in ci.yml, 11 setting up
+# uv. Lower each only by a deliberate edit when the workflows or packages shrink.
+JOBS_FLOOR = 12
+SETUP_UV_FLOOR = 11
 NAMED_MINORS_FLOOR = 4
 PYPROJECTS_FLOOR = 3
 
