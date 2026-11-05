@@ -1,14 +1,14 @@
 """Develop's deploy is the extension zip, its build provenance attested and verified (#220).
 
-Spec §12.1: the Python TestPyPI ``publish-dev`` job is retired, and so is the daily
-``yahoo-shape`` schedule, which checks a data source the extension does not use (decision 21).
+Spec §12.1: the Python TestPyPI ``publish-dev`` job is retired. The ``yahoo-shape`` check of a data
+source the extension does not use went too: its schedule with decision 21, the workflow with #502.
 """
 
 import shlex
 from pathlib import Path
 from typing import Any
 
-from ci_workflow import ci, parse
+from ci_workflow import ci
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github/workflows"
@@ -112,13 +112,6 @@ def test_the_verified_zip_is_kept_as_it_is_not_zipped_again() -> None:
 
 def test_nothing_publishes_to_testpypi_any_more() -> None:
     texts = {path.name: path.read_text(encoding="utf-8") for path in WORKFLOWS.glob("*.yml")}
-    assert len(texts) >= 2
+    assert list(texts) == ["ci.yml"]
     assert "publish-dev" not in JOBS
     assert [name for name, text in texts.items() if "pypi" in text.lower()] == []
-
-
-def test_the_yahoo_shape_check_runs_only_by_hand() -> None:
-    shape: dict[str | bool, Any] = parse(
-        (WORKFLOWS / "yahoo-shape.yml").read_text(encoding="utf-8")
-    )
-    assert shape[True] == {"workflow_dispatch": None}

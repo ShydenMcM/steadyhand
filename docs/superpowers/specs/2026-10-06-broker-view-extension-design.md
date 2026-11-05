@@ -236,7 +236,7 @@ The scan reads the built JavaScript through a tokenizer, not a regex, so a forbi
 - The `ci.yml` jobs gain `extension`: install, lint, `tsc --noEmit`, Vitest with coverage, the meta-guards, the build, the security scan, Playwright with the built extension, the parity harness (§14.4).
 - **Develop's deploy** becomes: build the extension zip and attest its build provenance (GitHub's `actions/attest-build-provenance`). The Python TestPyPI `publish-dev` job is retired (design §4).
 - **The docs-only fast path** (Shyden's global rule): steadyhand's CI has none. Its own ticket measures the current CI first (jobs per PR, minutes per run) and adds it before other CI work in this epic.
-- The scheduled `yahoo-shape.yml` checks a data source the extension no longer uses: it is disabled with the retirement of `publish-dev`. (A default, confirmed: decision 21.)
+- The scheduled `yahoo-shape.yml` checks a data source the extension no longer uses: it is disabled with the retirement of `publish-dev`. (A default, confirmed: decision 21.) #502 then removed the workflow and its live test (nothing skipped, 2026-11-05).
 
 ### 12.2 Release
 - **Reproducible:** the same source builds a byte-identical zip; CI builds twice and compares.

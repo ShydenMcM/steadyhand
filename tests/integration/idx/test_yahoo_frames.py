@@ -23,7 +23,7 @@ UNVR_FILE = FIXTURES / "UNVR.JK_2023-05-15_2023-06-09.json"
 
 def _frames(history: YahooHistory) -> tuple[pd.DataFrame, pd.Series]:
     """The pandas objects yfinance returns, rebuilt from a recording: the same columns, dtypes
-    and time zone as ``Ticker.history`` and ``Ticker.splits`` (checked live by test_yahoo_live)."""
+    and time zone as ``Ticker.history`` and ``Ticker.splits`` returned when recorded."""
     index = pd.DatetimeIndex([pd.Timestamp(row.day) for row in history.rows]).tz_localize(
         "Asia/Jakarta"
     )

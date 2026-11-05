@@ -1,8 +1,8 @@
 """The one function that asks Yahoo, with yfinance stood in (#374 AC7): no line is excluded from
 coverage any more (Shyden 2026-10-22, "Count them as unrun"), so what it asks and what it does
-with the answer and with a failure are tested here; the real network run stays in the
-yahoo-shape workflow (``tests/idx/test_yahoo_live.py``) and the real import in the integration
-suite (``tests/integration/idx/test_yfinance_loads.py``)."""
+with the answer and with a failure are tested here, and the real import in the integration
+suite (``tests/integration/idx/test_yfinance_loads.py``). No test asks the real Yahoo since #502
+removed the hand-run live check: the extension reads the broker page, not Yahoo (#214)."""
 
 from dataclasses import dataclass, field
 from datetime import date

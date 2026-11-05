@@ -205,11 +205,11 @@ def test_the_refusal_says_what_to_do_instead() -> None:
         pytest.param(["parametrize"], True, id="parametrized"),
         pytest.param(["last"], True, id="last"),
         pytest.param(["perf"], False, id="perf"),
-        pytest.param(["live"], False, id="live"),
+        pytest.param(["live"], True, id="live-retired-by-502"),
         pytest.param(["parametrize", "perf"], False, id="perf-among-others"),
     ],
 )
-def test_a_perf_or_live_test_is_another_suite_and_runs_unarmed(
+def test_a_perf_test_alone_is_another_suite_and_runs_unarmed(
     markers: list[str], *, armed: bool
 ) -> None:
     assert armed_for(markers) is armed

@@ -596,7 +596,7 @@ def _yfinance() -> Any:  # noqa: ANN401 - yfinance ships no type information
 def download_history(
     ticker: str, start: date, end: date, *, yahoo: Callable[[], Any] = _yfinance
 ) -> YahooHistory:
-    """Ask Yahoo for one ticker's history (network; run by hand by the yahoo-shape workflow).
+    """Ask Yahoo for one ticker's history (network).
 
     This is the only function that talks to Yahoo. *yahoo* gives the yfinance module; the unit
     tests stand it in (``tests/idx/test_yahoo_download.py``), so no line is left unmeasured.

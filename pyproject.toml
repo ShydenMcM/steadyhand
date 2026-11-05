@@ -68,9 +68,8 @@ testpaths = ["tests"]
 # tests/engine and tests/idx: each property in tests/properties calls its unit stand-in there;
 # tests/properties: its Hypothesis profile, which tests/conftest.py loads (#290).
 pythonpath = ["scripts", "tests/plugins", "tests/repo", "tests/guards", "tests/cli", "tests/perf", "tests/scripts", "tests/engine", "tests/idx", "tests/properties"]
-addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-ra", "-m", "not live and not perf"]
+addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-ra", "-m", "not perf"]
 markers = [
-    "live: talks to Yahoo; run by the yahoo-shape workflow, by hand, with -m live, never on a PR",
     "perf: times the engine, paper runs and start-up; CI runs it with -m perf, without coverage",
     "last: judges what every other test did, so tests/conftest.py runs it at the end (#218)",
 ]
