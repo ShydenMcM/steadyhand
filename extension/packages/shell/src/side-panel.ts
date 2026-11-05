@@ -1,12 +1,15 @@
-import * as history from "@steadyhand/history";
-import * as readers from "@steadyhand/readers";
+// The side panel's page (spec §10.3): it opens the history record and starts the panel on the
+// browser's own page, Chrome and clock.
+import { openHistory } from "@steadyhand/history";
+import { startPanel, type Panel } from "./panel.ts";
 
-// EXT S14a builds the panel. Until then the page records the packages it was built from, which
-// shows the bundle carries the whole workspace: a bare package import would not load in Chrome.
-const packages = new Set([
-  ...readers.BUILT_ON,
-  readers.PACKAGE,
-  ...history.BUILT_ON,
-  history.PACKAGE,
-]);
-document.documentElement.dataset["packages"] = [...packages].join(" ");
+/** The panel once it is drawn; tests wait on it. */
+export const opened: Promise<Panel> = openHistory(indexedDB).then((db) =>
+  startPanel({
+    page: document,
+    db,
+    runtime: chrome.runtime,
+    tabs: chrome.tabs,
+    clock: () => new Date(),
+  }),
+);

@@ -2,13 +2,9 @@ import { readFileSync } from "node:fs";
 import Decimal from "decimal.js";
 import { IDR, Money, PAGE_KINDS, type PageKind, type PartValues } from "@steadyhand/core";
 import { expect, test } from "vitest";
-import {
-  FIXTURE_BROKER,
-  FIXTURE_PAGES,
-  FIXTURE_READERS,
-  fixturePagePath,
-} from "../src/fixture-broker.ts";
+import { FIXTURE_BROKER, FIXTURE_READERS } from "../src/fixture-broker.ts";
 import type { Snapshot } from "../src/reader.ts";
+import { FIXTURE_PAGES, fixturePagePath } from "./fixture-pages.ts";
 
 // The fixture broker (#226 AC5): a page of every kind and its reader, standing in for a real
 // broker in core, history and shell tests until the first one (spec §5.3).

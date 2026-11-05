@@ -1,10 +1,8 @@
-/** The package's own name. The layers above read it to show they reach core through the workspace. */
-export const PACKAGE = "@steadyhand/core";
-
 export * from "./advice.ts";
 export * from "./buy-and-hold.ts";
 export * from "./broker-view.ts";
 export * from "./cash.ts";
+export * from "./costs.ts";
 export * from "./dividend-growth.ts";
 export * from "./high-yield.ts";
 export * from "./income.ts";
@@ -20,8 +18,9 @@ export * from "./risk-state.ts";
 export * from "./sizing.ts";
 export * from "./strategy.ts";
 export * from "./tradable.ts";
-export { IdxCalendar } from "./calendar.ts";
+export { dayAfter, IdxCalendar } from "./calendar.ts";
 export { RuleDecimal } from "./ratio.ts";
+export { lastUnknownAction } from "./series.ts";
 export { IdxMarketRules } from "./rules.ts";
 export type { Dated } from "./rules-file.ts";
 export { adviceDayAt, shippedSessions, type SessionRow } from "./sessions.ts";

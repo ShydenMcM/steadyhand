@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { expect, test } from "vitest";
-import { FIXTURE_PAGES } from "../src/fixture-broker.ts";
 import { personalFound, scrub, type Personal } from "../src/scrubber.ts";
+import { FIXTURE_PAGES } from "./fixture-pages.ts";
 
 // The scrubber (#226 AC6, #460, spec §5.2): a saved page loses every personal detail an
 // Indonesian broker page may show before it becomes a fixture (the holder's names, address and

@@ -5,6 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "dependencies": {
+    "@steadyhand/core": "0.1.0",
     "@steadyhand/history": "0.1.0",
     "@steadyhand/readers": "0.1.0"
   }

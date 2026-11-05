@@ -15,13 +15,13 @@ interface Manifest {
 const read = (path: string): string => readFileSync(join(ROOT, path), "utf8");
 const manifest = (path: string): Manifest => JSON.parse(read(path)) as Manifest;
 
-/** Spec §3: the workspace's packages and the ones each is built on (shell, then readers and
- * history, then core). */
+/** Spec §3: the workspace's packages and the ones each is built on, one way only: shell, then
+ * readers and history, then core. Shell may use core directly (Shyden, 2026-11-05, #238). */
 const LAYERS: Record<string, string[]> = {
   core: [],
   readers: ["core"],
   history: ["core"],
-  shell: ["history", "readers"],
+  shell: ["core", "history", "readers"],
 };
 const MANIFESTS = ["package.json", ...Object.keys(LAYERS).map((p) => `packages/${p}/package.json`)];
 const EXACT = /^\d+\.\d+\.\d+$/;

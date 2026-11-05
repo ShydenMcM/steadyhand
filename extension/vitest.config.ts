@@ -21,7 +21,7 @@ export const INTEGRATION = "tests/integration/**/*.test.ts";
  * in-process with their tools stood in (#374 AC6: `tests/build.test.ts`, `tests/tool-configs.test.ts`). */
 export const UNIT_COVERED = [
   ...COVERED.map((name) => `packages/${name}/src/**/*.ts`),
-  "packages/shell/src/side-panel.ts",
+  "packages/shell/src/**/*.ts",
   "build.ts",
   "eslint.config.js",
   "playwright.config.ts",

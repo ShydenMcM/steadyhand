@@ -26,11 +26,12 @@ const output = async (): Promise<string> => {
 const bundle = async (name: string): Promise<string> =>
   readFile(join(await output(), `${name}.js`), "utf8");
 
-test("the build emits one bundle per entry point and the manifest, nothing else", async () => {
+test("the build emits each entry point's bundle, the manifest and the panel page, no more", async () => {
   expect((await readdir(await output())).sort()).toEqual([
     "content-script.js",
     "manifest.json",
     "service-worker.js",
+    "side-panel.html",
     "side-panel.js",
   ]);
 });
@@ -43,14 +44,16 @@ test.each(ENTRY_POINTS)("%s is one self-contained script, no module syntax left"
   expect(text).not.toContain("require(");
 });
 
-test.each(["@steadyhand/core", "@steadyhand/readers", "@steadyhand/history"])(
-  "the side panel bundle carries %s, which it imports through the workspace",
+// esbuild heads each module it bundles with a comment naming its path, so a workspace package the
+// panel imports but the bundle left out (a bare import Chrome cannot load) has no such line.
+test.each(["core", "readers", "history"])(
+  "the side panel bundle carries @steadyhand/%s's code, which it imports through the workspace",
   async (name) => {
-    expect(await bundle("side-panel")).toContain(`"${name}"`);
+    expect(await bundle("side-panel")).toMatch(new RegExp(`^ {2}// packages/${name}/src/`, "m"));
   },
 );
 
-test("the manifest is Manifest V3 at the workspace's version, asking for no permission", async () => {
+test("the built manifest has exactly spec §10.1's permissions, host matches and policy", async () => {
   const pkg = JSON.parse(
     await readFile(join(import.meta.dirname, "..", "..", "package.json"), "utf8"),
   ) as {
@@ -62,6 +65,21 @@ test("the manifest is Manifest V3 at the workspace's version, asking for no perm
     version: pkg.version,
     description: "What the strategy you chose implies, read from what your broker's page shows.",
     minimum_chrome_version: "119",
+    permissions: ["sidePanel", "storage"],
     background: { service_worker: "service-worker.js" },
+    action: { default_title: "steadyhand" },
+    side_panel: { default_path: "side-panel.html" },
+    content_scripts: [
+      {
+        matches: ["https://broker.steadyhand.test/*"],
+        js: ["content-script.js"],
+        run_at: "document_idle",
+      },
+    ],
+    content_security_policy: {
+      extension_pages:
+        "script-src 'self'; object-src 'none'; connect-src 'none'; base-uri 'none'; " +
+        "form-action 'none'; frame-ancestors 'none'",
+    },
   });
 });
