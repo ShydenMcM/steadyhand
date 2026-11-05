@@ -122,13 +122,19 @@ test("the built extension turns the broker's pages into the day's buy orders", a
     await expect(advice.locator("h2").last()).toHaveText("Income goal");
     const lines = await advice.locator("h2, p").all();
     expect(lines.length).toBeGreaterThan(3);
+    // A block's box keeps the panel's width while its text spills past it (a 300-letter word
+    // passed a box check on all three browsers, PR #509), so the text's own width is measured.
     for (const line of [...lines, panel.locator("#disclaimer"), panel.locator("#choice")]) {
       await expect(line).toBeVisible();
       const box = await line.boundingBox();
       expect(box === null ? Number.POSITIVE_INFINITY : box.x + box.width).toBeLessThanOrEqual(
         width,
       );
+      expect(await line.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0);
     }
+    expect(await panel.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      width,
+    );
     await opened.devtools.close();
   } finally {
     await context.close();
