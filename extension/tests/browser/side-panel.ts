@@ -57,6 +57,16 @@ const screen = (): Picture => {
   };
 };
 
+/** The screen as a PNG at *file*, so a failed run can be judged by what it looked at. */
+const saveScreen = (file: string): void => {
+  const now = screen();
+  execFileSync(
+    "convert",
+    ["-size", `${String(now.width)}x${String(now.height)}`, "-depth", "8", "rgb:-", file],
+    { input: now.rgb },
+  );
+};
+
 const click = ({ x, y }: Point): void => {
   run("xdotool", ["mousemove", String(x), String(y), "click", "1"]);
 };
@@ -108,11 +118,22 @@ const panelIn = async (browser: Browser, path: string): Promise<Page> => {
 /** Open the extension's side panel with a real click, as a person does, and return its page with
  * *time* as its clock. The panel is reached over DevTools after the click: a connection made
  * before it never hears of the page the browser opens (measured on CI 2026-11-06, PR #509), so
- * the clock is set on the open panel and the panel reloaded under it. */
+ * the clock is set on the open panel and the panel reloaded under it. If it cannot, the screen
+ * it looked at is saved at *screenOnFailure* (CI keeps it) and the error stands. */
 export const openSidePanel = async (
   path: string,
   time: Date,
+  screenOnFailure: string,
 ): Promise<{ panel: Page; devtools: Browser }> => {
+  try {
+    return await clickOpen(path, time);
+  } catch (error) {
+    saveScreen(screenOnFailure);
+    throw error;
+  }
+};
+
+const clickOpen = async (path: string, time: Date): Promise<{ panel: Page; devtools: Browser }> => {
   const tile = { name: "the extension's tile", picture: pictureOf(TILE) };
   const first = await lookFor([
     tile,

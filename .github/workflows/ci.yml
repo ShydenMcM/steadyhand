@@ -515,6 +515,15 @@ jobs:
         timeout-minutes: 2
         working-directory: extension
         run: npm run test:browser -- --project=msedge
+      # A failed click on the extension's button is judged by the screen it looked at (#503): the
+      # suite saves that screen in its output folder, kept here only when a step failed.
+      - name: Keep what the screen showed when the browser suite failed
+        if: failure() && steps.scope.outputs.docs_only != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-suite-failure
+          path: extension/test-results/
+          if-no-files-found: error
 
   # Every Hypothesis property at its full count, drawing fresh cases each run (#290), in its own
   # suite with one limit at its step and coverage off. Unit keeps a fast stand-in of each.

@@ -111,3 +111,18 @@ def test_the_browser_suite_runs_on_a_screen_with_a_window_manager() -> None:
     assert 'echo "DISPLAY=:99" >> "$GITHUB_ENV"' in run
     runs = [step.get("run") for step in steps]
     assert names.index(SCREEN_STEP) < runs.index("npm run test:browser -- --project=chromium")
+
+
+FAILED_SCREENS_STEP = "Keep what the screen showed when the browser suite failed"
+
+
+def test_a_failed_browser_suite_keeps_what_the_screen_showed() -> None:
+    # A failed click on the extension's button is judged by the screen it was looking at (#503):
+    # the suite saves that screen in its output folder, and the job keeps the folder on failure.
+    steps = job("extension-integration")["steps"]
+    names = [step.get("name") for step in steps]
+    keep = steps[names.index(FAILED_SCREENS_STEP)]
+    assert keep["if"] == "failure() && steps.scope.outputs.docs_only != 'true'"
+    assert keep["uses"].startswith("actions/upload-artifact@")
+    assert keep["with"]["path"] == "extension/test-results/"
+    assert names.index(FAILED_SCREENS_STEP) == len(names) - 1

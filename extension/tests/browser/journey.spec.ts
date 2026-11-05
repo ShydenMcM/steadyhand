@@ -84,7 +84,11 @@ test("the built extension turns the broker's pages into the day's buy orders", a
       });
     });
 
-    const opened = await openSidePanel("/side-panel.html", AFTER_CLOSE);
+    const opened = await openSidePanel(
+      "/side-panel.html",
+      AFTER_CLOSE,
+      info.outputPath("screen-at-failure.png"),
+    );
     const { panel } = opened;
     expect(panel.url()).toBe(`chrome-extension://${id}/side-panel.html`);
     await expect(panel.getByText(DISCLAIMER)).toBeVisible();
