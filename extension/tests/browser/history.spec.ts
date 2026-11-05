@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 
-// The history store in Chromium's own IndexedDB (#231 AC6): the unit tests' in-memory stand-in
+// The history store in each browser's own IndexedDB (#231 AC6; Chromium, Chrome and Edge, #501): the unit tests' in-memory stand-in
 // is not the browser's. The store is bundled as the extension bundles it and run on a page of
 // its own origin (IndexedDB refuses an opaque one), served by the test so nothing is fetched.
 
@@ -24,7 +24,7 @@ const bundled = async (): Promise<string> => {
   return output.text;
 };
 
-test("the store records, keeps across a reopen and forgets, in Chromium's IndexedDB", async ({
+test("the store records, keeps across a reopen and forgets, in the browser's IndexedDB", async ({
   page,
 }) => {
   await page.route(`${ORIGIN}/**`, (route) =>

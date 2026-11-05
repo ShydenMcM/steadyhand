@@ -4,8 +4,11 @@ import { readFile } from "node:fs/promises";
 import { BROKER_ORIGINS, build } from "../../build.ts";
 import { CHOICE_LINE, DISCLAIMER } from "../../packages/shell/src/advice-view.ts";
 
-// The first journey (#238 AC5): the built extension loads in Chromium, which proves Chrome accepts
-// its manifest and content security policy, and the fixture broker's pages become advice. The
+// The first journey (#238 AC5): the built extension loads in each browser the suite runs on
+// (Chromium, Chrome and Edge, #501), which proves each accepts its manifest and content security
+// policy, and the fixture broker's pages become advice. Each browser installs it as "Load
+// unpacked" does, through Chrome's DevTools protocol: Chrome and Edge ignore the command-line flag
+// that once did it (measured 2026-11-05 on Chrome 156 and Edge 156, #501). The
 // panel opens in a tab of its own (automation cannot open Chrome's side panel), where it hears the
 // content script as the side panel does. The broker is served by the test at its reserved `.test`
 // origin, so nothing is fetched. The panel's clock is set to a Tuesday evening after the close.
@@ -29,11 +32,22 @@ const AFTER_CLOSE = new Date("2025-06-17T19:00:00+07:00");
 test("the built extension turns the broker's pages into the day's buy orders", async () => {
   const extension = test.info().outputPath("extension");
   await build(extension, esbuild);
+  const { channel } = test.info().project.use;
+  if (channel === undefined) {
+    throw new Error(`project ${test.info().project.name} names no browser channel`);
+  }
   const context = await chromium.launchPersistentContext("", {
-    channel: "chromium",
-    args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`],
+    channel,
+    args: ["--enable-unsafe-extension-debugging"],
+    ignoreDefaultArgs: ["--disable-extensions"],
   });
   try {
+    const browser = context.browser();
+    if (browser === null) {
+      throw new Error("the browser gave no handle to install the extension with");
+    }
+    const devtools = await browser.newBrowserCDPSession();
+    const { id } = await devtools.send("Extensions.loadUnpacked", { path: extension });
     await context.route(`${ORIGIN}/**`, async (route) => {
       const name = new URL(route.request().url()).pathname.slice(1);
       await route.fulfill({
@@ -41,10 +55,6 @@ test("the built extension turns the broker's pages into the day's buy orders", a
         body: await readFile(new URL(`${name}.html`, PAGES), "utf8"),
       });
     });
-    // Chrome starts the extension's service worker when it loads the extension; its address
-    // names the extension.
-    const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent("serviceworker"));
-    const id = new URL(worker.url()).host;
 
     const panel = await context.newPage();
     await panel.clock.install({ time: AFTER_CLOSE });
