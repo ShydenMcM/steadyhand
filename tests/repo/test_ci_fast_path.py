@@ -18,6 +18,20 @@ from ci_workflow import ci
 ROOT = Path(__file__).resolve().parents[2]
 CI = ROOT / ".github/workflows/ci.yml"
 SKIP = "steps.scope.outputs.docs_only != 'true'"
+# A step that keeps evidence of a failed step (#503) runs only on failure, and still never on a
+# docs-only run: the skip is part of its condition.
+SKIP_ON_FAILURE = f"failure() && {SKIP}"
+
+
+def skips(step: dict[str, Any]) -> bool:
+    """The step never runs on a docs-only change: it carries the skip, or is an upload that keeps
+    what a failed step left and carries the skip after `failure() &&`."""
+    if step.get("if") == SKIP:
+        return True
+    uploads = str(step.get("uses", "")).startswith("actions/upload-artifact@")
+    return uploads and step.get("if") == SKIP_ON_FAILURE
+
+
 SCOPE_RUN = 'uv run --no-project scripts/ci_scope.py "$EVENT_NAME"'
 EVENT = "${{ github.event_name }}"
 LOCK = {
@@ -158,9 +172,7 @@ def test_a_gated_job_reports_and_skips_every_later_step(name: str) -> None:
     )
     later = later_steps(name)
     unguarded = [
-        step.get("name", step.get("run", step.get("uses")))
-        for step in later
-        if step.get("if") != SKIP
+        step.get("name", step.get("run", step.get("uses"))) for step in later if not skips(step)
     ]
     assert unguarded == []
 
@@ -174,7 +186,7 @@ def later_steps(name: str) -> list[dict[str, Any]]:
 def test_the_skip_covers_every_later_step_of_every_gated_job() -> None:
     later = [step for name in GATED for step in later_steps(name)]
     assert later
-    assert sum(step.get("if") == SKIP for step in later) == len(later)
+    assert sum(skips(step) for step in later) == len(later)
 
 
 @pytest.mark.parametrize("name", DEPLOYS)
@@ -186,3 +198,10 @@ def test_a_deploy_job_always_runs_in_full(name: str) -> None:
         if step.get("id") == "scope" or SKIP in str(step.get("if")) or step == LOCK
     ]
     assert scoped == []
+
+
+def test_only_an_upload_may_run_on_failure_with_the_skip() -> None:
+    assert skips({"if": SKIP_ON_FAILURE, "uses": "actions/upload-artifact@abc"})
+    assert not skips({"if": SKIP_ON_FAILURE, "run": "npm test"})
+    assert not skips({"if": "failure()", "uses": "actions/upload-artifact@abc"})
+    assert not skips({"if": "always()", "uses": "actions/upload-artifact@abc"})

@@ -489,6 +489,17 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         working-directory: extension
         run: npx playwright install --with-deps chromium chrome msedge
+      # The side panel is browser UI, opened by a real click on the extension's button (#503): each
+      # browser runs in a window on this X display, with a window manager as a desktop has, and
+      # xdotool clicks what ImageMagick's screenshots show. The display stays for the later steps.
+      - name: A screen with a window manager for the side panel
+        if: steps.scope.outputs.docs_only != 'true'
+        run: |
+          sudo apt-get install -y xvfb openbox xdotool imagemagick
+          Xvfb :99 -screen 0 1280x800x24 &
+          timeout 10 sh -c 'until DISPLAY=:99 xdotool getdisplaygeometry; do sleep 0.2; done'
+          DISPLAY=:99 openbox &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
       - name: The browser suite on Chromium
         if: steps.scope.outputs.docs_only != 'true'
         timeout-minutes: 2
@@ -504,6 +515,15 @@ jobs:
         timeout-minutes: 2
         working-directory: extension
         run: npm run test:browser -- --project=msedge
+      # A failed click on the extension's button is judged by the screen it looked at (#503): the
+      # suite saves that screen in its output folder, kept here only when a step failed.
+      - name: Keep what the screen showed when the browser suite failed
+        if: failure() && steps.scope.outputs.docs_only != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-suite-failure
+          path: extension/test-results/
+          if-no-files-found: error
 
   # Every Hypothesis property at its full count, drawing fresh cases each run (#290), in its own
   # suite with one limit at its step and coverage off. Unit keeps a fast stand-in of each.
