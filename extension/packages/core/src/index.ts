@@ -20,7 +20,7 @@ export * from "./risk-state.ts";
 export * from "./sizing.ts";
 export * from "./strategy.ts";
 export * from "./tradable.ts";
-export { IdxCalendar } from "./calendar.ts";
+export { dayAfter, IdxCalendar } from "./calendar.ts";
 export { RuleDecimal } from "./ratio.ts";
 export { IdxMarketRules } from "./rules.ts";
 export type { Dated } from "./rules-file.ts";

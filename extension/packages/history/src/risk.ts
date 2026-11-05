@@ -53,7 +53,7 @@ interface ResumeRow {
 }
 
 /** A recorded amount as money. steadyhand knows rupiah alone. */
-const amountOf = (amount: string | bigint, currency: string): Money => {
+export const amountOf = (amount: string | bigint, currency: string): Money => {
   if (currency !== IDR.code) {
     throw new Error(`a recorded amount is in ${currency}, not ${IDR.code}`);
   }
