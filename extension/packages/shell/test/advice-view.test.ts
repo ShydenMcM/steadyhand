@@ -189,3 +189,18 @@ test("with no universe listed, the panel asks for one", () => {
     { heading: "Universe", lines: ["List the universe's stocks in Settings to get advice."] },
   ]);
 });
+
+test("a note or reason already ending in a full stop gets no second one", () => {
+  const view = adviceView(
+    advice({
+      orders: [{ ...buyBbca, reason: "BBCA passed." }],
+      warnings: [note(NOTE_CODES.INCOME_GROWTH_SHORT_HISTORY, "Only 2 stocks passed the test.")],
+    }),
+    RULES,
+  );
+  expect(view.flatMap((section) => section.lines)).toEqual([
+    "Buy 3 lots of BBCA at a limit of IDR 9,100, estimated fees IDR 5,275: BBCA passed.",
+    "Only 2 stocks passed the test.",
+    "No income goal set.",
+  ]);
+});

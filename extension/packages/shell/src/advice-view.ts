@@ -34,10 +34,14 @@ const SIDE_NAMES: Readonly<Record<Side, string>> = { [Side.BUY]: "Buy", [Side.SE
 /** WIB is seven hours ahead of UTC all year. */
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 
-const sentence = (text: string): string => `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+/** `text` with its full stop: a note written as a whole sentence already has one. */
+const stopped = (text: string): string => (text.endsWith(".") ? text : `${text}.`);
+
+const sentence = (text: string): string =>
+  stopped(`${text.charAt(0).toUpperCase()}${text.slice(1)}`);
 
 /** `text` after a colon: as written, with its full stop. */
-const clause = (text: string): string => `${text}.`;
+const clause = stopped;
 
 const noteLines = (notes: readonly Note[]): readonly string[] =>
   notes.map((each) => sentence(each.text));
