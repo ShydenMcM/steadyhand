@@ -13,7 +13,9 @@ import { findImage, type Picture, type Point } from "../lib/find-image.ts";
 // in Chrome's toolbar and in Edge's extensions menu (measured on CI 2026-11-06). Chrome and
 // Chromium show it pinned; Edge does not honour the pin, so its extensions button opens the menu
 // that lists it. What the screen shows decides the route, never the browser's name. Both pictures
-// were cut from CI screenshots (Chrome 156, Edge 156, Xvfb 1280x800); when a browser redraws them,
+// were cut from CI screenshots (Chrome 156, Edge 156, Xvfb 1280x800) with the pointer away from
+// them: a hovered button is drawn on grey, not the toolbar's white (Edge's first cut was hovered and
+// never matched, PR #509). When a browser redraws them,
 // the test fails naming the picture it cannot find.
 
 const TOOLBAR = new URL("fixtures/toolbar/", import.meta.url);
