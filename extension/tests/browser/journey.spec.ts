@@ -30,11 +30,12 @@ const JOURNEY = [
 const AFTER_CLOSE = new Date("2025-06-17T19:00:00+07:00");
 
 test("the built extension turns the broker's pages into the day's buy orders", async () => {
-  const extension = test.info().outputPath("extension");
+  const info = test.info();
+  const extension = info.outputPath("extension");
   await build(extension, esbuild);
-  const { channel } = test.info().project.use;
+  const { channel } = info.project.use;
   if (channel === undefined) {
-    throw new Error(`project ${test.info().project.name} names no browser channel`);
+    throw new Error(`project ${info.project.name} names no browser channel`);
   }
   const context = await chromium.launchPersistentContext("", {
     channel,
