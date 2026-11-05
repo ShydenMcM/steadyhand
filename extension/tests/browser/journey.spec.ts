@@ -118,13 +118,11 @@ test("the built extension turns the broker's pages into the day's buy orders", a
     // At the side panel's own width (#503 AC2): every line shows, and none runs past the edge.
     const width = await panel.evaluate(() => innerWidth);
     expect(width).toBeLessThan(500);
-    for (const line of [
-      advice.locator("h2").first(),
-      advice.locator("p").first(),
-      advice.locator("p").nth(1),
-      panel.locator("#disclaimer"),
-      panel.locator("#choice"),
-    ]) {
+    // Every heading and line the advice shows, down to its last section, not only the orders.
+    await expect(advice.locator("h2").last()).toHaveText("Income goal");
+    const lines = await advice.locator("h2, p").all();
+    expect(lines.length).toBeGreaterThan(3);
+    for (const line of [...lines, panel.locator("#disclaimer"), panel.locator("#choice")]) {
       await expect(line).toBeVisible();
       const box = await line.boundingBox();
       expect(box === null ? Number.POSITIVE_INFINITY : box.x + box.width).toBeLessThanOrEqual(
