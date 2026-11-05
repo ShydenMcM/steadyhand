@@ -1,0 +1,135 @@
+import { type Browser, type BrowserContext, type Page, chromium } from "@playwright/test";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { findImage, type Picture, type Point } from "../lib/find-image.ts";
+
+// The real side panel, opened as a person opens it (#503; Shyden 2026-11-05: an operating-system
+// click on CI's virtual screen is real input). Automation cannot open it: Chrome refuses
+// `sidePanel.open()` from DevTools even with a user gesture, and Playwright cannot click browser
+// UI (measured 2026-11-05). So the suite runs each browser in a window on an X display, with a
+// window manager, finds the extension's button in a screenshot and clicks it with xdotool.
+//
+// The button is the extension's tile: the browser draws its name's first letter, the same pixels
+// in Chrome's toolbar and in Edge's extensions menu (measured on CI 2026-11-06). Chrome and
+// Chromium show it pinned; Edge does not honour the pin, so its extensions button opens the menu
+// that lists it. What the screen shows decides the route, never the browser's name. Both pictures
+// were cut from CI screenshots (Chrome 156, Edge 156, Xvfb 1280x800); when a browser redraws them,
+// the test fails naming the picture it cannot find.
+
+const TOOLBAR = new URL("fixtures/toolbar/", import.meta.url);
+/** The extension's tile, 16x16, as the browser draws it for an extension with no icon. */
+const TILE = new URL("extension-tile.png", TOOLBAR);
+/** Edge's extensions (puzzle) button on its toolbar, 18x20. */
+const EXTENSIONS_BUTTON = new URL("edge-extensions-button.png", TOOLBAR);
+
+/** How long the screen may take to show what the next click needs. */
+const SCREEN_CEILING_MS = 10_000;
+const LOOK_EVERY_MS = 250;
+/** The port the panel's page is reached on; one browser runs at a time in CI. */
+export const PANEL_DEBUGGING_PORT = 9333;
+
+const run = (command: string, args: readonly string[]): Buffer =>
+  execFileSync(command, args, { maxBuffer: 64 * 1024 * 1024 });
+
+const pictureOf = (file: URL): Picture => {
+  const path = fileURLToPath(file);
+  const [width, height] = run("identify", ["-format", "%w %h", path])
+    .toString()
+    .split(" ")
+    .map((side) => Number.parseInt(side, 10));
+  return {
+    width: width ?? 0,
+    height: height ?? 0,
+    rgb: new Uint8Array(run("stream", ["-map", "rgb", "-storage-type", "char", path, "-"])),
+  };
+};
+
+const screen = (): Picture => {
+  const [width, height] = run("xdotool", ["getdisplaygeometry"])
+    .toString()
+    .trim()
+    .split(" ")
+    .map((side) => Number.parseInt(side, 10));
+  return {
+    width: width ?? 0,
+    height: height ?? 0,
+    rgb: new Uint8Array(run("import", ["-window", "root", "-depth", "8", "rgb:-"])),
+  };
+};
+
+const click = ({ x, y }: Point): void => {
+  run("xdotool", ["mousemove", String(x), String(y), "click", "1"]);
+};
+
+const pause = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+/** The one place each picture shows, looked for until one of them shows or the ceiling passes. */
+const lookFor = async (
+  wanted: readonly { name: string; picture: Picture }[],
+): Promise<{ name: string; at: Point }> => {
+  const seen: string[] = [];
+  for (let waited = 0; waited <= SCREEN_CEILING_MS; waited += LOOK_EVERY_MS) {
+    const now = screen();
+    seen.length = 0;
+    for (const { name, picture } of wanted) {
+      const places = findImage(now, picture);
+      seen.push(`${name}: ${String(places.length)}`);
+      const [at] = places;
+      if (places.length === 1 && at !== undefined) {
+        return { name, at };
+      }
+    }
+    await pause(LOOK_EVERY_MS);
+  }
+  throw new Error(
+    `after ${String(SCREEN_CEILING_MS)} ms the screen shows none of these exactly once (${seen.join(", ")}): the browser drew its toolbar differently, so the pictures in tests/browser/fixtures/toolbar need cutting again`,
+  );
+};
+
+/** The panel's page as the browser opened it, reached over DevTools within the ceiling. */
+const panelIn = async (browser: Browser, path: string): Promise<Page> => {
+  for (let waited = 0; waited <= SCREEN_CEILING_MS; waited += LOOK_EVERY_MS) {
+    for (const context of browser.contexts()) {
+      const panel = context.pages().find((page) => page.url().endsWith(path));
+      if (panel !== undefined) {
+        return panel;
+      }
+    }
+    await pause(LOOK_EVERY_MS);
+  }
+  throw new Error(
+    `the click on the extension's button opened no page ending ${path} within ${String(SCREEN_CEILING_MS)} ms`,
+  );
+};
+
+/** Open the extension's side panel with a real click, as a person does, and return its page,
+ * with *time* as its clock from its first script. *browser* is the suite's own browser, reached
+ * again over DevTools so the panel (which the browser opened, not Playwright) can be driven. */
+export const openSidePanel = async (
+  path: string,
+  time: Date,
+): Promise<{ panel: Page; devtools: Browser; context: BrowserContext }> => {
+  const devtools = await chromium.connectOverCDP(
+    `http://127.0.0.1:${String(PANEL_DEBUGGING_PORT)}`,
+  );
+  const [context] = devtools.contexts();
+  if (context === undefined) {
+    throw new Error("the browser reached over DevTools has no context to open the panel in");
+  }
+  await context.clock.install({ time });
+  const tile = { name: "the extension's tile", picture: pictureOf(TILE) };
+  const first = await lookFor([
+    tile,
+    { name: "Edge's extensions button", picture: pictureOf(EXTENSIONS_BUTTON) },
+  ]);
+  if (first.name !== tile.name) {
+    click(first.at);
+    click((await lookFor([tile])).at);
+  } else {
+    click(first.at);
+  }
+  return { panel: await panelIn(devtools, path), devtools, context };
+};

@@ -92,3 +92,22 @@ def test_no_other_job_runs_an_integration_suite() -> None:
 def test_the_dev_deploy_waits_for_both_integration_jobs() -> None:
     needs = job("deploy-dev")["needs"]
     assert {"integration", "extension-integration"} <= set(needs)
+
+
+SCREEN_STEP = "A screen with a window manager for the side panel"
+
+
+def test_the_browser_suite_runs_on_a_screen_with_a_window_manager() -> None:
+    # The side panel is browser UI, opened by a real click on the extension's button (#503): each
+    # browser runs in a window on an X display with a window manager, xdotool clicks and ImageMagick
+    # takes the screenshots the button is found in. The display carries over to later steps.
+    steps = job("extension-integration")["steps"]
+    names = [step.get("name") for step in steps]
+    screen = steps[names.index(SCREEN_STEP)]
+    run = screen["run"]
+    assert "apt-get install -y xvfb openbox xdotool imagemagick" in run
+    assert "Xvfb :99 -screen 0 1280x800x24 &" in run
+    assert "DISPLAY=:99 openbox &" in run
+    assert 'echo "DISPLAY=:99" >> "$GITHUB_ENV"' in run
+    runs = [step.get("run") for step in steps]
+    assert names.index(SCREEN_STEP) < runs.index("npm run test:browser -- --project=chromium")
