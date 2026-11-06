@@ -14,12 +14,18 @@ import { adviceView, CHOICE_LINE, DISCLAIMER } from "./advice-view.ts";
 import { isSnapshot, type Ask } from "./messages.ts";
 import { keptUniverse, recordedFrom, recordRead, SETTINGS } from "./record-read.ts";
 import {
+  FEE_PRESETS,
+  feePresetOf,
   KEPT,
   keptSettings,
+  limitsOf,
+  storedLimits,
   storedStrategy,
   strategyOf,
+  typedLimits,
   typedStrategy,
   type ChosenStrategy,
+  type TypedLimits,
 } from "./settings.ts";
 
 /** An element as the panel uses one, whose children are elements `E` (the browser's
@@ -80,6 +86,9 @@ const NOT_A_BROKER_TAB = "This tab shows no broker page steadyhand reads.";
 /** An IDX stock code: four capital letters. */
 const STOCK_CODE = /^[A-Z]{4}$/u;
 
+/** Whole rupiah as typed: plain digits, or digits in threes after Indonesian thousands dots. */
+const WHOLE_RUPIAH = /^(?:\d+|\d{1,3}(?:\.\d{3})+)$/u;
+
 /** The symbols typed into the universe box: split on spaces, commas and new lines, in capitals,
  * each once, in the order first typed. */
 const symbolsIn = (typed: string): readonly string[] => [
@@ -90,6 +99,32 @@ const symbolsIn = (typed: string): readonly string[] => [
       .map((word) => word.toUpperCase()),
   ),
 ];
+
+/** How Settings names each risk limit, in order. */
+const LIMIT_NAMES: Readonly<Record<keyof TypedLimits, string>> = {
+  maxWeight: "The largest share of one stock, in percent",
+  minLots: "The smallest buy, in lots",
+  dailyLoss: "The one-day fall that halts ordering, in percent",
+  maxDrawdown: "The fall from the high that halts ordering, in percent",
+};
+
+/** Why a typed setting was refused: every refusal of one is a RangeError naming what is wrong. */
+const refusal = (failure: unknown): string => String(failure).replace(/^RangeError: /u, "");
+
+/** What `read` makes of the setting `name` kept in `db`, or of nothing kept when it refuses
+ * that: the advice redraw then names the refused setting on the status line. */
+const keptOr = async <T>(
+  db: IDBDatabase,
+  name: string,
+  read: (value: unknown) => T,
+): Promise<T> => {
+  const value: unknown = await settingOf(db, name);
+  try {
+    return read(value);
+  } catch {
+    return read(undefined);
+  }
+};
 
 /** The panel's tabs, in order, each with its name. */
 const TABS = [
@@ -136,6 +171,43 @@ export const startPanel = async <E extends PanelElement<E>>(
   const universe = named(page.createElement("textarea"), "universe");
   label.htmlFor = universe.id;
   const save = element("button", "save-universe", "Save universe");
+
+  const goalLabel = named(
+    page.createElement("label"),
+    "goal-label",
+    "Monthly income goal, in rupiah",
+  );
+  const goal = named(page.createElement("input"), "goal");
+  goalLabel.htmlFor = goal.id;
+  const saveGoal = element("button", "save-goal", "Save goal");
+
+  // The risk limits, the rates as percentages (#239 AC1).
+  const limitInput = (limit: keyof TypedLimits) => {
+    const input = named(page.createElement("input"), `limit-${limit}`);
+    const limitLabel = named(page.createElement("label"), `${input.id}-label`, LIMIT_NAMES[limit]);
+    limitLabel.htmlFor = input.id;
+    return { label: limitLabel, input };
+  };
+  const limitRows = {
+    maxWeight: limitInput("maxWeight"),
+    minLots: limitInput("minLots"),
+    dailyLoss: limitInput("dailyLoss"),
+    maxDrawdown: limitInput("maxDrawdown"),
+  };
+  const saveLimits = element("button", "save-limits", "Save risk limits");
+
+  // The fee preset, from the shipped fees file's presets.
+  const presetLabel = named(page.createElement("label"), "fee-preset-label", "Broker fee preset");
+  const preset = named(page.createElement("select"), "fee-preset");
+  presetLabel.htmlFor = preset.id;
+  preset.append(
+    ...FEE_PRESETS.map((name) => {
+      const option = named(page.createElement("option"), "", name);
+      option.value = name;
+      return option;
+    }),
+  );
+  const savePreset = element("button", "save-fee-preset", "Save fee preset");
 
   // The strategy and its settings (#239 AC1): a labelled input per setting, its help read with it.
   const strategyLabel = named(page.createElement("label"), "strategy-label", "Strategy");
@@ -213,6 +285,14 @@ export const startPanel = async <E extends PanelElement<E>>(
     summary,
     strategySettings,
     saveStrategy,
+    goalLabel,
+    goal,
+    saveGoal,
+    ...Object.values(limitRows).flatMap((row) => [row.label, row.input]),
+    saveLimits,
+    presetLabel,
+    preset,
+    savePreset,
     label,
     universe,
     save,
@@ -298,11 +378,51 @@ export const startPanel = async <E extends PanelElement<E>>(
       chosen = typedStrategy(picker.value, typed);
     } catch (refused) {
       // Every refusal of a typed strategy is a RangeError naming what is wrong.
-      status.textContent = `Strategy not saved: ${String(refused).replace(/^RangeError: /u, "")}`;
+      status.textContent = `Strategy not saved: ${refusal(refused)}`;
       return;
     }
     await putSetting(db, KEPT.strategy, storedStrategy(chosen));
     status.textContent = `Strategy saved: ${chosen.name}.`;
+    await redraw();
+  };
+
+  /** Keep the goal typed, or clear it when nothing is typed (spec §9). */
+  const saveTypedGoal = async (): Promise<void> => {
+    const typed = goal.value.trim();
+    if (typed === "") {
+      await putSetting(db, SETTINGS.goal, undefined);
+      status.textContent = "Income goal cleared.";
+    } else if (WHOLE_RUPIAH.test(typed)) {
+      await putSetting(db, SETTINGS.goal, BigInt(typed.replaceAll(".", "")).toString());
+      status.textContent = "Income goal saved.";
+    } else {
+      status.textContent = `Income goal not saved: type whole rupiah, such as 5.000.000, got "${goal.value}"`;
+      return;
+    }
+    await redraw();
+  };
+
+  const saveTypedLimits = async (): Promise<void> => {
+    let limits: ReturnType<typeof typedLimits>;
+    try {
+      limits = typedLimits({
+        maxWeight: limitRows.maxWeight.input.value,
+        minLots: limitRows.minLots.input.value,
+        dailyLoss: limitRows.dailyLoss.input.value,
+        maxDrawdown: limitRows.maxDrawdown.input.value,
+      });
+    } catch (refused) {
+      status.textContent = `Risk limits not saved: ${refusal(refused)}`;
+      return;
+    }
+    await putSetting(db, KEPT.limits, storedLimits(limits));
+    status.textContent = "Risk limits saved.";
+    await redraw();
+  };
+
+  const saveChosenPreset = async (): Promise<void> => {
+    await putSetting(db, KEPT.feePreset, preset.value);
+    status.textContent = `Fee preset saved: ${preset.value}.`;
     await redraw();
   };
 
@@ -329,18 +449,29 @@ export const startPanel = async <E extends PanelElement<E>>(
   picker.addEventListener("change", () => {
     showStrategy({ name: picker.value, values: new Map() });
   });
+  saveLimits.addEventListener("click", () => {
+    run(saveTypedLimits);
+  });
+  savePreset.addEventListener("click", () => {
+    run(saveChosenPreset);
+  });
+  saveGoal.addEventListener("click", () => {
+    run(saveTypedGoal);
+  });
   saveStrategy.addEventListener("click", () => {
     run(saveChosenStrategy);
   });
 
   universe.value = (await keptUniverse(db))?.join(" ") ?? "";
-  const kept: unknown = await settingOf(db, KEPT.strategy);
-  try {
-    showStrategy(strategyOf(kept));
-  } catch {
-    // The advice redraw below says the kept strategy is refused; the picker starts from the default.
-    showStrategy(strategyOf(undefined));
-  }
+  const keptGoal: unknown = await settingOf(db, SETTINGS.goal);
+  goal.value = typeof keptGoal === "string" ? keptGoal : "";
+  showStrategy(await keptOr(db, KEPT.strategy, strategyOf));
+  const limits = await keptOr(db, KEPT.limits, limitsOf);
+  limitRows.maxWeight.input.value = limits.maxWeight.mul(100).toString();
+  limitRows.minLots.input.value = limits.minLots.toString();
+  limitRows.dailyLoss.input.value = limits.dailyLoss.mul(100).toString();
+  limitRows.maxDrawdown.input.value = limits.maxDrawdown.mul(100).toString();
+  preset.value = await keptOr(db, KEPT.feePreset, feePresetOf);
   run(redraw);
   return { settled: () => queue };
 };

@@ -13,7 +13,7 @@ import {
   type PanelTabs,
 } from "../src/panel.ts";
 import { SETTINGS } from "../src/record-read.ts";
-import { KEPT } from "../src/settings.ts";
+import { FEE_PRESETS, KEPT } from "../src/settings.ts";
 
 // The side panel (spec §10.2, §10.3, #238 AC3-AC4): it records each page the content script sends,
 // asks the active tab for its page on "Read this page", keeps the universe typed into Settings,
@@ -551,5 +551,193 @@ test("a kept strategy not as Settings keeps it still opens the panel, and says s
   expect(byId(page, "strategy").value).toBe("dividend-growth");
   expect(byId(page, "status").textContent).toBe(
     "Something went wrong: Error: the setting strategy is not as Settings keeps it",
+  );
+});
+
+// Settings: the monthly income goal (#239 AC1), in whole rupiah.
+
+const saveGoal = async (page: StandIn, panel: { settled(): Promise<void> }, typed: string) => {
+  byId(page, "goal").value = typed;
+  byId(page, "save-goal").clicked?.();
+  await panel.settled();
+  return byId(page, "status").textContent;
+};
+
+test("the income goal has a labelled input on Settings holding the kept goal", async () => {
+  await putSetting(db, SETTINGS.goal, "5000000");
+  const { page } = await open();
+  const settings = byId(page, "pane-settings");
+  expect(byId(settings, "goal").tagName).toBe("input");
+  expect(byId(settings, "goal").value).toBe("5000000");
+  const label = byId(settings, "goal-label");
+  expect([label.tagName, label.htmlFor, label.textContent]).toEqual([
+    "label",
+    "goal",
+    "Monthly income goal, in rupiah",
+  ]);
+  expect(byId(settings, "save-goal").textContent).toBe("Save goal");
+});
+
+test("the goal input is empty before any goal is kept", async () => {
+  const { page } = await open();
+  expect(byId(page, "goal").value).toBe("");
+});
+
+test("a goal typed with thousands dots is kept as whole rupiah", async () => {
+  const { page, panel } = await open();
+  expect(await saveGoal(page, panel, " 5.000.000 ")).toBe("Income goal saved.");
+  expect(await settingOf(db, SETTINGS.goal)).toBe("5000000");
+});
+
+test("a goal typed as plain digits is kept as typed", async () => {
+  const { page, panel } = await open();
+  expect(await saveGoal(page, panel, "2500000")).toBe("Income goal saved.");
+  expect(await settingOf(db, SETTINGS.goal)).toBe("2500000");
+});
+
+test("an empty goal clears the kept goal", async () => {
+  await putSetting(db, SETTINGS.goal, "5000000");
+  const { page, panel } = await open();
+  expect(await saveGoal(page, panel, "  ")).toBe("Income goal cleared.");
+  expect(await settingOf(db, SETTINGS.goal)).toBeUndefined();
+});
+
+test("a goal that is not whole rupiah is refused, naming what was typed, and nothing changes", async () => {
+  await putSetting(db, SETTINGS.goal, "5000000");
+  const { page, panel } = await open();
+  for (const typed of ["5jt", "5.00.000", "5,000,000", "-5000"]) {
+    expect(await saveGoal(page, panel, typed)).toBe(
+      `Income goal not saved: type whole rupiah, such as 5.000.000, got "${typed}"`,
+    );
+  }
+  expect(await settingOf(db, SETTINGS.goal)).toBe("5000000");
+});
+
+// Settings: the risk limits, the rates as percentages and the smallest buy in lots, and the fee
+// preset (#239 AC1).
+
+const LIMITS = [
+  ["maxWeight", "The largest share of one stock, in percent"],
+  ["minLots", "The smallest buy, in lots"],
+  ["dailyLoss", "The one-day fall that halts ordering, in percent"],
+  ["maxDrawdown", "The fall from the high that halts ordering, in percent"],
+] as const;
+
+const typeLimits = (page: StandIn, typed: Readonly<Record<string, string>>): void => {
+  for (const [limit, text] of Object.entries(typed)) {
+    byId(page, `limit-${limit}`).value = text;
+  }
+};
+
+test("each risk limit has a labelled input on Settings, at its default before any is kept", async () => {
+  const { page } = await open();
+  const settings = byId(page, "pane-settings");
+  for (const [limit, name] of LIMITS) {
+    const label = byId(settings, `limit-${limit}-label`);
+    expect([label.tagName, label.htmlFor, label.textContent]).toEqual([
+      "label",
+      `limit-${limit}`,
+      name,
+    ]);
+    expect(byId(settings, `limit-${limit}`).tagName).toBe("input");
+  }
+  expect(LIMITS.map(([limit]) => byId(page, `limit-${limit}`).value)).toEqual([
+    "10",
+    "1",
+    "5",
+    "25",
+  ]);
+  expect(byId(settings, "save-limits").textContent).toBe("Save risk limits");
+});
+
+test("the kept risk limits are shown as percentages", async () => {
+  const kept = { maxWeight: "0.2", minLots: "2", dailyLoss: "0.04", maxDrawdown: "0.305" };
+  await putSetting(db, KEPT.limits, kept);
+  const { page } = await open();
+  expect(LIMITS.map(([limit]) => byId(page, `limit-${limit}`).value)).toEqual([
+    "20",
+    "2",
+    "4",
+    "30.5",
+  ]);
+});
+
+test("the risk limits typed are kept, and advice follows them", async () => {
+  await putSetting(db, SETTINGS.universe, ["BBRI", "UNVR"]);
+  await putSetting(db, KEPT.strategy, { name: "buy-and-hold", values: [] });
+  const { page, panel, chrome } = await open();
+  chrome.send(snapshot("portfolio"));
+  chrome.send(snapshot("watchlist"));
+  chrome.send(snapshot("flags"));
+  typeLimits(page, { maxWeight: " 1 ", minLots: "1", dailyLoss: "5", maxDrawdown: "20" });
+  byId(page, "save-limits").clicked?.();
+  await panel.settled();
+  expect(byId(page, "status").textContent).toBe("Risk limits saved.");
+  expect(await settingOf(db, KEPT.limits)).toEqual({
+    maxWeight: "0.01",
+    minLots: "1",
+    dailyLoss: "0.05",
+    maxDrawdown: "0.2",
+  });
+  expect(textOf(byId(page, "advice"))).toContain(
+    "Buy BBRI cut to 6 lots: cut to the 1.00% limit per stock.",
+  );
+});
+
+test("a risk limit typed wrong is refused by name, and nothing is kept", async () => {
+  const { page, panel } = await open();
+  typeLimits(page, { maxWeight: "ten" });
+  byId(page, "save-limits").clicked?.();
+  await panel.settled();
+  expect(byId(page, "status").textContent).toBe(
+    'Risk limits not saved: the largest share of one stock must be a percentage, got "ten"',
+  );
+  typeLimits(page, { maxWeight: "120" });
+  byId(page, "save-limits").clicked?.();
+  await panel.settled();
+  expect(byId(page, "status").textContent).toBe(
+    "Risk limits not saved: maxWeight must be above 0 and at most 1, got 1.2",
+  );
+  expect(await settingOf(db, KEPT.limits)).toBeUndefined();
+});
+
+test("the fee preset is chosen on Settings from every broker preset, custom before any is kept", async () => {
+  const { page } = await open();
+  const settings = byId(page, "pane-settings");
+  const picker = byId(settings, "fee-preset");
+  expect(picker.tagName).toBe("select");
+  const label = byId(settings, "fee-preset-label");
+  expect([label.tagName, label.htmlFor, label.textContent]).toEqual([
+    "label",
+    "fee-preset",
+    "Broker fee preset",
+  ]);
+  expect(
+    picker.children.map((option) => [option.tagName, option.value, option.textContent]),
+  ).toEqual(FEE_PRESETS.map((name) => ["option", name, name]));
+  expect(picker.value).toBe("custom");
+  expect(byId(settings, "save-fee-preset").textContent).toBe("Save fee preset");
+});
+
+test("the fee preset chosen is kept and shown when the panel opens again", async () => {
+  const first = await open();
+  byId(first.page, "fee-preset").value = "ajaib";
+  byId(first.page, "save-fee-preset").clicked?.();
+  await first.panel.settled();
+  expect(byId(first.page, "status").textContent).toBe("Fee preset saved: ajaib.");
+  expect(await settingOf(db, KEPT.feePreset)).toBe("ajaib");
+  const { page } = await open();
+  expect(byId(page, "fee-preset").value).toBe("ajaib");
+});
+
+test("kept risk limits and fee preset not as Settings keeps them still open the panel at the defaults", async () => {
+  await putSetting(db, KEPT.limits, { maxWeight: "lots" });
+  await putSetting(db, KEPT.feePreset, "no-such-broker");
+  const { page, panel } = await open();
+  await panel.settled();
+  expect(byId(page, "limit-maxWeight").value).toBe("10");
+  expect(byId(page, "fee-preset").value).toBe("custom");
+  expect(byId(page, "status").textContent).toBe(
+    "Something went wrong: Error: the setting risk-limits is not as Settings keeps it",
   );
 });
