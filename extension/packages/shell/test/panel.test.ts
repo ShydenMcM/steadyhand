@@ -305,8 +305,8 @@ test("a kept strategy value out of its bounds is refused, naming the setting", a
 });
 
 /** The advice of buy-and-hold over BBRI and UNVR, with `kept` saved too, once the portfolio,
- * watchlist and flags are read. The portfolio page's cash available to buy is lowered to
- * IDR 8,000,000, within its cash balance, so the strategy buys (above it, see #511). */
+ * watchlist and flags are read. The page's cash available to buy is above its cash balance,
+ * so the cash balance is what is spent (#511). */
 const ordersWith = async (kept: Readonly<Record<string, unknown>>) => {
   await putSetting(db, SETTINGS.universe, ["BBRI", "UNVR"]);
   await putSetting(db, KEPT.strategy, { name: "buy-and-hold", values: [] });
@@ -314,10 +314,7 @@ const ordersWith = async (kept: Readonly<Record<string, unknown>>) => {
     await putSetting(db, name, value);
   }
   const { page: body, panel, chrome } = await open();
-  chrome.send({
-    ...snapshot("portfolio"),
-    html: page("portfolio").replace("12.500.000", "8.000.000"),
-  });
+  chrome.send(snapshot("portfolio"));
   chrome.send(snapshot("watchlist"));
   chrome.send(snapshot("flags"));
   await panel.settled();
@@ -341,7 +338,7 @@ test("kept risk limits not as Settings keeps them are refused, naming the settin
 test("advice follows the fee preset kept in Settings", async () => {
   const advice = await ordersWith({ [KEPT.feePreset]: "ajaib" });
   expect(advice[1]).toBe(
-    "Buy 8 lots of BBRI at a limit of IDR 4,560, estimated fees IDR 5,520: buy-and-hold: part of its day-one set, bought with an equal share of the cash.",
+    "Buy 9 lots of BBRI at a limit of IDR 4,560, estimated fees IDR 6,210: buy-and-hold: part of its day-one set, bought with an equal share of the cash.",
   );
 });
 
