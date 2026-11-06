@@ -122,7 +122,8 @@ const universeOf = (value: unknown): readonly string[] | undefined => {
 const isExclusion = (value: unknown): value is readonly [string, string] =>
   Array.isArray(value) && value.length === 2 && value.every(isText);
 
-const excludedOf = (value: unknown): ReadonlyMap<string, string> => {
+/** The exclusions Settings keeps, each stock with the user's reason; none before any are kept. */
+export const excludedOf = (value: unknown): ReadonlyMap<string, string> => {
   if (value === undefined) {
     return new Map();
   }

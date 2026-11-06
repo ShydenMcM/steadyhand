@@ -20,7 +20,7 @@ import { putSetting, recordTyped, remember, riskRecord, settingOf } from "@stead
 import { adviceModel, type PanelReads } from "./advice-model.ts";
 import { adviceView, CHOICE_LINE, DISCLAIMER } from "./advice-view.ts";
 import { isSnapshot, type Ask } from "./messages.ts";
-import { keptUniverse, recordedFrom, recordRead, SETTINGS } from "./record-read.ts";
+import { excludedOf, keptUniverse, recordedFrom, recordRead, SETTINGS } from "./record-read.ts";
 import {
   FEE_PRESETS,
   feePresetOf,
@@ -260,6 +260,16 @@ export const startPanel = async <E extends PanelElement<E>>(
     );
   };
 
+  // The exclusions: a stock per line, its code and then the user's reason (spec §6.1).
+  const exclusionsLabel = named(
+    page.createElement("label"),
+    "exclusions-label",
+    "Excluded stocks: one per line, the code and then your reason",
+  );
+  const exclusions = named(page.createElement("textarea"), "exclusions");
+  exclusionsLabel.htmlFor = exclusions.id;
+  const saveExclusions = element("button", "save-exclusions", "Save exclusions");
+
   // The strategy and its settings (#239 AC1): a labelled input per setting, its help read with it.
   const strategyLabel = named(page.createElement("label"), "strategy-label", "Strategy");
   const picker = named(page.createElement("select"), "strategy");
@@ -350,6 +360,9 @@ export const startPanel = async <E extends PanelElement<E>>(
     label,
     universe,
     save,
+    exclusionsLabel,
+    exclusions,
+    saveExclusions,
   );
   show("advice");
   page.body.append(status, tabList, ...tabs.map(({ pane }) => pane), footer);
@@ -503,6 +516,33 @@ export const startPanel = async <E extends PanelElement<E>>(
     await redraw();
   };
 
+  const saveTypedExclusions = async (): Promise<void> => {
+    const excluded = new Map<string, string>();
+    for (const line of exclusions.value.split("\n")) {
+      const words = line.trim();
+      const space = words.search(/\s/u);
+      const code = space === -1 ? words : words.slice(0, space);
+      const reason = space === -1 ? "" : words.slice(space).trim();
+      const symbol = code.toUpperCase();
+      if (symbol === "") {
+        continue;
+      }
+      if (!STOCK_CODE.test(symbol)) {
+        status.textContent = `Exclusions not saved: "${code}" is not a four-letter IDX stock code.`;
+        return;
+      }
+      if (excluded.has(symbol)) {
+        status.textContent = `Exclusions not saved: ${symbol} is listed twice.`;
+        return;
+      }
+      excluded.set(symbol, reason);
+    }
+    await putSetting(db, SETTINGS.excluded, [...excluded]);
+    const stocks = excluded.size === 1 ? "stock" : "stocks";
+    status.textContent = `Exclusions saved: ${excluded.size.toString()} ${stocks}.`;
+    await redraw();
+  };
+
   let queue = Promise.resolve();
   /** Run `job` after everything asked before it; a failure is shown, and the queue goes on. */
   const run = (job: () => Promise<void>): void => {
@@ -532,6 +572,9 @@ export const startPanel = async <E extends PanelElement<E>>(
   savePreset.addEventListener("click", () => {
     run(saveChosenPreset);
   });
+  saveExclusions.addEventListener("click", () => {
+    run(saveTypedExclusions);
+  });
   addMovement.addEventListener("click", () => {
     run(keepTypedMovement);
   });
@@ -553,6 +596,9 @@ export const startPanel = async <E extends PanelElement<E>>(
   limitRows.maxDrawdown.input.value = limits.maxDrawdown.mul(100).toString();
   preset.value = await keptOr(db, KEPT.feePreset, feePresetOf);
   await showTyped();
+  exclusions.value = [...(await keptOr(db, SETTINGS.excluded, excludedOf))]
+    .map(([symbol, reason]) => `${symbol} ${reason}`.trim())
+    .join("\n");
   run(redraw);
   return { settled: () => queue };
 };

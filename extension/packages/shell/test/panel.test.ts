@@ -842,3 +842,99 @@ test("a typed amount that is not whole rupiah above 0 is refused, naming what wa
   }
   expect(await typedKept()).toEqual([]);
 });
+
+// Settings: the exclusions (#239 AC1), each stock with the user's reason, one per line.
+
+const saveExclusions = async (
+  page: StandIn,
+  panel: { settled(): Promise<void> },
+  typed: string,
+) => {
+  byId(page, "exclusions").value = typed;
+  byId(page, "save-exclusions").clicked?.();
+  await panel.settled();
+  return byId(page, "status").textContent;
+};
+
+test("the exclusions have a labelled text box on Settings holding those kept, one per line", async () => {
+  await putSetting(db, SETTINGS.excluded, [
+    ["BBRI", "Too much debt"],
+    ["UNVR", ""],
+  ]);
+  const { page } = await open();
+  const settings = byId(page, "pane-settings");
+  expect(byId(settings, "exclusions").tagName).toBe("textarea");
+  expect(byId(settings, "exclusions").value).toBe("BBRI Too much debt\nUNVR");
+  const label = byId(settings, "exclusions-label");
+  expect([label.tagName, label.htmlFor, label.textContent]).toEqual([
+    "label",
+    "exclusions",
+    "Excluded stocks: one per line, the code and then your reason",
+  ]);
+  expect(byId(settings, "save-exclusions").textContent).toBe("Save exclusions");
+});
+
+test("the exclusions box is empty before any is kept", async () => {
+  const { page } = await open();
+  expect(byId(page, "exclusions").value).toBe("");
+});
+
+test("the exclusions typed are kept with their reasons, and advice leaves them out", async () => {
+  await putSetting(db, SETTINGS.universe, ["BBRI", "UNVR"]);
+  await putSetting(db, KEPT.strategy, { name: "buy-and-hold", values: [] });
+  const { page, panel, chrome } = await open();
+  chrome.send(snapshot("portfolio"));
+  chrome.send(snapshot("watchlist"));
+  chrome.send(snapshot("flags"));
+  await panel.settled();
+  expect(textOf(byId(page, "advice")).join("\n")).toContain("of UNVR");
+  expect(await saveExclusions(page, panel, " unvr   Too  much debt \n\n")).toBe(
+    "Exclusions saved: 1 stock.",
+  );
+  expect(await settingOf(db, SETTINGS.excluded)).toEqual([["UNVR", "Too  much debt"]]);
+  const advice = textOf(byId(page, "advice")).join("\n");
+  expect(advice).toContain("of BBRI");
+  expect(advice).not.toContain("of UNVR");
+});
+
+test("exclusions with no reason are kept with an empty one", async () => {
+  const { page, panel } = await open();
+  expect(await saveExclusions(page, panel, "BBRI\nUNVR")).toBe("Exclusions saved: 2 stocks.");
+  expect(await settingOf(db, SETTINGS.excluded)).toEqual([
+    ["BBRI", ""],
+    ["UNVR", ""],
+  ]);
+});
+
+test("emptying the exclusions box keeps no exclusions", async () => {
+  await putSetting(db, SETTINGS.excluded, [["BBRI", ""]]);
+  const { page, panel } = await open();
+  expect(await saveExclusions(page, panel, " \n")).toBe("Exclusions saved: 0 stocks.");
+  expect(await settingOf(db, SETTINGS.excluded)).toEqual([]);
+});
+
+test("an exclusion that is not an IDX stock code is refused, naming it, and nothing changes", async () => {
+  const { page, panel } = await open();
+  expect(await saveExclusions(page, panel, "BBRI debt\nBBC4 why")).toBe(
+    'Exclusions not saved: "BBC4" is not a four-letter IDX stock code.',
+  );
+  expect(await settingOf(db, SETTINGS.excluded)).toBeUndefined();
+});
+
+test("a stock excluded twice is refused, naming it, and nothing changes", async () => {
+  const { page, panel } = await open();
+  expect(await saveExclusions(page, panel, "BBRI debt\nbbri again")).toBe(
+    "Exclusions not saved: BBRI is listed twice.",
+  );
+  expect(await settingOf(db, SETTINGS.excluded)).toBeUndefined();
+});
+
+test("kept exclusions not as Settings keeps them still open the panel with the box empty", async () => {
+  await putSetting(db, SETTINGS.excluded, "BBRI");
+  const { page, panel } = await open();
+  await panel.settled();
+  expect(byId(page, "exclusions").value).toBe("");
+  expect(byId(page, "status").textContent).toBe(
+    "Something went wrong: Error: the setting excluded is not as Settings keeps it",
+  );
+});
