@@ -40,12 +40,15 @@ export const instrument = (symbol: string, rules: IdxMarketRules): Instrument =>
 });
 
 /** The broker's portfolio as sizing sees it. Cash is the settled balance plus the unsettled one,
- * which is signed (a buy not yet settled lowers it); what may be spent is the broker's cash
- * available to buy. */
+ * which is signed (a buy not yet settled lowers it). What may be spent is the broker's cash
+ * available to buy, but never more than that cash nor below nothing (#511): a broker's buying
+ * power can run above its cash balance (credit, unsettled sales), and spending it would weigh
+ * more than the whole portfolio. */
 export const portfolioView = (rules: IdxMarketRules, portfolio: Portfolio, day: Day): HeldView => {
   const holdings = new Map<string, Money>();
   const held = new Map<string, bigint>();
-  let value = portfolio.cashSettled.plus(portfolio.cashUnsettled);
+  const cash = portfolio.cashSettled.plus(portfolio.cashUnsettled);
+  let value = cash;
   for (const holding of portfolio.holdings) {
     if (held.has(holding.symbol)) {
       throw new Error(`the portfolio lists ${holding.symbol} twice`);
@@ -56,7 +59,10 @@ export const portfolioView = (rules: IdxMarketRules, portfolio: Portfolio, day: 
     holdings.set(holding.symbol, worth);
     value = value.plus(worth);
   }
-  return { value, spendable: portfolio.cashAvailable, holdings, held };
+  const none = new Money(0n, cash.currency);
+  const within = portfolio.cashAvailable.gt(cash) ? cash : portfolio.cashAvailable;
+  const spendable = within.lt(none) ? none : within;
+  return { value, spendable, holdings, held };
 };
 
 /** The last close of `symbol` in `prices`, refused by name when there is none. */
