@@ -1,9 +1,11 @@
 import { expect, test } from "vitest";
+import * as forget from "../src/forget.ts";
 import * as history from "../src/index.ts";
 import * as market from "../src/market.ts";
 import * as record from "../src/record.ts";
 import * as risk from "../src/risk.ts";
 import * as schema from "../src/schema.ts";
+import * as summary from "../src/summary.ts";
 
 // The panel records each read and reads the record back through the package (#238).
 test.each([
@@ -25,6 +27,8 @@ test.each([
   ["dividendRecord", market.dividendRecord],
   ["corporateActionRecord", market.corporateActionRecord],
   ["settingOf", market.settingOf],
+  ["stockHistory", summary.stockHistory],
+  ["forgetEverything", forget.forgetEverything],
 ])("history gives the panel %s", (name, source) => {
   expect(Object.entries(history)).toContainEqual([name, source]);
 });
