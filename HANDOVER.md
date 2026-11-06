@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-06 (laptop shutdown), #239 (a) tests red, uncommitted. Current state only. Older history: `git show d66cdce:HANDOVER.md`.
+**Updated:** 2026-11-06, #239 (a) committed; P0 #511 next. Current state only. Older history: `git show d66cdce:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here (desktop extension; phones unavailable anyway).
 
@@ -15,9 +15,9 @@
 - `238/extension-shell` merged (PR #500); delete locally only after checking its tip equals PR #500's head 3f3dd12.
 - Backups (keep 30 days): `377/wip-backup-2026-10-28` (to 2026-11-27); `365/exact-values-backup-2026-10-27` (to 2026-11-26), `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29).
 
-## Uncommitted (shutdown 2026-11-06)
-- `extension/packages/shell/test/panel.test.ts`: 7 new tests for (a) (`adviceWith` helper + kept strategy, refusals of an unknown strategy / an out-of-bounds value / bad limits / unknown preset, and advice differing under kept limits and under preset `ajaib`). Ran RED in its own call, each for the right reason (7 failed, 13 passed). No src written yet. Left uncommitted because the tree is red.
-- Next src (a): in `shell/src/settings.ts` add `keptSettings(db)` returning `{ strategy, limits, market }`: `strategyOf` then `strategyFrom`, with any failure rethrown as `refusedSetting(KEPT.strategy)`; `limitsOf`; `new IdxMarketRules(shippedTables(), feePresetOf(...))`. Values come from history `settingOf`. `record-read.ts` imports `refusedSetting` from settings.ts (drop its copy). `panel.ts`: drop the STRATEGY/LIMITS/MARKET constants; redraw and recordPage read `keptSettings(db)`. core exports no `Strategy` type from index (check `ReturnType<typeof strategyFrom>`).
+## Done this session
+- (a) committed 2170bc9: the panel advises with the kept strategy, limits and fee preset (`keptSettings(db)`); the 2 tests rewritten per Shyden's ruling, red with src stashed, then green. Gate: 3340 passed, 100% coverage.
+- Found while probing: **#511 (P0, Estimate 3)**: advice errors "weights sum to ... more than 1" when the broker's cash available to buy (Dana Siap Beli) is above settled + unsettled cash (fixture portfolio: 12.5M vs 8.75M). Cause in `core/src/sizing.ts` `portfolioView`.
 
 ## Running
 - Nothing local. Docker/Colima: never used by this session.
@@ -33,7 +33,7 @@
 
 ## Resume steps
 1. `ListAgents`; `git status --short`; `git fetch --prune`; `git rev-parse --abbrev-ref HEAD`.
-2. Resume #239 on `239/settings-history-lessons-2`: re-run `npx vitest run --project unit packages/shell/test/panel.test.ts` (from `extension/`) to see the 7 red, then write the (a) src above, then green + full `npm test` (100% coverage), commit.
+2. P0 #511 first: fresh branch `511/...` from develop, tests red first, fix, PR. Then resume #239 (b) on `239/settings-history-lessons-2`.
 3. After #239, next ticket: `node ~/Developer/Repos/repo-template/scripts/board-next.ts PVT_kwHOCQ_jzM4BkhEb steadyhand 2>/dev/null`.
 4. Core rules (CI-only guards, a hook refusal is final): no `number` declarations or `Number(...)` in core, no index parameters in callbacks, no generic `test.each<...>(`, no identifier named `window`/`document`/`chrome`/`indexedDB` in core, no `%j` titles over bigints; a `?? fallback` never taken fails 100% branch coverage; scratch copies go in `pristine/`, never `*.bak`. Guards (Python and extension), integration and the browser suite are CI's: the hook refuses them locally.
 5. Filing a ticket: `gh issue create`, `gh project item-add 1 --owner ShydenMcM --url <issue>`, `gh project item-edit` (project id `PVT_kwHOCQ_jzM4BkhEb`) with Priority `PVTSSF_lAHOCQ_jzM4BkhEbzhn_bYM` (P0 `2f8059d5`, P1 `ec7925c3`, P4 `6e3c5b78`), Estimate `PVTF_lAHOCQ_jzM4BkhEbzhkUeyc`, Status `PVTSSF_lAHOCQ_jzM4BkhEbzhjRYtk` (Todo `f75ad846`, In Progress `47fc9ee4`, Done `98236657`); read back by repository + issue. Blocked-by: `gh api -X POST repos/ShydenMcM/steadyhand/issues/<n>/dependencies/blocked_by -F issue_id=<blocker database id>`.
