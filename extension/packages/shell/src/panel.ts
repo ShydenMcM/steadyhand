@@ -16,7 +16,17 @@ import {
   STRATEGIES,
   type PageKind,
 } from "@steadyhand/core";
-import { putSetting, recordTyped, remember, riskRecord, settingOf } from "@steadyhand/history";
+import {
+  forgetEverything,
+  openHistory,
+  putSetting,
+  recordTyped,
+  remember,
+  riskRecord,
+  settingOf,
+  stockHistory,
+  type ExtensionStorage,
+} from "@steadyhand/history";
 import { adviceModel, type PanelReads } from "./advice-model.ts";
 import { adviceView, CHOICE_LINE, DISCLAIMER } from "./advice-view.ts";
 import { isSnapshot, type Ask } from "./messages.ts";
@@ -74,6 +84,10 @@ export interface PanelTabs {
 export interface PanelInputs<E extends PanelElement<E>> {
   readonly page: PanelDocument<E>;
   readonly db: IDBDatabase;
+  /** Where `db` was opened: "forget everything" deletes it there and opens it again, empty. */
+  readonly factory: IDBFactory;
+  /** The extension's own storage, which "forget everything" clears. */
+  readonly storage: ExtensionStorage;
   readonly runtime: PanelRuntime;
   readonly tabs: PanelTabs;
   readonly clock: () => Date;
@@ -149,6 +163,10 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number][0];
 
+/** `count` with its noun, in the singular for 1. */
+const counted = (count: bigint, one: string, many: string): string =>
+  `${count.toString()} ${count === 1n ? one : many}`;
+
 /** How the status line names each page read. */
 const PAGE_NAMES: Readonly<Record<PageKind, string>> = {
   portfolio: "the portfolio page",
@@ -163,7 +181,8 @@ const PAGE_NAMES: Readonly<Record<PageKind, string>> = {
 export const startPanel = async <E extends PanelElement<E>>(
   inputs: PanelInputs<E>,
 ): Promise<Panel> => {
-  const { page, db } = inputs;
+  const { page } = inputs;
+  let { db } = inputs;
   const named = <T extends E>(made: T, id: string, text = ""): T => {
     made.id = id;
     made.textContent = text;
@@ -304,6 +323,42 @@ export const startPanel = async <E extends PanelElement<E>>(
       ...rows.flatMap(({ label, input, help }) => [label, input, help]),
     );
   };
+  // History (#239 AC2): per stock what is recorded, and "forget everything", asked first.
+  const recordingNote = element(
+    "p",
+    "recording-note",
+    "steadyhand records a broker page only while this panel is open beside it.",
+  );
+  const stocksRecorded = element("section", "stock-history");
+  const showHistory = async (): Promise<void> => {
+    const stocks = await stockHistory(db);
+    stocksRecorded.replaceChildren(
+      ...(stocks.length === 0
+        ? [element("p", "", "Nothing is recorded yet.")]
+        : stocks.map((stock) =>
+            element(
+              "p",
+              "",
+              `${stock.symbol}: ${counted(stock.days, "day", "days")} recorded, ${counted(stock.chartReads, "chart read", "chart reads")}, ${counted(stock.dividends, "dividend", "dividends")}`,
+            ),
+          )),
+    );
+  };
+  const forget = element("button", "forget", "Forget everything");
+  const forgetConfirm = element("div", "forget-confirm");
+  const forgetYes = element("button", "forget-yes", "Yes, forget everything");
+  const forgetKeep = element("button", "forget-keep", "Keep everything");
+  forgetConfirm.append(
+    element(
+      "p",
+      "",
+      "This deletes everything steadyhand has recorded and every setting. It cannot be undone.",
+    ),
+    forgetYes,
+    forgetKeep,
+  );
+  forgetConfirm.hidden = true;
+
   const status = element("p", "status");
   const footer = element("footer", "notice");
   footer.append(element("p", "disclaimer", DISCLAIMER), element("p", "choice", CHOICE_LINE));
@@ -364,6 +419,7 @@ export const startPanel = async <E extends PanelElement<E>>(
     exclusions,
     saveExclusions,
   );
+  panes.history.append(recordingNote, stocksRecorded, forget, forgetConfirm);
   show("advice");
   page.body.append(status, tabList, ...tabs.map(({ pane }) => pane), footer);
 
@@ -390,6 +446,7 @@ export const startPanel = async <E extends PanelElement<E>>(
       ...section.lines.map((line) => element("p", "", line)),
     ]);
     advice.replaceChildren(...lines);
+    await showHistory();
   };
 
   const recordPage = async (html: string): Promise<void> => {
@@ -543,6 +600,39 @@ export const startPanel = async <E extends PanelElement<E>>(
     await redraw();
   };
 
+  /** Show every setting as kept, the deposits and withdrawals typed, and the history. */
+  const showKept = async (): Promise<void> => {
+    universe.value = (await keptUniverse(db))?.join(" ") ?? "";
+    const keptGoal: unknown = await settingOf(db, SETTINGS.goal);
+    goal.value = typeof keptGoal === "string" ? keptGoal : "";
+    showStrategy(await keptOr(db, KEPT.strategy, strategyOf));
+    const limits = await keptOr(db, KEPT.limits, limitsOf);
+    limitRows.maxWeight.input.value = limits.maxWeight.mul(100).toString();
+    limitRows.minLots.input.value = limits.minLots.toString();
+    limitRows.dailyLoss.input.value = limits.dailyLoss.mul(100).toString();
+    limitRows.maxDrawdown.input.value = limits.maxDrawdown.mul(100).toString();
+    preset.value = await keptOr(db, KEPT.feePreset, feePresetOf);
+    await showTyped();
+    exclusions.value = [...(await keptOr(db, SETTINGS.excluded, excludedOf))]
+      .map(([symbol, reason]) => `${symbol} ${reason}`.trim())
+      .join("\n");
+    await showHistory();
+  };
+
+  /** Forget everything, then open the history again, empty, whether or not the forget left
+   * anything: what it left is named on the status line. */
+  const forgetAll = async (): Promise<void> => {
+    try {
+      await forgetEverything(inputs.factory, db, inputs.storage);
+    } finally {
+      db = await openHistory(inputs.factory);
+      reads = {};
+      await showKept();
+    }
+    status.textContent = "Everything is forgotten.";
+    await redraw();
+  };
+
   let queue = Promise.resolve();
   /** Run `job` after everything asked before it; a failure is shown, and the queue goes on. */
   const run = (job: () => Promise<void>): void => {
@@ -584,21 +674,18 @@ export const startPanel = async <E extends PanelElement<E>>(
   saveStrategy.addEventListener("click", () => {
     run(saveChosenStrategy);
   });
+  forget.addEventListener("click", () => {
+    forgetConfirm.hidden = false;
+  });
+  forgetKeep.addEventListener("click", () => {
+    forgetConfirm.hidden = true;
+  });
+  forgetYes.addEventListener("click", () => {
+    forgetConfirm.hidden = true;
+    run(forgetAll);
+  });
 
-  universe.value = (await keptUniverse(db))?.join(" ") ?? "";
-  const keptGoal: unknown = await settingOf(db, SETTINGS.goal);
-  goal.value = typeof keptGoal === "string" ? keptGoal : "";
-  showStrategy(await keptOr(db, KEPT.strategy, strategyOf));
-  const limits = await keptOr(db, KEPT.limits, limitsOf);
-  limitRows.maxWeight.input.value = limits.maxWeight.mul(100).toString();
-  limitRows.minLots.input.value = limits.minLots.toString();
-  limitRows.dailyLoss.input.value = limits.dailyLoss.mul(100).toString();
-  limitRows.maxDrawdown.input.value = limits.maxDrawdown.mul(100).toString();
-  preset.value = await keptOr(db, KEPT.feePreset, feePresetOf);
-  await showTyped();
-  exclusions.value = [...(await keptOr(db, SETTINGS.excluded, excludedOf))]
-    .map(([symbol, reason]) => `${symbol} ${reason}`.trim())
-    .join("\n");
+  await showKept();
   run(redraw);
   return { settled: () => queue };
 };

@@ -1,6 +1,14 @@
 import { readFileSync } from "node:fs";
 import { STRATEGIES, type PageKind } from "@steadyhand/core";
-import { openHistory, putSetting, riskRecord, settingOf, storedMemory } from "@steadyhand/history";
+import {
+  openHistory,
+  putSetting,
+  riskRecord,
+  rowsOf,
+  settingOf,
+  storedMemory,
+  STORES,
+} from "@steadyhand/history";
 import { IDBFactory } from "fake-indexeddb";
 import { beforeEach, expect, test } from "vitest";
 import { CHOICE_LINE, DISCLAIMER } from "../src/advice-view.ts";
@@ -127,23 +135,44 @@ const standInChrome = (
   return chrome;
 };
 
+let factory: IDBFactory;
 let db: IDBDatabase;
 
 beforeEach(async () => {
-  db = await openHistory(new IDBFactory());
+  factory = new IDBFactory();
+  db = await openHistory(factory);
   return () => {
     db.close();
   };
 });
 
+/** The extension's storage (`chrome.storage.local`'s shape), stood in by a map; `clears` false
+ * stands in a clear that leaves its items. */
+const standInStorage = (items: Record<string, unknown> = {}, clears = true) => {
+  const held = new Map(Object.entries(items));
+  return {
+    held,
+    get: () => Promise.resolve(Object.fromEntries(held)),
+    clear: () => {
+      if (clears) {
+        held.clear();
+      }
+      return Promise.resolve();
+    },
+  };
+};
+
 const open = async (
   chrome = standInChrome(() => Promise.resolve(undefined)),
   clock = () => AFTER_CLOSE,
+  storage = standInStorage(),
 ) => {
   const page = standInDocument();
   const panel = await startPanel({
     page,
     db,
+    factory,
+    storage,
     runtime: chrome.runtime,
     tabs: chrome.tabs,
     clock,
@@ -937,4 +966,137 @@ test("kept exclusions not as Settings keeps them still open the panel with the b
   expect(byId(page, "status").textContent).toBe(
     "Something went wrong: Error: the setting excluded is not as Settings keeps it",
   );
+});
+
+// History (#239 AC2, spec §10.3): per stock the days recorded, chart reads and dividends; the note
+// that recording happens only while the panel is open; "forget everything", confirmed first.
+
+/** The lines the History tab lists, one per stock. */
+const historyLines = (root: StandIn): string[] => textOf(byId(root, "stock-history"));
+
+/** Send each fixture page of `kinds`, in turn, and wait for each to be recorded. */
+const readPages = async (
+  opened: Awaited<ReturnType<typeof open>>,
+  kinds: readonly PageKind[],
+): Promise<void> => {
+  for (const kind of kinds) {
+    opened.chrome.send(snapshot(kind));
+    await opened.panel.settled();
+  }
+};
+
+test("the History tab says recording happens only while the panel is open", async () => {
+  const { page } = await open();
+  expect(textOf(byId(page, "pane-history"))).toContain(
+    "steadyhand records a broker page only while this panel is open beside it.",
+  );
+});
+
+test("History says nothing is recorded before any page is read", async () => {
+  const { page } = await open();
+  expect(historyLines(page)).toEqual(["Nothing is recorded yet."]);
+});
+
+test("History lists each stock read with its days, chart reads and dividends, by symbol", async () => {
+  const opened = await open();
+  await readPages(opened, ["portfolio", "watchlist", "stock-detail", "dividends"]);
+  expect(historyLines(opened.page)).toEqual([
+    "BBCA: 1 day recorded, 1 chart read, 2 dividends",
+    "BBRI: 1 day recorded, 0 chart reads, 0 dividends",
+    "TLKM: 1 day recorded, 0 chart reads, 0 dividends",
+    "UNVR: 1 day recorded, 0 chart reads, 0 dividends",
+  ]);
+});
+
+test("History lists what was recorded before the panel opened", async () => {
+  await readPages(await open(), ["portfolio"]);
+  const { page } = await open();
+  expect(historyLines(page)).toEqual([
+    "BBCA: 1 day recorded, 0 chart reads, 0 dividends",
+    "TLKM: 1 day recorded, 0 chart reads, 0 dividends",
+  ]);
+});
+
+test('"Forget everything" asks first, and nothing is forgotten until it is confirmed', async () => {
+  const opened = await open();
+  await readPages(opened, ["portfolio"]);
+  const { page } = opened;
+  expect(byId(page, "forget-confirm").hidden).toBe(true);
+  expect(byId(page, "forget").textContent).toBe("Forget everything");
+  byId(page, "forget").clicked?.();
+  expect(byId(page, "forget-confirm").hidden).toBe(false);
+  expect(textOf(byId(page, "forget-confirm"))).toEqual([
+    "This deletes everything steadyhand has recorded and every setting. It cannot be undone.",
+    "Yes, forget everything",
+    "Keep everything",
+  ]);
+  await opened.panel.settled();
+  expect(await rowsOf(db, STORES.closes)).toHaveLength(2);
+});
+
+test('"Keep everything" closes the question and forgets nothing', async () => {
+  const opened = await open();
+  await readPages(opened, ["portfolio"]);
+  byId(opened.page, "forget").clicked?.();
+  byId(opened.page, "forget-keep").clicked?.();
+  await opened.panel.settled();
+  expect(byId(opened.page, "forget-confirm").hidden).toBe(true);
+  expect(await rowsOf(db, STORES.closes)).toHaveLength(2);
+});
+
+test("forgetting everything deletes every store and the storage, and reads back empty", async () => {
+  const storage = standInStorage({ "kept-by-the-shell": true });
+  const opened = await open(undefined, undefined, storage);
+  await readPages(opened, ["portfolio", "watchlist", "stock-detail", "dividends"]);
+  await putSetting(db, SETTINGS.universe, ["BBCA", "TLKM"]);
+  const { page, panel } = opened;
+  byId(page, "forget").clicked?.();
+  byId(page, "forget-yes").clicked?.();
+  await panel.settled();
+  expect(byId(page, "status").textContent).toBe("Everything is forgotten.");
+  expect(byId(page, "forget-confirm").hidden).toBe(true);
+  expect(historyLines(page)).toEqual(["Nothing is recorded yet."]);
+  expect(byId(page, "universe").value).toBe("");
+  expect(storage.held.size).toBe(0);
+  const reopened = await openHistory(factory);
+  for (const store of Object.values(STORES)) {
+    expect(await rowsOf(reopened, store)).toEqual([]);
+  }
+  reopened.close();
+});
+
+test("after forgetting everything the panel records the next page again", async () => {
+  const opened = await open();
+  await readPages(opened, ["watchlist"]);
+  byId(opened.page, "forget").clicked?.();
+  byId(opened.page, "forget-yes").clicked?.();
+  await opened.panel.settled();
+  await readPages(opened, ["portfolio"]);
+  expect(historyLines(opened.page)).toEqual([
+    "BBCA: 1 day recorded, 0 chart reads, 0 dividends",
+    "TLKM: 1 day recorded, 0 chart reads, 0 dividends",
+  ]);
+});
+
+test("a forget that leaves anything behind is shown, naming what is left", async () => {
+  const storage = standInStorage({ "kept-by-the-shell": true }, false);
+  const opened = await open(undefined, undefined, storage);
+  byId(opened.page, "forget").clicked?.();
+  byId(opened.page, "forget-yes").clicked?.();
+  await opened.panel.settled();
+  expect(byId(opened.page, "status").textContent).toBe(
+    "Something went wrong: Error: forget everything left the extension's storage holding: kept-by-the-shell",
+  );
+  await readPages(opened, ["portfolio"]);
+  expect(historyLines(opened.page)).toHaveLength(2);
+});
+
+test("after forgetting everything the advice asks for the pages again", async () => {
+  const opened = await open();
+  await readPages(opened, ["portfolio", "watchlist"]);
+  expect(textOf(byId(opened.page, "advice"))).not.toContain("Open the portfolio page.");
+  byId(opened.page, "forget").clicked?.();
+  byId(opened.page, "forget-yes").clicked?.();
+  await opened.panel.settled();
+  expect(textOf(byId(opened.page, "advice"))).toContain("Open the portfolio page.");
 });

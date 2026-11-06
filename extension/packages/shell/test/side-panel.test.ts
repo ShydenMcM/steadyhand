@@ -31,7 +31,10 @@ const element = (): Element & Record<string, unknown> => {
       made.children = children;
     },
     hidden: false,
-    addEventListener: () => undefined,
+    listeners: new Map<string, () => void>(),
+    addEventListener: (type: string, listener: () => void) => {
+      (made.listeners as Map<string, () => void>).set(type, listener);
+    },
     setAttribute: () => undefined,
   };
   return made;
@@ -47,10 +50,46 @@ test("the page starts the panel on the browser's document, Chrome and IndexedDB"
   vi.stubGlobal("chrome", {
     runtime: { onMessage: { addListener: (listener: unknown) => listened.push(listener) } },
     tabs: {},
+    storage: { local: {} },
   });
   const { opened } = await import("../src/side-panel.ts");
   await (await opened).settled();
   expect(listened).toHaveLength(1);
   expect(all(body).find((each) => each.id === "disclaimer")?.textContent).toBe(DISCLAIMER);
   expect(all(body).find((each) => each.id === "advice")?.children.length).toBeGreaterThan(0);
+});
+
+test("forgetting everything clears the extension's storage and the page's IndexedDB", async () => {
+  const body = element();
+  const factory = new IDBFactory();
+  const cleared: string[] = [];
+  vi.resetModules();
+  vi.stubGlobal("indexedDB", factory);
+  vi.stubGlobal("document", { body, createElement: element });
+  vi.stubGlobal("chrome", {
+    runtime: { onMessage: { addListener: () => undefined } },
+    tabs: {},
+    storage: {
+      local: {
+        get: () => Promise.resolve({}),
+        clear: () => {
+          cleared.push("local");
+          return Promise.resolve();
+        },
+      },
+    },
+  });
+  const { opened } = await import("../src/side-panel.ts");
+  const panel = await opened;
+  await panel.settled();
+  const forgetYes = all(body).find((each) => each.id === "forget-yes") as Element & {
+    listeners: Map<string, () => void>;
+  };
+  forgetYes.listeners.get("click")?.();
+  await panel.settled();
+  expect(cleared).toEqual(["local"]);
+  expect(all(body).find((each) => each.id === "status")?.textContent).toBe(
+    "Everything is forgotten.",
+  );
+  expect((await factory.databases()).map((each) => each.name)).toEqual(["steadyhand-history"]);
 });
