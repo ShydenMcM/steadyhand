@@ -7,8 +7,16 @@
  * Chrome, the page and the clock come in as arguments so the unit run can stand them in. The
  * page is written with elements and their text only, never markup. */
 
-import { IdxCalendar, shippedSessions, STRATEGIES, type PageKind } from "@steadyhand/core";
-import { putSetting, remember, settingOf } from "@steadyhand/history";
+import {
+  asDay,
+  IDR,
+  IdxCalendar,
+  Money,
+  shippedSessions,
+  STRATEGIES,
+  type PageKind,
+} from "@steadyhand/core";
+import { putSetting, recordTyped, remember, riskRecord, settingOf } from "@steadyhand/history";
 import { adviceModel, type PanelReads } from "./advice-model.ts";
 import { adviceView, CHOICE_LINE, DISCLAIMER } from "./advice-view.ts";
 import { isSnapshot, type Ask } from "./messages.ts";
@@ -99,6 +107,12 @@ const symbolsIn = (typed: string): readonly string[] => [
       .map((word) => word.toUpperCase()),
   ),
 ];
+
+/** The kinds of cash movement the user may type, each with its name. */
+const MOVEMENT_KINDS = [
+  ["deposit", "Deposit"],
+  ["withdrawal", "Withdrawal"],
+] as const;
 
 /** How Settings names each risk limit, in order. */
 const LIMIT_NAMES: Readonly<Record<keyof TypedLimits, string>> = {
@@ -209,6 +223,43 @@ export const startPanel = async <E extends PanelElement<E>>(
   );
   const savePreset = element("button", "save-fee-preset", "Save fee preset");
 
+  // Deposits and withdrawals the user types (spec §8), kept as typed and listed back.
+  const movementKind = named(page.createElement("select"), "movement-kind");
+  movementKind.append(
+    ...MOVEMENT_KINDS.map(([kind, name]) => {
+      const option = named(page.createElement("option"), "", name);
+      option.value = kind;
+      return option;
+    }),
+  );
+  const movementDay = named(page.createElement("input"), "movement-day");
+  const movementAmount = named(page.createElement("input"), "movement-amount");
+  const movementLabels = (
+    [
+      [movementKind, "Deposit or withdrawal"],
+      [movementDay, "Day, such as 2025-06-16"],
+      [movementAmount, "Amount, in rupiah"],
+    ] as const
+  ).flatMap(([input, name]) => {
+    const movementLabel = named(page.createElement("label"), `${input.id}-label`, name);
+    movementLabel.htmlFor = input.id;
+    return [movementLabel, input];
+  });
+  const addMovement = element("button", "add-movement", "Keep this deposit or withdrawal");
+  const typedMovements = element("section", "typed-movements");
+  const showTyped = async (): Promise<void> => {
+    const typed = [...(await riskRecord(db)).typed].sort((one, other) =>
+      one.day.localeCompare(other.day),
+    );
+    typedMovements.replaceChildren(
+      ...(typed.length === 0
+        ? [element("p", "", "No deposits or withdrawals typed.")]
+        : typed.map((entry) =>
+            element("p", "", `${entry.day}: ${entry.kind} of ${entry.amount.toString()}`),
+          )),
+    );
+  };
+
   // The strategy and its settings (#239 AC1): a labelled input per setting, its help read with it.
   const strategyLabel = named(page.createElement("label"), "strategy-label", "Strategy");
   const picker = named(page.createElement("select"), "strategy");
@@ -293,6 +344,9 @@ export const startPanel = async <E extends PanelElement<E>>(
     presetLabel,
     preset,
     savePreset,
+    ...movementLabels,
+    addMovement,
+    typedMovements,
     label,
     universe,
     save,
@@ -426,6 +480,29 @@ export const startPanel = async <E extends PanelElement<E>>(
     await redraw();
   };
 
+  const keepTypedMovement = async (): Promise<void> => {
+    const day = movementDay.value.trim();
+    try {
+      asDay(day, "the day");
+    } catch {
+      status.textContent = `Not kept: type the day as a date such as 2025-06-16, got "${movementDay.value}"`;
+      return;
+    }
+    const amount = movementAmount.value.trim();
+    const rupiah = WHOLE_RUPIAH.test(amount) ? BigInt(amount.replaceAll(".", "")) : 0n;
+    if (rupiah <= 0n) {
+      status.textContent = `Not kept: type whole rupiah above 0, such as 1.000.000, got "${movementAmount.value}"`;
+      return;
+    }
+    const kind = movementKind.value === "withdrawal" ? "withdrawal" : "deposit";
+    const [, name] = kind === "withdrawal" ? MOVEMENT_KINDS[1] : MOVEMENT_KINDS[0];
+    const money = new Money(rupiah, IDR);
+    await recordTyped(db, { day, kind, amount: money, typedAt: inputs.clock() });
+    status.textContent = `${name} of ${money.toString()} on ${day} kept.`;
+    await showTyped();
+    await redraw();
+  };
+
   let queue = Promise.resolve();
   /** Run `job` after everything asked before it; a failure is shown, and the queue goes on. */
   const run = (job: () => Promise<void>): void => {
@@ -455,6 +532,9 @@ export const startPanel = async <E extends PanelElement<E>>(
   savePreset.addEventListener("click", () => {
     run(saveChosenPreset);
   });
+  addMovement.addEventListener("click", () => {
+    run(keepTypedMovement);
+  });
   saveGoal.addEventListener("click", () => {
     run(saveTypedGoal);
   });
@@ -472,6 +552,7 @@ export const startPanel = async <E extends PanelElement<E>>(
   limitRows.dailyLoss.input.value = limits.dailyLoss.mul(100).toString();
   limitRows.maxDrawdown.input.value = limits.maxDrawdown.mul(100).toString();
   preset.value = await keptOr(db, KEPT.feePreset, feePresetOf);
+  await showTyped();
   run(redraw);
   return { settled: () => queue };
 };

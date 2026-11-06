@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { STRATEGIES, type PageKind } from "@steadyhand/core";
-import { openHistory, putSetting, settingOf, storedMemory } from "@steadyhand/history";
+import { openHistory, putSetting, riskRecord, settingOf, storedMemory } from "@steadyhand/history";
 import { IDBFactory } from "fake-indexeddb";
 import { beforeEach, expect, test } from "vitest";
 import { CHOICE_LINE, DISCLAIMER } from "../src/advice-view.ts";
@@ -136,14 +136,17 @@ beforeEach(async () => {
   };
 });
 
-const open = async (chrome = standInChrome(() => Promise.resolve(undefined))) => {
+const open = async (
+  chrome = standInChrome(() => Promise.resolve(undefined)),
+  clock = () => AFTER_CLOSE,
+) => {
   const page = standInDocument();
   const panel = await startPanel({
     page,
     db,
     runtime: chrome.runtime,
     tabs: chrome.tabs,
-    clock: () => AFTER_CLOSE,
+    clock,
   });
   return { page: page.body, panel, chrome };
 };
@@ -740,4 +743,102 @@ test("kept risk limits and fee preset not as Settings keeps them still open the 
   expect(byId(page, "status").textContent).toBe(
     "Something went wrong: Error: the setting risk-limits is not as Settings keeps it",
   );
+});
+
+// Settings: deposits and withdrawals the user types (#239 AC1), kept as typed and listed back.
+
+const typeMovement = async (
+  page: StandIn,
+  panel: { settled(): Promise<void> },
+  typed: { kind: string; day: string; amount: string },
+) => {
+  byId(page, "movement-kind").value = typed.kind;
+  byId(page, "movement-day").value = typed.day;
+  byId(page, "movement-amount").value = typed.amount;
+  byId(page, "add-movement").clicked?.();
+  await panel.settled();
+  return byId(page, "status").textContent;
+};
+
+const typedKept = async () =>
+  (await riskRecord(db)).typed.map((entry) => [
+    entry.day,
+    entry.kind,
+    entry.amount.toString(),
+    entry.typedAt.toISOString(),
+  ]);
+
+test("Settings has a labelled kind, day and amount for a typed deposit or withdrawal", async () => {
+  const { page } = await open();
+  const settings = byId(page, "pane-settings");
+  const kind = byId(settings, "movement-kind");
+  expect(kind.tagName).toBe("select");
+  expect(kind.children.map((option) => [option.value, option.textContent])).toEqual([
+    ["deposit", "Deposit"],
+    ["withdrawal", "Withdrawal"],
+  ]);
+  for (const [id, tag, name] of [
+    ["movement-kind", "select", "Deposit or withdrawal"],
+    ["movement-day", "input", "Day, such as 2025-06-16"],
+    ["movement-amount", "input", "Amount, in rupiah"],
+  ] as const) {
+    const label = byId(settings, `${id}-label`);
+    expect([label.tagName, label.htmlFor, label.textContent]).toEqual(["label", id, name]);
+    expect(byId(settings, id).tagName).toBe(tag);
+  }
+  expect(byId(settings, "add-movement").textContent).toBe("Keep this deposit or withdrawal");
+  expect(textOf(byId(settings, "typed-movements"))).toEqual(["No deposits or withdrawals typed."]);
+});
+
+test("a deposit typed is kept as typed, at the instant it was typed, and listed", async () => {
+  const { page, panel } = await open();
+  const typed = { kind: "deposit", day: " 2025-06-16 ", amount: "1.000.000" };
+  expect(await typeMovement(page, panel, typed)).toBe(
+    "Deposit of IDR 1,000,000 on 2025-06-16 kept.",
+  );
+  expect(await typedKept()).toEqual([
+    ["2025-06-16", "deposit", "IDR 1,000,000", AFTER_CLOSE.toISOString()],
+  ]);
+  expect(textOf(byId(page, "typed-movements"))).toEqual(["2025-06-16: deposit of IDR 1,000,000"]);
+});
+
+test("the deposits and withdrawals typed are listed by day when the panel opens", async () => {
+  // Each entry is kept under the instant it was typed, so the clock moves on a second each time.
+  let ticks = 0;
+  const first = await open(undefined, () => new Date(AFTER_CLOSE.getTime() + 1000 * ++ticks));
+  await typeMovement(first.page, first.panel, {
+    kind: "withdrawal",
+    day: "2025-06-13",
+    amount: "250000",
+  });
+  await typeMovement(first.page, first.panel, {
+    kind: "deposit",
+    day: "2025-06-02",
+    amount: "500.000",
+  });
+  const { page } = await open();
+  expect(textOf(byId(page, "typed-movements"))).toEqual([
+    "2025-06-02: deposit of IDR 500,000",
+    "2025-06-13: withdrawal of IDR 250,000",
+  ]);
+});
+
+test("a typed day that is not a real date is refused, naming what was typed, and nothing is kept", async () => {
+  const { page, panel } = await open();
+  for (const day of ["2025-02-30", "16/06/2025", ""]) {
+    expect(await typeMovement(page, panel, { kind: "deposit", day, amount: "1000" })).toBe(
+      `Not kept: type the day as a date such as 2025-06-16, got "${day}"`,
+    );
+  }
+  expect(await typedKept()).toEqual([]);
+});
+
+test("a typed amount that is not whole rupiah above 0 is refused, naming what was typed", async () => {
+  const { page, panel } = await open();
+  for (const amount of ["1jt", "0", "-500", ""]) {
+    expect(await typeMovement(page, panel, { kind: "withdrawal", day: "2025-06-16", amount })).toBe(
+      `Not kept: type whole rupiah above 0, such as 1.000.000, got "${amount}"`,
+    );
+  }
+  expect(await typedKept()).toEqual([]);
 });

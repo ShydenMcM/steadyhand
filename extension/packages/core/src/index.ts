@@ -23,5 +23,5 @@ export { dayAfter, IdxCalendar } from "./calendar.ts";
 export { RuleDecimal } from "./ratio.ts";
 export { lastUnknownAction } from "./series.ts";
 export { IdxMarketRules, shippedTables } from "./rules.ts";
-export type { Dated } from "./rules-file.ts";
+export { asDay, type Dated } from "./rules-file.ts";
 export { adviceDayAt, shippedSessions, type SessionRow } from "./sessions.ts";
