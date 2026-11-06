@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-06 late, #239 (a) committed; P0 #511 fixed in PR #512 (CI running). Current state only. Older history: `git show d66cdce:HANDOVER.md`.
+**Updated:** 2026-11-06 late, #239 (a) committed; P0 #511 merged (PR #512, cf4f05d); #239 (b) tabs committed, Settings form next. Current state only. Older history: `git show d66cdce:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here (desktop extension; phones unavailable anyway).
 
@@ -21,7 +21,8 @@
 - #511 ACs not met as written: AC2 (a test per strategy) and AC3 (a panel test with the fixture pages): the fix is in `portfolioView`, which every strategy reads, and on develop the panel cannot choose buy-and-hold. AC3 is met inside #239 once #512 merges: drop `ordersWith`'s `.replace("12.500.000", "8.000.000")` and its #511 comment in `shell/test/panel.test.ts`. Ask Shyden whether AC2/AC3 may be reworded before closing #511.
 
 ## Running
-- Nothing local. Docker/Colima: never used by this session.
+- Nothing. Branch `239/settings-history-lessons-2` pushed at f25c382 (tabs). Committed this session: 2170bc9 (a), 95f2267 (#511 AC3: panel tests read the fixture portfolio unchanged), f25c382 (tabs: `tab-*`/`pane-*`, status+notice outside panes; journey clicks Settings then Advice: browser suite unverified until the PR's CI).
+- #511 stays open (In Progress) until #239 merges: its AC3 test lives on this branch. ACs 2/3 reworded on the ticket per Shyden 2026-11-06. Then shut it by hand after reading each AC.
 
 ## #239 (Settings, History, Lessons, paste and import), done so far
 - Ruling 2026-11-06 (on #239): M7 bounds yield_stocks 1-45, paid_years 1-10, momentum_stocks 1-45, fast_days 1-499, slow_days 2-500, momentum_months 2-24, skip_months 0-23.
@@ -34,8 +35,8 @@
 
 ## Resume steps
 1. `ListAgents`; `git status --short`; `git fetch --prune`; `git rev-parse --abbrev-ref HEAD`.
-2. `~/.claude/scripts/pr-verdict.sh 512` (run_in_background); green on its head SHA: squash-merge into develop (standing approval). Settle #511 AC2/AC3 with Shyden, close #511 by hand once verified.
-3. Merge develop into `239/settings-history-lessons-2`, drop the 8.000.000 replace in `ordersWith` (AC3 of #511), then #239 (b) tabs.
+2. #239 (b) next slice, tests red first: Settings pane gets the strategy select + a labelled input per setting (help as aria-describedby), goal, limits, fee preset, exclusions, typed deposits/withdrawals; then History, Lessons, paste box + file picker.
+3. (c) browser suite per tab, (d) PR, CI, verify each AC; then #511 by hand.
 4. After #239, next ticket: `node ~/Developer/Repos/repo-template/scripts/board-next.ts PVT_kwHOCQ_jzM4BkhEb steadyhand 2>/dev/null`.
 5. Core rules (CI-only guards, a hook refusal is final): no `number` declarations or `Number(...)` in core, no index parameters in callbacks, no generic `test.each<...>(`, no identifier named `window`/`document`/`chrome`/`indexedDB` in core, no `%j` titles over bigints; a `?? fallback` never taken fails 100% branch coverage; scratch copies go in `pristine/`, never `*.bak`. Guards (Python and extension), integration and the browser suite are CI's: the hook refuses them locally.
 6. Filing a ticket: `gh issue create`, `gh project item-add 1 --owner ShydenMcM --url <issue>`, `gh project item-edit` (project id `PVT_kwHOCQ_jzM4BkhEb`) with Priority `PVTSSF_lAHOCQ_jzM4BkhEbzhn_bYM` (P0 `2f8059d5`, P1 `ec7925c3`, P4 `6e3c5b78`), Estimate `PVTF_lAHOCQ_jzM4BkhEbzhkUeyc`, Status `PVTSSF_lAHOCQ_jzM4BkhEbzhjRYtk` (Todo `f75ad846`, In Progress `47fc9ee4`, Done `98236657`); read back by repository + issue. Blocked-by: `gh api -X POST repos/ShydenMcM/steadyhand/issues/<n>/dependencies/blocked_by -F issue_id=<blocker database id>`.
