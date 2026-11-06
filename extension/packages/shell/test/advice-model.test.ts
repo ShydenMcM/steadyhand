@@ -1,5 +1,6 @@
 import {
   adviceDayAt,
+  buyAndHold,
   buyStops,
   IDR,
   IdxCalendar,
@@ -194,6 +195,14 @@ test("fresh reads give the day's orders: each side, stock, lots, limit price, co
   expect(buy.costs).toEqual(RULES.costs("buy", rp(9100n).times(buy.order.quantity), "2025-06-17"));
   expect(advice.missing).toEqual([]);
   expect(advice.stops).toEqual([]);
+});
+
+test("cash available to buy above the cash balance still gives advice, buying with the balance", () => {
+  const portfolio = portfolioAt(AFTER_CLOSE);
+  const credit = { ...portfolio, value: { ...portfolio.value, cashAvailable: rp(12_000_000n) } };
+  const advice = model({ ...FRESH, portfolio: credit }, {}, buyAndHold);
+  // TLKM, at 2,750,000 of 12,750,000, is already above the usual 10% limit per stock.
+  expect(advice.state === "advice" ? sides(advice) : advice).toEqual(["buy BBCA"]);
 });
 
 test("with the flags page unread, buys stop naming it and sells are still given", () => {

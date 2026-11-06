@@ -255,6 +255,16 @@ test("what may be spent is the cash the broker says is available to buy", () => 
   );
 });
 
+test("cash available to buy above the cash balance is spent only up to the balance", () => {
+  const credit = { ...brokerPortfolio([]), cashAvailable: rp(4_000_000n) };
+  expect(portfolioView(RULES, credit, DAY).spendable.amount).toBe(5_000_000n - 1_250_000n);
+});
+
+test("with a cash balance below nothing, nothing is spent", () => {
+  const owing = { ...brokerPortfolio([]), cashSettled: rp(1_000_000n) };
+  expect(portfolioView(RULES, owing, DAY).spendable.amount).toBe(0n);
+});
+
 test("each holding is worth its lots, in shares, at its last price", () => {
   const seen = portfolioView(RULES, brokerPortfolio([holding("BBCA", 2n, 9_000n)]), DAY);
   expect([...seen.holdings].map(([symbol, worth]) => [symbol, worth.amount])).toEqual([
