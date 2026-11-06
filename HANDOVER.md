@@ -21,7 +21,9 @@
 - #511 ACs not met as written: AC2 (a test per strategy) and AC3 (a panel test with the fixture pages): the fix is in `portfolioView`, which every strategy reads, and on develop the panel cannot choose buy-and-hold. AC3 is met inside #239 once #512 merges: drop `ordersWith`'s `.replace("12.500.000", "8.000.000")` and its #511 comment in `shell/test/panel.test.ts`. Ask Shyden whether AC2/AC3 may be reworded before closing #511.
 
 ## Running
-- Nothing. Branch `239/settings-history-lessons-2` pushed at f25c382 (tabs). Committed this session: 2170bc9 (a), 95f2267 (#511 AC3: panel tests read the fixture portfolio unchanged), f25c382 (tabs: `tab-*`/`pane-*`, status+notice outside panes; journey clicks Settings then Advice: browser suite unverified until the PR's CI).
+- Nothing (laptop shutdown 2026-11-07: no local jobs, no Colima claim). Head 0ae192b, tree clean; 7 commits ahead of origin (strategy picker, goal/limits/fee preset, typed movements, exclusions + handovers), local only: push with the next slice, unit gate green at each (3381 passed, 100%).
+- #513 filed (P4, Estimate 1): vitest + @vitest/coverage-v8 5.0.5 -> 5.1.0 (census from yawelo-idle-20); own branch after #239.
+- Branch `239/settings-history-lessons-2` pushed at f25c382 (tabs). Committed this session: 2170bc9 (a), 95f2267 (#511 AC3: panel tests read the fixture portfolio unchanged), f25c382 (tabs: `tab-*`/`pane-*`, status+notice outside panes; journey clicks Settings then Advice: browser suite unverified until the PR's CI).
 - #511 stays open (In Progress) until #239 merges: its AC3 test lives on this branch. ACs 2/3 reworded on the ticket per Shyden 2026-11-06. Then shut it by hand after reading each AC.
 
 ## #239 (Settings, History, Lessons, paste and import), done so far
