@@ -2,7 +2,15 @@
  * what the user typed (#239 AC1). A kept value not in the shape Settings writes is refused,
  * naming the setting; a typed value is refused by the name of what is wrong. */
 
-import { RiskLimits, RuleDecimal, shippedTables, strategyFrom } from "@steadyhand/core";
+import {
+  IdxMarketRules,
+  RiskLimits,
+  RuleDecimal,
+  shippedTables,
+  strategyFrom,
+  type Strategy,
+} from "@steadyhand/core";
+import { settingOf } from "@steadyhand/history";
 
 /** The strategy chosen in Settings, with the values typed for its settings; a setting with no
  * value takes its default. */
@@ -162,3 +170,28 @@ export const feePresetOf = (value: unknown): string => {
   }
   return value;
 };
+
+/** What the panel advises and records under: the strategy, risk limits and fee preset Settings
+ * keeps (#239 AC1). A kept value not as Settings keeps it, or a strategy that refuses its kept
+ * values, is refused naming the setting. */
+export interface KeptSettings {
+  readonly strategy: Strategy;
+  readonly limits: RiskLimits;
+  readonly market: IdxMarketRules;
+}
+
+const keptStrategy = (value: unknown): Strategy => {
+  const chosen = strategyOf(value);
+  try {
+    return strategyFrom(chosen.name, chosen.values);
+  } catch {
+    throw refusedSetting(KEPT.strategy);
+  }
+};
+
+/** The strategy, risk limits and market rules under the settings kept in `db`. */
+export const keptSettings = async (db: IDBDatabase): Promise<KeptSettings> => ({
+  strategy: keptStrategy(await settingOf(db, KEPT.strategy)),
+  limits: limitsOf(await settingOf(db, KEPT.limits)),
+  market: new IdxMarketRules(shippedTables(), feePresetOf(await settingOf(db, KEPT.feePreset))),
+});

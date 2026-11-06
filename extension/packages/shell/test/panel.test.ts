@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { PageKind } from "@steadyhand/core";
-import { openHistory, settingOf, storedMemory } from "@steadyhand/history";
+import { openHistory, putSetting, settingOf, storedMemory } from "@steadyhand/history";
 import { IDBFactory } from "fake-indexeddb";
 import { beforeEach, expect, test } from "vitest";
 import { CHOICE_LINE, DISCLAIMER } from "../src/advice-view.ts";
@@ -13,6 +13,7 @@ import {
   type PanelTabs,
 } from "../src/panel.ts";
 import { SETTINGS } from "../src/record-read.ts";
+import { KEPT } from "../src/settings.ts";
 
 // The side panel (spec §10.2, §10.3, #238 AC3-AC4): it records each page the content script sends,
 // asks the active tab for its page on "Read this page", keeps the universe typed into Settings,
@@ -265,4 +266,88 @@ test('"Read this page" on a tab Chrome gives no id says so', async () => {
   await panel.settled();
   expect(byId(page, "status").textContent).toBe("This tab shows no broker page steadyhand reads.");
   expect(chrome.asked).toEqual([]);
+});
+
+/** The advice once the portfolio and watchlist are read, with the universe and `kept` saved
+ * first, and the status line beside it. */
+const adviceWith = async (kept: Readonly<Record<string, unknown>>) => {
+  await putSetting(db, SETTINGS.universe, ["BBCA", "TLKM", "UNVR"]);
+  for (const [name, value] of Object.entries(kept)) {
+    await putSetting(db, name, value);
+  }
+  const { page, panel, chrome } = await open();
+  chrome.send(snapshot("portfolio"));
+  chrome.send(snapshot("watchlist"));
+  await panel.settled();
+  return { advice: textOf(byId(page, "advice")), status: byId(page, "status").textContent };
+};
+
+test("advice is given and remembered under the strategy kept in Settings", async () => {
+  const { advice } = await adviceWith({ [KEPT.strategy]: { name: "buy-and-hold", values: [] } });
+  expect(advice[0]).toBe("Advice for 2025-06-17");
+  expect((await storedMemory(db, "buy-and-hold"))?.day).toBe("2025-06-17");
+  expect(await storedMemory(db, "dividend-growth")).toBeUndefined();
+});
+
+test("a kept strategy no strategy has is refused, naming the setting", async () => {
+  const { status } = await adviceWith({ [KEPT.strategy]: { name: "no-such", values: [] } });
+  expect(status).toBe(
+    "Something went wrong: Error: the setting strategy is not as Settings keeps it",
+  );
+});
+
+test("a kept strategy value out of its bounds is refused, naming the setting", async () => {
+  const kept = { name: "ma-trend", values: [["fast_days", "0"]] };
+  const { status } = await adviceWith({ [KEPT.strategy]: kept });
+  expect(status).toBe(
+    "Something went wrong: Error: the setting strategy is not as Settings keeps it",
+  );
+});
+
+/** The advice of buy-and-hold over BBRI and UNVR, with `kept` saved too, once the portfolio,
+ * watchlist and flags are read. The portfolio page's cash available to buy is lowered to
+ * IDR 8,000,000, within its cash balance, so the strategy buys (above it, see #511). */
+const ordersWith = async (kept: Readonly<Record<string, unknown>>) => {
+  await putSetting(db, SETTINGS.universe, ["BBRI", "UNVR"]);
+  await putSetting(db, KEPT.strategy, { name: "buy-and-hold", values: [] });
+  for (const [name, value] of Object.entries(kept)) {
+    await putSetting(db, name, value);
+  }
+  const { page: body, panel, chrome } = await open();
+  chrome.send({
+    ...snapshot("portfolio"),
+    html: page("portfolio").replace("12.500.000", "8.000.000"),
+  });
+  chrome.send(snapshot("watchlist"));
+  chrome.send(snapshot("flags"));
+  await panel.settled();
+  return textOf(byId(body, "advice"));
+};
+
+test("advice follows the risk limits kept in Settings", async () => {
+  const limits = { maxWeight: "0.01", minLots: "1", dailyLoss: "0.05", maxDrawdown: "0.2" };
+  const advice = await ordersWith({ [KEPT.limits]: limits });
+  expect(advice).toContain("Buy BBRI cut to 6 lots: cut to the 1.00% limit per stock.");
+  expect(advice).toContain("Buy UNVR cut to 16 lots: cut to the 1.00% limit per stock.");
+});
+
+test("kept risk limits not as Settings keeps them are refused, naming the setting", async () => {
+  const { status } = await adviceWith({ [KEPT.limits]: { maxWeight: "lots" } });
+  expect(status).toBe(
+    "Something went wrong: Error: the setting risk-limits is not as Settings keeps it",
+  );
+});
+
+test("advice follows the fee preset kept in Settings", async () => {
+  const advice = await ordersWith({ [KEPT.feePreset]: "ajaib" });
+  expect(advice[1]).toBe(
+    "Buy 8 lots of BBRI at a limit of IDR 4,560, estimated fees IDR 5,520: buy-and-hold: part of its day-one set, bought with an equal share of the cash.",
+  );
+});
+
+test("a kept fee preset no broker has is refused, naming the setting", async () => {
+  const { status } = await adviceWith({ [KEPT.feePreset]: "no-such" });
+  expect(status).toBe(
+    "Something went wrong: Error: the setting fee-preset is not as Settings keeps it",
+  );
 });

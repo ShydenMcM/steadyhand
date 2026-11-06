@@ -6,19 +6,13 @@
  * Chrome, the page and the clock come in as arguments so the unit run can stand them in. The
  * page is written with elements and their text only, never markup. */
 
-import {
-  dividendGrowth,
-  IdxCalendar,
-  IdxMarketRules,
-  RiskLimits,
-  shippedSessions,
-  type PageKind,
-} from "@steadyhand/core";
+import { IdxCalendar, shippedSessions, type PageKind } from "@steadyhand/core";
 import { putSetting, remember } from "@steadyhand/history";
 import { adviceModel, type PanelReads } from "./advice-model.ts";
 import { adviceView, CHOICE_LINE, DISCLAIMER } from "./advice-view.ts";
 import { isSnapshot, type Ask } from "./messages.ts";
-import { recordedFrom, recordRead, SETTINGS } from "./record-read.ts";
+import { keptUniverse, recordedFrom, recordRead, SETTINGS } from "./record-read.ts";
+import { keptSettings } from "./settings.ts";
 
 /** An element as the panel uses one, whose children are elements `E` (the browser's
  * `HTMLElement` is one, with `E` = `HTMLElement`). */
@@ -65,13 +59,8 @@ export interface Panel {
   settled(): Promise<void>;
 }
 
-const MARKET = new IdxMarketRules();
 const CALENDAR = IdxCalendar.shipped();
 const SESSIONS = shippedSessions();
-const RULES = { calendar: CALENDAR, sessions: SESSIONS, market: MARKET };
-const LIMITS = new RiskLimits();
-/** The panel's strategy until Settings offers others (EXT S14b). */
-const STRATEGY = dividendGrowth();
 
 /** What Chrome says when a tab has no content script of the extension to answer. */
 const NO_RECEIVER = "Receiving end does not exist";
@@ -132,21 +121,22 @@ export const startPanel = async <E extends PanelElement<E>>(
   let reads: PanelReads = {};
 
   const redraw = async (): Promise<void> => {
-    const recorded = await recordedFrom(db, STRATEGY.name);
+    const { strategy, limits, market } = await keptSettings(db);
+    const recorded = await recordedFrom(db, strategy.name);
     const model = adviceModel({
       reads,
       recorded,
-      strategy: STRATEGY,
-      rules: MARKET,
-      limits: LIMITS,
+      strategy,
+      rules: market,
+      limits,
       calendar: CALENDAR,
       sessions: SESSIONS,
       now: inputs.clock(),
     });
     if (model.state === "advice") {
-      await remember(db, STRATEGY.name, model.remember);
+      await remember(db, strategy.name, model.remember);
     }
-    const lines = adviceView(model, MARKET).flatMap((section) => [
+    const lines = adviceView(model, market).flatMap((section) => [
       element("h2", "", section.heading),
       ...section.lines.map((line) => element("p", "", line)),
     ]);
@@ -154,7 +144,9 @@ export const startPanel = async <E extends PanelElement<E>>(
   };
 
   const recordPage = async (html: string): Promise<void> => {
-    const recording = await recordRead(db, html, inputs.clock(), reads, RULES);
+    const { market } = await keptSettings(db);
+    const rules = { calendar: CALENDAR, sessions: SESSIONS, market };
+    const recording = await recordRead(db, html, inputs.clock(), reads, rules);
     if ("refused" in recording) {
       status.textContent = `This page was not read: ${recording.refused}`;
       return;
@@ -218,7 +210,7 @@ export const startPanel = async <E extends PanelElement<E>>(
     run(saveUniverse);
   });
 
-  universe.value = (await recordedFrom(db, STRATEGY.name)).universe?.join(" ") ?? "";
+  universe.value = (await keptUniverse(db))?.join(" ") ?? "";
   run(redraw);
   return { settled: () => queue };
 };
