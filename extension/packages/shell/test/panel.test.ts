@@ -20,6 +20,7 @@ import {
   type PanelRuntime,
   type PanelTabs,
 } from "../src/panel.ts";
+import type { LessonModule } from "../src/lessons.ts";
 import { SETTINGS } from "../src/record-read.ts";
 import { FEE_PRESETS, KEPT } from "../src/settings.ts";
 
@@ -166,6 +167,7 @@ const open = async (
   chrome = standInChrome(() => Promise.resolve(undefined)),
   clock = () => AFTER_CLOSE,
   storage = standInStorage(),
+  lessons: readonly LessonModule[] = [],
 ) => {
   const page = standInDocument();
   const panel = await startPanel({
@@ -173,6 +175,7 @@ const open = async (
     db,
     factory,
     storage,
+    lessons,
     runtime: chrome.runtime,
     tabs: chrome.tabs,
     clock,
@@ -1099,4 +1102,70 @@ test("after forgetting everything the advice asks for the pages again", async ()
   byId(opened.page, "forget-yes").clicked?.();
   await opened.panel.settled();
   expect(textOf(byId(opened.page, "advice"))).toContain("Open the portfolio page.");
+});
+
+// Lessons (#239 AC3, spec §13): the tab renders the catalogue; its lessons are EXT S17's (#244).
+
+const CATALOGUE: readonly LessonModule[] = [
+  {
+    title: "How IDX works",
+    lessons: [
+      {
+        id: "idx.lots",
+        title: "Lots: shares come in hundreds",
+        summary: "Shares trade in lots of 100.",
+        paragraphs: ["One lot is 100 shares.", "So the smallest purchase is one lot."],
+      },
+      {
+        id: "idx.ticks",
+        title: "Ticks",
+        summary: "Prices move in steps.",
+        paragraphs: ["The step depends on the price."],
+      },
+    ],
+  },
+  {
+    title: "Costs and tax",
+    lessons: [
+      {
+        id: "costs.trading",
+        title: "What a trade costs",
+        summary: "The broker's fee and the levies.",
+        paragraphs: ["Every trade pays a fee."],
+      },
+    ],
+  },
+];
+
+test("with no lessons shipped yet the Lessons tab says they come in a later release", async () => {
+  const { page } = await open();
+  expect(textOf(byId(page, "pane-lessons"))).toEqual(["The lessons come in a later release."]);
+});
+
+test("the Lessons tab shows each module's lessons in order, with title, summary and text", async () => {
+  const { page } = await open(undefined, undefined, undefined, CATALOGUE);
+  expect(textOf(byId(page, "pane-lessons"))).toEqual([
+    "How IDX works",
+    "Lots: shares come in hundreds",
+    "Shares trade in lots of 100.",
+    "One lot is 100 shares.",
+    "So the smallest purchase is one lot.",
+    "Ticks",
+    "Prices move in steps.",
+    "The step depends on the price.",
+    "Costs and tax",
+    "What a trade costs",
+    "The broker's fee and the levies.",
+    "Every trade pays a fee.",
+  ]);
+});
+
+test("each lesson is a section labelled by its title, under its module's heading", async () => {
+  const { page } = await open(undefined, undefined, undefined, CATALOGUE);
+  const lesson = byId(page, "lesson-idx.lots");
+  expect(lesson.tagName).toBe("section");
+  expect(lesson.attributes.get("aria-labelledby")).toBe("lesson-idx.lots-title");
+  expect(byId(lesson, "lesson-idx.lots-title").tagName).toBe("h3");
+  const pane = byId(page, "pane-lessons").children;
+  expect(pane.map((each) => each.tagName)).toEqual(["h2", "section", "section", "h2", "section"]);
 });

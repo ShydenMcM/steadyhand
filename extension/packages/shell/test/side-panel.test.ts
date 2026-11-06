@@ -57,6 +57,10 @@ test("the page starts the panel on the browser's document, Chrome and IndexedDB"
   expect(listened).toHaveLength(1);
   expect(all(body).find((each) => each.id === "disclaimer")?.textContent).toBe(DISCLAIMER);
   expect(all(body).find((each) => each.id === "advice")?.children.length).toBeGreaterThan(0);
+  const lessons = all(body).find((each) => each.id === "pane-lessons");
+  expect(lessons?.children.map((each) => each.textContent)).toEqual([
+    "The lessons come in a later release.",
+  ]);
 });
 
 test("forgetting everything clears the extension's storage and the page's IndexedDB", async () => {

@@ -29,6 +29,7 @@ import {
 } from "@steadyhand/history";
 import { adviceModel, type PanelReads } from "./advice-model.ts";
 import { adviceView, CHOICE_LINE, DISCLAIMER } from "./advice-view.ts";
+import type { LessonModule } from "./lessons.ts";
 import { isSnapshot, type Ask } from "./messages.ts";
 import { excludedOf, keptUniverse, recordedFrom, recordRead, SETTINGS } from "./record-read.ts";
 import {
@@ -64,7 +65,7 @@ export interface PanelDocument<E extends PanelElement<E>> {
   readonly body: E;
   createElement(tag: "textarea" | "select" | "input" | "option"): E & { value: string };
   createElement(tag: "label"): E & { htmlFor: string };
-  createElement(tag: "section" | "div" | "button" | "p" | "footer" | "h2"): E;
+  createElement(tag: "section" | "div" | "button" | "p" | "footer" | "h2" | "h3"): E;
 }
 
 /** The part of `chrome.runtime` the panel uses: the content script's snapshots arrive here. */
@@ -88,6 +89,8 @@ export interface PanelInputs<E extends PanelElement<E>> {
   readonly factory: IDBFactory;
   /** The extension's own storage, which "forget everything" clears. */
   readonly storage: ExtensionStorage;
+  /** The lesson catalogue the Lessons tab renders. */
+  readonly lessons: readonly LessonModule[];
   readonly runtime: PanelRuntime;
   readonly tabs: PanelTabs;
   readonly clock: () => Date;
@@ -189,7 +192,7 @@ export const startPanel = async <E extends PanelElement<E>>(
     return made;
   };
   const element = (
-    tag: "section" | "div" | "button" | "p" | "footer" | "h2",
+    tag: "section" | "div" | "button" | "p" | "footer" | "h2" | "h3",
     id: string,
     text = "",
   ) => named(page.createElement(tag), id, text);
@@ -420,6 +423,25 @@ export const startPanel = async <E extends PanelElement<E>>(
     saveExclusions,
   );
   panes.history.append(recordingNote, stocksRecorded, forget, forgetConfirm);
+  // Lessons (#239 AC3): each module's heading, then each of its lessons as a section.
+  panes.lessons.append(
+    ...(inputs.lessons.length === 0
+      ? [element("p", "", "The lessons come in a later release.")]
+      : inputs.lessons.flatMap((module) => [
+          element("h2", "", module.title),
+          ...module.lessons.map((lesson) => {
+            const section = element("section", `lesson-${lesson.id}`);
+            const title = element("h3", `${section.id}-title`, lesson.title);
+            section.setAttribute("aria-labelledby", title.id);
+            section.append(
+              title,
+              element("p", "", lesson.summary),
+              ...lesson.paragraphs.map((paragraph) => element("p", "", paragraph)),
+            );
+            return section;
+          }),
+        ])),
+  );
   show("advice");
   page.body.append(status, tabList, ...tabs.map(({ pane }) => pane), footer);
 
