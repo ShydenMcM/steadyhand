@@ -7,13 +7,20 @@
  * Chrome, the page and the clock come in as arguments so the unit run can stand them in. The
  * page is written with elements and their text only, never markup. */
 
-import { IdxCalendar, shippedSessions, type PageKind } from "@steadyhand/core";
-import { putSetting, remember } from "@steadyhand/history";
+import { IdxCalendar, shippedSessions, STRATEGIES, type PageKind } from "@steadyhand/core";
+import { putSetting, remember, settingOf } from "@steadyhand/history";
 import { adviceModel, type PanelReads } from "./advice-model.ts";
 import { adviceView, CHOICE_LINE, DISCLAIMER } from "./advice-view.ts";
 import { isSnapshot, type Ask } from "./messages.ts";
 import { keptUniverse, recordedFrom, recordRead, SETTINGS } from "./record-read.ts";
-import { keptSettings } from "./settings.ts";
+import {
+  KEPT,
+  keptSettings,
+  storedStrategy,
+  strategyOf,
+  typedStrategy,
+  type ChosenStrategy,
+} from "./settings.ts";
 
 /** An element as the panel uses one, whose children are elements `E` (the browser's
  * `HTMLElement` is one, with `E` = `HTMLElement`). */
@@ -25,13 +32,13 @@ export interface PanelElement<E> {
   setAttribute(name: string, value: string): void;
   append(...children: E[]): void;
   replaceChildren(...children: E[]): void;
-  addEventListener(type: "click", listener: () => void): void;
+  addEventListener(type: "click" | "change", listener: () => void): void;
 }
 
 /** The panel's page as the panel uses it: the browser's `document` is one. */
 export interface PanelDocument<E extends PanelElement<E>> {
   readonly body: E;
-  createElement(tag: "textarea"): E & { value: string };
+  createElement(tag: "textarea" | "select" | "input" | "option"): E & { value: string };
   createElement(tag: "label"): E & { htmlFor: string };
   createElement(tag: "section" | "div" | "button" | "p" | "footer" | "h2"): E;
 }
@@ -129,6 +136,41 @@ export const startPanel = async <E extends PanelElement<E>>(
   const universe = named(page.createElement("textarea"), "universe");
   label.htmlFor = universe.id;
   const save = element("button", "save-universe", "Save universe");
+
+  // The strategy and its settings (#239 AC1): a labelled input per setting, its help read with it.
+  const strategyLabel = named(page.createElement("label"), "strategy-label", "Strategy");
+  const picker = named(page.createElement("select"), "strategy");
+  strategyLabel.htmlFor = picker.id;
+  picker.append(
+    ...[...STRATEGIES.keys()].map((name) => {
+      const option = named(page.createElement("option"), "", name);
+      option.value = name;
+      return option;
+    }),
+  );
+  const summary = element("p", "strategy-summary");
+  const strategySettings = element("div", "strategy-settings");
+  const saveStrategy = element("button", "save-strategy", "Save strategy");
+  let settingInputs: ReadonlyMap<string, { value: string }> = new Map();
+  /** Show `chosen` in the picker, with each of its settings at its value or its default. */
+  const showStrategy = (chosen: ChosenStrategy): void => {
+    picker.value = chosen.name;
+    const entry = STRATEGIES.get(chosen.name);
+    summary.textContent = entry?.summary ?? "";
+    const rows = (entry?.settings ?? []).map((each) => {
+      const id = `setting-${each.name}`;
+      const label = named(page.createElement("label"), `${id}-label`, each.name);
+      label.htmlFor = id;
+      const input = named(page.createElement("input"), id);
+      input.value = (chosen.values.get(each.name) ?? each.default).toString();
+      input.setAttribute("aria-describedby", `${id}-help`);
+      return { name: each.name, label, input, help: element("p", `${id}-help`, each.help) };
+    });
+    settingInputs = new Map(rows.map(({ name, input }) => [name, input]));
+    strategySettings.replaceChildren(
+      ...rows.flatMap(({ label, input, help }) => [label, input, help]),
+    );
+  };
   const status = element("p", "status");
   const footer = element("footer", "notice");
   footer.append(element("p", "disclaimer", DISCLAIMER), element("p", "choice", CHOICE_LINE));
@@ -165,7 +207,16 @@ export const startPanel = async <E extends PanelElement<E>>(
     tabList.append(button);
   }
   panes.advice.append(read, advice);
-  panes.settings.append(label, universe, save);
+  panes.settings.append(
+    strategyLabel,
+    picker,
+    summary,
+    strategySettings,
+    saveStrategy,
+    label,
+    universe,
+    save,
+  );
   show("advice");
   page.body.append(status, tabList, ...tabs.map(({ pane }) => pane), footer);
 
@@ -240,6 +291,21 @@ export const startPanel = async <E extends PanelElement<E>>(
     await redraw();
   };
 
+  const saveChosenStrategy = async (): Promise<void> => {
+    const typed = new Map([...settingInputs].map(([name, input]) => [name, input.value]));
+    let chosen: ChosenStrategy;
+    try {
+      chosen = typedStrategy(picker.value, typed);
+    } catch (refused) {
+      // Every refusal of a typed strategy is a RangeError naming what is wrong.
+      status.textContent = `Strategy not saved: ${String(refused).replace(/^RangeError: /u, "")}`;
+      return;
+    }
+    await putSetting(db, KEPT.strategy, storedStrategy(chosen));
+    status.textContent = `Strategy saved: ${chosen.name}.`;
+    await redraw();
+  };
+
   let queue = Promise.resolve();
   /** Run `job` after everything asked before it; a failure is shown, and the queue goes on. */
   const run = (job: () => Promise<void>): void => {
@@ -260,8 +326,21 @@ export const startPanel = async <E extends PanelElement<E>>(
   save.addEventListener("click", () => {
     run(saveUniverse);
   });
+  picker.addEventListener("change", () => {
+    showStrategy({ name: picker.value, values: new Map() });
+  });
+  saveStrategy.addEventListener("click", () => {
+    run(saveChosenStrategy);
+  });
 
   universe.value = (await keptUniverse(db))?.join(" ") ?? "";
+  const kept: unknown = await settingOf(db, KEPT.strategy);
+  try {
+    showStrategy(strategyOf(kept));
+  } catch {
+    // The advice redraw below says the kept strategy is refused; the picker starts from the default.
+    showStrategy(strategyOf(undefined));
+  }
   run(redraw);
   return { settled: () => queue };
 };

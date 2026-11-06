@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { PageKind } from "@steadyhand/core";
+import { STRATEGIES, type PageKind } from "@steadyhand/core";
 import { openHistory, putSetting, settingOf, storedMemory } from "@steadyhand/history";
 import { IDBFactory } from "fake-indexeddb";
 import { beforeEach, expect, test } from "vitest";
@@ -39,9 +39,17 @@ class StandIn implements PanelElement<StandIn> {
   hidden = false;
   readonly attributes = new Map<string, string>();
   children: StandIn[] = [];
-  clicked: (() => void) | undefined;
+  readonly listeners = new Map<string, () => void>();
 
   constructor(readonly tagName: string) {}
+
+  get clicked(): (() => void) | undefined {
+    return this.listeners.get("click");
+  }
+
+  get changed(): (() => void) | undefined {
+    return this.listeners.get("change");
+  }
 
   append(...children: StandIn[]): void {
     this.children.push(...children);
@@ -51,8 +59,8 @@ class StandIn implements PanelElement<StandIn> {
     this.children = children;
   }
 
-  addEventListener(_type: "click", listener: () => void): void {
-    this.clicked = listener;
+  addEventListener(type: "click" | "change", listener: () => void): void {
+    this.listeners.set(type, listener);
   }
 
   setAttribute(name: string, value: string): void {
@@ -410,5 +418,138 @@ test("a kept fee preset no broker has is refused, naming the setting", async () 
   const { status } = await adviceWith({ [KEPT.feePreset]: "no-such" });
   expect(status).toBe(
     "Something went wrong: Error: the setting fee-preset is not as Settings keeps it",
+  );
+});
+
+// Settings: the strategy and its settings (#239 AC1), each bounded as the registry says and
+// refused out of range by name.
+
+/** The input of each setting shown for the chosen strategy, by setting name. */
+const settingInputs = (root: StandIn): Map<string, StandIn> =>
+  new Map(
+    all(byId(root, "strategy-settings"))
+      .filter((element) => element.tagName === "input")
+      .map((input) => [input.id.replace(/^setting-/u, ""), input]),
+  );
+
+const choose = (root: StandIn, name: string): void => {
+  byId(root, "strategy").value = name;
+  byId(root, "strategy").changed?.();
+};
+
+test("Settings offers every strategy by name, with dividend-growth chosen before any is kept", async () => {
+  const { page } = await open();
+  const settings = byId(page, "pane-settings");
+  const picker = byId(settings, "strategy");
+  expect(picker.tagName).toBe("select");
+  expect(byId(settings, "strategy-label").htmlFor).toBe("strategy");
+  expect(byId(settings, "strategy-label").textContent).toBe("Strategy");
+  expect(
+    picker.children.map((option) => [option.tagName, option.value, option.textContent]),
+  ).toEqual([...STRATEGIES.keys()].map((name) => ["option", name, name]));
+  expect(picker.value).toBe("dividend-growth");
+  expect(byId(settings, "strategy-summary").textContent).toBe(
+    STRATEGIES.get("dividend-growth")?.summary,
+  );
+});
+
+test("each setting of the kept strategy has a labelled input holding its kept value, with its help", async () => {
+  await putSetting(db, KEPT.strategy, { name: "ma-trend", values: [["fast_days", "20"]] });
+  const { page } = await open();
+  expect(byId(page, "strategy").value).toBe("ma-trend");
+  const inputs = settingInputs(page);
+  expect([...inputs.keys()]).toEqual(["fast_days", "slow_days"]);
+  expect(inputs.get("fast_days")?.value).toBe("20");
+  const slow = STRATEGIES.get("ma-trend")?.settings.find((each) => each.name === "slow_days");
+  expect(inputs.get("slow_days")?.value).toBe(slow?.default.toString());
+  for (const each of STRATEGIES.get("ma-trend")?.settings ?? []) {
+    const label = byId(page, `setting-${each.name}-label`);
+    expect([label.tagName, label.htmlFor, label.textContent]).toEqual([
+      "label",
+      `setting-${each.name}`,
+      each.name,
+    ]);
+    const input = byId(page, `setting-${each.name}`);
+    expect(input.attributes.get("aria-describedby")).toBe(`setting-${each.name}-help`);
+    expect(byId(page, `setting-${each.name}-help`).textContent).toBe(each.help);
+  }
+});
+
+test("choosing another strategy shows its summary and its settings at their defaults", async () => {
+  const { page } = await open();
+  choose(page, "buy-and-hold");
+  expect(settingInputs(page).size).toBe(0);
+  expect(byId(page, "strategy-summary").textContent).toBe(STRATEGIES.get("buy-and-hold")?.summary);
+  choose(page, "ma-trend");
+  expect([...settingInputs(page)].map(([name, input]) => [name, input.value])).toEqual(
+    STRATEGIES.get("ma-trend")?.settings.map((each) => [each.name, each.default.toString()]),
+  );
+});
+
+test("the strategy saved is kept with the values typed, and advice follows it", async () => {
+  await putSetting(db, SETTINGS.universe, ["BBRI", "UNVR"]);
+  const { page, panel, chrome } = await open();
+  chrome.send(snapshot("portfolio"));
+  chrome.send(snapshot("watchlist"));
+  await panel.settled();
+  choose(page, "ma-trend");
+  const fast = settingInputs(page).get("fast_days");
+  if (fast === undefined) {
+    throw new Error("no fast_days input");
+  }
+  fast.value = " 10 ";
+  byId(page, "save-strategy").clicked?.();
+  await panel.settled();
+  const slow = STRATEGIES.get("ma-trend")?.settings.find((each) => each.name === "slow_days");
+  expect(await settingOf(db, KEPT.strategy)).toEqual({
+    name: "ma-trend",
+    values: [
+      ["fast_days", "10"],
+      ["slow_days", slow?.default.toString()],
+    ],
+  });
+  expect(byId(page, "status").textContent).toBe("Strategy saved: ma-trend.");
+  expect((await storedMemory(db, "ma-trend"))?.day).toBe("2025-06-17");
+});
+
+test("a typed setting out of its bounds is refused by name, and nothing is kept", async () => {
+  const { page, panel } = await open();
+  choose(page, "ma-trend");
+  const fast = settingInputs(page).get("fast_days");
+  if (fast === undefined) {
+    throw new Error("no fast_days input");
+  }
+  fast.value = "0";
+  byId(page, "save-strategy").clicked?.();
+  await panel.settled();
+  expect(byId(page, "status").textContent).toBe(
+    "Strategy not saved: fast_days must be from 1 to 499, got 0",
+  );
+  expect(await settingOf(db, KEPT.strategy)).toBeUndefined();
+});
+
+test("a typed setting that is not a whole number is refused by name, and nothing is kept", async () => {
+  const { page, panel } = await open();
+  choose(page, "ma-trend");
+  const slow = settingInputs(page).get("slow_days");
+  if (slow === undefined) {
+    throw new Error("no slow_days input");
+  }
+  slow.value = "ten";
+  byId(page, "save-strategy").clicked?.();
+  await panel.settled();
+  expect(byId(page, "status").textContent).toBe(
+    'Strategy not saved: slow_days must be a whole number, got "ten"',
+  );
+  expect(await settingOf(db, KEPT.strategy)).toBeUndefined();
+});
+
+test("a kept strategy not as Settings keeps it still opens the panel, and says so", async () => {
+  await putSetting(db, KEPT.strategy, "dividend-growth");
+  const { page, panel } = await open();
+  await panel.settled();
+  expect(byId(page, "strategy").value).toBe("dividend-growth");
+  expect(byId(page, "status").textContent).toBe(
+    "Something went wrong: Error: the setting strategy is not as Settings keeps it",
   );
 });
