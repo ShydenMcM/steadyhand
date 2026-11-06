@@ -16,6 +16,7 @@ export * from "./notes.ts";
 export * from "./risk.ts";
 export * from "./risk-state.ts";
 export * from "./sizing.ts";
+export * from "./strategies.ts";
 export * from "./strategy.ts";
 export * from "./tradable.ts";
 export { dayAfter, IdxCalendar } from "./calendar.ts";
