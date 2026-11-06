@@ -35,7 +35,7 @@
 
 ## Resume steps
 1. `ListAgents`; `git status --short`; `git fetch --prune`; `git rev-parse --abbrev-ref HEAD`.
-2. #239 (b) next slice, tests red first: Settings pane gets the strategy select + a labelled input per setting (help as aria-describedby), goal, limits, fee preset, exclusions, typed deposits/withdrawals; then History, Lessons, paste box + file picker.
+2. #239 (b) strategy picker done (select `#strategy`, `#strategy-summary`, inputs `#setting-<name>` with `-label`/`-help`, `#save-strategy`; status "Strategy saved: X." / "Strategy not saved: <reason>"). Next slice, tests red first: goal, limits, fee preset, exclusions, typed deposits/withdrawals; then History, Lessons, paste box + file picker.
 3. (c) browser suite per tab, (d) PR, CI, verify each AC; then #511 by hand.
 4. After #239, next ticket: `node ~/Developer/Repos/repo-template/scripts/board-next.ts PVT_kwHOCQ_jzM4BkhEb steadyhand 2>/dev/null`.
 5. Core rules (CI-only guards, a hook refusal is final): no `number` declarations or `Number(...)` in core, no index parameters in callbacks, no generic `test.each<...>(`, no identifier named `window`/`document`/`chrome`/`indexedDB` in core, no `%j` titles over bigints; a `?? fallback` never taken fails 100% branch coverage; scratch copies go in `pristine/`, never `*.bak`. Guards (Python and extension), integration and the browser suite are CI's: the hook refuses them locally.
