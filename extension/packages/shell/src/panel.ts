@@ -63,9 +63,18 @@ export interface PanelElement<E> {
 /** The panel's page as the panel uses it: the browser's `document` is one. */
 export interface PanelDocument<E extends PanelElement<E>> {
   readonly body: E;
-  createElement(tag: "textarea" | "select" | "input" | "option"): E & { value: string };
+  createElement(tag: "textarea" | "select" | "input" | "option"): E & {
+    value: string;
+    /** A file input's files: the browser's `FileList` is one. */
+    readonly files: ChosenFiles | null;
+  };
   createElement(tag: "label"): E & { htmlFor: string };
   createElement(tag: "section" | "div" | "button" | "p" | "footer" | "h2" | "h3"): E;
+}
+
+/** The files a file input holds, as the panel reads them. */
+export interface ChosenFiles {
+  item(place: number): { text(): Promise<string> } | null;
 }
 
 /** The part of `chrome.runtime` the panel uses: the content script's snapshots arrive here. */
@@ -207,6 +216,26 @@ export const startPanel = async <E extends PanelElement<E>>(
   const universe = named(page.createElement("textarea"), "universe");
   label.htmlFor = universe.id;
   const save = element("button", "save-universe", "Save universe");
+
+  // Paste and import (#239 AC4): a saved page's text goes to the readers; the file is read here
+  // and never leaves the panel.
+  const pasteLabel = named(
+    page.createElement("label"),
+    "paste-label",
+    "Or paste a broker page you saved",
+  );
+  const paste = named(page.createElement("textarea"), "paste");
+  pasteLabel.htmlFor = paste.id;
+  const readPaste = element("button", "read-paste", "Read the pasted page");
+  const importLabel = named(
+    page.createElement("label"),
+    "import-label",
+    "Or open a broker page you saved",
+  );
+  const importer = named(page.createElement("input"), "import");
+  importer.setAttribute("type", "file");
+  importer.setAttribute("accept", ".html,.htm");
+  importLabel.htmlFor = importer.id;
 
   const goalLabel = named(
     page.createElement("label"),
@@ -397,7 +426,7 @@ export const startPanel = async <E extends PanelElement<E>>(
     });
     tabList.append(button);
   }
-  panes.advice.append(read, advice);
+  panes.advice.append(read, pasteLabel, paste, readPaste, importLabel, importer, advice);
   panes.settings.append(
     strategyLabel,
     picker,
@@ -503,6 +532,23 @@ export const startPanel = async <E extends PanelElement<E>>(
       return;
     }
     await recordPage(answer.html);
+  };
+
+  const readPasted = async (): Promise<void> => {
+    if (paste.value.trim() === "") {
+      status.textContent = "Nothing is pasted.";
+      return;
+    }
+    await recordPage(paste.value);
+  };
+
+  const readChosenFile = async (): Promise<void> => {
+    const file = importer.files?.item(0) ?? null;
+    if (file === null) {
+      status.textContent = "No file was chosen.";
+      return;
+    }
+    await recordPage(await file.text());
   };
 
   const saveUniverse = async (): Promise<void> => {
@@ -671,6 +717,12 @@ export const startPanel = async <E extends PanelElement<E>>(
   });
   read.addEventListener("click", () => {
     run(askActiveTab);
+  });
+  readPaste.addEventListener("click", () => {
+    run(readPasted);
+  });
+  importer.addEventListener("change", () => {
+    run(readChosenFile);
   });
   save.addEventListener("click", () => {
     run(saveUniverse);

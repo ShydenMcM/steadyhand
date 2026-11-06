@@ -46,6 +46,11 @@ class StandIn implements PanelElement<StandIn> {
   value = "";
   textContent = "";
   hidden = false;
+  /** The files chosen, as a file input's `files` gives them. */
+  files: {
+    readonly length: number;
+    item(place: number): { text(): Promise<string> } | null;
+  } | null = null;
   readonly attributes = new Map<string, string>();
   children: StandIn[] = [];
   readonly listeners = new Map<string, () => void>();
@@ -1168,4 +1173,89 @@ test("each lesson is a section labelled by its title, under its module's heading
   expect(byId(lesson, "lesson-idx.lots-title").tagName).toBe("h3");
   const pane = byId(page, "pane-lessons").children;
   expect(pane.map((each) => each.tagName)).toEqual(["h2", "section", "section", "h2", "section"]);
+});
+
+// Paste and import (#239 AC4, spec §10.3): a text box and a file picker feeding the readers.
+
+/** A file input's `files` holding one file whose text is `text`. */
+const chosen = (text: Promise<string>) => ({
+  length: 1,
+  item: (place: number) => (place === 0 ? { text: () => text } : null),
+});
+
+test("the paste box and the file picker are labelled, on the Advice tab", async () => {
+  const { page } = await open();
+  const advice = byId(page, "pane-advice");
+  expect(byId(advice, "paste-label").textContent).toBe("Or paste a broker page you saved");
+  expect(byId(advice, "paste-label").htmlFor).toBe("paste");
+  expect(byId(advice, "paste").tagName).toBe("textarea");
+  expect(byId(advice, "read-paste").textContent).toBe("Read the pasted page");
+  expect(byId(advice, "import-label").textContent).toBe("Or open a broker page you saved");
+  expect(byId(advice, "import-label").htmlFor).toBe("import");
+  const picker = byId(advice, "import");
+  expect([picker.tagName, picker.attributes.get("type"), picker.attributes.get("accept")]).toEqual([
+    "input",
+    "file",
+    ".html,.htm",
+  ]);
+});
+
+test("a pasted page is read and recorded", async () => {
+  const { page, panel } = await open();
+  byId(page, "paste").value = snapshot("portfolio").html;
+  byId(page, "read-paste").clicked?.();
+  await panel.settled();
+  expect(byId(page, "status").textContent).toBe("Read the portfolio page.");
+  expect(historyLines(page)).toEqual([
+    "BBCA: 1 day recorded, 0 chart reads, 0 dividends",
+    "TLKM: 1 day recorded, 0 chart reads, 0 dividends",
+  ]);
+});
+
+test("reading an empty paste box says nothing is pasted, and records nothing", async () => {
+  const { page, panel } = await open();
+  byId(page, "paste").value = "  \n ";
+  byId(page, "read-paste").clicked?.();
+  await panel.settled();
+  expect(byId(page, "status").textContent).toBe("Nothing is pasted.");
+  expect(historyLines(page)).toEqual(["Nothing is recorded yet."]);
+});
+
+test("pasted text that is no broker page is refused, naming why", async () => {
+  const { page, panel } = await open();
+  byId(page, "paste").value = "BBCA 9.000";
+  byId(page, "read-paste").clicked?.();
+  await panel.settled();
+  expect(byId(page, "status").textContent).toMatch(/^This page was not read: /u);
+});
+
+test("a saved page chosen in the file picker is read and recorded", async () => {
+  const { page, panel } = await open();
+  const picker = byId(page, "import");
+  picker.files = chosen(Promise.resolve(snapshot("watchlist").html));
+  picker.changed?.();
+  await panel.settled();
+  expect(byId(page, "status").textContent).toBe("Read the watchlist page.");
+  expect(historyLines(page)).toEqual([
+    "BBRI: 1 day recorded, 0 chart reads, 0 dividends",
+    "UNVR: 1 day recorded, 0 chart reads, 0 dividends",
+  ]);
+});
+
+test("a file picker closed with no file chosen says so", async () => {
+  const { page, panel } = await open();
+  const picker = byId(page, "import");
+  picker.files = { length: 0, item: () => null };
+  picker.changed?.();
+  await panel.settled();
+  expect(byId(page, "status").textContent).toBe("No file was chosen.");
+});
+
+test("a file that cannot be read is shown, never dropped", async () => {
+  const { page, panel } = await open();
+  const picker = byId(page, "import");
+  picker.files = chosen(Promise.reject(new Error("the file was moved")));
+  picker.changed?.();
+  await panel.settled();
+  expect(byId(page, "status").textContent).toBe("Something went wrong: Error: the file was moved");
 });
