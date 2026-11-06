@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-06 late, #239 (a) committed; P0 #511 merged (PR #512, cf4f05d); #239 (b) tabs committed, Settings form next. Current state only. Older history: `git show d66cdce:HANDOVER.md`.
+**Updated:** 2026-11-07, #239 every AC built and in unit tests; PR opened from `239/settings-history-lessons-2`. Current state only. Older history: `git show d66cdce:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here (desktop extension; phones unavailable anyway).
 
@@ -9,39 +9,32 @@
 **Standing approval (Shyden 2026-11-04, AskUserQuestion):** squash-merge into develop any PR green on every check on its head.
 
 ## Branches and heads
-- `develop` = 3c446c7 (handover PR #510).
-- `239/settings-history-lessons-2` = fresh branch from origin's `239/settings-history-lessons` (a238443, includes f263e1f); not pushed yet; #239 In Progress. Open the PR from this branch.
-- Slip 2026-11-06: I wrote core `registeredStrategy` with its test in one edit. Shyden ruled a fresh branch ("this is the consequences of your actions"). The day's work (keptAdvisers, tabs, the start of the strategy picker) is on `239/slip-backup-2026-11-06` (16180e5, kept to 2026-12-06): **never copy or replay from it**; write tests and code new. The local `239/settings-history-lessons` (c4bebaf) holds the same dropped commits: leave it alone.
+- `develop` = 3c446c7. `239/settings-history-lessons-2`: every #239 slice committed and pushed (head: `git rev-parse HEAD`); the PR is the one `gh pr list --head 239/settings-history-lessons-2` shows.
+- `239/slip-backup-2026-11-06` (16180e5, kept to 2026-12-06): **never copy or replay from it**. Local `239/settings-history-lessons` (c4bebaf): leave alone.
 - `238/extension-shell` merged (PR #500); delete locally only after checking its tip equals PR #500's head 3f3dd12.
 - Backups (keep 30 days): `377/wip-backup-2026-10-28` (to 2026-11-27); `365/exact-values-backup-2026-10-27` (to 2026-11-26), `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29).
 
-## Done this session
-- #239 (a) committed 2170bc9 and pushed: the panel advises with the kept strategy, limits and fee preset (`keptSettings(db)`); the 2 tests rewritten per Shyden's ruling, red with src stashed, then green (3340 passed, 100%).
-- **#511 (P0, Estimate 3, In Progress)** filed: advice errored "weights sum to ... more than 1" when the broker's cash available to buy is above settled + unsettled cash. Fix on `511/spend-within-cash` (5cd118e), **PR #512**: `portfolioView` spends at most the cash balance, never below 0; spec §4 line updated. Tests ran red first (sizing x2; advice-model with real buy-and-hold, red with the fix stashed). Local gate 3287 passed, 100%.
-- #511 ACs not met as written: AC2 (a test per strategy) and AC3 (a panel test with the fixture pages): the fix is in `portfolioView`, which every strategy reads, and on develop the panel cannot choose buy-and-hold. AC3 is met inside #239 once #512 merges: drop `ordersWith`'s `.replace("12.500.000", "8.000.000")` and its #511 comment in `shell/test/panel.test.ts`. Ask Shyden whether AC2/AC3 may be reworded before closing #511.
+## #239 state (unit gate 3407 passed, 100% branches)
+- AC1 Settings: strategy picker, goal, limits, fee preset, typed movements, universe, exclusions.
+- AC2 History (bd9d768): `stockHistory` (history/src/summary.ts, ac6d345), `#recording-note`, `#stock-history`, `#forget` -> `#forget-confirm` (`#forget-yes`/`#forget-keep`); forget reopens the db empty and redraws. PanelInputs gained `factory`, `storage` (chrome.storage.local).
+- AC3 Lessons (cc9f6d8): `shell/src/lessons.ts` `LESSONS` (modules -> lessons: id, title, summary, plain paragraphs) is empty until #244; tab says "The lessons come in a later release." #244 must turn the Python Markdown into plain paragraphs.
+- AC4 paste/import (5f8cee7): `#paste` + `#read-paste`, `#import` (file, .html/.htm); both feed `recordRead`. "No request" is EXT S15b's.
+- (c) 88379e2: journey.spec.ts `withPanel` helper + a second journey driving every tab: **unverified until CI's browser suite runs.**
 
 ## Running
-- Nothing (laptop shutdown 2026-11-07: no local jobs, no Colima claim). Head 0ae192b, tree clean; 7 commits ahead of origin (strategy picker, goal/limits/fee preset, typed movements, exclusions + handovers), local only: push with the next slice, unit gate green at each (3381 passed, 100%).
-- #513 filed (P4, Estimate 1): vitest + @vitest/coverage-v8 5.0.5 -> 5.1.0 (census from yawelo-idle-20); own branch after #239.
-- Branch `239/settings-history-lessons-2` pushed at f25c382 (tabs). Committed this session: 2170bc9 (a), 95f2267 (#511 AC3: panel tests read the fixture portfolio unchanged), f25c382 (tabs: `tab-*`/`pane-*`, status+notice outside panes; journey clicks Settings then Advice: browser suite unverified until the PR's CI).
-- #511 stays open (In Progress) until #239 merges: its AC3 test lives on this branch. ACs 2/3 reworded on the ticket per Shyden 2026-11-06. Then shut it by hand after reading each AC.
-
-## #239 (Settings, History, Lessons, paste and import), done so far
-- Ruling 2026-11-06 (on #239): M7 bounds yield_stocks 1-45, paid_years 1-10, momentum_stocks 1-45, fast_days 1-499, slow_days 2-500, momentum_months 2-24, skip_months 0-23.
-- 48c37e2: `core/src/strategies.ts`: `STRATEGIES` (six, dividend-growth first) with bounds and help; `strategyFrom(name, values)` refuses by name.
-- f263e1f: `shell/src/settings.ts`: kept-shape readers/writers for strategy, risk limits, fee preset (keys in `KEPT`), and typed readers (`typedStrategy`, `typedLimits` as percentages). `shippedTables` now exported from core. Unit 3333 passed, 100% coverage.
-- Left, all written new, each test run red in its own call before any src edit: (a) the panel advises and records with the kept strategy, limits and fee preset (panel.ts hard-codes `dividendGrowth()`, `new RiskLimits()`, `new IdxMarketRules()`); `refusedSetting` once, in settings.ts. (b) tabs Advice/Settings/History/Lessons; Settings: strategy select + a labelled input per setting (help as aria-describedby), goal, limits, fee preset, universe, exclusions, typed deposits/withdrawals (history `recordTyped`, not exported from history's index yet); History: per stock days, chart reads, dividends, the recording-only-while-open note, "forget everything" confirmed in the panel (no browser dialog), then empty (`forgetEverything` in history/src/forget.ts, not exported); Lessons (catalogue; content EXT S17); paste box + file picker feeding `recordRead`. The journey must click Settings before typing the universe. (c) browser suite drives each tab with real clicks and typing. (d) PR, CI, verify each AC. Note: a kept strategy name no strategy has should be refused by `strategyOf`; strategyFrom's bound message reads "fast_days must be from 1 to 499, got 0".
+- Nothing local. CI on the PR: one background `~/.claude/scripts/pr-verdict.sh <pr>`.
 
 ## Waiting
 - #308, #400 (main protection) and #348 (SonarCloud): Shyden's.
+- #511 stays open until #239 merges (its AC3 test is on this branch); then shut it by hand after reading each AC.
 
 ## Resume steps
 1. `ListAgents`; `git status --short`; `git fetch --prune`; `git rev-parse --abbrev-ref HEAD`.
-2. #239 (b) strategy picker done (select `#strategy`, `#strategy-summary`, inputs `#setting-<name>` with `-label`/`-help`, `#save-strategy`; status "Strategy saved: X." / "Strategy not saved: <reason>"). Goal (`#goal`, `#save-goal`), limits (`#limit-<name>`, `#save-limits`) and fee preset (`#fee-preset`, `#save-fee-preset`) done, all local commits, not pushed. Typed deposits/withdrawals (`#movement-*`, `#add-movement`, list `#typed-movements`) and exclusions (`#exclusions`, `#save-exclusions`) done: Settings (AC1) is complete in unit tests. Next slice, tests red first: then History, Lessons, paste box + file picker.
-3. (c) browser suite per tab, (d) PR, CI, verify each AC; then #511 by hand.
-4. After #239, next ticket: `node ~/Developer/Repos/repo-template/scripts/board-next.ts PVT_kwHOCQ_jzM4BkhEb steadyhand 2>/dev/null`.
-5. Core rules (CI-only guards, a hook refusal is final): no `number` declarations or `Number(...)` in core, no index parameters in callbacks, no generic `test.each<...>(`, no identifier named `window`/`document`/`chrome`/`indexedDB` in core, no `%j` titles over bigints; a `?? fallback` never taken fails 100% branch coverage; scratch copies go in `pristine/`, never `*.bak`. Guards (Python and extension), integration and the browser suite are CI's: the hook refuses them locally.
-6. Filing a ticket: `gh issue create`, `gh project item-add 1 --owner ShydenMcM --url <issue>`, `gh project item-edit` (project id `PVT_kwHOCQ_jzM4BkhEb`) with Priority `PVTSSF_lAHOCQ_jzM4BkhEbzhn_bYM` (P0 `2f8059d5`, P1 `ec7925c3`, P4 `6e3c5b78`), Estimate `PVTF_lAHOCQ_jzM4BkhEbzhkUeyc`, Status `PVTSSF_lAHOCQ_jzM4BkhEbzhjRYtk` (Todo `f75ad846`, In Progress `47fc9ee4`, Done `98236657`); read back by repository + issue. Blocked-by: `gh api -X POST repos/ShydenMcM/steadyhand/issues/<n>/dependencies/blocked_by -F issue_id=<blocker database id>`.
+2. Read the PR's CI verdict; a red browser job: `gh run view <run> --log --job <id>`, find the cause, fix (test first), push once.
+3. Green on the head SHA: squash-merge into develop (standing approval 2026-11-04). Then verify each #239 AC against code and tests case by case and shut the ticket by hand; then #511.
+4. Next ticket: #513 (vitest 5.1.0), or `node ~/Developer/Repos/repo-template/scripts/board-next.ts PVT_kwHOCQ_jzM4BkhEb steadyhand 2>/dev/null`.
+5. Core rules (CI-only guards, a hook refusal is final): no `number` declarations or `Number(...)` in core, no index parameters in callbacks, no generic `test.each<...>(`, no identifier named `window`/`document`/`chrome`/`indexedDB` in core, no `%j` titles over bigints; a `?? fallback` never taken fails 100% branch coverage; scratch copies go in `pristine/`, never `*.bak`. Guards, integration and the browser suite are CI's.
+6. Filing a ticket: `gh issue create`, `gh project item-add 1 --owner ShydenMcM --url <issue>`, `gh project item-edit` (project id `PVT_kwHOCQ_jzM4BkhEb`) with Priority `PVTSSF_lAHOCQ_jzM4BkhEbzhn_bYM` (P0 `2f8059d5`, P1 `ec7925c3`, P4 `6e3c5b78`), Estimate `PVTF_lAHOCQ_jzM4BkhEbzhkUeyc`, Status `PVTSSF_lAHOCQ_jzM4BkhEbzhjRYtk` (Todo `f75ad846`, In Progress `47fc9ee4`, Done `98236657`); read back by repository + issue.
 
 ## Notes
 - pre-push refuses an uncommitted tree: `git stash push HANDOVER.md`, push, `git stash pop`. `git commit --amend` is refused by auto mode: add a commit.
