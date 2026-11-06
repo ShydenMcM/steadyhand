@@ -95,6 +95,12 @@ test("the built extension turns the broker's pages into the day's buy orders", a
     await expect(panel.locator("#disclaimer")).toHaveText(DISCLAIMER);
     await expect(panel.locator("#choice")).toHaveText(CHOICE_LINE);
 
+    // The panel opens on Advice; the universe is typed on the Settings tab.
+    await expect(panel.locator("#pane-advice")).toBeVisible();
+    await expect(panel.locator("#pane-settings")).toBeHidden();
+    await panel.getByRole("tab", { name: "Settings" }).click();
+    await expect(panel.locator("#pane-settings")).toBeVisible();
+    await expect(panel.locator("#pane-advice")).toBeHidden();
     await panel.getByLabel("Universe: the stocks to choose from").pressSequentially("BBCA BBRI");
     await panel.getByRole("button", { name: "Save universe" }).click();
     await expect(panel.locator("#status")).toHaveText("Universe saved: 2 stocks.");
@@ -105,7 +111,9 @@ test("the built extension turns the broker's pages into the day's buy orders", a
       await expect(panel.locator("#status")).toHaveText(read);
     }
 
+    await panel.getByRole("tab", { name: "Advice" }).click();
     const advice = panel.locator("#advice");
+    await expect(advice).toBeVisible();
     await expect(advice.locator("h2").first()).toHaveText("Advice for 2025-06-17");
     await expect(advice.locator("p").first()).toHaveText(
       "Buy 7 lots of BBCA at a limit of IDR 9,100, estimated fees IDR 13,365: " +

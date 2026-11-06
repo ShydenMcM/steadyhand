@@ -1,6 +1,7 @@
 /** The side panel (spec §10.2, §10.3, #238): it records each broker page the content script
  * sends, asks the active tab for its page on "Read this page", keeps the universe typed into
- * Settings, and shows the day's advice with the disclaimer always beneath it. One thing is done
+ * Settings, and shows the day's advice, each on its tab (Advice, Settings, History, Lessons), with
+ * the status line and the disclaimer outside the tabs. One thing is done
  * at a time, in the order asked; any failure is shown on the panel, never dropped.
  *
  * Chrome, the page and the clock come in as arguments so the unit run can stand them in. The
@@ -19,6 +20,9 @@ import { keptSettings } from "./settings.ts";
 export interface PanelElement<E> {
   id: string;
   textContent: string | null;
+  /** As the browser types it: `"until-found"` is a kind of hidden the panel never uses. */
+  hidden: boolean | "until-found";
+  setAttribute(name: string, value: string): void;
   append(...children: E[]): void;
   replaceChildren(...children: E[]): void;
   addEventListener(type: "click", listener: () => void): void;
@@ -29,7 +33,7 @@ export interface PanelDocument<E extends PanelElement<E>> {
   readonly body: E;
   createElement(tag: "textarea"): E & { value: string };
   createElement(tag: "label"): E & { htmlFor: string };
-  createElement(tag: "section" | "button" | "p" | "footer" | "h2"): E;
+  createElement(tag: "section" | "div" | "button" | "p" | "footer" | "h2"): E;
 }
 
 /** The part of `chrome.runtime` the panel uses: the content script's snapshots arrive here. */
@@ -80,6 +84,15 @@ const symbolsIn = (typed: string): readonly string[] => [
   ),
 ];
 
+/** The panel's tabs, in order, each with its name. */
+const TABS = [
+  ["advice", "Advice"],
+  ["settings", "Settings"],
+  ["history", "History"],
+  ["lessons", "Lessons"],
+] as const;
+type Tab = (typeof TABS)[number][0];
+
 /** How the status line names each page read. */
 const PAGE_NAMES: Readonly<Record<PageKind, string>> = {
   portfolio: "the portfolio page",
@@ -100,8 +113,11 @@ export const startPanel = async <E extends PanelElement<E>>(
     made.textContent = text;
     return made;
   };
-  const element = (tag: "section" | "button" | "p" | "footer" | "h2", id: string, text = "") =>
-    named(page.createElement(tag), id, text);
+  const element = (
+    tag: "section" | "div" | "button" | "p" | "footer" | "h2",
+    id: string,
+    text = "",
+  ) => named(page.createElement(tag), id, text);
 
   const advice = element("section", "advice");
   const read = element("button", "read", "Read this page");
@@ -116,7 +132,42 @@ export const startPanel = async <E extends PanelElement<E>>(
   const status = element("p", "status");
   const footer = element("footer", "notice");
   footer.append(element("p", "disclaimer", DISCLAIMER), element("p", "choice", CHOICE_LINE));
-  page.body.append(read, status, advice, label, universe, save, footer);
+
+  // The tabs (spec §10.2): one pane shows at a time; the status line and the notice stay outside
+  // them, so they show on every tab.
+  const tabList = element("div", "tabs");
+  tabList.setAttribute("role", "tablist");
+  const panes: Readonly<Record<Tab, E>> = {
+    advice: element("section", "pane-advice"),
+    settings: element("section", "pane-settings"),
+    history: element("section", "pane-history"),
+    lessons: element("section", "pane-lessons"),
+  };
+  const tabs = TABS.map(([tab, name]) => {
+    const button = element("button", `tab-${tab}`, name);
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-controls", `pane-${tab}`);
+    const pane = panes[tab];
+    pane.setAttribute("role", "tabpanel");
+    pane.setAttribute("aria-labelledby", button.id);
+    return { tab, button, pane };
+  });
+  const show = (chosen: Tab): void => {
+    for (const { tab, button, pane } of tabs) {
+      pane.hidden = tab !== chosen;
+      button.setAttribute("aria-selected", String(tab === chosen));
+    }
+  };
+  for (const { tab, button } of tabs) {
+    button.addEventListener("click", () => {
+      show(tab);
+    });
+    tabList.append(button);
+  }
+  panes.advice.append(read, advice);
+  panes.settings.append(label, universe, save);
+  show("advice");
+  page.body.append(status, tabList, ...tabs.map(({ pane }) => pane), footer);
 
   let reads: PanelReads = {};
 

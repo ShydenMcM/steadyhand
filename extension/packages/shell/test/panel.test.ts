@@ -36,6 +36,8 @@ class StandIn implements PanelElement<StandIn> {
   htmlFor = "";
   value = "";
   textContent = "";
+  hidden = false;
+  readonly attributes = new Map<string, string>();
   children: StandIn[] = [];
   clicked: (() => void) | undefined;
 
@@ -51,6 +53,10 @@ class StandIn implements PanelElement<StandIn> {
 
   addEventListener(_type: "click", listener: () => void): void {
     this.clicked = listener;
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
   }
 }
 
@@ -138,6 +144,64 @@ test("the disclaimer and the choice line are on the panel from the start", async
   const { page } = await open();
   expect(byId(page, "disclaimer").textContent).toBe(DISCLAIMER);
   expect(byId(page, "choice").textContent).toBe(CHOICE_LINE);
+});
+
+const TABS = ["advice", "settings", "history", "lessons"] as const;
+/** The tabs whose panes are showing. */
+const shown = (root: StandIn): string[] => TABS.filter((tab) => !byId(root, `pane-${tab}`).hidden);
+/** Each tab's aria-selected, in tab order. */
+const selected = (root: StandIn): (string | undefined)[] =>
+  TABS.map((tab) => byId(root, `tab-${tab}`).attributes.get("aria-selected"));
+
+test("the panel has the tabs Advice, Settings, History and Lessons, and opens on Advice", async () => {
+  const { page } = await open();
+  expect(TABS.map((tab) => byId(page, `tab-${tab}`).textContent)).toEqual([
+    "Advice",
+    "Settings",
+    "History",
+    "Lessons",
+  ]);
+  expect(shown(page)).toEqual(["advice"]);
+  expect(selected(page)).toEqual(["true", "false", "false", "false"]);
+});
+
+test("clicking a tab shows its pane alone and marks that tab selected", async () => {
+  const { page } = await open();
+  byId(page, "tab-history").clicked?.();
+  expect(shown(page)).toEqual(["history"]);
+  expect(selected(page)).toEqual(["false", "false", "true", "false"]);
+  byId(page, "tab-advice").clicked?.();
+  expect(shown(page)).toEqual(["advice"]);
+  expect(selected(page)).toEqual(["true", "false", "false", "false"]);
+});
+
+test("each tab controls its pane and each pane is labelled by its tab", async () => {
+  const { page } = await open();
+  expect(byId(page, "tabs").attributes.get("role")).toBe("tablist");
+  for (const tab of TABS) {
+    const button = byId(page, `tab-${tab}`).attributes;
+    const pane = byId(page, `pane-${tab}`).attributes;
+    expect([button.get("role"), button.get("aria-controls")]).toEqual(["tab", `pane-${tab}`]);
+    expect([pane.get("role"), pane.get("aria-labelledby")]).toEqual(["tabpanel", `tab-${tab}`]);
+  }
+});
+
+test("the advice and the read button are on the Advice tab, the universe on Settings", async () => {
+  const { page } = await open();
+  expect(byId(byId(page, "pane-advice"), "advice").tagName).toBe("section");
+  expect(byId(byId(page, "pane-advice"), "read").textContent).toBe("Read this page");
+  expect(byId(byId(page, "pane-settings"), "universe").tagName).toBe("textarea");
+  expect(byId(byId(page, "pane-settings"), "save-universe").textContent).toBe("Save universe");
+});
+
+test("the status line and the disclaimer stay outside the tabs, shown on every one", async () => {
+  const { page } = await open();
+  for (const tab of TABS) {
+    const pane = byId(page, `pane-${tab}`);
+    expect(all(pane).some((element) => ["status", "notice"].includes(element.id))).toBe(false);
+  }
+  expect(byId(page, "status").tagName).toBe("p");
+  expect(byId(page, "notice").tagName).toBe("footer");
 });
 
 test("before any read the panel says which pages to open", async () => {

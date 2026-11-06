@@ -30,7 +30,9 @@ const element = (): Element & Record<string, unknown> => {
     replaceChildren: (...children: Element[]) => {
       made.children = children;
     },
+    hidden: false,
     addEventListener: () => undefined,
+    setAttribute: () => undefined,
   };
   return made;
 };
