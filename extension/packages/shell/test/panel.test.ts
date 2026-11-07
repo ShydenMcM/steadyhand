@@ -1259,3 +1259,114 @@ test("a file that cannot be read is shown, never dropped", async () => {
   await panel.settled();
   expect(byId(page, "status").textContent).toBe("Something went wrong: Error: the file was moved");
 });
+
+// Halts and the deposits question (#517, spec §8): the panel answers "none" for an unrecorded
+// span and resumes a halt by the strategy's name, each recorded.
+
+/** Two after-close reads, the second 7.69% below the first: a daily-loss halt once the span
+ * between them is answered. */
+const FALLING = [
+  { day: "2025-06-16", readAt: new Date("2025-06-16T19:00:00+07:00"), value: 13_000_000n },
+  { day: "2025-06-17", readAt: AFTER_CLOSE, value: 12_000_000n },
+].map((row) => ({ ...row, currency: "IDR" }));
+
+/** Write `rows` straight into `store`, as history's recorders would. */
+const putRows = (store: string, rows: readonly object[]): Promise<void> =>
+  new Promise((resolve, reject) => {
+    const write = db.transaction(store, "readwrite");
+    for (const row of rows) {
+      write.objectStore(store).put(row);
+    }
+    write.oncomplete = () => {
+      resolve();
+    };
+    write.onerror = () => {
+      reject(write.error ?? new Error(`writing ${store}`));
+    };
+  });
+
+/** Five minutes after the falling read: a resume counts only once made after the halt's read. */
+const AFTER_THE_READ = new Date("2025-06-17T19:05:00+07:00");
+
+const halted = async () => {
+  await putRows(STORES.valuations, FALLING);
+  await putRows(STORES.answered, [{ from: "2025-06-17", to: "2025-06-17", at: AFTER_CLOSE }]);
+  return open(undefined, () => AFTER_THE_READ);
+};
+
+test("with nothing halted and nothing unrecorded, neither the resume box nor the answer shows", async () => {
+  const { page } = await open();
+  expect(byId(page, "resume-box").hidden).toBe(true);
+  expect(byId(page, "answer-none").hidden).toBe(true);
+});
+
+test("while deposits since the last read are unrecorded, the panel offers to answer none", async () => {
+  await putRows(STORES.valuations, FALLING);
+  const { page } = await open();
+  const answer = byId(page, "answer-none");
+  expect(answer.hidden).toBe(false);
+  expect(answer.textContent).toBe("No deposits or withdrawals since 2025-06-16");
+  expect(byId(page, "pane-advice").children).toContain(answer);
+});
+
+test("answering none records the span asked about, and the question goes", async () => {
+  await putRows(STORES.valuations, FALLING);
+  const { page, panel } = await open();
+  byId(page, "answer-none").clicked?.();
+  await panel.settled();
+  expect(byId(page, "status").textContent).toBe(
+    "Kept: no deposits or withdrawals since 2025-06-16.",
+  );
+  expect(await rowsOf(db, STORES.answered)).toEqual([
+    { from: "2025-06-17", to: "2025-06-17", at: AFTER_CLOSE },
+  ]);
+  expect(byId(page, "answer-none").hidden).toBe(true);
+  expect(byId(page, "resume-box").hidden).toBe(false);
+});
+
+test("while a halt is in force the Advice tab asks for the strategy's name to resume", async () => {
+  const { page } = await halted();
+  const box = byId(page, "resume-box");
+  expect(box.hidden).toBe(false);
+  expect(byId(page, "pane-advice").children).toContain(box);
+  expect(byId(box, "resume-label").textContent).toBe("Type the strategy's name to resume buying");
+  expect(byId(box, "resume-label").htmlFor).toBe("resume");
+  expect(byId(box, "resume").tagName).toBe("input");
+  expect(byId(box, "resume-go").textContent).toBe("Resume");
+});
+
+test("typing the strategy's name resumes, recording the halt's day and when", async () => {
+  const { page, panel } = await halted();
+  byId(page, "resume").value = "dividend-growth";
+  byId(page, "resume-go").clicked?.();
+  await panel.settled();
+  expect(byId(page, "status").textContent).toBe("Buying resumed: dividend-growth.");
+  expect(await rowsOf(db, STORES.resumes)).toEqual([
+    { haltDay: "2025-06-17", at: AFTER_THE_READ, strategy: "dividend-growth" },
+  ]);
+  expect(byId(page, "resume-box").hidden).toBe(true);
+});
+
+test("a name that is not the strategy's is refused with the reason, and nothing is kept", async () => {
+  const { page, panel } = await halted();
+  byId(page, "resume").value = "ma-trend";
+  byId(page, "resume-go").clicked?.();
+  await panel.settled();
+  expect(byId(page, "status").textContent).toBe(
+    "Not resumed: you typed 'ma-trend', not 'dividend-growth'; nothing was changed",
+  );
+  expect(await rowsOf(db, STORES.resumes)).toEqual([]);
+  expect(byId(page, "resume-box").hidden).toBe(false);
+});
+
+test("a second click on the answer finds nothing asked, and keeps nothing more", async () => {
+  await putRows(STORES.valuations, FALLING);
+  const { page, panel } = await open();
+  byId(page, "answer-none").clicked?.();
+  byId(page, "answer-none").clicked?.();
+  await panel.settled();
+  expect(byId(page, "status").textContent).toBe(
+    "Kept: no deposits or withdrawals since 2025-06-16.",
+  );
+  expect(await rowsOf(db, STORES.answered)).toHaveLength(1);
+});
