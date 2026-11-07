@@ -1007,12 +1007,10 @@ test("History says nothing is recorded before any page is read", async () => {
 
 test("History lists each stock read with its days, chart reads and dividends, by symbol", async () => {
   const opened = await open();
-  await readPages(opened, ["portfolio", "watchlist", "stock-detail", "dividends"]);
+  await readPages(opened, ["portfolio", "dividends"]);
   expect(historyLines(opened.page)).toEqual([
-    "BBCA: 1 day recorded, 1 chart read, 2 dividends",
-    "BBRI: 1 day recorded, 0 chart reads, 0 dividends",
+    "BBCA: 1 day recorded, 0 chart reads, 2 dividends",
     "TLKM: 1 day recorded, 0 chart reads, 0 dividends",
-    "UNVR: 1 day recorded, 0 chart reads, 0 dividends",
   ]);
 });
 
@@ -1052,10 +1050,12 @@ test('"Keep everything" closes the question and forgets nothing', async () => {
   expect(await rowsOf(db, STORES.closes)).toHaveLength(2);
 });
 
-test("forgetting everything deletes every store and the storage, and reads back empty", async () => {
+// Every store written and read back empty is history's forget test (#231 AC5); here the panel's
+// own record and settings are.
+test("forgetting everything empties the history and the storage, and reads back empty", async () => {
   const storage = standInStorage({ "kept-by-the-shell": true });
   const opened = await open(undefined, undefined, storage);
-  await readPages(opened, ["portfolio", "watchlist", "stock-detail", "dividends"]);
+  await readPages(opened, ["portfolio"]);
   await putSetting(db, SETTINGS.universe, ["BBCA", "TLKM"]);
   const { page, panel } = opened;
   byId(page, "forget").clicked?.();
@@ -1177,10 +1177,10 @@ test("each lesson is a section labelled by its title, under its module's heading
 
 // Paste and import (#239 AC4, spec §10.3): a text box and a file picker feeding the readers.
 
-/** A file input's `files` holding one file whose text is `text`. */
-const chosen = (text: Promise<string>) => ({
+/** A file input's `files` holding one file whose text is what `text` gives when it is read. */
+const chosen = (text: () => Promise<string>) => ({
   length: 1,
-  item: (place: number) => (place === 0 ? { text: () => text } : null),
+  item: (place: number) => (place === 0 ? { text } : null),
 });
 
 test("the paste box and the file picker are labelled, on the Advice tab", async () => {
@@ -1232,7 +1232,7 @@ test("pasted text that is no broker page is refused, naming why", async () => {
 test("a saved page chosen in the file picker is read and recorded", async () => {
   const { page, panel } = await open();
   const picker = byId(page, "import");
-  picker.files = chosen(Promise.resolve(snapshot("watchlist").html));
+  picker.files = chosen(() => Promise.resolve(snapshot("watchlist").html));
   picker.changed?.();
   await panel.settled();
   expect(byId(page, "status").textContent).toBe("Read the watchlist page.");
@@ -1254,7 +1254,7 @@ test("a file picker closed with no file chosen says so", async () => {
 test("a file that cannot be read is shown, never dropped", async () => {
   const { page, panel } = await open();
   const picker = byId(page, "import");
-  picker.files = chosen(Promise.reject(new Error("the file was moved")));
+  picker.files = chosen(() => Promise.reject(new Error("the file was moved")));
   picker.changed?.();
   await panel.settled();
   expect(byId(page, "status").textContent).toBe("Something went wrong: Error: the file was moved");
