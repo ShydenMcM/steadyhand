@@ -25,6 +25,7 @@ export const UNIT_COVERED = [
   "build.ts",
   "eslint.config.js",
   "playwright.config.ts",
+  "tests/lib/bundle-scan.ts",
   "tests/lib/find-image.ts",
   "tests/lib/found.ts",
   "tests/lib/no-process.ts",
