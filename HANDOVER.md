@@ -14,12 +14,10 @@
 - `238/extension-shell` merged (PR #500); delete locally only after checking its tip equals PR #500's head 3f3dd12.
 - Backups (keep 30 days): `377/wip-backup-2026-10-28` (to 2026-11-27); `365/exact-values-backup-2026-10-27` (to 2026-11-26), `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29).
 
-## Parked for Shyden (asked 2026-11-07 by AskUserQuestion)
-- #499 (P1, 3): his ruling among its three options (a same-day deposit after the read making a false daily-loss halt) before ACs can be set.
-- #242, #243 (P1, 8 each): a POEMS or BIONS account, its agreement read for automated-reading terms, and his saved pages (spec §5.3).
-- #245 (P1, release): blocked by #242 and #243; then the release environment and his admin part (AC4).
-- #308, #400 (main protection), #348 (SonarCloud): P2, his.
-- Whether to start P4 "EXT later" stories (#253 income received first by size) before the first release.
+## Shyden's answers (2026-11-07, AskUserQuestion)
+- **Wait for the release:** no more steadyhand work until the outside waits clear (a POEMS or BIONS account, its agreement read for automated-reading terms, his saved pages: #242, #243). Do not start P4 "EXT later" stories.
+- **#499:** option 1 (ask to read the portfolio again after a same-day movement recorded after the read); ACs set on the ticket. Held under the ruling above.
+- Still his: #308, #400 (main protection), #348 (SonarCloud); #245 (release) after #242 and #243.
 
 ## Running
 - Nothing local. A PR's CI: wait with `until ~/.claude/scripts/pr-verdict.sh <pr> | grep -q "runs=\[ci:completed"; do sleep 60; done` in the background.
@@ -29,8 +27,8 @@
 
 ## Resume steps
 1. `ListAgents`; `git status --short`; `git fetch --prune`; `git rev-parse --abbrev-ref HEAD`.
-2. Read Shyden's answers (#499 option; P4 or wait). #499: set its ACs from the ruling, tests red first, own branch.
-3. Otherwise `node ~/Developer/Repos/repo-template/scripts/board-next.ts PVT_kwHOCQ_jzM4BkhEb steadyhand 2>/dev/null` and skip what is parked above.
+2. Start nothing until Shyden says the outside waits have cleared or names work.
+3. When he does: #242 first (read its AC1 waits back from him), then #243, #499, #245; each on its own branch, tests red first.
 4. Merge rule: squash into develop when every check is green on the head SHA (standing approval 2026-11-04); read the browser suite's per-browser totals and each new guard by name before merging.
 5. Core rules (CI-only guards, a hook refusal is final): no `number` declarations or `Number(...)` in core, no index parameters in callbacks, no generic `test.each<...>(`, no identifier named `window`/`document`/`chrome`/`indexedDB` in core, no `%j` titles over bigints; a `?? fallback` never taken fails 100% branch coverage; scratch copies go in `pristine/`, never `*.bak`. Guards, integration and the browser suite are CI's. Read a gate's `exit=` line, and grep `Errors|Unhandled`, never only `Tests`.
 6. Filing a ticket: `gh issue create`, `gh project item-add 1 --owner ShydenMcM --url <issue>`, `gh project item-edit` (project id `PVT_kwHOCQ_jzM4BkhEb`) with Priority `PVTSSF_lAHOCQ_jzM4BkhEbzhn_bYM` (P0 `2f8059d5`, P1 `ec7925c3`, P4 `6e3c5b78`), Estimate `PVTF_lAHOCQ_jzM4BkhEbzhkUeyc`, Status `PVTSSF_lAHOCQ_jzM4BkhEbzhjRYtk` (Todo `f75ad846`, In Progress `47fc9ee4`, Done `98236657`); read back by repository + issue.
