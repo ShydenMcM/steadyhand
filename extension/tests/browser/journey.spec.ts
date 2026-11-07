@@ -348,7 +348,7 @@ test("a fall past the daily limit halts buying until the strategy's name is type
   }, MONDAY_AFTER_CLOSE);
 });
 
-test("Settings keeps the strategy, the goal and the exclusions, and Lessons says what is coming", async () => {
+test("Settings keeps the strategy, the goal and the exclusions, and Lessons shows the course", async () => {
   await withPanel(async ({ panel }) => {
     const status = panel.locator("#status");
     await panel.getByRole("tab", { name: "Settings" }).click();
@@ -376,7 +376,12 @@ test("Settings keeps the strategy, the goal and the exclusions, and Lessons says
     await panel.getByRole("button", { name: "Save exclusions" }).click();
     await expect(status).toHaveText("Exclusions saved: 1 stock.");
     await panel.getByRole("tab", { name: "Lessons" }).click();
-    await expect(panel.locator("#pane-lessons")).toHaveText("The lessons come in a later release.");
+    // The shipped course (#244): its modules in order, the first lesson first.
+    const lessons = panel.locator("#pane-lessons");
+    await expect(lessons).toBeVisible();
+    await expect(lessons.locator("h2").first()).toHaveText("Start here");
+    await expect(lessons.locator("h2").last()).toHaveText("Strategies");
+    await expect(panel.locator("#lesson-start\\.welcome h3")).toHaveText("Start here");
   });
 });
 

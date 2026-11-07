@@ -57,9 +57,11 @@ test("the page starts the panel on the browser's document, Chrome and IndexedDB"
   expect(listened).toHaveLength(1);
   expect(all(body).find((each) => each.id === "disclaimer")?.textContent).toBe(DISCLAIMER);
   expect(all(body).find((each) => each.id === "advice")?.children.length).toBeGreaterThan(0);
+  // The shipped course (#244): its first module's heading, then its first lesson.
   const lessons = all(body).find((each) => each.id === "pane-lessons");
-  expect(lessons?.children.map((each) => each.textContent)).toEqual([
-    "The lessons come in a later release.",
+  expect(lessons?.children.slice(0, 2).map((each) => [each.textContent, each.id])).toEqual([
+    ["Start here", ""],
+    ["", "lesson-start.welcome"],
   ]);
 });
 

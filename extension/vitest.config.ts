@@ -40,7 +40,15 @@ export const GUARDS_COVERED = [
   "tests/lib/walk.ts",
 ];
 
+/** A lesson's Markdown file as its text, as the build's esbuild text loader bundles it (#244). */
+const markdownAsText = {
+  name: "markdown-as-text",
+  transform: (code: string, id: string) =>
+    id.endsWith(".md") ? { code: `export default ${JSON.stringify(code)};`, map: null } : null,
+};
+
 export default defineConfig(({ mode }) => ({
+  plugins: [markdownAsText],
   test: {
     projects: [
       {
