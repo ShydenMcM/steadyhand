@@ -35,6 +35,7 @@ import {
 } from "@steadyhand/history";
 import { adviceModel, type PanelReads } from "./advice-model.ts";
 import { adviceView, CHOICE_LINE, DISCLAIMER } from "./advice-view.ts";
+import type { Block, Spans } from "./lesson-text.ts";
 import type { LessonModule } from "./lessons.ts";
 import { isSnapshot, type Ask } from "./messages.ts";
 import { excludedOf, keptUniverse, recordedFrom, recordRead, SETTINGS } from "./record-read.ts";
@@ -75,13 +76,33 @@ export interface PanelDocument<E extends PanelElement<E>> {
     readonly files: ChosenFiles | null;
   };
   createElement(tag: "label"): E & { htmlFor: string };
-  createElement(tag: "section" | "div" | "button" | "p" | "footer" | "h2" | "h3"): E;
+  createElement(tag: ContainerTag): E;
 }
 
 /** The files a file input holds, as the panel reads them. */
 export interface ChosenFiles {
   item(place: number): { text(): Promise<string> } | null;
 }
+
+/** The tags the panel makes elements of that hold text or other elements. */
+type ContainerTag =
+  | "section"
+  | "div"
+  | "button"
+  | "p"
+  | "footer"
+  | "h2"
+  | "h3"
+  | "span"
+  | "strong"
+  | "code"
+  | "ul"
+  | "ol"
+  | "li"
+  | "table"
+  | "tr"
+  | "th"
+  | "td";
 
 /** The part of `chrome.runtime` the panel uses: the content script's snapshots arrive here. */
 export interface PanelRuntime {
@@ -206,11 +227,35 @@ export const startPanel = async <E extends PanelElement<E>>(
     made.textContent = text;
     return made;
   };
-  const element = (
-    tag: "section" | "div" | "button" | "p" | "footer" | "h2" | "h3",
-    id: string,
-    text = "",
-  ) => named(page.createElement(tag), id, text);
+  const element = (tag: ContainerTag, id: string, text = "") =>
+    named(page.createElement(tag), id, text);
+
+  /** `tag` holding `spans`, each its own element: plain text, bold or code. */
+  const spanned = (tag: ContainerTag, spans: Spans): E => {
+    const holder = element(tag, "");
+    holder.append(
+      ...spans.map((span) => element(span.style === "plain" ? "span" : span.style, "", span.text)),
+    );
+    return holder;
+  };
+  const blockElement = (block: Block): E => {
+    if (block.kind === "paragraph") {
+      return spanned("p", block.spans);
+    }
+    if (block.kind === "list") {
+      const listed = element(block.ordered ? "ol" : "ul", "");
+      listed.append(...block.items.map((item) => spanned("li", item)));
+      return listed;
+    }
+    const table = element("table", "");
+    const row = (cells: readonly Spans[], tag: "th" | "td"): E => {
+      const tr = element("tr", "");
+      tr.append(...cells.map((cell) => spanned(tag, cell)));
+      return tr;
+    };
+    table.append(row(block.heading, "th"), ...block.rows.map((cells) => row(cells, "td")));
+    return table;
+  };
 
   const advice = element("section", "advice");
   const read = element("button", "read", "Read this page");
@@ -497,7 +542,7 @@ export const startPanel = async <E extends PanelElement<E>>(
             section.append(
               title,
               element("p", "", lesson.summary),
-              ...lesson.paragraphs.map((paragraph) => element("p", "", paragraph)),
+              ...lesson.blocks.map(blockElement),
             );
             return section;
           }),

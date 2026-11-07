@@ -20,6 +20,7 @@ import {
   type PanelRuntime,
   type PanelTabs,
 } from "../src/panel.ts";
+import type { Lesson } from "../src/lesson-text.ts";
 import type { LessonModule } from "../src/lessons.ts";
 import { SETTINGS } from "../src/record-read.ts";
 import { FEE_PRESETS, KEPT } from "../src/settings.ts";
@@ -1109,59 +1110,82 @@ test("after forgetting everything the advice asks for the pages again", async ()
   expect(textOf(byId(opened.page, "advice"))).toContain("Open the portfolio page.");
 });
 
-// Lessons (#239 AC3, spec §13): the tab renders the catalogue; its lessons are EXT S17's (#244).
+// Lessons (#239 AC3, #244, spec §13): the tab renders the catalogue, each lesson's paragraphs,
+// lists and tables with their bold and code, as elements and text only.
+
+const plain = (text: string) => ({ text, style: "plain" as const });
+
+const lessonOf = (id: string, title: string, blocks: Lesson["blocks"]): Lesson => ({
+  id,
+  title,
+  summary: `${title}, in one line.`,
+  explains: [],
+  module: "module",
+  position: 1,
+  seeAlso: [],
+  blocks,
+});
 
 const CATALOGUE: readonly LessonModule[] = [
   {
     title: "How IDX works",
     lessons: [
-      {
-        id: "idx.lots",
-        title: "Lots: shares come in hundreds",
-        summary: "Shares trade in lots of 100.",
-        paragraphs: ["One lot is 100 shares.", "So the smallest purchase is one lot."],
-      },
-      {
-        id: "idx.ticks",
-        title: "Ticks",
-        summary: "Prices move in steps.",
-        paragraphs: ["The step depends on the price."],
-      },
+      lessonOf("idx.lots", "Lots", [
+        {
+          kind: "paragraph",
+          spans: [plain("One lot is "), { text: "100 shares", style: "strong" }, plain(".")],
+        },
+        {
+          kind: "list",
+          ordered: false,
+          items: [[plain("Buy whole lots.")], [{ text: "idx.ticks", style: "code" }]],
+        },
+      ]),
+      lessonOf("idx.auto_reject", "Auto-rejection", [
+        {
+          kind: "table",
+          heading: [[plain("Close")], [plain("Rise")]],
+          rows: [[[plain("up to Rp200")], [plain("35%")]]],
+        },
+      ]),
     ],
   },
   {
     title: "Costs and tax",
     lessons: [
-      {
-        id: "costs.trading",
-        title: "What a trade costs",
-        summary: "The broker's fee and the levies.",
-        paragraphs: ["Every trade pays a fee."],
-      },
+      lessonOf("costs.trading", "Costs", [
+        { kind: "list", ordered: true, items: [[plain("The fee.")]] },
+      ]),
     ],
   },
 ];
 
-test("with no lessons shipped yet the Lessons tab says they come in a later release", async () => {
+test("with no lessons the Lessons tab says they come in a later release", async () => {
   const { page } = await open();
   expect(textOf(byId(page, "pane-lessons"))).toEqual(["The lessons come in a later release."]);
 });
 
-test("the Lessons tab shows each module's lessons in order, with title, summary and text", async () => {
+test("the Lessons tab shows each module's lessons in order: title, summary and every block", async () => {
   const { page } = await open(undefined, undefined, undefined, CATALOGUE);
   expect(textOf(byId(page, "pane-lessons"))).toEqual([
     "How IDX works",
-    "Lots: shares come in hundreds",
-    "Shares trade in lots of 100.",
-    "One lot is 100 shares.",
-    "So the smallest purchase is one lot.",
-    "Ticks",
-    "Prices move in steps.",
-    "The step depends on the price.",
+    "Lots",
+    "Lots, in one line.",
+    "One lot is ",
+    "100 shares",
+    ".",
+    "Buy whole lots.",
+    "idx.ticks",
+    "Auto-rejection",
+    "Auto-rejection, in one line.",
+    "Close",
+    "Rise",
+    "up to Rp200",
+    "35%",
     "Costs and tax",
-    "What a trade costs",
-    "The broker's fee and the levies.",
-    "Every trade pays a fee.",
+    "Costs",
+    "Costs, in one line.",
+    "The fee.",
   ]);
 });
 
@@ -1173,6 +1197,37 @@ test("each lesson is a section labelled by its title, under its module's heading
   expect(byId(lesson, "lesson-idx.lots-title").tagName).toBe("h3");
   const pane = byId(page, "pane-lessons").children;
   expect(pane.map((each) => each.tagName)).toEqual(["h2", "section", "section", "h2", "section"]);
+});
+
+/** Each element's tag under `root`, nested as the page holds them. */
+const shape = (root: StandIn): unknown =>
+  root.children.length === 0 ? root.tagName : { [root.tagName]: root.children.map(shape) };
+
+test("a paragraph's spans, a list's items and a table's cells are their own elements", async () => {
+  const { page } = await open(undefined, undefined, undefined, CATALOGUE);
+  expect(shape(byId(page, "lesson-idx.lots"))).toEqual({
+    section: [
+      "h3",
+      "p",
+      { p: ["span", "strong", "span"] },
+      { ul: [{ li: ["span"] }, { li: ["code"] }] },
+    ],
+  });
+  expect(shape(byId(page, "lesson-idx.auto_reject"))).toEqual({
+    section: [
+      "h3",
+      "p",
+      {
+        table: [
+          { tr: [{ th: ["span"] }, { th: ["span"] }] },
+          { tr: [{ td: ["span"] }, { td: ["span"] }] },
+        ],
+      },
+    ],
+  });
+  expect(shape(byId(page, "lesson-costs.trading"))).toEqual({
+    section: ["h3", "p", { ol: [{ li: ["span"] }] }],
+  });
 });
 
 // Paste and import (#239 AC4, spec §10.3): a text box and a file picker feeding the readers.
