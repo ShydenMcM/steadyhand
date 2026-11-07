@@ -28,6 +28,8 @@ test.each([
   ["corporateActionRecord", market.corporateActionRecord],
   ["settingOf", market.settingOf],
   ["stockHistory", summary.stockHistory],
+  ["recordResume", risk.recordResume],
+  ["recordAnswered", risk.recordAnswered],
   ["forgetEverything", forget.forgetEverything],
 ])("history gives the panel %s", (name, source) => {
   expect(Object.entries(history)).toContainEqual([name, source]);
