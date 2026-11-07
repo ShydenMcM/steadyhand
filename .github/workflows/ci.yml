@@ -257,6 +257,10 @@ jobs:
       - run: npm ci --ignore-scripts
         if: steps.scope.outputs.docs_only != 'true'
         working-directory: extension
+      # #240 AC5: an advisory against any installed package, dev tools too, fails the job.
+      - run: npm audit
+        if: steps.scope.outputs.docs_only != 'true'
+        working-directory: extension
       - run: npm run lint
         if: steps.scope.outputs.docs_only != 'true'
         working-directory: extension

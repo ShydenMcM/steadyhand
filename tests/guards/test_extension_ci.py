@@ -21,6 +21,8 @@ WORKFLOWS = ROOT / ".github/workflows"
 # The npm commands the job runs, in order, and the tool behind each script (AC4).
 COMMANDS = [
     "npm ci --ignore-scripts",
+    # #240 AC5: an advisory against any installed package, dev tools too, fails the job.
+    "npm audit",
     "npm run lint",
     "npm run format:check",
     "npm run typecheck",
