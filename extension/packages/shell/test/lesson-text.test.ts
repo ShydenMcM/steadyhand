@@ -133,3 +133,21 @@ test("a front matter with no id and a line it cannot read names it as a lesson",
     'a lesson: the front matter line "loose words" is not key = value',
   );
 });
+
+test("a list written over several lines, with a comma after its last item, is read", () => {
+  const text = lesson("Text.").replace(
+    'explains = ["limit.min_lots", "trade.no_bar"]',
+    'explains = [\n    "limit.min_lots",\n    "trade.no_bar",\n]',
+  );
+  expect(lessonFrom(text).explains).toEqual(["limit.min_lots", "trade.no_bar"]);
+});
+
+test("a list left open is refused, naming its first line", () => {
+  const text = lesson("Text.").replace(
+    'explains = ["limit.min_lots", "trade.no_bar"]',
+    'explains = [\n    "limit.min_lots",',
+  );
+  expect(() => lessonFrom(text)).toThrow(
+    'idx.lots: the front matter line "explains = [" is not key = value',
+  );
+});

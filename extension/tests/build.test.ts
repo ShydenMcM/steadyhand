@@ -61,6 +61,8 @@ test("the bundler is asked once for one self-contained browser script per entry 
       charset: "utf8",
       legalComments: "none",
       logLevel: "warning",
+      // The lessons ship as written (#244): each .md file is bundled as its text.
+      loader: { ".md": "text" },
     },
   ]);
 });

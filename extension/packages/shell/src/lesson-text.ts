@@ -37,13 +37,34 @@ const FENCE = "+++";
 const ITEM = /^(?:- |\d+\. )/u;
 const INLINE = /(\*\*[^*]+\*\*|`[^`]+`)/u;
 
+/** The front matter's lines with each list written over several lines joined into one, the comma
+ * TOML allows after its last item dropped; a list left open is its first line alone. */
+const logicalLines = (lines: readonly string[]): string[] => {
+  const joined: string[] = [];
+  let open: string[] | null = null;
+  for (const line of lines) {
+    if (open !== null) {
+      open.push(line.trim());
+      if (line.trim() === "]") {
+        joined.push(open.join(" ").replace(/,\s*\]$/u, "]"));
+        open = null;
+      }
+    } else if (line.trimEnd().endsWith("= [")) {
+      open = [line.trimEnd()];
+    } else {
+      joined.push(line);
+    }
+  }
+  return open === null ? joined : [...joined, ...open.slice(0, 1)];
+};
+
 /** The front matter's fields: each line `key = value`, the value as TOML writes a string, a whole
  * number or a list of strings, which JSON reads the same. */
 const frontOf = (lines: readonly string[]): Map<string, unknown> => {
   const fields = new Map<string, unknown>();
   // The lesson a refusal names: its id, read the plain way, before any line is judged.
   const named = /^id = "([^"]*)"$/mu.exec(lines.join("\n"))?.[1] ?? "a lesson";
-  for (const line of lines.filter((each) => each.trim() !== "")) {
+  for (const line of logicalLines(lines).filter((each) => each.trim() !== "")) {
     const equals = line.indexOf(" = ");
     let value: unknown;
     try {

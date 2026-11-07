@@ -86,6 +86,8 @@ export async function build(outdir: string, bundle: Bundle): Promise<void> {
     charset: "utf8",
     legalComments: "none",
     logLevel: "warning",
+    // The lessons ship as written (#244): each .md file is bundled as its text.
+    loader: { ".md": "text" },
   });
   await writeFile(join(outdir, "manifest.json"), `${JSON.stringify(manifest(pkg), null, 2)}\n`);
   await writeFile(join(outdir, "side-panel.html"), SIDE_PANEL_HTML);
