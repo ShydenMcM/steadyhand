@@ -12,14 +12,20 @@ import {
   IDR,
   IdxCalendar,
   Money,
+  resume,
+  riskState,
   shippedSessions,
   STRATEGIES,
+  type Covered,
+  type Day,
   type PageKind,
 } from "@steadyhand/core";
 import {
   forgetEverything,
   openHistory,
   putSetting,
+  recordAnswered,
+  recordResume,
   recordTyped,
   remember,
   riskRecord,
@@ -208,6 +214,22 @@ export const startPanel = async <E extends PanelElement<E>>(
 
   const advice = element("section", "advice");
   const read = element("button", "read", "Read this page");
+
+  // The deposits question and the resume after a halt (#517, spec §8): each shows only while
+  // the risk record asks for it.
+  const answerNone = element("button", "answer-none");
+  /** The span the deposits question asks about, and the last read it runs from. */
+  let asked: { readonly span: Covered; readonly since: Day } | null = null;
+  const resumeBox = element("div", "resume-box");
+  const resumeLabel = named(
+    page.createElement("label"),
+    "resume-label",
+    "Type the strategy's name to resume buying",
+  );
+  const resumeName = named(page.createElement("input"), "resume");
+  resumeLabel.htmlFor = resumeName.id;
+  const resumeGo = element("button", "resume-go", "Resume");
+  resumeBox.append(resumeLabel, resumeName, resumeGo);
   const label = named(
     page.createElement("label"),
     "universe-label",
@@ -426,7 +448,17 @@ export const startPanel = async <E extends PanelElement<E>>(
     });
     tabList.append(button);
   }
-  panes.advice.append(read, pasteLabel, paste, readPaste, importLabel, importer, advice);
+  panes.advice.append(
+    read,
+    answerNone,
+    resumeBox,
+    pasteLabel,
+    paste,
+    readPaste,
+    importLabel,
+    importer,
+    advice,
+  );
   panes.settings.append(
     strategyLabel,
     picker,
@@ -476,6 +508,21 @@ export const startPanel = async <E extends PanelElement<E>>(
 
   let reads: PanelReads = {};
 
+  /** Show the deposits question and the resume box only while the risk record asks for them. */
+  const showRisk = async (): Promise<void> => {
+    // Limits kept wrong are named by the advice; until then the question uses the defaults.
+    const limits = await keptOr(db, KEPT.limits, limitsOf);
+    const state = riskState(limits, CALENDAR, await riskRecord(db));
+    resumeBox.hidden = state.halt === null;
+    asked =
+      state.unrecorded !== null && state.judgedTo !== null
+        ? { span: state.unrecorded, since: state.judgedTo }
+        : null;
+    answerNone.hidden = asked === null;
+    answerNone.textContent =
+      asked === null ? "" : `No deposits or withdrawals since ${asked.since}`;
+  };
+
   const redraw = async (): Promise<void> => {
     const { strategy, limits, market } = await keptSettings(db);
     const recorded = await recordedFrom(db, strategy.name);
@@ -498,6 +545,7 @@ export const startPanel = async <E extends PanelElement<E>>(
     ]);
     advice.replaceChildren(...lines);
     await showHistory();
+    await showRisk();
   };
 
   const recordPage = async (html: string): Promise<void> => {
@@ -549,6 +597,30 @@ export const startPanel = async <E extends PanelElement<E>>(
       return;
     }
     await recordPage(await file.text());
+  };
+
+  /** Keep the answer that the span asked about had no deposit or withdrawal. */
+  const answerNoneAsked = async (): Promise<void> => {
+    if (asked === null) {
+      return;
+    }
+    await recordAnswered(db, asked.span, inputs.clock());
+    status.textContent = `Kept: no deposits or withdrawals since ${asked.since}.`;
+    await redraw();
+  };
+
+  /** Resume buying when the name typed is the kept strategy's, as `resume` judges it. */
+  const resumeHalt = async (): Promise<void> => {
+    const { strategy, limits } = await keptSettings(db);
+    const state = riskState(limits, CALENDAR, await riskRecord(db));
+    const answer = resume(limits, state, strategy.name, resumeName.value.trim(), inputs.clock());
+    if ("refused" in answer) {
+      status.textContent = `Not resumed: ${answer.refused}`;
+      return;
+    }
+    await recordResume(db, answer.resumed);
+    status.textContent = `Buying resumed: ${strategy.name}.`;
+    await redraw();
   };
 
   const saveUniverse = async (): Promise<void> => {
@@ -685,6 +757,7 @@ export const startPanel = async <E extends PanelElement<E>>(
       .map(([symbol, reason]) => `${symbol} ${reason}`.trim())
       .join("\n");
     await showHistory();
+    await showRisk();
   };
 
   /** Forget everything, then open the history again, empty, whether or not the forget left
@@ -717,6 +790,12 @@ export const startPanel = async <E extends PanelElement<E>>(
   });
   read.addEventListener("click", () => {
     run(askActiveTab);
+  });
+  answerNone.addEventListener("click", () => {
+    run(answerNoneAsked);
+  });
+  resumeGo.addEventListener("click", () => {
+    run(resumeHalt);
   });
   readPaste.addEventListener("click", () => {
     run(readPasted);
