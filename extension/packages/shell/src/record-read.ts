@@ -22,6 +22,7 @@ import {
 } from "@steadyhand/history";
 import { FIXTURE_READERS, pageKindOf, type Refused } from "@steadyhand/readers";
 import type { PanelReads, Recorded } from "./advice-model.ts";
+import { refusedSetting } from "./settings.ts";
 
 /** The names Settings keeps its values under. */
 export const SETTINGS = {
@@ -106,9 +107,6 @@ export const recordRead = async (
   return "refused" in named ? named : recordAs(named.kind, db, html, readAt, reads, rules);
 };
 
-const refusedSetting = (name: string): Error =>
-  new Error(`the setting ${name} is not as Settings keeps it`);
-
 const isText = (value: unknown): value is string => typeof value === "string";
 
 const universeOf = (value: unknown): readonly string[] | undefined => {
@@ -124,7 +122,8 @@ const universeOf = (value: unknown): readonly string[] | undefined => {
 const isExclusion = (value: unknown): value is readonly [string, string] =>
   Array.isArray(value) && value.length === 2 && value.every(isText);
 
-const excludedOf = (value: unknown): ReadonlyMap<string, string> => {
+/** The exclusions Settings keeps, each stock with the user's reason; none before any are kept. */
+export const excludedOf = (value: unknown): ReadonlyMap<string, string> => {
   if (value === undefined) {
     return new Map();
   }
@@ -144,6 +143,10 @@ const goalOf = (value: unknown): Money | undefined => {
   return new Money(BigInt(value), IDR);
 };
 
+/** The universe Settings keeps, if one is saved. */
+export const keptUniverse = async (db: IDBDatabase): Promise<readonly string[] | undefined> =>
+  universeOf(await settingOf(db, SETTINGS.universe));
+
 /** Everything history and Settings hold that `strategy` advises with. A setting not in the
  * shape Settings keeps it is refused, naming it. */
 export const recordedFrom = async (db: IDBDatabase, strategy: string): Promise<Recorded> => {
@@ -155,7 +158,7 @@ export const recordedFrom = async (db: IDBDatabase, strategy: string): Promise<R
     actionReads: actions.reads,
     risk: await riskRecord(db),
     stored: await storedMemory(db, strategy),
-    universe: universeOf(await settingOf(db, SETTINGS.universe)),
+    universe: await keptUniverse(db),
     excluded: excludedOf(await settingOf(db, SETTINGS.excluded)),
     goal: goalOf(await settingOf(db, SETTINGS.goal)),
   };

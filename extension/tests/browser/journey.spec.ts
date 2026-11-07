@@ -1,7 +1,8 @@
-import { chromium, expect, test } from "@playwright/test";
+import { chromium, expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { build as esbuild } from "esbuild";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { BROKER_ORIGINS, build } from "../../build.ts";
 import { CHOICE_LINE, DISCLAIMER } from "../../packages/shell/src/advice-view.ts";
 import { PANEL_DEBUGGING_PORT, openSidePanel } from "./side-panel.ts";
@@ -38,7 +39,11 @@ const unpackedId = (path: string): string =>
     String.fromCharCode(97 + Number.parseInt(digit, 16)),
   ).join("");
 
-test("the built extension turns the broker's pages into the day's buy orders", async () => {
+/** Build the extension, install it in this project's browser, serve the journey's broker pages,
+ * open the real side panel and run `journey` on it; the browser is closed after, pass or fail. */
+const withPanel = async (
+  journey: (panel: Page, context: BrowserContext) => Promise<void>,
+): Promise<void> => {
   const info = test.info();
   const extension = info.outputPath("extension");
   await build(extension, esbuild);
@@ -91,10 +96,25 @@ test("the built extension turns the broker's pages into the day's buy orders", a
     );
     const { panel } = opened;
     expect(panel.url()).toBe(`chrome-extension://${id}/side-panel.html`);
+    await journey(panel, context);
+    await opened.devtools.close();
+  } finally {
+    await context.close();
+  }
+};
+
+test("the built extension turns the broker's pages into the day's buy orders", async () => {
+  await withPanel(async (panel, context) => {
     await expect(panel.getByText(DISCLAIMER)).toBeVisible();
     await expect(panel.locator("#disclaimer")).toHaveText(DISCLAIMER);
     await expect(panel.locator("#choice")).toHaveText(CHOICE_LINE);
 
+    // The panel opens on Advice; the universe is typed on the Settings tab.
+    await expect(panel.locator("#pane-advice")).toBeVisible();
+    await expect(panel.locator("#pane-settings")).toBeHidden();
+    await panel.getByRole("tab", { name: "Settings" }).click();
+    await expect(panel.locator("#pane-settings")).toBeVisible();
+    await expect(panel.locator("#pane-advice")).toBeHidden();
     await panel.getByLabel("Universe: the stocks to choose from").pressSequentially("BBCA BBRI");
     await panel.getByRole("button", { name: "Save universe" }).click();
     await expect(panel.locator("#status")).toHaveText("Universe saved: 2 stocks.");
@@ -105,7 +125,9 @@ test("the built extension turns the broker's pages into the day's buy orders", a
       await expect(panel.locator("#status")).toHaveText(read);
     }
 
+    await panel.getByRole("tab", { name: "Advice" }).click();
     const advice = panel.locator("#advice");
+    await expect(advice).toBeVisible();
     await expect(advice.locator("h2").first()).toHaveText("Advice for 2025-06-17");
     await expect(advice.locator("p").first()).toHaveText(
       "Buy 7 lots of BBCA at a limit of IDR 9,100, estimated fees IDR 13,365: " +
@@ -135,8 +157,63 @@ test("the built extension turns the broker's pages into the day's buy orders", a
     expect(await panel.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
       width,
     );
-    await opened.devtools.close();
-  } finally {
-    await context.close();
-  }
+  });
+});
+
+// The tabs driven as a person drives them (#239 AC1-AC4): real clicks, real key presses, a page
+// pasted by typing it, and a saved page chosen in the browser's own file chooser.
+test("Settings, paste, import, History and Lessons answer real clicks and typing", async () => {
+  await withPanel(async (panel) => {
+    const status = panel.locator("#status");
+    await panel.getByRole("tab", { name: "Settings" }).click();
+    await expect(panel.locator("#pane-settings")).toBeVisible();
+    await panel.getByRole("button", { name: "Save strategy" }).click();
+    await expect(status).toHaveText("Strategy saved: dividend-growth.");
+    await panel.getByLabel("Monthly income goal, in rupiah").pressSequentially("5.000.000");
+    await panel.getByRole("button", { name: "Save goal" }).click();
+    await expect(status).toHaveText("Income goal saved.");
+    await panel.getByLabel("Day, such as 2025-06-16").pressSequentially("2025-06-16");
+    await panel.getByLabel("Amount, in rupiah").pressSequentially("1.000.000");
+    await panel.getByRole("button", { name: "Keep this deposit or withdrawal" }).click();
+    await expect(status).toHaveText("Deposit of IDR 1,000,000 on 2025-06-16 kept.");
+    await expect(panel.locator("#typed-movements")).toHaveText(
+      "2025-06-16: deposit of IDR 1,000,000",
+    );
+    await panel
+      .getByLabel("Excluded stocks: one per line, the code and then your reason")
+      .pressSequentially("UNVR too expensive");
+    await panel.getByRole("button", { name: "Save exclusions" }).click();
+    await expect(status).toHaveText("Exclusions saved: 1 stock.");
+
+    // A saved portfolio page, pasted by typing it into the box.
+    await panel.getByRole("tab", { name: "Advice" }).click();
+    const portfolio = await readFile(new URL("portfolio.html", PAGES), "utf8");
+    await panel.getByLabel("Or paste a broker page you saved").pressSequentially(portfolio);
+    await panel.getByRole("button", { name: "Read the pasted page" }).click();
+    await expect(status).toHaveText("Read the portfolio page.");
+
+    // A saved watchlist page, chosen in the file chooser the picker's real click opens.
+    const chooser = panel.waitForEvent("filechooser");
+    await panel.getByLabel("Or open a broker page you saved").click();
+    await (await chooser).setFiles(fileURLToPath(new URL("watchlist.html", PAGES)));
+    await expect(status).toHaveText("Read the watchlist page.");
+
+    await panel.getByRole("tab", { name: "History" }).click();
+    const history = panel.locator("#pane-history");
+    await expect(history).toBeVisible();
+    await expect(history).toContainText(
+      "steadyhand records a broker page only while this panel is open beside it.",
+    );
+    await expect(panel.locator("#stock-history p")).not.toHaveCount(0);
+    await expect(panel.locator("#forget-confirm")).toBeHidden();
+    await panel.getByRole("button", { name: "Forget everything" }).click();
+    await expect(panel.locator("#forget-confirm")).toBeVisible();
+    await panel.getByRole("button", { name: "Yes, forget everything" }).click();
+    await expect(status).toHaveText("Everything is forgotten.");
+    await expect(panel.locator("#stock-history")).toHaveText("Nothing is recorded yet.");
+
+    await panel.getByRole("tab", { name: "Lessons" }).click();
+    await expect(panel.locator("#pane-lessons")).toBeVisible();
+    await expect(panel.locator("#pane-lessons")).toHaveText("The lessons come in a later release.");
+  });
 });

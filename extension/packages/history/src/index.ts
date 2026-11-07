@@ -12,5 +12,7 @@ export {
   type Adjustment,
   type ReadRules,
 } from "./record.ts";
-export { amountOf, recordValuation, riskRecord, type ValuationRules } from "./risk.ts";
+export { amountOf, recordTyped, recordValuation, riskRecord, type ValuationRules } from "./risk.ts";
 export { openHistory, STORES } from "./schema.ts";
+export { forgetEverything, type ExtensionStorage } from "./forget.ts";
+export { stockHistory, type StockHistory } from "./summary.ts";
