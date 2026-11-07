@@ -40,9 +40,17 @@ export const parse = (text: string, fileName: string): ts.SourceFile => {
   if (kind === undefined) {
     throw new UnreadableSourceError(`${fileName}: not a TypeScript or JavaScript file`);
   }
-  const { diagnostics = [] } = ts.transpileModule(text, { fileName, reportDiagnostics: true });
+  // TypeScript emits nothing for a declaration file and fails transpiling one under its own
+  // name (#244), so its syntax is checked under the name of the source file it declares for.
+  const checked = fileName.replace(/\.d\.ts$/u, ".ts");
+  const { diagnostics = [] } = ts.transpileModule(text, {
+    fileName: checked,
+    reportDiagnostics: true,
+  });
   if (diagnostics.length > 0) {
-    throw new UnreadableSourceError(ts.formatDiagnostics(diagnostics, FORMAT).trim());
+    throw new UnreadableSourceError(
+      ts.formatDiagnostics(diagnostics, FORMAT).trim().replaceAll(`${checked}(`, `${fileName}(`),
+    );
   }
   return ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, kind);
 };

@@ -74,6 +74,24 @@ test("a file with a syntax error is refused by name, line and column", () => {
   );
 });
 
+test("a declaration file is read (#244: TypeScript emits nothing for one)", () => {
+  const file = parse(
+    'declare module "*.md" {\n  const text: string;\n  export default text;\n}\n',
+    "x.d.ts",
+  );
+  expect(file.fileName).toBe("x.d.ts");
+  expect(file.isDeclarationFile).toBe(true);
+});
+
+test("a declaration file with a syntax error is refused by its own name", () => {
+  expect(() => parse("declare const = 1;\n", "broken.d.ts")).toThrow(
+    new UnreadableSourceError(
+      "broken.d.ts(1,15): error TS1134: Variable declaration expected.\n" +
+        "broken.d.ts(1,17): error TS1134: Variable declaration expected.",
+    ),
+  );
+});
+
 test("a file that is neither TypeScript nor JavaScript is refused by name", () => {
   expect(() => parse("# notes\n", "notes.md")).toThrow(
     new UnreadableSourceError("notes.md: not a TypeScript or JavaScript file"),
