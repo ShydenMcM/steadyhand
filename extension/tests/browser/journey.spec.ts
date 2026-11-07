@@ -248,11 +248,6 @@ test("reading the portfolio and the watchlist gives the day's orders", async () 
       "Buy 14 lots of BBRI at a limit of IDR 4,560, estimated fees IDR 13,394: " +
         "dividend-growth: paid a dividend every year and grew it.",
     );
-    // The rest of the advice is reached as a person reaches it: the wheel turned over the panel.
-    const top = await panel.evaluate(() => scrollY);
-    await advice.hover();
-    await panel.mouse.wheel(0, 2_000);
-    await expect.poll(() => panel.evaluate(() => scrollY)).toBeGreaterThan(top);
     // At the side panel's own width (#503 AC2): every line shows, and none runs past the edge.
     const width = await panel.evaluate(() => innerWidth);
     expect(width).toBeLessThan(500);
@@ -362,9 +357,19 @@ test("Settings keeps the strategy, the goal and the exclusions, and Lessons says
     await panel.getByLabel("Monthly income goal, in rupiah").pressSequentially("5.000.000");
     await panel.getByRole("button", { name: "Save goal" }).click();
     await expect(status).toHaveText("Income goal saved.");
-    // The exclusions are near the foot of Settings: the wheel brings them up.
+    // Settings runs past the panel's foot, so the wheel turned over it scrolls the panel, as a
+    // person reaches the exclusions. (The advice did not scroll under the wheel on CI, PR #519.)
+    const [tall, high] = await panel.evaluate(() => [
+      document.documentElement.scrollHeight,
+      innerHeight,
+    ]);
+    expect(
+      tall,
+      `Settings is ${String(tall)} px tall in a ${String(high)} px panel`,
+    ).toBeGreaterThan(high);
     await panel.locator("#pane-settings").hover();
     await panel.mouse.wheel(0, 2_000);
+    await expect.poll(() => panel.evaluate(() => scrollY)).toBeGreaterThan(0);
     await panel
       .getByLabel("Excluded stocks: one per line, the code and then your reason")
       .pressSequentially("UNVR too expensive");
