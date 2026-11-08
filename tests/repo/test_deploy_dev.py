@@ -112,6 +112,6 @@ def test_the_verified_zip_is_kept_as_it_is_not_zipped_again() -> None:
 
 def test_nothing_publishes_to_testpypi_any_more() -> None:
     texts = {path.name: path.read_text(encoding="utf-8") for path in WORKFLOWS.glob("*.yml")}
-    assert list(texts) == ["ci.yml"]
+    assert sorted(texts) == ["ci.yml", "release-cut.yml"]
     assert "publish-dev" not in JOBS
     assert [name for name, text in texts.items() if "pypi" in text.lower()] == []
