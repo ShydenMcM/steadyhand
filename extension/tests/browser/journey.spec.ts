@@ -1,7 +1,7 @@
 import { chromium, expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { build as esbuild } from "esbuild";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { BROKER_ORIGINS, build } from "../../build.ts";
 import { CHOICE_LINE, DISCLAIMER } from "../../packages/shell/src/advice-view.ts";
@@ -122,14 +122,8 @@ const withPanel = async (
   if (channel === undefined) {
     throw new Error(`project ${info.project.name} names no browser channel`);
   }
-  // The extension's tile is pinned to the toolbar in the profile, as "Pin" in the extensions
-  // menu does; the id is loadUnpacked's, which is checked below.
+  // The extension is not pinned (#528): every browser opens it from its Extensions menu, one route.
   const profile = info.outputPath("profile");
-  await mkdir(`${profile}/Default`, { recursive: true });
-  await writeFile(
-    `${profile}/Default/Preferences`,
-    JSON.stringify({ extensions: { pinned_extensions: [unpackedId(extension)] } }),
-  );
   // A window on the display the CI step gives it: the side panel is browser UI, which has no
   // headless form a person could click.
   const context = await chromium.launchPersistentContext(profile, {
