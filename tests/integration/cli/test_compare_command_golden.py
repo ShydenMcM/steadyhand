@@ -4,7 +4,7 @@ limit of 0.07 s of its own CPU in its heaviest measured run (develop, 2026-10-13
 The first runs on a cold cache, as it must: it proves that one fetch with the longest look-back
 serves every strategy as its own fetch would.
 
-The unit suite keeps a stand-in of each, of the same name, in
+The unit suite keeps stand-ins of these checks, under their own names, in
 ``tests/cli/test_compare_command.py``: the same command and checks over nineteen trading days of
 three made-up stocks (``tests/cli/short_world.py``).
 """
@@ -44,8 +44,11 @@ def test_each_strategy_ends_as_it_does_alone_with_the_longest_look_back(tmp_path
     assert len(set(alone.values())) == 3
 
 
-def test_the_csv_row_is_the_golden_runs_figures(market: Cli) -> None:
-    assert market("compare", *WINDOW, "buy-and-hold").code == 0
+def test_a_comparison_prints_its_table_and_writes_its_files(market: Cli) -> None:
+    result = market("compare", *WINDOW, "buy-and-hold")
+    assert result.code == 0
+
+    # The CSV row is the golden run's figures.
     with (market.home / "reports" / f"{STEM}.csv").open(encoding="utf-8", newline="") as file:
         header, row, *rest = list(csv.reader(file))
     assert rest == []
@@ -81,16 +84,14 @@ def test_the_csv_row_is_the_golden_runs_figures(market: Cli) -> None:
     ]
     assert figures["goal"] == "1000000"
 
-
-def test_the_table_is_a_row_per_strategy_then_the_warnings(market: Cli) -> None:
-    result = market("compare", *WINDOW, "buy-and-hold")
+    # The table is a row per strategy, then the warnings.
     assert result.err == ""
-    header, row = result.out.split("\n\n")[1].splitlines()
-    assert header.split("  ")[0] == "Strategy"
-    assert header.endswith("Run-rate, of the goal")
-    assert row.startswith("buy-and-hold")
-    assert "IDR 96,825,198" in row
-    assert row.endswith("20.70%")
+    table_header, table_row = result.out.split("\n\n")[1].splitlines()
+    assert table_header.split("  ")[0] == "Strategy"
+    assert table_header.endswith("Run-rate, of the goal")
+    assert table_row.startswith("buy-and-hold")
+    assert "IDR 96,825,198" in table_row
+    assert table_row.endswith("20.70%")
     assert result.out.startswith(
         "Comparison, 2021-02-01 to 2022-01-31, 248 trading days\n\nStrategy"
     )
@@ -99,9 +100,7 @@ def test_the_table_is_a_row_per_strategy_then_the_warnings(market: Cli) -> None:
     assert "\n\nWhat this means\n• Prices, and what your portfolio is worth: " in result.out
     assert result.out.endswith(f"\n\n{DISCLAIMER}\n")
 
-
-def test_the_markdown_file_is_the_same_table(market: Cli) -> None:
-    market("compare", *WINDOW, "buy-and-hold")
+    # The Markdown file is the same table.
     lines = (market.home / "reports" / f"{STEM}.md").read_text(encoding="utf-8").splitlines()
     assert lines[:4] == ["# Comparison, 2021-02-01 to 2022-01-31", "", "248 trading days.", ""]
     assert lines[4].startswith("| Strategy | Final value | Deposited | ")

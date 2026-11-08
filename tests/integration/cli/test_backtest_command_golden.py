@@ -4,7 +4,7 @@ unit limit of 0.07 s of its own CPU in its heaviest measured run (develop, 2026-
 1.34 s). The monthly-savings tests share one module-scoped run, so they move together: left in unit,
 the run's cost would land on whichever of them ran first.
 
-The unit suite keeps a stand-in of each, of the same name, in
+The unit suite keeps stand-ins of these checks, under their own names, in
 ``tests/cli/test_backtest_command.py``: the same command and checks over nineteen trading days of
 three made-up stocks (``tests/cli/short_world.py``), which meet a dividend, a split and a restored
 adjustment as the golden window does.
@@ -60,8 +60,13 @@ def golden(tmp_path_factory: pytest.TempPathFactory) -> BacktestResult:
     return run(tmp_path_factory.mktemp("golden"))
 
 
-def test_the_daily_csv_is_the_golden_run_day_by_day(market: Cli, golden: BacktestResult) -> None:
-    assert market("backtest", *WINDOW).code == 0
+def test_a_backtest_prints_its_summary_and_writes_private_reports(
+    market: Cli, golden: BacktestResult
+) -> None:
+    result = market("backtest", *WINDOW)
+    assert result.code == 0
+
+    # The daily CSV is the golden run, day by day.
     with (market.home / "reports" / f"{STEM}.csv").open(encoding="utf-8", newline="") as file:
         rows = list(csv.reader(file))
     assert rows[0] == [
@@ -94,9 +99,7 @@ def test_the_daily_csv_is_the_golden_run_day_by_day(market: Cli, golden: Backtes
     assert len(expected) == 248
     assert sum(int(row[5]) for row in rows[1:]) == 2_699_239
 
-
-def test_the_summary_shows_the_golden_figures(market: Cli) -> None:
-    result = market("backtest", *WINDOW)
+    # The summary shows the golden figures.
     stored = json.loads(GOLDEN.read_text(encoding="utf-8"))["metrics"]
     assert stored["final_value"] == 96_825_198
     assert stored["dividends"] == {"gross": 2_699_239, "tax": 269_925}
@@ -121,9 +124,7 @@ def test_the_summary_shows_the_golden_figures(market: Cli) -> None:
     costs = stored["costs"]
     assert costs["fee"] + costs["levy"] + costs["sale_tax"] + costs["daily"] == 279_116
 
-
-def test_the_summary_then_the_warnings_the_files_and_the_explanations(market: Cli) -> None:
-    result = market("backtest", *WINDOW)
+    # The summary, then the warnings, the files and the explanations.
     assert result.err == ""
     reports = market.home / "reports"
     assert result.out.startswith(
@@ -141,9 +142,7 @@ def test_the_summary_then_the_warnings_the_files_and_the_explanations(market: Cl
     assert f"More: steadyhand-idx learn {restored}\n" in result.out
     assert result.out.endswith(f"\n\n{DISCLAIMER}\n")
 
-
-def test_the_markdown_file_holds_the_summary_and_the_disclaimer(market: Cli) -> None:
-    market("backtest", *WINDOW)
+    # The Markdown file holds the summary and the disclaimer.
     text = (market.home / "reports" / f"{STEM}.md").read_text(encoding="utf-8")
     lines = text.splitlines()
     assert lines[:6] == [
@@ -159,9 +158,7 @@ def test_the_markdown_file_holds_the_summary_and_the_disclaimer(market: Cli) -> 
     assert "## Day warnings" not in text
     assert text.endswith(f"\n\n---\n\n{DISCLAIMER}\n")
 
-
-def test_the_reports_are_private_and_a_second_run_replaces_them(market: Cli) -> None:
-    market("backtest", *WINDOW)
+    # The reports are private, and a second run replaces them.
     reports = market.home / "reports"
     first = {path.name: path.read_bytes() for path in reports.iterdir()}
     assert market("backtest", *WINDOW).code == 0
