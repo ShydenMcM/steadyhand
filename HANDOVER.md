@@ -24,6 +24,8 @@
 
 ## Paused (Shyden 2026-11-08 23:24 WIB, AskUserQuestion)
 - steadyhand is paused until the broker account exists. Start nothing; at resume, ask him whether the account is open.
+- **Overnight relay, 2026-11-08 23:48 WIB (repo-template session, relaying Shyden going to sleep: "take the next ticket by Priority"):** the pause holds. The board was re-read: open tickets are #242, #243, #245 (parked), the #214 epic and the P4 "EXT later" stories he ruled out before the first release, so no ticket is workable. A relay names no ticket, and it does not lift his own ruling.
+- **For Shyden when back:** is the broker account open? If not, does the pause stand? Only he can change either.
 
 ## Waiting on Shyden
 - #242, #243, #245: parked (above).
