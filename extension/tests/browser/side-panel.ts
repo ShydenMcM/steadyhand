@@ -10,22 +10,28 @@ import { findImage, type Picture, type Point } from "../lib/find-image.ts";
 // window manager, finds the extension's button in a screenshot and clicks it with xdotool.
 //
 // The button is the extension's tile: the browser draws its name's first letter, the same pixels
-// in Chrome's toolbar and in Edge's extensions menu (measured on CI 2026-11-06). Chrome and
-// Chromium show it pinned; Edge does not honour the pin, so its extensions button opens the menu
-// that lists it. What the screen shows decides the route, never the browser's name. Both pictures
-// were cut from CI screenshots (Chrome 156, Edge 156, Xvfb 1280x800) with the pointer away from
-// them: a hovered button is drawn on grey, not the toolbar's white (Edge's first cut was hovered and
-// never matched, PR #509). When a browser redraws them,
-// the test fails naming the picture it cannot find.
+// in every browser's extensions menu (measured on CI 2026-11-06). Every browser takes one route
+// (#528, Shyden 2026-11-08): its Extensions (puzzle) button opens the menu, and the tile below the
+// toolbar row, the menu's entry, is the extension's action button. Choosing by which picture was
+// drawn first raced a toolbar tile (PR #526), and Chrome pins the extension on its own, so a tile
+// on the toolbar is never clicked. The pictures were cut from CI screenshots
+// (Xvfb 1280x800) with the pointer away from them: a hovered or pressed button is drawn on grey,
+// not the toolbar's white (Edge's first cut was hovered and never matched, PR #509). When a
+// browser redraws them, the test fails naming the picture it cannot find.
 
 const TOOLBAR = new URL("fixtures/toolbar/", import.meta.url);
 /** The extension's tile, 16x16, as the browser draws it for an extension with no icon. */
 const TILE = new URL("extension-tile.png", TOOLBAR);
-/** Edge's extensions (puzzle) button on its toolbar, 18x20. */
-const EXTENSIONS_BUTTON = new URL("edge-extensions-button.png", TOOLBAR);
+/** The Extensions (puzzle) button at rest, 18x20, as each browser draws it: one shows. */
+const EXTENSIONS_BUTTONS = [
+  { name: "Chromium's Extensions button", file: "chromium-extensions-button.png" },
+  { name: "Edge's Extensions button", file: "edge-extensions-button.png" },
+] as const;
 
 /** How long the screen may take to show what the next click needs. */
 const SCREEN_CEILING_MS = 10_000;
+/** How far below the Extensions button's centre its menu's entries start: past the toolbar row. */
+const MENU_BELOW_BUTTON_PX = 24;
 const LOOK_EVERY_MS = 250;
 /** The port the panel's page is reached on; one browser runs at a time in CI. */
 export const PANEL_DEBUGGING_PORT = 9333;
@@ -78,16 +84,18 @@ const pause = (ms: number): Promise<void> =>
     setTimeout(resolve, ms);
   });
 
-/** The one place each picture shows, looked for until one of them shows or the ceiling passes. */
+/** The one place each picture shows below *top* (pixels from the screen's top), looked for until
+ * one of them shows or the ceiling passes. */
 const lookFor = async (
   wanted: readonly { name: string; picture: Picture }[],
+  top = 0,
 ): Promise<{ name: string; at: Point }> => {
   const seen: string[] = [];
   for (let waited = 0; waited <= SCREEN_CEILING_MS; waited += LOOK_EVERY_MS) {
     const now = screen();
     seen.length = 0;
     for (const { name, picture } of wanted) {
-      const places = findImage(now, picture);
+      const places = findImage(now, picture).filter((place) => place.y > top);
       seen.push(`${name}: ${String(places.length)}`);
       const [at] = places;
       if (places.length === 1 && at !== undefined) {
@@ -136,15 +144,20 @@ export const openSidePanel = async (
 };
 
 const clickOpen = async (path: string, time: Date): Promise<{ panel: Page; devtools: Browser }> => {
-  const tile = { name: "the extension's tile", picture: pictureOf(TILE) };
-  const first = await lookFor([
-    tile,
-    { name: "Edge's extensions button", picture: pictureOf(EXTENSIONS_BUTTON) },
-  ]);
-  click(first.at);
-  if (first.name !== tile.name) {
-    click((await lookFor([tile])).at);
-  }
+  const tile = pictureOf(TILE);
+  const menu = await lookFor(
+    EXTENSIONS_BUTTONS.map(({ name, file }) => ({
+      name,
+      picture: pictureOf(new URL(file, TOOLBAR)),
+    })),
+  );
+  click(menu.at);
+  // The menu opens below its button; a tile on the toolbar beside the button is not the menu's
+  // (Chrome pins the extension on its own, run 42461808760), so only one below that row counts.
+  const belowToolbar = menu.at.y + MENU_BELOW_BUTTON_PX;
+  click(
+    (await lookFor([{ name: "the extension's tile in its menu", picture: tile }], belowToolbar)).at,
+  );
   const devtools = await chromium.connectOverCDP(
     `http://127.0.0.1:${String(PANEL_DEBUGGING_PORT)}`,
   );
