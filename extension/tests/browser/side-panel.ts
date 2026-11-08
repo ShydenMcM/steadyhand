@@ -139,14 +139,23 @@ export const openSidePanel = async (
 };
 
 const clickOpen = async (path: string, time: Date): Promise<{ panel: Page; devtools: Browser }> => {
+  const tile = pictureOf(TILE);
   const menu = await lookFor(
     EXTENSIONS_BUTTONS.map(({ name, file }) => ({
       name,
       picture: pictureOf(new URL(file, TOOLBAR)),
     })),
   );
+  // The menu is the only place the tile may show: one drawn on the toolbar too (a pinned
+  // extension) would race the menu's, so the route stops here and names it (#528).
+  const early = findImage(screen(), tile).length;
+  if (early !== 0) {
+    throw new Error(
+      `the extension's tile shows ${String(early)} time(s) before its menu is opened: is it pinned?`,
+    );
+  }
   click(menu.at);
-  click((await lookFor([{ name: "the extension's tile", picture: pictureOf(TILE) }])).at);
+  click((await lookFor([{ name: "the extension's tile", picture: tile }])).at);
   const devtools = await chromium.connectOverCDP(
     `http://127.0.0.1:${String(PANEL_DEBUGGING_PORT)}`,
   );
