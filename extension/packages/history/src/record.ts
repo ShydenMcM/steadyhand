@@ -161,7 +161,7 @@ export const recordCashMovements = (db: IDBDatabase, read: Part<CashMovements>):
     return Promise.reject(new Error(`refusing a cash-movement read: ${mismatch}`));
   }
   return putEach(db, [
-    [STORES.cashMovementReads, [read.value.covered]],
+    [STORES.cashMovementReads, [{ ...read.value.covered, readAt: read.readAt }]],
     [
       STORES.cashMovements,
       entered(

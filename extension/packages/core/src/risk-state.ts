@@ -8,12 +8,17 @@
  * own day. A deposit or withdrawal dated on a read's own day is in that read's value (Shyden,
  * 2026-11-04: a read after the close sees the day's whole cash balance), so it buys or sells
  * units at the price the read gives without it. The first span the record does not cover stops
- * the judging there: the panel lists `missing.deposits` and gives sell orders only. */
+ * the judging there: the panel lists `missing.deposits` and gives sell orders only.
+ *
+ * A same-day movement counts in its day's read only if it was recorded before that read (#499,
+ * Shyden 2026-11-07): typed before the read, or listed by a cash-movement page read before it.
+ * One recorded after the read may not be in it, so the judging stops before that read and the
+ * panel lists `missing.reread` until a later read of the same day replaces it. */
 
 import type { CashMovement, Covered, Day } from "./broker-view.ts";
 import { dayAfter, type IdxCalendar } from "./calendar.ts";
 import { Money } from "./money.ts";
-import { missingDeposits, type Note } from "./notes.ts";
+import { missingDeposits, missingReread, type Note } from "./notes.ts";
 import { Ratio } from "./ratio.ts";
 import { haltOn, percent, UnitValue, type Halt, type RiskLimits } from "./risk.ts";
 
@@ -22,6 +27,12 @@ export interface Valuation {
   readonly day: Day;
   readonly readAt: Date;
   readonly value: Money;
+}
+
+/** The period a cash-movement page read covered, and when it was read; reads stored before
+ * #499 have no `readAt`. */
+export interface MovementRead extends Covered {
+  readonly readAt?: Date;
 }
 
 /** A deposit or withdrawal the user typed, kept and shown as typed. */
@@ -41,8 +52,8 @@ export interface RiskRecord {
   readonly valuations: readonly Valuation[];
   /** The rows of every cash-movement page read. */
   readonly movements: readonly CashMovement[];
-  /** The period each cash-movement page read covered. */
-  readonly movementReads: readonly Covered[];
+  /** The period each cash-movement page read covered, and when it was read. */
+  readonly movementReads: readonly MovementRead[];
   readonly typed: readonly TypedMovement[];
   /** Each period the user said is complete: every entry in it typed, or none. */
   readonly answered: readonly Covered[];
@@ -97,6 +108,26 @@ const netFlow = (record: RiskRecord, from: Day, to: Day, start: Money): Money =>
     }
   }
   return net;
+};
+
+/** Whether a deposit or withdrawal dated `valuation`'s day was recorded after that read: a
+ * counted typed entry typed later, or a row of that day with a page read covering it read later. */
+const recordedAfter = (record: RiskRecord, valuation: Valuation): boolean => {
+  const day = valuation.day;
+  const typedLate = record.typed.some(
+    (entry) =>
+      entry.day === day && entry.typedAt > valuation.readAt && !inside(record.movementReads, day),
+  );
+  const pageLate =
+    record.movements.some((movement) => movement.day === day) &&
+    record.movementReads.some(
+      (read) =>
+        read.from <= day &&
+        day <= read.to &&
+        read.readAt !== undefined &&
+        read.readAt > valuation.readAt,
+    );
+  return typedLate || pageLate;
 };
 
 interface Raised {
@@ -169,6 +200,16 @@ export const riskState = (
         halt: halted(null),
         missing: [missingDeposits(previous.day)],
         unrecorded: { from, to: latest },
+        superseded,
+      };
+    }
+    if (recordedAfter(record, valuation)) {
+      return {
+        unitValue: fund,
+        judgedTo: previous.day,
+        halt: halted(null),
+        missing: [missingReread(valuation.day)],
+        unrecorded: null,
         superseded,
       };
     }

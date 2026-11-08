@@ -157,7 +157,9 @@ test("a cash movements read records every movement", async () => {
   expect(outcome).toEqual({ kind: "cash-movements", reads: NO_READS });
   const part = partOf("cash-movements", AFTER_CLOSE);
   expect(await rowsOf(db, STORES.cashMovements)).toHaveLength(part.value.movements.length);
-  expect(await rowsOf(db, STORES.cashMovementReads)).toEqual([part.value.covered]);
+  expect(await rowsOf(db, STORES.cashMovementReads)).toEqual([
+    { ...part.value.covered, readAt: part.readAt },
+  ]);
 });
 
 test("a corporate actions read records every split and the period read", async () => {
