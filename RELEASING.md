@@ -42,12 +42,25 @@ answer, and passes only when:
 A pull request from a fork posts nothing at all: a status belongs to a SHA, which a fork can
 share with a real release. The design is shyden-labs/repo-template#86 (its `docs/release-cut.md`).
 
+What it does not stop:
+
+- **A green verdict can outlive a move of `main`.** `main` is not strict, so a `release-cut`
+  result stays green after another release merges. That is still safe: `develop` is linear, so
+  (b) puts any two cuts in order on it, and `main` takes nothing but merges this check passed. A
+  later cut merged after an earlier one lands its own tree; an earlier one merged after a later
+  one has nothing left to bring.
+- **The status names its source app, not its workflow.** Requiring `release-cut` from GitHub
+  Actions shuts out statuses posted by people or other apps, but any workflow in this repository
+  whose token may write statuses could post it. A fork's token cannot, and nothing reaches
+  `main` without Shyden merging a release he cut. Pinning each required check to one workflow is
+  shyden-labs/repo-template#90.
+
 ### Shyden's settings, once the workflow is on `develop`
 
 1. Settings → Branches → edit the `main` rule → untick "Require branches to be up to date before
    merging".
 2. In the same rule, under "Require status checks to pass", add `release-cut` and choose
-   **GitHub Actions** as its source, so only this workflow's status counts.
+   **GitHub Actions** as its source (see "What it does not stop" above).
 3. Read both back:
 
    ```sh
