@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-08. #308, #348 (not planned), #400, #499, #528 shut. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-09. #308, #348 (not planned), #400, #499, #528, #535 shut. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here (desktop extension; phones unavailable anyway).
 
@@ -26,6 +26,8 @@
 - steadyhand is paused until the broker account exists. Start nothing; at resume, ask him whether the account is open.
 - **Overnight relay, 2026-11-08 23:48 WIB (repo-template session, relaying Shyden going to sleep: "take the next ticket by Priority"):** the pause holds. The board was re-read: open tickets are #242, #243, #245 (parked), the #214 epic and the P4 "EXT later" stories he ruled out before the first release, so no ticket is workable. A relay names no ticket, and it does not lift his own ruling.
 - **For Shyden when back:** is the broker account open? If not, does the pause stand? Only he can change either.
+- **One exception, done:** #535, his named instruction to every project on 2026-11-09 (his words are in the global `reference-engineering-standards.md`). Tests repeating the same actions were merged (PR #536): browser 8 tests to 6, Python integration 149 to 141, assertions unchanged. Proof is on the ticket. It lifts the pause for nothing else.
+- **New tests (global rule "One journey, all its assertions"):** before writing any e2e, journey, device or integration test, look for that journey and add the assertion there. Agent briefs carry this.
 
 ## Waiting on Shyden
 - #242, #243, #245: parked (above).
