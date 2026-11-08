@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import type { CashMovement, Covered } from "../src/broker-view.ts";
 import { IdxCalendar } from "../src/calendar.ts";
 import { IDR, Money } from "../src/money.ts";
-import { missingDeposits, NOTE_CODES } from "../src/notes.ts";
+import { missingDeposits, missingReread, NOTE_CODES } from "../src/notes.ts";
 import { RuleDecimal } from "../src/ratio.ts";
 import {
   buyStops,
@@ -12,6 +12,7 @@ import {
   type RiskRecord,
   type RiskState,
   type TypedMovement,
+  type MovementRead,
   type Valuation,
 } from "../src/risk-state.ts";
 import { RiskLimits, UnitValue } from "../src/risk.ts";
@@ -46,9 +47,20 @@ const withdrawal = (day: string, amount: bigint): CashMovement => ({
   amount: rp(amount),
 });
 
-const typed = (movement: CashMovement): TypedMovement => ({
+/** `at` is a time in Jakarta (WIB, UTC+7) on `day`, such as "20:00". */
+const wib = (day: string, at: string): Date => new Date(`${day}T${at}:00+07:00`);
+
+/** An entry typed at 16:00 in Jakarta on its own day, before that day's read at 17:00. */
+const typed = (movement: CashMovement, at = "16:00"): TypedMovement => ({
   ...movement,
-  typedAt: new Date(`${movement.day}T12:00:00Z`),
+  typedAt: wib(movement.day, at),
+});
+
+/** A cash-movement page read covering `from` to `to`, read at `at` in Jakarta on `to`. */
+const pageRead = (from: string, to: string, at: string): MovementRead => ({
+  from,
+  to,
+  readAt: wib(to, at),
 });
 
 /** A record whose cash movements are answered for all of July. */
@@ -223,6 +235,133 @@ test("a typed entry outside every judged span is neither counted nor superseded"
   });
   expect(priced(result)).toEqual(["100000000", "1", "1"]);
   expect(result.superseded).toEqual([]);
+});
+
+// #499 (Shyden 2026-11-07, option 1): a same-day deposit or withdrawal counts in that day's read
+// only if it was recorded before the read; one recorded after it asks for the portfolio to be
+// read again, and no halt is judged from that read until a later read of the day replaces it.
+// The case from the ticket: a read at 17:00 WIB, then Rp 10,000,000 deposited at 20:00.
+
+/** Asked to read 2025-07-02 again, judged up to 2025-07-01, nothing halted or bought. */
+const askedToReread = (result: RiskState): void => {
+  expect(result.missing).toEqual([missingReread("2025-07-02")]);
+  expect([result.judgedTo, result.halt, result.unrecorded]).toEqual(["2025-07-01", null, null]);
+  expect(priced(result)).toEqual(["100000000", "1", "1"]);
+  expect(buyStops(result)).toEqual([missingReread("2025-07-02")]);
+};
+
+test("a deposit typed after its day's read asks for the portfolio to be read again", () => {
+  askedToReread(
+    state({
+      valuations: reads(["2025-07-01", 100_000_000n], ["2025-07-02", 100_000_000n]),
+      typed: [typed(deposit("2025-07-02", 10_000_000n), "20:00")],
+    }),
+  );
+});
+
+test("a withdrawal typed after its day's read asks the same way", () => {
+  askedToReread(
+    state({
+      valuations: reads(["2025-07-01", 100_000_000n], ["2025-07-02", 100_000_000n]),
+      typed: [typed(withdrawal("2025-07-02", 10_000_000n), "20:00")],
+    }),
+  );
+});
+
+test("a cash-movement page read after the day's read, listing that day, asks the same way", () => {
+  askedToReread(
+    state({
+      valuations: reads(["2025-07-01", 100_000_000n], ["2025-07-02", 100_000_000n]),
+      movements: [deposit("2025-07-02", 10_000_000n)],
+      movementReads: [pageRead("2025-07-01", "2025-07-02", "21:00")],
+      answered: [],
+    }),
+  );
+});
+
+test("a later read of the same day replaces the early one: the deposit buys units", () => {
+  const result = state({
+    valuations: [
+      read("2025-07-01", 100_000_000n),
+      { day: "2025-07-02", readAt: wib("2025-07-02", "21:00"), value: rp(110_000_000n) },
+    ],
+    typed: [typed(deposit("2025-07-02", 10_000_000n), "20:00")],
+  });
+  expect([result.missing, result.judgedTo, result.halt]).toEqual([[], "2025-07-02", null]);
+  expect(priced(result)).toEqual(["110000000", "1", "1"]);
+});
+
+test("a deposit typed before its day's read counts in it, with no question", () => {
+  const result = state({
+    valuations: reads(["2025-07-01", 100_000_000n], ["2025-07-02", 110_000_000n]),
+    typed: [typed(deposit("2025-07-02", 10_000_000n), "16:00")],
+  });
+  expect([result.missing, result.judgedTo]).toEqual([[], "2025-07-02"]);
+  expect(priced(result)).toEqual(["110000000", "1", "1"]);
+});
+
+test("a cash-movement page read before the day's read counts in it, with no question", () => {
+  const result = state({
+    valuations: reads(["2025-07-01", 100_000_000n], ["2025-07-02", 110_000_000n]),
+    movements: [deposit("2025-07-02", 10_000_000n)],
+    movementReads: [pageRead("2025-07-01", "2025-07-02", "16:30")],
+    answered: [],
+  });
+  expect([result.missing, result.judgedTo]).toEqual([[], "2025-07-02"]);
+});
+
+test("a late typed entry superseded by an earlier page read raises no question", () => {
+  const result = state({
+    valuations: reads(["2025-07-01", 100_000_000n], ["2025-07-02", 110_000_000n]),
+    movements: [deposit("2025-07-02", 10_000_000n)],
+    movementReads: [pageRead("2025-07-01", "2025-07-02", "16:30")],
+    typed: [typed(deposit("2025-07-02", 10_000_000n), "20:00")],
+    answered: [],
+  });
+  expect([result.missing, result.judgedTo]).toEqual([[], "2025-07-02"]);
+});
+
+test("a page read after the day's read with no row on that day raises no question", () => {
+  const result = state({
+    valuations: reads(["2025-07-01", 100_000_000n], ["2025-07-02", 100_000_000n]),
+    movements: [deposit("2025-07-01", 10_000_000n)],
+    movementReads: [pageRead("2025-07-01", "2025-07-02", "21:00")],
+    answered: [],
+  });
+  expect([result.missing, result.judgedTo]).toEqual([[], "2025-07-02"]);
+});
+
+test("an entry dated before the read's day, typed after the read, raises no question", () => {
+  const result = state({
+    valuations: reads(["2025-07-04", 100_000_000n], ["2025-07-07", 105_000_000n]),
+    typed: [{ ...deposit("2025-07-05", 5_000_000n), typedAt: wib("2025-07-07", "20:00") }],
+  });
+  expect([result.missing, result.judgedTo]).toEqual([[], "2025-07-07"]);
+  expect(priced(result)).toEqual(["105000000", "1", "1"]);
+});
+
+test("a page read stored before #499 has no read time and raises no question", () => {
+  const result = state({
+    valuations: reads(["2025-07-01", 100_000_000n], ["2025-07-02", 110_000_000n]),
+    movements: [deposit("2025-07-02", 10_000_000n)],
+    movementReads: [span("2025-07-01", "2025-07-02")],
+    answered: [],
+  });
+  expect([result.missing, result.judgedTo]).toEqual([[], "2025-07-02"]);
+});
+
+test("a halt raised before the late deposit's day stays in force while the panel asks", () => {
+  const result = state({
+    valuations: reads(
+      ["2025-07-01", 100_000_000n],
+      ["2025-07-02", 90_000_000n],
+      ["2025-07-03", 90_000_000n],
+    ),
+    typed: [typed(deposit("2025-07-03", 10_000_000n), "20:00")],
+  });
+  expect(result.missing).toEqual([missingReread("2025-07-03")]);
+  expect(result.judgedTo).toBe("2025-07-02");
+  expect(result.halt?.cause.code).toBe(NOTE_CODES.RISK_HALT_DAILY_LOSS);
 });
 
 test("no cash-movement record since the last read: missing.deposits, judged up to that read", () => {

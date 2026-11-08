@@ -4,12 +4,13 @@ import {
   missingDeposits,
   missingHistory,
   missingPage,
+  missingReread,
   missingRulesYear,
   note,
 } from "../src/notes.ts";
 
 // Python's steadyhand/notes.py codes, without the simulated-fill codes (spec §4.5), plus the
-// four codes that name what is missing.
+// five codes that name what is missing.
 const PYTHON_CODES_KEPT = [
   "corporate.split.fraction_dropped",
   "corporate.split.order_cancelled",
@@ -36,7 +37,13 @@ const PYTHON_CODES_KEPT = [
   "trade.not_in_universe",
   "trade.refused",
 ];
-const NEW_CODES = ["missing.deposits", "missing.history", "missing.page", "missing.rules_year"];
+const NEW_CODES = [
+  "missing.deposits",
+  "missing.history",
+  "missing.page",
+  "missing.reread",
+  "missing.rules_year",
+];
 
 test("the codes are Python's dotted codes and the four missing ones", () => {
   expect([...Object.values(NOTE_CODES)].sort()).toEqual(
@@ -104,6 +111,15 @@ test("missing.deposits names the day the record must cover from", () => {
     text:
       "deposits and withdrawals since 2026-10-01 are not recorded: open the cash movement page, " +
       "or enter each one (or none)",
+  });
+});
+
+test("missing.reread names the day whose read came before a deposit or withdrawal", () => {
+  expect(missingReread("2025-07-02")).toEqual({
+    code: "missing.reread",
+    text:
+      "a deposit or withdrawal on 2025-07-02 was recorded after that day's portfolio read: " +
+      "read the portfolio again",
   });
 });
 

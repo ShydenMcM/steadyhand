@@ -14,6 +14,7 @@ import {
   type IdxMarketRules,
   type Part,
   type Portfolio,
+  type MovementRead,
   type Resumed,
   type RiskRecord,
   type TypedMovement,
@@ -114,11 +115,17 @@ const movementOf = (row: MovementRow): CashMovement => ({
 
 const periodOf = (row: Covered): Covered => ({ from: row.from, to: row.to });
 
+/** A cash-movement read's period and read time; a row stored before #499 has no time. */
+const movementReadOf = (row: MovementRead): MovementRead => ({
+  ...periodOf(row),
+  ...(row.readAt === undefined ? {} : { readAt: row.readAt }),
+});
+
 /** Everything recorded that the halts are judged from, each kind in key order. */
 export const riskRecord = async (db: IDBDatabase): Promise<RiskRecord> => {
   const valuations = (await rowsOf(db, STORES.valuations)) as ValuationRow[];
   const movements = (await rowsOf(db, STORES.cashMovements)) as MovementRow[];
-  const movementReads = (await rowsOf(db, STORES.cashMovementReads)) as Covered[];
+  const movementReads = (await rowsOf(db, STORES.cashMovementReads)) as MovementRead[];
   const typed = (await rowsOf(db, STORES.typedMovements)) as TypedRow[];
   const answered = (await rowsOf(db, STORES.answered)) as Covered[];
   const resumes = (await rowsOf(db, STORES.resumes)) as ResumeRow[];
@@ -129,7 +136,7 @@ export const riskRecord = async (db: IDBDatabase): Promise<RiskRecord> => {
       value: amountOf(row.value, row.currency),
     })),
     movements: movements.map(movementOf),
-    movementReads: movementReads.map(periodOf),
+    movementReads: movementReads.map(movementReadOf),
     typed: typed.map((row): TypedMovement => ({
       day: row.day,
       kind: row.kind,

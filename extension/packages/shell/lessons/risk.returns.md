@@ -2,7 +2,7 @@
 id = "risk.returns"
 title = "Returns, counted fairly"
 summary = "How steadyhand measures gain or loss so that money you pay in is never counted as profit."
-explains = ["missing.deposits"]
+explains = ["missing.deposits", "missing.reread"]
 module = "risk"
 position = 2
 see_also = ["risk.drawdown", "risk.limits"]
