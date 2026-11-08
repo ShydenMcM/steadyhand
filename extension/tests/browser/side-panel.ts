@@ -10,10 +10,11 @@ import { findImage, type Picture, type Point } from "../lib/find-image.ts";
 // window manager, finds the extension's button in a screenshot and clicks it with xdotool.
 //
 // The button is the extension's tile: the browser draws its name's first letter, the same pixels
-// in every browser's extensions menu (measured on CI 2026-11-06). The extension is not pinned, so
-// every browser takes one route (#528, Shyden 2026-11-08): its Extensions (puzzle) button opens
-// the menu, where the tile is the extension's action button. A pinned tile raced the menu button
-// (the first one drawn decided the route, PR #526). The pictures were cut from CI screenshots
+// in every browser's extensions menu (measured on CI 2026-11-06). Every browser takes one route
+// (#528, Shyden 2026-11-08): its Extensions (puzzle) button opens the menu, and the tile below the
+// toolbar row, the menu's entry, is the extension's action button. Choosing by which picture was
+// drawn first raced a toolbar tile (PR #526), and Chrome pins the extension on its own, so a tile
+// on the toolbar is never clicked. The pictures were cut from CI screenshots
 // (Xvfb 1280x800) with the pointer away from them: a hovered or pressed button is drawn on grey,
 // not the toolbar's white (Edge's first cut was hovered and never matched, PR #509). When a
 // browser redraws them, the test fails naming the picture it cannot find.
@@ -29,6 +30,8 @@ const EXTENSIONS_BUTTONS = [
 
 /** How long the screen may take to show what the next click needs. */
 const SCREEN_CEILING_MS = 10_000;
+/** How far below the Extensions button's centre its menu's entries start: past the toolbar row. */
+const MENU_BELOW_BUTTON_PX = 24;
 const LOOK_EVERY_MS = 250;
 /** The port the panel's page is reached on; one browser runs at a time in CI. */
 export const PANEL_DEBUGGING_PORT = 9333;
@@ -81,16 +84,18 @@ const pause = (ms: number): Promise<void> =>
     setTimeout(resolve, ms);
   });
 
-/** The one place each picture shows, looked for until one of them shows or the ceiling passes. */
+/** The one place each picture shows below *top* (pixels from the screen's top), looked for until
+ * one of them shows or the ceiling passes. */
 const lookFor = async (
   wanted: readonly { name: string; picture: Picture }[],
+  top = 0,
 ): Promise<{ name: string; at: Point }> => {
   const seen: string[] = [];
   for (let waited = 0; waited <= SCREEN_CEILING_MS; waited += LOOK_EVERY_MS) {
     const now = screen();
     seen.length = 0;
     for (const { name, picture } of wanted) {
-      const places = findImage(now, picture);
+      const places = findImage(now, picture).filter((place) => place.y > top);
       seen.push(`${name}: ${String(places.length)}`);
       const [at] = places;
       if (places.length === 1 && at !== undefined) {
@@ -146,16 +151,13 @@ const clickOpen = async (path: string, time: Date): Promise<{ panel: Page; devto
       picture: pictureOf(new URL(file, TOOLBAR)),
     })),
   );
-  // The menu is the only place the tile may show: one drawn on the toolbar too (a pinned
-  // extension) would race the menu's, so the route stops here and names it (#528).
-  const early = findImage(screen(), tile).length;
-  if (early !== 0) {
-    throw new Error(
-      `the extension's tile shows ${String(early)} time(s) before its menu is opened: is it pinned?`,
-    );
-  }
   click(menu.at);
-  click((await lookFor([{ name: "the extension's tile", picture: tile }])).at);
+  // The menu opens below its button; a tile on the toolbar beside the button is not the menu's
+  // (Chrome pins the extension on its own, run 42461808760), so only one below that row counts.
+  const belowToolbar = menu.at.y + MENU_BELOW_BUTTON_PX;
+  click(
+    (await lookFor([{ name: "the extension's tile in its menu", picture: tile }], belowToolbar)).at,
+  );
   const devtools = await chromium.connectOverCDP(
     `http://127.0.0.1:${String(PANEL_DEBUGGING_PORT)}`,
   );

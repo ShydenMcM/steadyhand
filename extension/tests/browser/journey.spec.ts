@@ -122,7 +122,7 @@ const withPanel = async (
   if (channel === undefined) {
     throw new Error(`project ${info.project.name} names no browser channel`);
   }
-  // The extension is not pinned (#528): every browser opens it from its Extensions menu, one route.
+  // Not pinned (#528): every browser opens the panel from its Extensions menu, one route.
   const profile = info.outputPath("profile");
   // A window on the display the CI step gives it: the side panel is browser UI, which has no
   // headless form a person could click.
