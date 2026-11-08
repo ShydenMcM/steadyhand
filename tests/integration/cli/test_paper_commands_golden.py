@@ -3,8 +3,9 @@
 five recorded stocks through the real source, cache and state database, over the unit limit of
 0.07 s of its own CPU in its heaviest measured run (develop, 2026-10-13: 0.17 s to 1.3 s).
 
-The unit suite keeps a stand-in of each, of the same name, in ``tests/cli/test_paper_commands.py``:
-the same pages over nineteen trading days of three made-up stocks (``tests/cli/short_world.py``),
+The unit suite keeps stand-ins of these checks, under their own names, in
+``tests/cli/test_paper_commands.py``: the same pages over nineteen trading days of three made-up
+stocks (``tests/cli/short_world.py``),
 which meet a dividend paid and reinvested, a weight limit that cuts and skips orders, and a halt.
 """
 
@@ -45,8 +46,10 @@ DEEP = GOLDEN_CONFIG.replace(
 rounded down as every limit is written."""
 
 
-def test_status_shows_each_holding_with_its_last_close_value_and_weight(tmp_path: Path) -> None:
+def test_status_and_report_show_the_holdings_of_the_latest_day(tmp_path: Path) -> None:
     cli = ran_to(tmp_path, date(2021, 6, 30), quiet())
+
+    # Status shows each holding with its last close, value and weight.
     result = cli("paper", "status")
     assert result.code == 0
     assert (
@@ -64,6 +67,16 @@ def test_status_shows_each_holding_with_its_last_close_value_and_weight(tmp_path
         "\n"
         "Queued for the next open:\n"
         "- buy 100 TLKM\n"
+    ) in result.out
+
+    # The report shows the latest day by default, with its holdings.
+    result = cli("report")
+    assert (result.code, result.err) == (0, "")
+    assert result.out.startswith("Day report for 2021-06-30\n\n")
+    assert (
+        "Holdings:\n"
+        "Stock  Quantity  Last close           Value  Weight\n"
+        "ASII       3300   IDR 4,940  IDR 16,302,000  19.02%\n"
     ) in result.out
 
 
@@ -126,18 +139,6 @@ def test_the_status_page_names_every_figure_it_shows(tmp_path: Path) -> None:
         FIGURES["DividendClaim.uncovered"],
         FIGURES["Protection.amount"],
     ]
-
-
-def test_report_shows_the_latest_day_by_default_with_its_holdings(tmp_path: Path) -> None:
-    cli = ran_to(tmp_path, date(2021, 6, 30), quiet())
-    result = cli("report")
-    assert (result.code, result.err) == (0, "")
-    assert result.out.startswith("Day report for 2021-06-30\n\n")
-    assert (
-        "Holdings:\n"
-        "Stock  Quantity  Last close           Value  Weight\n"
-        "ASII       3300   IDR 4,940  IDR 16,302,000  19.02%\n"
-    ) in result.out
 
 
 def test_a_blocked_order_is_shown_with_its_reason_and_the_dividends_of_the_day(

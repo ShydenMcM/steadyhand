@@ -27,8 +27,7 @@ const [ORIGIN] = BROKER_ORIGINS;
 const PAGES = new URL("fixtures/journey/", import.meta.url);
 /** The pages in the order the orders journey opens them, with what the panel says once it has
  * read each. No two in a row say the same, so each read is seen before the next page opens. */
-const JOURNEY = [
-  ["portfolio", "Read the portfolio page."],
+const AFTER_THE_PORTFOLIO = [
   ["dividends-BBCA", "Read the dividend page."],
   ["watchlist", "Read the watchlist page."],
   ["dividends-BBRI", "Read the dividend page."],
@@ -216,68 +215,82 @@ const saveUniverse = async (panel: Page, typed: string, saved: string): Promise<
   await expect(panel.locator("#status")).toHaveText(saved);
 };
 
-test("reading the portfolio and the watchlist gives the day's orders", async () => {
+test("a day's reading names the page still missing, gives the orders, and forgetting empties History", async () => {
   await withPanel(async (opened) => {
     const { panel } = opened;
-    await expect(panel.getByText(DISCLAIMER)).toBeVisible();
-    await expect(panel.locator("#choice")).toHaveText(CHOICE_LINE);
-    await expect(panel.locator("#pane-advice")).toBeVisible();
-    await expect(panel.locator("#pane-settings")).toBeHidden();
+    await expect.soft(panel.getByText(DISCLAIMER)).toBeVisible();
+    await expect.soft(panel.locator("#choice")).toHaveText(CHOICE_LINE);
+    await expect.soft(panel.locator("#pane-advice")).toBeVisible();
+    await expect.soft(panel.locator("#pane-settings")).toBeHidden();
     await saveUniverse(panel, "BBCA BBRI", "Universe saved: 2 stocks.");
-    await expect(panel.locator("#pane-advice")).toBeHidden();
+    await expect.soft(panel.locator("#pane-advice")).toBeHidden();
 
-    for (const [name, read] of JOURNEY) {
+    // One page read, the advice names the page it still needs.
+    await readOnBroker(opened, "portfolio", "Read the portfolio page.");
+    await panel.getByRole("tab", { name: "Advice" }).click();
+    const advice = panel.locator("#advice");
+    await expect.soft(advice).toContainText("Open the watchlist page.");
+
+    for (const [name, read] of AFTER_THE_PORTFOLIO) {
       await readOnBroker(opened, name, read);
     }
 
-    await panel.getByRole("tab", { name: "Advice" }).click();
-    const advice = panel.locator("#advice");
-    await expect(advice).toBeVisible();
-    await expect(advice.locator("h2").first()).toHaveText("Advice for 2025-06-17");
-    await expect(advice.locator("p").first()).toHaveText(
-      "Buy 7 lots of BBCA at a limit of IDR 9,100, estimated fees IDR 13,365: " +
-        "dividend-growth: paid a dividend every year and grew it.",
-    );
-    await expect(advice.locator("p").nth(1)).toHaveText(
-      "Buy 14 lots of BBRI at a limit of IDR 4,560, estimated fees IDR 13,394: " +
-        "dividend-growth: paid a dividend every year and grew it.",
-    );
+    await expect.soft(advice).toBeVisible();
+    await expect.soft(advice.locator("h2").first()).toHaveText("Advice for 2025-06-17");
+    await expect
+      .soft(advice.locator("p").first())
+      .toHaveText(
+        "Buy 7 lots of BBCA at a limit of IDR 9,100, estimated fees IDR 13,365: " +
+          "dividend-growth: paid a dividend every year and grew it.",
+      );
+    await expect
+      .soft(advice.locator("p").nth(1))
+      .toHaveText(
+        "Buy 14 lots of BBRI at a limit of IDR 4,560, estimated fees IDR 13,394: " +
+          "dividend-growth: paid a dividend every year and grew it.",
+      );
     // At the side panel's own width (#503 AC2): every line shows, and none runs past the edge.
     const width = await panel.evaluate(() => innerWidth);
-    expect(width).toBeLessThan(500);
-    await expect(advice.locator("h2").last()).toHaveText("Income goal");
+    expect.soft(width).toBeLessThan(500);
+    await expect.soft(advice.locator("h2").last()).toHaveText("Income goal");
     const lines = await advice.locator("h2, p").all();
-    expect(lines.length).toBeGreaterThan(3);
+    expect.soft(lines.length).toBeGreaterThan(3);
     // A block's box keeps the panel's width while its text spills past it (a 300-letter word
     // passed a box check on all three browsers, PR #509), so the text's own width is measured.
     for (const line of [...lines, panel.locator("#disclaimer"), panel.locator("#choice")]) {
-      await expect(line).toBeVisible();
+      await expect.soft(line).toBeVisible();
       const box = await line.boundingBox();
-      expect(box === null ? Number.POSITIVE_INFINITY : box.x + box.width).toBeLessThanOrEqual(
-        width,
-      );
-      expect(await line.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0);
+      expect
+        .soft(box === null ? Number.POSITIVE_INFINITY : box.x + box.width)
+        .toBeLessThanOrEqual(width);
+      expect
+        .soft(await line.evaluate((element) => element.scrollWidth - element.clientWidth))
+        .toBe(0);
     }
-    expect(await panel.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
-      width,
-    );
+    expect
+      .soft(await panel.evaluate(() => document.documentElement.scrollWidth))
+      .toBeLessThanOrEqual(width);
 
     // The recorder's control: a change planted on the broker's page is seen.
     const broker = await opened.broker();
     await broker.evaluate(() => {
       document.body.setAttribute("data-planted", "yes");
     });
-    expect(await seenOn(broker)).toEqual(["mutation attributes"]);
-  });
-});
+    expect.soft(await seenOn(broker)).toEqual(["mutation attributes"]);
 
-test("a page the advice needs and has not read is named", async () => {
-  await withPanel(async (opened) => {
-    const { panel } = opened;
-    await saveUniverse(panel, "BBCA BBRI", "Universe saved: 2 stocks.");
-    await readOnBroker(opened, "portfolio", "Read the portfolio page.");
-    await panel.getByRole("tab", { name: "Advice" }).click();
-    await expect(panel.locator("#advice")).toContainText("Open the watchlist page.");
+    // Forgetting, once confirmed, leaves History empty.
+    await panel.getByRole("tab", { name: "History" }).click();
+    const history = panel.locator("#pane-history");
+    await expect
+      .soft(history)
+      .toContainText("steadyhand records a broker page only while this panel is open beside it.");
+    await expect.soft(panel.locator("#stock-history p")).not.toHaveCount(0);
+    await expect.soft(panel.locator("#forget-confirm")).toBeHidden();
+    await panel.getByRole("button", { name: "Forget everything" }).click();
+    await expect.soft(panel.locator("#forget-confirm")).toBeVisible();
+    await panel.getByRole("button", { name: "Yes, forget everything" }).click();
+    await expect.soft(panel.locator("#status")).toHaveText("Everything is forgotten.");
+    await expect.soft(panel.locator("#stock-history")).toHaveText("Nothing is recorded yet.");
   });
 });
 
@@ -376,24 +389,5 @@ test("Settings keeps the strategy, the goal and the exclusions, and Lessons show
     await expect(lessons.locator("h2").first()).toHaveText("Start here");
     await expect(lessons.locator("h2").last()).toHaveText("Strategies");
     await expect(panel.locator("#lesson-start\\.welcome h3")).toHaveText("Start here");
-  });
-});
-
-test("forgetting everything, once confirmed, leaves History empty", async () => {
-  await withPanel(async (opened) => {
-    const { panel } = opened;
-    await readOnBroker(opened, "watchlist", "Read the watchlist page.");
-    await panel.getByRole("tab", { name: "History" }).click();
-    const history = panel.locator("#pane-history");
-    await expect(history).toContainText(
-      "steadyhand records a broker page only while this panel is open beside it.",
-    );
-    await expect(panel.locator("#stock-history p")).not.toHaveCount(0);
-    await expect(panel.locator("#forget-confirm")).toBeHidden();
-    await panel.getByRole("button", { name: "Forget everything" }).click();
-    await expect(panel.locator("#forget-confirm")).toBeVisible();
-    await panel.getByRole("button", { name: "Yes, forget everything" }).click();
-    await expect(panel.locator("#status")).toHaveText("Everything is forgotten.");
-    await expect(panel.locator("#stock-history")).toHaveText("Nothing is recorded yet.");
   });
 });

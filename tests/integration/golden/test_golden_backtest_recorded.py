@@ -6,7 +6,7 @@ in its heaviest measured run (develop, 2026-10-13: 0.30 s to 0.77 s). ``scripts/
 writes the stored files they reproduce; after a change that moves the numbers on purpose,
 re-record with ``uv run python scripts/record_golden.py`` and review the diff.
 
-The unit suite keeps a stand-in of each, of the same name, in
+The unit suite keeps stand-ins of these checks, under their own names, in
 ``tests/golden/test_golden_backtest.py``: the same checks over nineteen trading days of three
 made-up stocks (``tests/cli/short_world.py``), against their own pinned files in
 ``tests/fixtures/golden/made-up``.
@@ -76,10 +76,11 @@ def test_the_recorder_writes_the_dividend_growth_file_byte_for_byte(tmp_path: Pa
     assert written.read_bytes() == GROWTH_GOLDEN.read_bytes()
 
 
-def test_the_window_holds_the_events_it_was_chosen_for(tmp_path: Path) -> None:
-    """The golden file is only worth pinning if the run meets a split, dividends, and prices
-    restored from an adjustment Yahoo does not report (#160)."""
+def test_the_golden_run_meets_its_events_and_its_income_report_agrees(tmp_path: Path) -> None:
     result = run(tmp_path)
+
+    # The golden file is only worth pinning if the run meets a split, dividends, and prices
+    # restored from an adjustment Yahoo does not report (#160).
     held = {p.instrument.symbol: p.quantity for p in result.run.final.holdings.portfolio.positions}
     # BBCA's 1-for-5 split on 13 October 2021: every share bought became five.
     bought = sum(
@@ -90,8 +91,8 @@ def test_the_window_holds_the_events_it_was_chosen_for(tmp_path: Path) -> None:
     )
     assert bought > 0
     assert held["BBCA"] == 5 * bought
-    paid = {e.instrument.symbol for report in result.run.reports for e in report.paid}
-    assert paid == {"ASII", "BBCA", "BBRI", "TLKM", "UNVR"}
+    payers = {e.instrument.symbol for report in result.run.reports for e in report.paid}
+    assert payers == {"ASII", "BBCA", "BBRI", "TLKM", "UNVR"}
     # BBRI's prices up to 2021-09-07 are restored (f = 1.100019), so it is ordered on the first
     # day and bought at the next open, and its 2021 dividend is credited at the restored Rp98.9057
     # a share.
@@ -111,9 +112,7 @@ def test_the_window_holds_the_events_it_was_chosen_for(tmp_path: Path) -> None:
         ),
     )
 
-
-def test_the_income_report_agrees_with_what_the_engine_paid(tmp_path: Path) -> None:
-    result = run(tmp_path)
+    # The income report agrees with what the engine paid.
     income = result.run.income
     assert income is not None
     paid = {
