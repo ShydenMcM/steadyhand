@@ -26,6 +26,7 @@ export const NOTE_CODES = {
   MISSING_DEPOSITS: "missing.deposits",
   MISSING_HISTORY: "missing.history",
   MISSING_PAGE: "missing.page",
+  MISSING_REREAD: "missing.reread",
   MISSING_RULES_YEAR: "missing.rules_year",
   RISK_HALT_DAILY_LOSS: "risk.halt.daily_loss",
   RISK_HALT_DRAWDOWN: "risk.halt.drawdown",
@@ -96,6 +97,15 @@ export const missingDeposits = (since: Day): Note =>
     NOTE_CODES.MISSING_DEPOSITS,
     `deposits and withdrawals since ${since} are not recorded: open the cash movement page, ` +
       "or enter each one (or none)",
+  );
+
+/** `missing.reread`: a deposit or withdrawal dated `day` was recorded after that day's portfolio
+ * read, so the read may not hold it (#499). */
+export const missingReread = (day: Day): Note =>
+  note(
+    NOTE_CODES.MISSING_REREAD,
+    `a deposit or withdrawal on ${day} was recorded after that day's portfolio read: ` +
+      "read the portfolio again",
   );
 
 /** `missing.rules_year`: this release carries no IDX holiday data for `year`. */

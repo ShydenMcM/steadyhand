@@ -11,7 +11,7 @@ import {
 } from "@steadyhand/core";
 import { IDBFactory } from "fake-indexeddb";
 import { beforeEach, expect, test } from "vitest";
-import { recordCashMovements, rowsOf } from "../src/record.ts";
+import { putAll, recordCashMovements, rowsOf } from "../src/record.ts";
 import {
   recordAnswered,
   recordResume,
@@ -105,11 +105,16 @@ const movements: Part<CashMovements> = {
   },
 };
 
-test("a cash-movement read records the period it covers with its rows", async () => {
+test("a cash-movement read records the period it covers and when it was read", async () => {
   await recordCashMovements(db, movements);
   expect(await rowsOf(db, STORES.cashMovementReads)).toEqual([
-    { from: "2025-06-01", to: "2025-06-17" },
+    { from: "2025-06-01", to: "2025-06-17", readAt: wib("2025-06-17T19:00:00") },
   ]);
+});
+
+test("a cash-movement read stored before #499 reads back with no read time", async () => {
+  await putAll(db, STORES.cashMovementReads, [{ from: "2025-06-01", to: "2025-06-17" }]);
+  expect((await riskRecord(db)).movementReads).toEqual([{ from: "2025-06-01", to: "2025-06-17" }]);
 });
 
 test("a cash-movement read refused for its totals records no period either", async () => {
@@ -146,7 +151,7 @@ test("everything recorded reads back as the record the halts are judged from", a
       { day: "2025-06-02", kind: "deposit", amount: rp(5_000_000n) },
       { day: "2025-06-10", kind: "withdrawal", amount: rp(250_000n), reference: "TX-9" },
     ],
-    movementReads: [{ from: "2025-06-01", to: "2025-06-17" }],
+    movementReads: [{ from: "2025-06-01", to: "2025-06-17", readAt: wib("2025-06-17T19:00:00") }],
     typed: [
       { day: "2025-06-18", kind: "deposit", amount: rp(700_000n), typedAt },
       {
