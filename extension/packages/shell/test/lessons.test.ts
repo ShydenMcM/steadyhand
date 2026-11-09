@@ -3,6 +3,7 @@ import { NOTE_CODES } from "@steadyhand/core";
 import { expect, test } from "vitest";
 import { lessonFrom, type Lesson } from "../src/lesson-text.ts";
 import { catalogue, LESSONS } from "../src/lessons.ts";
+import { identicalAllowed } from "../src/words.ts";
 
 // The lessons the extension ships (#244, spec §13): the Python course's lessons, less those that
 // describe what the extension does not do, thirteen rewritten for it, and six new.
@@ -52,7 +53,7 @@ const NEW = [
   "strategies.total_return",
 ] as const;
 
-const ALL: readonly Lesson[] = LESSONS.flatMap((module) => module.lessons);
+const ALL: readonly Lesson[] = LESSONS.en.flatMap((module) => module.lessons);
 
 /** Where the Python course keeps each lesson, by its package. */
 const PYTHON = new URL("../../../../packages/", import.meta.url);
@@ -119,7 +120,7 @@ test("the course ships the lessons kept as written, the rewritten ones and the n
 });
 
 test("the modules are the course's, in order, and none is empty", () => {
-  expect(LESSONS.map((module) => module.title)).toEqual([
+  expect(LESSONS.en.map((module) => module.title)).toEqual([
     "Start here",
     "Shares and dividends",
     "How IDX works",
@@ -129,11 +130,11 @@ test("the modules are the course's, in order, and none is empty", () => {
     "The income goal",
     "Strategies",
   ]);
-  expect(LESSONS.filter((module) => module.lessons.length === 0)).toEqual([]);
+  expect(LESSONS.en.filter((module) => module.lessons.length === 0)).toEqual([]);
 });
 
 test("each module's lessons are in their order, each place once", () => {
-  for (const module of LESSONS) {
+  for (const module of LESSONS.en) {
     const places = module.lessons.map((lesson) => lesson.position);
     expect(places).toEqual([...new Set(places)].sort((one, other) => one - other));
   }
@@ -210,4 +211,82 @@ test("a lesson in a module the course does not have is refused, naming both", ()
   expect(() => catalogue([placed("x.y", "backtesting", 1)])).toThrow(
     "x.y is in the module backtesting, which the course does not have",
   );
+});
+
+// The lessons in Indonesian (#251 AC1-AC2): every English lesson has one, in the same module and
+// place, explaining the same notes and pointing to the same lessons, with blocks of the same
+// shape, and none is its English left untranslated.
+
+const INDONESIAN: readonly Lesson[] = LESSONS.id.flatMap((module) => module.lessons);
+const IDS = ALL.map((lesson) => lesson.id).sort();
+const englishOf = (id: string): Lesson =>
+  ALL.find((lesson) => lesson.id === id) ?? pythonLesson(id);
+const indonesianOf = (id: string): Lesson | undefined =>
+  INDONESIAN.find((lesson) => lesson.id === id);
+
+/** A lesson's blocks with their words left out: each block's kind and how many items, rows and
+ * cells it has. */
+const shapeOf = (lesson: Lesson | undefined): unknown =>
+  lesson?.blocks.map((block) => {
+    if (block.kind === "paragraph") {
+      return "paragraph";
+    }
+    if (block.kind === "list") {
+      return [block.ordered ? "ordered" : "list", block.items.length];
+    }
+    return ["table", block.heading.length, block.rows.map((row) => row.length)];
+  });
+
+test("the Indonesian course has every English lesson, and no other", () => {
+  expect(INDONESIAN.map((lesson) => lesson.id).sort()).toEqual(IDS);
+});
+
+test("the Indonesian modules are the course's, in order", () => {
+  expect(LESSONS.id.map((module) => module.title)).toEqual([
+    "Mulai di sini",
+    "Saham dan dividen",
+    "Cara kerja BEI",
+    "Biaya dan pajak",
+    "Risiko",
+    "Memakai steadyhand",
+    "Target pendapatan",
+    "Strategi",
+  ]);
+});
+
+test.each(IDS)("%s in Indonesian keeps its module, place, notes, links and shape", (id) => {
+  const english = englishOf(id);
+  const indonesian = indonesianOf(id);
+  expect([
+    indonesian?.module,
+    indonesian?.position,
+    indonesian?.explains,
+    indonesian?.seeAlso,
+    shapeOf(indonesian),
+  ]).toEqual([
+    english.module,
+    english.position,
+    english.explains,
+    english.seeAlso,
+    shapeOf(english),
+  ]);
+});
+
+test.each(IDS)("%s in Indonesian is not its English left untranslated", (id) => {
+  const english = new Set(textsOf(englishOf(id)));
+  const indonesian = indonesianOf(id);
+  const left = (indonesian === undefined ? ["(missing)"] : textsOf(indonesian)).filter(
+    (text) => english.has(text) && !identicalAllowed(text.trim()),
+  );
+  expect(left).toEqual([]);
+});
+
+test.each(IDS)("%s in Indonesian never advises, nor speaks as kami or kita", (id) => {
+  const indonesian = indonesianOf(id);
+  const words = (indonesian === undefined ? ["(missing)"] : textsOf(indonesian)).flatMap(
+    (text) =>
+      text.match(/merekomendasikan|rekomendasi|kami\s+sarankan|\b(?:kami|kita)\b|\(missing\)/giu) ??
+      [],
+  );
+  expect(words).toEqual([]);
 });

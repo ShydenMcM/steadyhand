@@ -26,12 +26,18 @@ test("the core's files walked are those git lists", () => {
   expect(CORE).toEqual(gitListed("packages/core/src", [".ts"]));
 });
 
-test("every note code the core raises has a lesson that explains it", () => {
-  const raised = [...new Set(CORE.flatMap((path) => codesIn(readSource(path))))].sort();
-  expect(raised.length).toBeGreaterThan(0);
-  const explained = new Set(LESSONS.flatMap((module) => module.lessons.flatMap((l) => l.explains)));
-  expect(raised.filter((code) => !explained.has(code))).toEqual([]);
-});
+// In each language the lessons ship in (#251).
+test.each(["en", "id"] as const)(
+  "every note code the core raises has a lesson in %s that explains it",
+  (language) => {
+    const raised = [...new Set(CORE.flatMap((path) => codesIn(readSource(path))))].sort();
+    expect(raised.length).toBeGreaterThan(0);
+    const explained = new Set(
+      LESSONS[language].flatMap((module) => module.lessons.flatMap((l) => l.explains)),
+    );
+    expect(raised.filter((code) => !explained.has(code))).toEqual([]);
+  },
+);
 
 test("a code named only in a comment or a string is not counted as raised", () => {
   const file = parse(

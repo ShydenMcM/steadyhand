@@ -40,6 +40,8 @@ import strategiesMonthlySavings from "../lessons/strategies.monthly_savings.md";
 import strategiesTotalReturn from "../lessons/strategies.total_return.md";
 import taxDividend from "../lessons/tax.dividend.md";
 import { lessonFrom, type Lesson } from "./lesson-text.ts";
+import { WRITTEN_IN_INDONESIAN } from "./lessons-id.ts";
+import type { Language } from "./words.ts";
 
 export interface LessonModule {
   readonly title: string;
@@ -48,15 +50,15 @@ export interface LessonModule {
 
 /** The course's modules, in order: each lesson names its module by slug. */
 const COURSE = [
-  ["start-here", "Start here"],
-  ["shares-and-dividends", "Shares and dividends"],
-  ["how-idx-works", "How IDX works"],
-  ["costs-and-tax", "Costs and tax"],
-  ["risk", "Risk"],
-  ["using-steadyhand", "Using steadyhand"],
-  ["income-goal", "The income goal"],
-  ["strategies", "Strategies"],
-] as const;
+  ["start-here", { en: "Start here", id: "Mulai di sini" }],
+  ["shares-and-dividends", { en: "Shares and dividends", id: "Saham dan dividen" }],
+  ["how-idx-works", { en: "How IDX works", id: "Cara kerja BEI" }],
+  ["costs-and-tax", { en: "Costs and tax", id: "Biaya dan pajak" }],
+  ["risk", { en: "Risk", id: "Risiko" }],
+  ["using-steadyhand", { en: "Using steadyhand", id: "Memakai steadyhand" }],
+  ["income-goal", { en: "The income goal", id: "Target pendapatan" }],
+  ["strategies", { en: "Strategies", id: "Strategi" }],
+] as const satisfies readonly (readonly [string, Readonly<Record<Language, string>>])[];
 
 /** Every lesson written, read. */
 const WRITTEN: readonly Lesson[] = [
@@ -99,9 +101,12 @@ const WRITTEN: readonly Lesson[] = [
   taxDividend,
 ].map(lessonFrom);
 
-/** The modules of `lessons`, in the course's order, each with its lessons by place; a lesson in a
- * module the course does not have is refused, naming both. */
-export const catalogue = (lessons: readonly Lesson[]): readonly LessonModule[] => {
+/** The modules of `lessons`, in the course's order, each titled in `language` with its lessons by
+ * place; a lesson in a module the course does not have is refused, naming both. */
+export const catalogue = (
+  lessons: readonly Lesson[],
+  language: Language = "en",
+): readonly LessonModule[] => {
   const slugs = new Set<string>(COURSE.map(([slug]) => slug));
   const stray = lessons.find((lesson) => !slugs.has(lesson.module));
   if (stray !== undefined) {
@@ -109,13 +114,16 @@ export const catalogue = (lessons: readonly Lesson[]): readonly LessonModule[] =
       `${stray.id} is in the module ${stray.module}, which the course does not have`,
     );
   }
-  return COURSE.map(([slug, title]) => ({
-    title,
+  return COURSE.map(([slug, titles]) => ({
+    title: titles[language],
     lessons: lessons
       .filter((lesson) => lesson.module === slug)
       .sort((one, other) => one.position - other.position),
   })).filter((module) => module.lessons.length > 0);
 };
 
-/** The lessons this release ships. */
-export const LESSONS: readonly LessonModule[] = catalogue(WRITTEN);
+/** The lessons this release ships, in each language (#251). */
+export const LESSONS: Readonly<Record<Language, readonly LessonModule[]>> = {
+  en: catalogue(WRITTEN, "en"),
+  id: catalogue(WRITTEN_IN_INDONESIAN.map(lessonFrom), "id"),
+};

@@ -24,7 +24,7 @@ import type { Lesson } from "../src/lesson-text.ts";
 import type { LessonModule } from "../src/lessons.ts";
 import { SETTINGS } from "../src/record-read.ts";
 import { FEE_PRESETS, KEPT } from "../src/settings.ts";
-import { slotsOf, WORDS } from "../src/words.ts";
+import { slotsOf, WORDS, type Language } from "../src/words.ts";
 
 // The side panel (spec §10.2, §10.3, #238 AC3-AC4): it records each page the content script sends,
 // asks the active tab for its page on "Read this page", keeps the universe typed into Settings,
@@ -174,7 +174,7 @@ const open = async (
   chrome = standInChrome(() => Promise.resolve(undefined)),
   clock = () => AFTER_CLOSE,
   storage = standInStorage(),
-  lessons: readonly LessonModule[] = [],
+  lessons: Readonly<Record<Language, readonly LessonModule[]>> = { en: [], id: [] },
 ) => {
   const page = standInDocument();
   const panel = await startPanel({
@@ -1167,7 +1167,7 @@ test("with no lessons the Lessons tab says they come in a later release", async 
 });
 
 test("the Lessons tab shows each module's lessons in order: title, summary and every block", async () => {
-  const { page } = await open(undefined, undefined, undefined, CATALOGUE);
+  const { page } = await open(undefined, undefined, undefined, { en: CATALOGUE, id: [] });
   expect(textOf(byId(page, "pane-lessons"))).toEqual([
     "How IDX works",
     "Lots",
@@ -1191,7 +1191,7 @@ test("the Lessons tab shows each module's lessons in order: title, summary and e
 });
 
 test("each lesson is a section labelled by its title, under its module's heading", async () => {
-  const { page } = await open(undefined, undefined, undefined, CATALOGUE);
+  const { page } = await open(undefined, undefined, undefined, { en: CATALOGUE, id: [] });
   const lesson = byId(page, "lesson-idx.lots");
   expect(lesson.tagName).toBe("section");
   expect(lesson.attributes.get("aria-labelledby")).toBe("lesson-idx.lots-title");
@@ -1205,7 +1205,7 @@ const shape = (root: StandIn): unknown =>
   root.children.length === 0 ? root.tagName : { [root.tagName]: root.children.map(shape) };
 
 test("a paragraph's spans, a list's items and a table's cells are their own elements", async () => {
-  const { page } = await open(undefined, undefined, undefined, CATALOGUE);
+  const { page } = await open(undefined, undefined, undefined, { en: CATALOGUE, id: [] });
   expect(shape(byId(page, "lesson-idx.lots"))).toEqual({
     section: [
       "h3",
@@ -1548,4 +1548,42 @@ test("forgetting everything forgets the language too, and the panel speaks Engli
   expect(byId(page, "status").textContent).toBe("Everything is forgotten.");
   expect(byId(page, "tab-history").textContent).toBe("History");
   expect(byId(page, "language").value).toBe("en");
+});
+
+// The lessons follow the language (#251 AC1): the Lessons tab shows the catalogue in the language
+// kept, and changes with it.
+
+const CATALOGUE_ID: readonly LessonModule[] = [
+  {
+    title: "Cara kerja BEI",
+    lessons: [
+      lessonOf("idx.lots", "Lot", [
+        {
+          kind: "paragraph",
+          spans: [plain("Satu lot adalah "), { text: "100 lembar", style: "strong" }],
+        },
+      ]),
+    ],
+  },
+];
+
+test("the Lessons tab shows the Indonesian lessons once Indonesian is saved, and English again after", async () => {
+  const opened = await open(undefined, undefined, undefined, { en: CATALOGUE, id: CATALOGUE_ID });
+  await chooseLanguage(opened, "id");
+  expect(textOf(byId(opened.page, "pane-lessons"))).toEqual([
+    "Cara kerja BEI",
+    "Lot",
+    "Lot, in one line.",
+    "Satu lot adalah ",
+    "100 lembar",
+  ]);
+  await chooseLanguage(opened, "en");
+  expect(textOf(byId(opened.page, "pane-lessons"))[0]).toBe("How IDX works");
+});
+
+test("with no Indonesian lessons the Lessons tab says so in Indonesian", async () => {
+  await putSetting(db, KEPT.language, "id");
+  const { page, panel } = await open();
+  await panel.settled();
+  expect(textOf(byId(page, "pane-lessons"))).toEqual([WORDS.id.noLessons]);
 });

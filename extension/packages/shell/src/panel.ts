@@ -127,8 +127,8 @@ export interface PanelInputs<E extends PanelElement<E>> {
   readonly factory: IDBFactory;
   /** The extension's own storage, which "forget everything" clears. */
   readonly storage: ExtensionStorage;
-  /** The lesson catalogue the Lessons tab renders. */
-  readonly lessons: readonly LessonModule[];
+  /** The lesson catalogue the Lessons tab renders, in each language (#251). */
+  readonly lessons: Readonly<Record<Language, readonly LessonModule[]>>;
   readonly runtime: PanelRuntime;
   readonly tabs: PanelTabs;
   readonly clock: () => Date;
@@ -409,6 +409,7 @@ export const startPanel = async <E extends PanelElement<E>>(
     for (const [made, key] of said) {
       made.textContent = words[key];
     }
+    showLessons();
   };
 
   // The strategy and its settings (#239 AC1): a labelled input per setting, its help read with it.
@@ -548,26 +549,34 @@ export const startPanel = async <E extends PanelElement<E>>(
     saveExclusions,
   );
   panes.history.append(recordingNote, stocksRecorded, forget, forgetConfirm);
-  // Lessons (#239 AC3): each module's heading, then each of its lessons as a section.
-  panes.lessons.append(
-    ...(inputs.lessons.length === 0
-      ? [element("p", "", "noLessons")]
-      : inputs.lessons.flatMap((module) => [
-          holding("h2", module.title),
-          ...module.lessons.map((lesson) => {
-            const section = element("section", `lesson-${lesson.id}`);
-            const title = named(
-              page.createElement("h3"),
-              `${section.id}-title`,
-              undefined,
-              lesson.title,
-            );
-            section.setAttribute("aria-labelledby", title.id);
-            section.append(title, holding("p", lesson.summary), ...lesson.blocks.map(blockElement));
-            return section;
-          }),
-        ])),
-  );
+  // Lessons (#239 AC3): each module's heading, then each of its lessons as a section, in the
+  // language chosen (#251).
+  const showLessons = (): void => {
+    const modules = inputs.lessons[language];
+    panes.lessons.replaceChildren(
+      ...(modules.length === 0
+        ? [holding("p", words.noLessons)]
+        : modules.flatMap((module) => [
+            holding("h2", module.title),
+            ...module.lessons.map((lesson) => {
+              const section = element("section", `lesson-${lesson.id}`);
+              const title = named(
+                page.createElement("h3"),
+                `${section.id}-title`,
+                undefined,
+                lesson.title,
+              );
+              section.setAttribute("aria-labelledby", title.id);
+              section.append(
+                title,
+                holding("p", lesson.summary),
+                ...lesson.blocks.map(blockElement),
+              );
+              return section;
+            }),
+          ])),
+    );
+  };
   show("advice");
   page.body.append(status, tabList, ...tabs.map(({ pane }) => pane), footer);
 
