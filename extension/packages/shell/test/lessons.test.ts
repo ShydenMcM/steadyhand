@@ -272,10 +272,29 @@ test.each(IDS)("%s in Indonesian keeps its module, place, notes, links and shape
   ]);
 });
 
+/** A lesson's words outside code spans: a code span is a name (a strategy, a setting), the same in
+ * every language. */
+const proseOf = (lesson: Lesson): string[] => [
+  lesson.title,
+  lesson.summary,
+  ...lesson.blocks
+    .flatMap((block) => {
+      if (block.kind === "paragraph") {
+        return block.spans;
+      }
+      if (block.kind === "list") {
+        return block.items.flat();
+      }
+      return [block.heading, ...block.rows].flat(2);
+    })
+    .filter((span) => span.style !== "code")
+    .map((span) => span.text),
+];
+
 test.each(IDS)("%s in Indonesian is not its English left untranslated", (id) => {
-  const english = new Set(textsOf(englishOf(id)));
+  const english = new Set(proseOf(englishOf(id)));
   const indonesian = indonesianOf(id);
-  const left = (indonesian === undefined ? ["(missing)"] : textsOf(indonesian)).filter(
+  const left = (indonesian === undefined ? ["(missing)"] : proseOf(indonesian)).filter(
     (text) => english.has(text) && !identicalAllowed(text.trim()),
   );
   expect(left).toEqual([]);

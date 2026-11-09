@@ -245,9 +245,10 @@ export const fill = (text: string, values: Readonly<Record<string, string>>): st
   });
 };
 
-/** Words that read the same in every language: the product's name, codes in capitals, numbers
- * and dates, and slots. */
-const SAME_IN_EVERY_LANGUAGE = /^(?:steadyhand|[A-Z]{2,}|[\d.,:-]+|\{\w+\})$/u;
+/** Words that read the same in every language: the product's name, codes in capitals (with any
+ * digits or plus signs, such as LQ45 and T+2), numbers, dates and percentages, rupiah amounts,
+ * and slots. */
+const SAME_IN_EVERY_LANGUAGE = /^(?:steadyhand|[A-Z][A-Z\d+]+|[\d.,:-]+%?|Rp\d[\d.,]*|\{\w+\})$/u;
 
 /** Whether `text` may read the same in Indonesian as in English: every word in it is one that
  * reads the same in every language (the derived list, #251 AC2). */
