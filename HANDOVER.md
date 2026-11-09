@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-09. #246, #248, #249, #250 (not planned), #247, #308, #348 (not planned), #400, #499, #528, #535 shut. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-09. #246, #248, #249, #250 (not planned), #247, #539, #308, #348 (not planned), #400, #499, #528, #535 shut. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here (desktop extension; phones unavailable anyway).
 
@@ -23,15 +23,15 @@
 
 ## Running
 
-- The #539 PR, CI running; its waiter dies with this session, so re-run `~/.claude/scripts/pr-verdict.sh <pr>` on resume.
+- Nothing local, no PR open. Colima not held.
 
 ## P4 is open (Shyden 2026-11-09, AskUserQuestion)
 
 - The broker account is still not open, and he lifted the no-P4 ruling: **P4 stories start by Priority before the first release**. All P4s tie, so lowest number with every blocker closed.
 - Each strategy story's first AC is a spec amendment he approves before code. Measure the readings first with `.superpowers/sdd/247-low-volatility/measure.py` (point-in-time LQ45 cache in `.superpowers/sdd/m7-lq45`), ask, write spec §7.3, ask approval, then test first.
 - **Strategies settled 2026-11-09:** #247 low-volatility shipped (PR #538). Dropped after measuring, closed not planned: #246 dual-momentum, #248 breakout, #249 rsi-reversion, #250 dividend-capture (it becomes #539's lesson). Figures on each ticket and in spec §7.3. Scripts: `.superpowers/sdd/{246-dual-momentum,247-low-volatility,248-breakout,249-rsi,250-capture}/measure.py`.
-- **#539** (ex-date lesson): PR open from `539/ex-date-lesson`. When merged, read its ACs off and shut it by hand.
-- **Next: #251 (Indonesian, 8 points).** Before starting, ask Shyden which fluent reader reviews it (its AC4); every line needs the Google read-back (global rule). Then #254, #255, #256, #339, #345. #252, #253, #257 and #258 are blocked on the parked readers.
+- **#539** (ex-date lesson): shipped in PR #540, shut.
+- **Next: #251 (Indonesian, 8 points), not started.** Shyden 2026-11-09: build now, name the fluent reader later; #251 stays open until that reading is done. Every line needs the Google read-back (global rule). Then #254, #255, #256, #339, #345. #252, #253, #257 and #258 are blocked on the parked readers.
 - **New tests (global rule "One journey, all its assertions"):** before writing any e2e, journey, device or integration test, look for that journey and add the assertion there. Agent briefs carry this.
 
 ## Waiting on Shyden
@@ -45,7 +45,7 @@
 ## Resume steps
 
 1. `ListAgents`; `git status --short`; `git fetch --prune`; `git rev-parse --abbrev-ref HEAD`.
-2. #242/#243/#245 are parked on the broker account. #348 (SonarCloud) is closed: no SonarCloud for steadyhand (Shyden 2026-11-08). Merge the #539 PR when green, then take the next P4.
+2. #242/#243/#245 are parked on the broker account. #348 (SonarCloud) is closed: no SonarCloud for steadyhand (Shyden 2026-11-08). Start #251.
 3. Merge rule: squash into develop when every check is green on the head SHA (standing approval 2026-11-04); read the browser suite's per-browser totals and each new guard by name before merging.
 4. Core rules (CI-only guards, a hook refusal is final): no `number` declarations or `Number(...)` in core, no index parameters in callbacks, no generic `test.each<...>(`, no identifier named `window`/`document`/`chrome`/`indexedDB` in core, no `%j` titles over bigints; a `?? fallback` never taken fails 100% branch coverage; scratch copies go in `pristine/`, never `*.bak`. Guards, integration and the browser suite are CI's. Read a gate's `exit=` line, and grep `Errors|Unhandled`, never only `Tests`.
 5. Filing a ticket: `gh issue create`, `gh project item-add 1 --owner ShydenMcM --url <issue>`, `gh project item-edit` (project id `PVT_kwHOCQ_jzM4BkhEb`) with Priority `PVTSSF_lAHOCQ_jzM4BkhEbzhn_bYM` (P0 `2f8059d5`, P1 `ec7925c3`, P4 `6e3c5b78`), Estimate `PVTF_lAHOCQ_jzM4BkhEbzhkUeyc`, Status `PVTSSF_lAHOCQ_jzM4BkhEbzhjRYtk` (Todo `f75ad846`, In Progress `47fc9ee4`, Done `98236657`); read back by repository + issue.
