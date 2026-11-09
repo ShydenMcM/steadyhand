@@ -406,9 +406,8 @@ export const startPanel = async <E extends PanelElement<E>>(
     words = WORDS[chosen];
     languagePicker.value = chosen;
     page.body.setAttribute("lang", chosen);
-    for (const [made, key] of said) {
-      made.textContent = words[key];
-    }
+    // PROBE (#251): relabel switched off to see the journey fail.
+    void said;
   };
 
   // The strategy and its settings (#239 AC1): a labelled input per setting, its help read with it.
