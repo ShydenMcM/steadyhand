@@ -24,6 +24,7 @@ import type { Lesson } from "../src/lesson-text.ts";
 import type { LessonModule } from "../src/lessons.ts";
 import { SETTINGS } from "../src/record-read.ts";
 import { FEE_PRESETS, KEPT } from "../src/settings.ts";
+import { slotsOf, WORDS } from "../src/words.ts";
 
 // The side panel (spec §10.2, §10.3, #238 AC3-AC4): it records each page the content script sends,
 // asks the active tab for its page on "Read this page", keeps the universe typed into Settings,
@@ -1424,4 +1425,127 @@ test("a second click on the answer finds nothing asked, and keeps nothing more",
     "Kept: no deposits or withdrawals since 2025-06-16.",
   );
   expect(await rowsOf(db, STORES.answered)).toHaveLength(1);
+});
+
+// The language (#251 AC1): chosen on Settings, kept, and every text the panel writes follows it.
+
+/** The English texts with no slot: none is left on the page once Indonesian is chosen. */
+const ENGLISH_FIXED = new Set(Object.values(WORDS.en).filter((text) => slotsOf(text).length === 0));
+
+const chooseLanguage = async (
+  opened: { page: StandIn; panel: { settled(): Promise<void> } },
+  language: string,
+) => {
+  byId(opened.page, "language").value = language;
+  byId(opened.page, "save-language").clicked?.();
+  await opened.panel.settled();
+};
+
+test("the language is chosen on Settings from English and Bahasa Indonesia, English first", async () => {
+  const { page, panel } = await open();
+  await panel.settled();
+  const settings = byId(page, "pane-settings");
+  const picker = byId(settings, "language");
+  expect(picker.tagName).toBe("select");
+  const label = byId(settings, "language-label");
+  expect([label.tagName, label.htmlFor, label.textContent]).toEqual([
+    "label",
+    "language",
+    "Language",
+  ]);
+  expect(
+    picker.children.map((option) => [option.tagName, option.value, option.textContent]),
+  ).toEqual([
+    ["option", "en", "English"],
+    ["option", "id", "Bahasa Indonesia"],
+  ]);
+  expect(picker.value).toBe("en");
+  expect(byId(settings, "save-language").textContent).toBe("Save language");
+  expect(page.attributes.get("lang")).toBe("en");
+});
+
+test("Bahasa Indonesia saved is kept, and the panel then writes no English text", async () => {
+  const opened = await open();
+  await chooseLanguage(opened, "id");
+  const { page } = opened;
+  expect(await settingOf(db, KEPT.language)).toBe("id");
+  expect(byId(page, "status").textContent).toBe("Bahasa disimpan.");
+  expect(page.attributes.get("lang")).toBe("id");
+  expect(TABS.map((tab) => byId(page, `tab-${tab}`).textContent)).toEqual([
+    "Saran",
+    "Pengaturan",
+    "Riwayat",
+    "Pelajaran",
+  ]);
+  expect(byId(page, "disclaimer").textContent).toBe(WORDS.id.disclaimer);
+  expect(byId(page, "choice").textContent).toBe(WORDS.id.choiceLine);
+  expect(textOf(byId(page, "typed-movements"))).toEqual([WORDS.id.noMovements]);
+  expect(byId(page, "movement-kind").children.map((option) => option.textContent)).toEqual([
+    "Setoran",
+    "Penarikan",
+  ]);
+  expect(textOf(page).filter((text) => ENGLISH_FIXED.has(text))).toEqual([]);
+});
+
+test("the panel opens again in the language kept", async () => {
+  await putSetting(db, KEPT.language, "id");
+  const { page, panel } = await open();
+  await panel.settled();
+  expect(byId(page, "language").value).toBe("id");
+  expect(byId(page, "read").textContent).toBe("Baca halaman ini");
+  expect(page.attributes.get("lang")).toBe("id");
+  expect(textOf(page).filter((text) => ENGLISH_FIXED.has(text))).toEqual([]);
+});
+
+test("English saved after Indonesian brings every English text back", async () => {
+  const opened = await open();
+  await chooseLanguage(opened, "id");
+  await chooseLanguage(opened, "en");
+  const { page } = opened;
+  expect(byId(page, "status").textContent).toBe("Language saved.");
+  expect(byId(page, "tab-settings").textContent).toBe("Settings");
+  expect(byId(page, "forget-yes").textContent).toBe("Yes, forget everything");
+  expect(page.attributes.get("lang")).toBe("en");
+});
+
+test("the status line and History speak the language kept", async () => {
+  const opened = await open();
+  await chooseLanguage(opened, "id");
+  await readPages(opened, ["portfolio"]);
+  const { page } = opened;
+  expect(byId(page, "status").textContent).toBe("Sudah membaca halaman portofolio.");
+  expect(historyLines(page)).toEqual([
+    "BBCA: 1 hari tercatat, 0 pembacaan grafik, 0 dividen",
+    "TLKM: 1 hari tercatat, 0 pembacaan grafik, 0 dividen",
+  ]);
+  byId(page, "universe").value = "bbca, tlkm";
+  byId(page, "save-universe").clicked?.();
+  await opened.panel.settled();
+  expect(byId(page, "status").textContent).toBe("Semesta disimpan: 2 saham.");
+});
+
+test("a kept language not as Settings keeps it opens the panel in English, saying so", async () => {
+  await putSetting(db, KEPT.language, "fr");
+  const { page, panel } = await open();
+  await panel.settled();
+  expect(byId(page, "language").value).toBe("en");
+  expect(byId(page, "tab-advice").textContent).toBe("Advice");
+  expect(byId(page, "status").textContent).toBe(
+    "The kept language is not one steadyhand has; English is shown.",
+  );
+});
+
+test("forgetting everything forgets the language too, and the panel speaks English again", async () => {
+  const opened = await open();
+  await chooseLanguage(opened, "id");
+  byId(opened.page, "forget").clicked?.();
+  byId(opened.page, "forget-yes").clicked?.();
+  await opened.panel.settled();
+  const { page } = opened;
+  const reopened = await openHistory(factory);
+  expect(await settingOf(reopened, KEPT.language)).toBeUndefined();
+  reopened.close();
+  expect(byId(page, "status").textContent).toBe("Everything is forgotten.");
+  expect(byId(page, "tab-history").textContent).toBe("History");
+  expect(byId(page, "language").value).toBe("en");
 });

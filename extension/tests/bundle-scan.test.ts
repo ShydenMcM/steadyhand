@@ -145,6 +145,11 @@ test.each([
   ["Our RECOMMENDATION is", ["RECOMMEND"]],
   ["here we suggest BBCA", ["we suggest"]],
   ["We\nSuggest it", ["We\nSuggest"]],
+  // #251 AC5: the same words in Indonesian.
+  ["Saham ini kami merekomendasikan", ["merekomendasikan"]],
+  ["Rekomendasi hari ini", ["Rekomendasi"]],
+  ["Yang kami sarankan BBCA", ["kami sarankan"]],
+  ["KAMI\nSARANKAN", ["KAMI\nSARANKAN"]],
 ])("the advice words in %j are found", (text, words) => {
   expect(adviceWords(text)).toEqual(words);
 });
