@@ -18,5 +18,6 @@ freezes the holding and flags it so that you decide what to do. It does not mode
 auctions, and staying out keeps a strategy clear of the stocks the exchange itself is worried
 about.
 
-The data steadyhand uses cannot tell it which stocks are on the board, so you keep that list
-yourself, in the exclusions file in your data folder, with the dates you added each one.
+steadyhand learns which stocks are on the board from your broker's flags page, the page that
+marks them, so read that page with the others to keep the list current. A stock you want kept out
+for a reason of your own can be excluded on Settings, with its code and your reason.
