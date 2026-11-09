@@ -5,7 +5,7 @@ import { lessonFrom, type Lesson } from "../src/lesson-text.ts";
 import { catalogue, LESSONS } from "../src/lessons.ts";
 
 // The lessons the extension ships (#244, spec §13): the Python course's lessons, less those that
-// describe what the extension does not do, thirteen rewritten for it, and six new.
+// describe what the extension does not do, fourteen rewritten for it, and six new.
 
 /** Kept as written: their text is the Python lesson's, word for word. */
 const AS_WRITTEN = [
@@ -20,7 +20,6 @@ const AS_WRITTEN = [
   "income.calendar",
   "income.goal",
   "income.run_rate",
-  "risk.limits",
   "shares.basics",
   "shares.cost_basis",
   "shares.splits",
@@ -32,6 +31,7 @@ const REWRITTEN = [
   "idx.universe",
   "orders.not_tradable",
   "risk.drawdown",
+  "risk.limits",
   "risk.returns",
   "shares.prices",
   "start.explanations",
@@ -88,9 +88,9 @@ const textsOf = (lesson: Lesson): string[] => [
 ];
 
 /** What spec §13 refuses in a shipped lesson: backtests, paper trading, Yahoo, a command line or
- * the Python configuration file. */
+ * the Python configuration file (any "configuration", #548). */
 const FORBIDDEN =
-  /backtest|paper[ -]?trad|paper run|yahoo|steadyhand\.toml|steadyhand-idx|command line|\bCLI\b|explain command|configuration file/iu;
+  /backtest|paper[ -]?trad|paper run|yahoo|steadyhand\.toml|steadyhand-idx|command line|\bCLI\b|explain command|configuration/iu;
 const forbiddenIn = (lesson: Lesson): string[] =>
   textsOf(lesson).filter((text) => FORBIDDEN.test(text));
 
@@ -160,7 +160,7 @@ test.each(AS_WRITTEN)("%s is the Python lesson's text, word for word", (id) => {
 });
 
 test.each(ALL.map((lesson) => lesson.id))(
-  "%s names no backtest, paper trading, Yahoo, command line or configuration file",
+  "%s names no backtest, paper trading, Yahoo, command line or configuration",
   (id) => {
     expect(
       forbiddenIn(ALL.find((lesson) => lesson.id === id) ?? ALL[0] ?? pythonLesson(id)),
