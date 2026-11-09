@@ -45,6 +45,7 @@ const NEW = [
   "broker.reading",
   "orders.limit_prices",
   "strategies.high_yield",
+  "strategies.low_volatility",
   "strategies.ma_trend",
   "strategies.momentum_rotation",
   "strategies.total_return",

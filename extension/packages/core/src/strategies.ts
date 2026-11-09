@@ -10,6 +10,7 @@ import { buyAndHold } from "./buy-and-hold.ts";
 import { DIVIDEND_GROWTH, dividendGrowth } from "./dividend-growth.ts";
 import { HIGH_YIELD, highYield } from "./high-yield.ts";
 import { MA_TREND, maTrend } from "./ma-trend.ts";
+import { LOW_VOLATILITY, lowVolatility } from "./low-volatility.ts";
 import { MOMENTUM_ROTATION, momentumRotation } from "./momentum-rotation.ts";
 import { INSTALMENTS, monthlySavings } from "./monthly-savings.ts";
 import type { Strategy } from "./strategy.ts";
@@ -172,6 +173,29 @@ const REGISTERED: readonly RegisteredStrategy[] = [
         valueOf(values, "momentum_months"),
         valueOf(values, "skip_months"),
       ),
+  },
+  {
+    name: "low-volatility",
+    summary:
+      "Holds the stocks whose total return moved most evenly over the last year, reviewed monthly.",
+    settings: [
+      setting(
+        "volatility_stocks",
+        LOW_VOLATILITY.volatilityStocks,
+        1n,
+        45n,
+        "The most stocks held",
+      ),
+      setting(
+        "volatility_months",
+        LOW_VOLATILITY.volatilityMonths,
+        2n,
+        24n,
+        "The months over which the daily moves are measured",
+      ),
+    ],
+    make: (values) =>
+      lowVolatility(valueOf(values, "volatility_stocks"), valueOf(values, "volatility_months")),
   },
 ];
 

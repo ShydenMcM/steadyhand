@@ -1,5 +1,5 @@
 /** Total return (spec §6.5, decision 17): a stock's series (§6.3) with every cash dividend in its
- * window reinvested on its ex-date, as ma-trend and momentum-rotation judge it.
+ * window reinvested on its ex-date, as ma-trend, momentum-rotation and low-volatility judge it.
  *
  * Each dividend is restated in the series' share basis, today's (§6.6), and the standard factor
  * `1 - dividend / close the trading day before the ex-date` applies to every earlier close. A

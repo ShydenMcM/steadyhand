@@ -12,8 +12,8 @@ see_also = ["dividends.basics", "strategies.dividend_growth"]
 it gives each an equal share of the portfolio, never more than one part in `min_stocks` (15 by
 default). When fewer stocks pass than that, it does not spread the money over the few it has:
 the shares they would have taken stay in cash, and the panel's warnings say how many stocks
-passed. `high-yield` and `momentum-rotation` do the same when fewer stocks qualify than they
-hold.
+passed. `high-yield`, `momentum-rotation` and `low-volatility` do the same when fewer stocks qualify than
+they hold.
 
 This keeps the portfolio from resting on a handful of companies, which is a risk of its own. The
 cost is that cash earns nothing in steadyhand's sums, so a year with many dividend cuts can leave

@@ -12,7 +12,7 @@ const bounds = (name: string): readonly (readonly [string, bigint, bigint, bigin
     setting.most,
   ]);
 
-test("Settings offers the six strategies, dividend-growth first as the default", () => {
+test("Settings offers the seven strategies, dividend-growth first as the default", () => {
   expect([...STRATEGIES.keys()]).toEqual([
     "dividend-growth",
     "buy-and-hold",
@@ -20,6 +20,7 @@ test("Settings offers the six strategies, dividend-growth first as the default",
     "high-yield",
     "ma-trend",
     "momentum-rotation",
+    "low-volatility",
   ]);
 });
 
@@ -79,6 +80,28 @@ test("momentum-rotation is bounded as ruled on 2026-11-06", () => {
     ["momentum_months", 12n, 2n, 24n],
     ["skip_months", 1n, 0n, 23n],
   ]);
+});
+
+test("low-volatility is bounded as ruled on 2026-11-09", () => {
+  expect(bounds("low-volatility")).toEqual([
+    ["volatility_stocks", 10n, 1n, 45n],
+    ["volatility_months", 12n, 2n, 24n],
+  ]);
+});
+
+test("a low-volatility strategy is made with the values given", () => {
+  const made = strategyFrom(
+    "low-volatility",
+    new Map([
+      ["volatility_stocks", 5n],
+      ["volatility_months", 6n],
+    ]),
+  );
+  expect(made).toMatchObject({
+    name: "low-volatility",
+    volatilityStocks: 5n,
+    volatilityMonths: 6n,
+  });
 });
 
 test("a strategy made with no values takes every default", () => {
