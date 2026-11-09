@@ -242,9 +242,9 @@ The universe is the **LQ45** (IDX's list of 45 large, liquid stocks) as it stood
 | 6 | `momentum-rotation` | Each month, hold the top 10 stocks by 12-month return, skipping the most recent month | medium | 2 |
 | 7 | `dual-momentum` | **Dropped 2026-11-09 (broker-view spec §7.3).** Momentum rotation, but move to cash when even the best performers have fallen over 12 months | medium | 3 |
 | 8 | `low-volatility` | Hold the 10 stocks whose prices have swung least over the past year | low | 3 |
-| 9 | `breakout` | Buy when a stock closes at a 55-day high; sell at a 20-day low | medium | 3 |
-| 10 | `rsi-reversion` | Buy stocks that have fallen sharply over a short period (RSI below 30); sell when they recover (RSI above 55) or after 20 days | high | 4 |
-| 11 | `dividend-capture` | Buy just before ex-date and sell just after. **Shipped for learning:** on IDX the price usually drops by about the dividend on ex-date, so fees and the sell tax are expected to make this lose. The guide says so plainly. | high | 4 |
+| 9 | `breakout` | **Dropped 2026-11-09 (broker-view spec §7.3).** Buy when a stock closes at a 55-day high; sell at a 20-day low | medium | 3 |
+| 10 | `rsi-reversion` | **Dropped 2026-11-09 (broker-view spec §7.3).** Buy stocks that have fallen sharply over a short period (RSI below 30); sell when they recover (RSI above 55) or after 20 days | high | 4 |
+| 11 | `dividend-capture` | Buy just before ex-date and sell just after. **Dropped 2026-11-09 for the lesson `strategies.ex_date` (broker-view spec §7.3):** it was to ship for learning, expected to lose, but measured close to a coin flip (+0.25% a trade, 95% range -0.08% to +0.57%, ShydenMcM/steadyhand#250). | high | 4 |
 
 - **Waves** set the build order. Each wave is fully tested and documented before the next begins. All four waves are in scope for sub-project A.
 - **Deferred:** a true P/E or book-value "value" strategy. Free sources give today's fundamentals, not the figures as they stood on past dates (point-in-time), so backtesting such a strategy would use numbers nobody had at the time (look-ahead bias). It returns when a point-in-time fundamentals source exists. `high-yield` covers value-style investing using only price and dividend history, which is valid on past dates.
