@@ -208,6 +208,23 @@ Outside the first release's six (decision 22). Each is added here once its exact
 - A holding whose dividends for the window have not been read is listed as missing, and the goal shows no figure until every holding is covered.
 - Later stories, filed now: income received; the projection ("projection, not a promise"); the dividend tax-exemption claims.
 
+### 9.1 The income projection (#254, draft 2026-11-10, awaiting Shyden's approval)
+
+Ported from Python's `dividend_growth` and `project` (`packages/steadyhand/src/steadyhand/income.py`), with parity:
+
+- **Growth:** each paying holding's dividends a share over the trailing year against the year ending 4 years earlier (`GROWTH_YEARS`), both restated onto today's shares (§6.6). Its yearly rate is the fourth root of their ratio, less 1, rounded to `RATIO_PLACES`; a holding with nothing in the earlier year counts as 0% and gets an `income.growth.short_history` note. The portfolio's growth is the holdings' weighted by their run-rate gross. Python takes the root as `exp(ln(r) / 4)` at 50 digits; the port takes an exact integer fourth root to the same places, and a parity property test checks the two agree.
+- **Projection:** three scenarios, as Python: pessimistic (80% of the run-rate, growth at most 0%), base (growth capped at 5%) and optimistic (capped at 10%). Each starts from the run-rate's gross and the holdings' value (idle cash not assumed invested), reinvests the take-home income plus the monthly contribution each month at the holdings' own yield, grows dividends once a year, and stops when the monthly take-home meets the target, or after 50 years. Years are rounded up to a tenth. Trading costs are left out, and the `income.projection.costs_ignored` note says so.
+- **Label:** "Projection, not a promise", in years, never a date.
+- **Monthly contribution:** *to decide* (question 1 below).
+- **Where it shows:** *to decide* (question 2 below).
+- **Missing:** the projection needs each paying holding's dividends from 5 years before the advice day (`HISTORY_YEARS`). A holding whose dividend page has not been read that far back is listed under Missing, and no projection is shown until every holding is covered (#254 AC2).
+- **Lessons:** `income.projection` and `income.growth` return, rewritten where they name the backtest or the configuration file.
+
+Questions for Shyden (each with a recommendation):
+
+1. **The monthly contribution.** Python takes it from the run's settings; the extension has none. (a) **Recommended:** an optional Settings field, "Monthly amount you add, in rupiah", blank meaning 0, kept like the goal. (b) Always 0: simpler, but a saver's projection then reads years too long.
+2. **Where it shows.** (a) **Recommended:** under the Income goal section of the Advice tab, one line per scenario ("Base: about 12.4 years"). (b) Its own section.
+
 ## 10. The extension
 
 ### 10.1 Manifest V3
