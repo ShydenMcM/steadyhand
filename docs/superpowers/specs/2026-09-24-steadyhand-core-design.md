@@ -240,7 +240,7 @@ The universe is the **LQ45** (IDX's list of 45 large, liquid stocks) as it stood
 | 4 | `high-yield` | Hold the top 10 stocks by trailing 12-month dividend yield that have paid for at least 3 years, rebalanced quarterly | low | 2 |
 | 5 | `ma-trend` | Hold a stock while its 50-day average price is above its 200-day average; sell when that reverses | low–medium | 2 |
 | 6 | `momentum-rotation` | Each month, hold the top 10 stocks by 12-month return, skipping the most recent month | medium | 2 |
-| 7 | `dual-momentum` | Momentum rotation, but move to cash when even the best performers have fallen over 12 months | medium | 3 |
+| 7 | `dual-momentum` | **Dropped 2026-11-09 (broker-view spec §7.3).** Momentum rotation, but move to cash when even the best performers have fallen over 12 months | medium | 3 |
 | 8 | `low-volatility` | Hold the 10 stocks whose prices have swung least over the past year | low | 3 |
 | 9 | `breakout` | Buy when a stock closes at a 55-day high; sell at a 20-day low | medium | 3 |
 | 10 | `rsi-reversion` | Buy stocks that have fallen sharply over a short period (RSI below 30); sell when they recover (RSI above 55) or after 20 days | high | 4 |

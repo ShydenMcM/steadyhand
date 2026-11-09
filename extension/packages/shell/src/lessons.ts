@@ -32,6 +32,7 @@ import strategiesBuyAndHold from "../lessons/strategies.buy_and_hold.md";
 import strategiesDividendGrowth from "../lessons/strategies.dividend_growth.md";
 import strategiesHighYield from "../lessons/strategies.high_yield.md";
 import strategiesHoldingCash from "../lessons/strategies.holding_cash.md";
+import strategiesLowVolatility from "../lessons/strategies.low_volatility.md";
 import strategiesMaTrend from "../lessons/strategies.ma_trend.md";
 import strategiesMomentumRotation from "../lessons/strategies.momentum_rotation.md";
 import strategiesMonthlySavings from "../lessons/strategies.monthly_savings.md";
@@ -88,6 +89,7 @@ const WRITTEN: readonly Lesson[] = [
   strategiesDividendGrowth,
   strategiesHighYield,
   strategiesHoldingCash,
+  strategiesLowVolatility,
   strategiesMaTrend,
   strategiesMomentumRotation,
   strategiesMonthlySavings,
