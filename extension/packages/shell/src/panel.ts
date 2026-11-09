@@ -34,7 +34,7 @@ import {
   type ExtensionStorage,
 } from "@steadyhand/history";
 import { adviceModel, type PanelReads } from "./advice-model.ts";
-import { adviceView, CHOICE_LINE, DISCLAIMER } from "./advice-view.ts";
+import { adviceView } from "./advice-view.ts";
 import type { Block, Spans } from "./lesson-text.ts";
 import type { LessonModule } from "./lessons.ts";
 import { isSnapshot, type Ask } from "./messages.ts";
@@ -44,6 +44,7 @@ import {
   feePresetOf,
   KEPT,
   keptSettings,
+  languageOf,
   limitsOf,
   storedLimits,
   storedStrategy,
@@ -53,6 +54,7 @@ import {
   type ChosenStrategy,
   type TypedLimits,
 } from "./settings.ts";
+import { fill, LANGUAGES, WORDS, type Language, type Words } from "./words.ts";
 
 /** An element as the panel uses one, whose children are elements `E` (the browser's
  * `HTMLElement` is one, with `E` = `HTMLElement`). */
@@ -142,7 +144,6 @@ const SESSIONS = shippedSessions();
 
 /** What Chrome says when a tab has no content script of the extension to answer. */
 const NO_RECEIVER = "Receiving end does not exist";
-const NOT_A_BROKER_TAB = "This tab shows no broker page steadyhand reads.";
 
 /** An IDX stock code: four capital letters. */
 const STOCK_CODE = /^[A-Z]{4}$/u;
@@ -161,18 +162,21 @@ const symbolsIn = (typed: string): readonly string[] => [
   ),
 ];
 
+/** A key of the panel's words (#251). */
+type Said = keyof Words;
+
 /** The kinds of cash movement the user may type, each with its name. */
 const MOVEMENT_KINDS = [
-  ["deposit", "Deposit"],
-  ["withdrawal", "Withdrawal"],
-] as const;
+  ["deposit", "deposit"],
+  ["withdrawal", "withdrawal"],
+] as const satisfies readonly (readonly [string, Said])[];
 
 /** How Settings names each risk limit, in order. */
-const LIMIT_NAMES: Readonly<Record<keyof TypedLimits, string>> = {
-  maxWeight: "The largest share of one stock, in percent",
-  minLots: "The smallest buy, in lots",
-  dailyLoss: "The one-day fall that halts ordering, in percent",
-  maxDrawdown: "The fall from the high that halts ordering, in percent",
+const LIMIT_NAMES: Readonly<Record<keyof TypedLimits, Said>> = {
+  maxWeight: "limitMaxWeight",
+  minLots: "limitMinLots",
+  dailyLoss: "limitDailyLoss",
+  maxDrawdown: "limitMaxDrawdown",
 };
 
 /** Why a typed setting was refused: every refusal of one is a RangeError naming what is wrong. */
@@ -195,26 +199,26 @@ const keptOr = async <T>(
 
 /** The panel's tabs, in order, each with its name. */
 const TABS = [
-  ["advice", "Advice"],
-  ["settings", "Settings"],
-  ["history", "History"],
-  ["lessons", "Lessons"],
-] as const;
+  ["advice", "tabAdvice"],
+  ["settings", "tabSettings"],
+  ["history", "tabHistory"],
+  ["lessons", "tabLessons"],
+] as const satisfies readonly (readonly [string, Said])[];
 type Tab = (typeof TABS)[number][0];
 
-/** `count` with its noun, in the singular for 1. */
+/** `count` with its noun, as `one` says it for 1 and `many` for any other count. */
 const counted = (count: bigint, one: string, many: string): string =>
-  `${count.toString()} ${count === 1n ? one : many}`;
+  fill(count === 1n ? one : many, { count: count.toString() });
 
 /** How the status line names each page read. */
-const PAGE_NAMES: Readonly<Record<PageKind, string>> = {
-  portfolio: "the portfolio page",
-  watchlist: "the watchlist page",
-  flags: "the flags page",
-  "cash-movements": "the cash movement page",
-  "corporate-actions": "the corporate action page",
-  dividends: "the dividend page",
-  "stock-detail": "the stock's page",
+const PAGE_NAMES: Readonly<Record<PageKind, Said>> = {
+  portfolio: "pagePortfolio",
+  watchlist: "pageWatchlist",
+  flags: "pageFlags",
+  "cash-movements": "pageCashMovements",
+  "corporate-actions": "pageCorporateActions",
+  dividends: "pageDividends",
+  "stock-detail": "pageStockDetail",
 };
 
 export const startPanel = async <E extends PanelElement<E>>(
@@ -222,19 +226,33 @@ export const startPanel = async <E extends PanelElement<E>>(
 ): Promise<Panel> => {
   const { page } = inputs;
   let { db } = inputs;
-  const named = <T extends E>(made: T, id: string, text = ""): T => {
+  // The language (#251): every element given a key keeps it, and `speak` rewrites each one's
+  // text in the language chosen.
+  let language: Language = "en";
+  let words: Words = WORDS[language];
+  const said: (readonly [E, Said])[] = [];
+  /** `made` with its id and its text: the words under `key`, or `text` as given. */
+  const named = <T extends E>(made: T, id: string, key?: Said, text = ""): T => {
     made.id = id;
-    made.textContent = text;
+    if (key === undefined) {
+      made.textContent = text;
+    } else {
+      said.push([made, key]);
+      made.textContent = words[key];
+    }
     return made;
   };
-  const element = (tag: ContainerTag, id: string, text = "") =>
-    named(page.createElement(tag), id, text);
+  const element = (tag: ContainerTag, id: string, key?: Said) =>
+    named(page.createElement(tag), id, key);
+  /** A container holding `text` as given, in no language of the panel's. */
+  const holding = (tag: ContainerTag, text: string) =>
+    named(page.createElement(tag), "", undefined, text);
 
   /** `tag` holding `spans`, each its own element: plain text, bold or code. */
   const spanned = (tag: ContainerTag, spans: Spans): E => {
     const holder = element(tag, "");
     holder.append(
-      ...spans.map((span) => element(span.style === "plain" ? "span" : span.style, "", span.text)),
+      ...spans.map((span) => holding(span.style === "plain" ? "span" : span.style, span.text)),
     );
     return holder;
   };
@@ -258,7 +276,7 @@ export const startPanel = async <E extends PanelElement<E>>(
   };
 
   const advice = element("section", "advice");
-  const read = element("button", "read", "Read this page");
+  const read = element("button", "read", "read");
 
   // The deposits question and the resume after a halt (#517, spec §8): each shows only while
   // the risk record asks for it.
@@ -266,52 +284,32 @@ export const startPanel = async <E extends PanelElement<E>>(
   /** The span the deposits question asks about, and the last read it runs from. */
   let asked: { readonly span: Covered; readonly since: Day } | null = null;
   const resumeBox = element("div", "resume-box");
-  const resumeLabel = named(
-    page.createElement("label"),
-    "resume-label",
-    "Type the strategy's name to resume buying",
-  );
+  const resumeLabel = named(page.createElement("label"), "resume-label", "resumeLabel");
   const resumeName = named(page.createElement("input"), "resume");
   resumeLabel.htmlFor = resumeName.id;
-  const resumeGo = element("button", "resume-go", "Resume");
+  const resumeGo = element("button", "resume-go", "resume");
   resumeBox.append(resumeLabel, resumeName, resumeGo);
-  const label = named(
-    page.createElement("label"),
-    "universe-label",
-    "Universe: the stocks to choose from",
-  );
+  const label = named(page.createElement("label"), "universe-label", "universeLabel");
   const universe = named(page.createElement("textarea"), "universe");
   label.htmlFor = universe.id;
-  const save = element("button", "save-universe", "Save universe");
+  const save = element("button", "save-universe", "saveUniverse");
 
   // Paste and import (#239 AC4): a saved page's text goes to the readers; the file is read here
   // and never leaves the panel.
-  const pasteLabel = named(
-    page.createElement("label"),
-    "paste-label",
-    "Or paste a broker page you saved",
-  );
+  const pasteLabel = named(page.createElement("label"), "paste-label", "pasteLabel");
   const paste = named(page.createElement("textarea"), "paste");
   pasteLabel.htmlFor = paste.id;
-  const readPaste = element("button", "read-paste", "Read the pasted page");
-  const importLabel = named(
-    page.createElement("label"),
-    "import-label",
-    "Or open a broker page you saved",
-  );
+  const readPaste = element("button", "read-paste", "readPaste");
+  const importLabel = named(page.createElement("label"), "import-label", "importLabel");
   const importer = named(page.createElement("input"), "import");
   importer.setAttribute("type", "file");
   importer.setAttribute("accept", ".html,.htm");
   importLabel.htmlFor = importer.id;
 
-  const goalLabel = named(
-    page.createElement("label"),
-    "goal-label",
-    "Monthly income goal, in rupiah",
-  );
+  const goalLabel = named(page.createElement("label"), "goal-label", "goalLabel");
   const goal = named(page.createElement("input"), "goal");
   goalLabel.htmlFor = goal.id;
-  const saveGoal = element("button", "save-goal", "Save goal");
+  const saveGoal = element("button", "save-goal", "saveGoal");
 
   // The risk limits, the rates as percentages (#239 AC1).
   const limitInput = (limit: keyof TypedLimits) => {
@@ -326,20 +324,20 @@ export const startPanel = async <E extends PanelElement<E>>(
     dailyLoss: limitInput("dailyLoss"),
     maxDrawdown: limitInput("maxDrawdown"),
   };
-  const saveLimits = element("button", "save-limits", "Save risk limits");
+  const saveLimits = element("button", "save-limits", "saveLimits");
 
   // The fee preset, from the shipped fees file's presets.
-  const presetLabel = named(page.createElement("label"), "fee-preset-label", "Broker fee preset");
+  const presetLabel = named(page.createElement("label"), "fee-preset-label", "presetLabel");
   const preset = named(page.createElement("select"), "fee-preset");
   presetLabel.htmlFor = preset.id;
   preset.append(
     ...FEE_PRESETS.map((name) => {
-      const option = named(page.createElement("option"), "", name);
+      const option = named(page.createElement("option"), "", undefined, name);
       option.value = name;
       return option;
     }),
   );
-  const savePreset = element("button", "save-fee-preset", "Save fee preset");
+  const savePreset = element("button", "save-fee-preset", "savePreset");
 
   // Deposits and withdrawals the user types (spec §8), kept as typed and listed back.
   const movementKind = named(page.createElement("select"), "movement-kind");
@@ -354,16 +352,16 @@ export const startPanel = async <E extends PanelElement<E>>(
   const movementAmount = named(page.createElement("input"), "movement-amount");
   const movementLabels = (
     [
-      [movementKind, "Deposit or withdrawal"],
-      [movementDay, "Day, such as 2025-06-16"],
-      [movementAmount, "Amount, in rupiah"],
+      [movementKind, "movementKindLabel"],
+      [movementDay, "movementDayLabel"],
+      [movementAmount, "movementAmountLabel"],
     ] as const
   ).flatMap(([input, name]) => {
     const movementLabel = named(page.createElement("label"), `${input.id}-label`, name);
     movementLabel.htmlFor = input.id;
     return [movementLabel, input];
   });
-  const addMovement = element("button", "add-movement", "Keep this deposit or withdrawal");
+  const addMovement = element("button", "add-movement", "addMovement");
   const typedMovements = element("section", "typed-movements");
   const showTyped = async (): Promise<void> => {
     const typed = [...(await riskRecord(db)).typed].sort((one, other) =>
@@ -371,37 +369,62 @@ export const startPanel = async <E extends PanelElement<E>>(
     );
     typedMovements.replaceChildren(
       ...(typed.length === 0
-        ? [element("p", "", "No deposits or withdrawals typed.")]
+        ? [holding("p", words.noMovements)]
         : typed.map((entry) =>
-            element("p", "", `${entry.day}: ${entry.kind} of ${entry.amount.toString()}`),
+            holding(
+              "p",
+              fill(entry.kind === "withdrawal" ? words.withdrawalLine : words.depositLine, {
+                day: entry.day,
+                amount: entry.amount.toString(),
+              }),
+            ),
           )),
     );
   };
 
   // The exclusions: a stock per line, its code and then the user's reason (spec §6.1).
-  const exclusionsLabel = named(
-    page.createElement("label"),
-    "exclusions-label",
-    "Excluded stocks: one per line, the code and then your reason",
-  );
+  const exclusionsLabel = named(page.createElement("label"), "exclusions-label", "exclusionsLabel");
   const exclusions = named(page.createElement("textarea"), "exclusions");
   exclusionsLabel.htmlFor = exclusions.id;
-  const saveExclusions = element("button", "save-exclusions", "Save exclusions");
+  const saveExclusions = element("button", "save-exclusions", "saveExclusions");
+
+  // The language (#251 AC1): each named in its own language.
+  const languageLabel = named(page.createElement("label"), "language-label", "languageLabel");
+  const languagePicker = named(page.createElement("select"), "language");
+  languageLabel.htmlFor = languagePicker.id;
+  languagePicker.append(
+    ...LANGUAGES.map(([code, name]) => {
+      const option = named(page.createElement("option"), "", undefined, name);
+      option.value = code;
+      return option;
+    }),
+  );
+  const saveLanguage = element("button", "save-language", "saveLanguage");
+  /** Speak `chosen`: every element with a key says its words in it, and the page says which. */
+  const speak = (chosen: Language): void => {
+    language = chosen;
+    words = WORDS[chosen];
+    languagePicker.value = chosen;
+    page.body.setAttribute("lang", chosen);
+    for (const [made, key] of said) {
+      made.textContent = words[key];
+    }
+  };
 
   // The strategy and its settings (#239 AC1): a labelled input per setting, its help read with it.
-  const strategyLabel = named(page.createElement("label"), "strategy-label", "Strategy");
+  const strategyLabel = named(page.createElement("label"), "strategy-label", "strategyLabel");
   const picker = named(page.createElement("select"), "strategy");
   strategyLabel.htmlFor = picker.id;
   picker.append(
     ...[...STRATEGIES.keys()].map((name) => {
-      const option = named(page.createElement("option"), "", name);
+      const option = named(page.createElement("option"), "", undefined, name);
       option.value = name;
       return option;
     }),
   );
   const summary = element("p", "strategy-summary");
   const strategySettings = element("div", "strategy-settings");
-  const saveStrategy = element("button", "save-strategy", "Save strategy");
+  const saveStrategy = element("button", "save-strategy", "saveStrategy");
   let settingInputs: ReadonlyMap<string, { value: string }> = new Map();
   /** Show `chosen` in the picker, with each of its settings at its value or its default. */
   const showStrategy = (chosen: ChosenStrategy): void => {
@@ -410,12 +433,13 @@ export const startPanel = async <E extends PanelElement<E>>(
     summary.textContent = entry?.summary ?? "";
     const rows = (entry?.settings ?? []).map((each) => {
       const id = `setting-${each.name}`;
-      const label = named(page.createElement("label"), `${id}-label`, each.name);
+      const label = named(page.createElement("label"), `${id}-label`, undefined, each.name);
       label.htmlFor = id;
       const input = named(page.createElement("input"), id);
       input.value = (chosen.values.get(each.name) ?? each.default).toString();
       input.setAttribute("aria-describedby", `${id}-help`);
-      return { name: each.name, label, input, help: element("p", `${id}-help`, each.help) };
+      const help = named(page.createElement("p"), `${id}-help`, undefined, each.help);
+      return { name: each.name, label, input, help };
     });
     settingInputs = new Map(rows.map(({ name, input }) => [name, input]));
     strategySettings.replaceChildren(
@@ -423,44 +447,36 @@ export const startPanel = async <E extends PanelElement<E>>(
     );
   };
   // History (#239 AC2): per stock what is recorded, and "forget everything", asked first.
-  const recordingNote = element(
-    "p",
-    "recording-note",
-    "steadyhand records a broker page only while this panel is open beside it.",
-  );
+  const recordingNote = element("p", "recording-note", "recordingNote");
   const stocksRecorded = element("section", "stock-history");
   const showHistory = async (): Promise<void> => {
     const stocks = await stockHistory(db);
     stocksRecorded.replaceChildren(
       ...(stocks.length === 0
-        ? [element("p", "", "Nothing is recorded yet.")]
+        ? [holding("p", words.nothingRecorded)]
         : stocks.map((stock) =>
-            element(
+            holding(
               "p",
-              "",
-              `${stock.symbol}: ${counted(stock.days, "day", "days")} recorded, ${counted(stock.chartReads, "chart read", "chart reads")}, ${counted(stock.dividends, "dividend", "dividends")}`,
+              fill(words.stockLine, {
+                symbol: stock.symbol,
+                days: counted(stock.days, words.dayOne, words.dayMany),
+                chartReads: counted(stock.chartReads, words.chartReadOne, words.chartReadMany),
+                dividends: counted(stock.dividends, words.dividendOne, words.dividendMany),
+              }),
             ),
           )),
     );
   };
-  const forget = element("button", "forget", "Forget everything");
+  const forget = element("button", "forget", "forget");
   const forgetConfirm = element("div", "forget-confirm");
-  const forgetYes = element("button", "forget-yes", "Yes, forget everything");
-  const forgetKeep = element("button", "forget-keep", "Keep everything");
-  forgetConfirm.append(
-    element(
-      "p",
-      "",
-      "This deletes everything steadyhand has recorded and every setting. It cannot be undone.",
-    ),
-    forgetYes,
-    forgetKeep,
-  );
+  const forgetYes = element("button", "forget-yes", "forgetYes");
+  const forgetKeep = element("button", "forget-keep", "forgetKeep");
+  forgetConfirm.append(element("p", "", "forgetWarning"), forgetYes, forgetKeep);
   forgetConfirm.hidden = true;
 
   const status = element("p", "status");
   const footer = element("footer", "notice");
-  footer.append(element("p", "disclaimer", DISCLAIMER), element("p", "choice", CHOICE_LINE));
+  footer.append(element("p", "disclaimer", "disclaimer"), element("p", "choice", "choiceLine"));
 
   // The tabs (spec §10.2): one pane shows at a time; the status line and the notice stay outside
   // them, so they show on every tab.
@@ -505,6 +521,9 @@ export const startPanel = async <E extends PanelElement<E>>(
     advice,
   );
   panes.settings.append(
+    languageLabel,
+    languagePicker,
+    saveLanguage,
     strategyLabel,
     picker,
     summary,
@@ -532,18 +551,19 @@ export const startPanel = async <E extends PanelElement<E>>(
   // Lessons (#239 AC3): each module's heading, then each of its lessons as a section.
   panes.lessons.append(
     ...(inputs.lessons.length === 0
-      ? [element("p", "", "The lessons come in a later release.")]
+      ? [element("p", "", "noLessons")]
       : inputs.lessons.flatMap((module) => [
-          element("h2", "", module.title),
+          holding("h2", module.title),
           ...module.lessons.map((lesson) => {
             const section = element("section", `lesson-${lesson.id}`);
-            const title = element("h3", `${section.id}-title`, lesson.title);
-            section.setAttribute("aria-labelledby", title.id);
-            section.append(
-              title,
-              element("p", "", lesson.summary),
-              ...lesson.blocks.map(blockElement),
+            const title = named(
+              page.createElement("h3"),
+              `${section.id}-title`,
+              undefined,
+              lesson.title,
             );
+            section.setAttribute("aria-labelledby", title.id);
+            section.append(title, holding("p", lesson.summary), ...lesson.blocks.map(blockElement));
             return section;
           }),
         ])),
@@ -564,8 +584,7 @@ export const startPanel = async <E extends PanelElement<E>>(
         ? { span: state.unrecorded, since: state.judgedTo }
         : null;
     answerNone.hidden = asked === null;
-    answerNone.textContent =
-      asked === null ? "" : `No deposits or withdrawals since ${asked.since}`;
+    answerNone.textContent = asked === null ? "" : fill(words.answerNone, { day: asked.since });
   };
 
   const redraw = async (): Promise<void> => {
@@ -585,8 +604,8 @@ export const startPanel = async <E extends PanelElement<E>>(
       await remember(db, strategy.name, model.remember);
     }
     const lines = adviceView(model, market).flatMap((section) => [
-      element("h2", "", section.heading),
-      ...section.lines.map((line) => element("p", "", line)),
+      holding("h2", section.heading),
+      ...section.lines.map((line) => holding("p", line)),
     ]);
     advice.replaceChildren(...lines);
     await showHistory();
@@ -598,18 +617,18 @@ export const startPanel = async <E extends PanelElement<E>>(
     const rules = { calendar: CALENDAR, sessions: SESSIONS, market };
     const recording = await recordRead(db, html, inputs.clock(), reads, rules);
     if ("refused" in recording) {
-      status.textContent = `This page was not read: ${recording.refused}`;
+      status.textContent = fill(words.pageNotRead, { reason: recording.refused });
       return;
     }
     reads = recording.reads;
-    status.textContent = `Read ${PAGE_NAMES[recording.kind]}.`;
+    status.textContent = fill(words.pageRead, { page: words[PAGE_NAMES[recording.kind]] });
     await redraw();
   };
 
   const askActiveTab = async (): Promise<void> => {
     const [tab] = await inputs.tabs.query({ active: true, currentWindow: true });
     if (tab?.id === undefined) {
-      status.textContent = NOT_A_BROKER_TAB;
+      status.textContent = words.notABrokerTab;
       return;
     }
     let answer: unknown;
@@ -621,7 +640,7 @@ export const startPanel = async <E extends PanelElement<E>>(
       }
     }
     if (!isSnapshot(answer)) {
-      status.textContent = NOT_A_BROKER_TAB;
+      status.textContent = words.notABrokerTab;
       return;
     }
     await recordPage(answer.html);
@@ -629,7 +648,7 @@ export const startPanel = async <E extends PanelElement<E>>(
 
   const readPasted = async (): Promise<void> => {
     if (paste.value.trim() === "") {
-      status.textContent = "Nothing is pasted.";
+      status.textContent = words.nothingPasted;
       return;
     }
     await recordPage(paste.value);
@@ -638,7 +657,7 @@ export const startPanel = async <E extends PanelElement<E>>(
   const readChosenFile = async (): Promise<void> => {
     const file = importer.files?.item(0) ?? null;
     if (file === null) {
-      status.textContent = "No file was chosen.";
+      status.textContent = words.noFileChosen;
       return;
     }
     await recordPage(await file.text());
@@ -650,7 +669,7 @@ export const startPanel = async <E extends PanelElement<E>>(
       return;
     }
     await recordAnswered(db, asked.span, inputs.clock());
-    status.textContent = `Kept: no deposits or withdrawals since ${asked.since}.`;
+    status.textContent = fill(words.answeredNone, { day: asked.since });
     await redraw();
   };
 
@@ -660,11 +679,11 @@ export const startPanel = async <E extends PanelElement<E>>(
     const state = riskState(limits, CALENDAR, await riskRecord(db));
     const answer = resume(limits, state, strategy.name, resumeName.value.trim(), inputs.clock());
     if ("refused" in answer) {
-      status.textContent = `Not resumed: ${answer.refused}`;
+      status.textContent = fill(words.notResumed, { reason: answer.refused });
       return;
     }
     await recordResume(db, answer.resumed);
-    status.textContent = `Buying resumed: ${strategy.name}.`;
+    status.textContent = fill(words.resumed, { strategy: strategy.name });
     await redraw();
   };
 
@@ -672,11 +691,11 @@ export const startPanel = async <E extends PanelElement<E>>(
     const symbols = symbolsIn(universe.value);
     const wrong = symbols.find((symbol) => !STOCK_CODE.test(symbol));
     if (wrong !== undefined) {
-      status.textContent = `Universe not saved: "${wrong}" is not a four-letter IDX stock code.`;
+      status.textContent = fill(words.universeNotSaved, { code: wrong });
       return;
     }
     await putSetting(db, SETTINGS.universe, symbols);
-    status.textContent = `Universe saved: ${symbols.length.toString()} stocks.`;
+    status.textContent = fill(words.universeSaved, { count: symbols.length.toString() });
     await redraw();
   };
 
@@ -687,11 +706,11 @@ export const startPanel = async <E extends PanelElement<E>>(
       chosen = typedStrategy(picker.value, typed);
     } catch (refused) {
       // Every refusal of a typed strategy is a RangeError naming what is wrong.
-      status.textContent = `Strategy not saved: ${refusal(refused)}`;
+      status.textContent = fill(words.strategyNotSaved, { reason: refusal(refused) });
       return;
     }
     await putSetting(db, KEPT.strategy, storedStrategy(chosen));
-    status.textContent = `Strategy saved: ${chosen.name}.`;
+    status.textContent = fill(words.strategySaved, { strategy: chosen.name });
     await redraw();
   };
 
@@ -700,12 +719,12 @@ export const startPanel = async <E extends PanelElement<E>>(
     const typed = goal.value.trim();
     if (typed === "") {
       await putSetting(db, SETTINGS.goal, undefined);
-      status.textContent = "Income goal cleared.";
+      status.textContent = words.goalCleared;
     } else if (WHOLE_RUPIAH.test(typed)) {
       await putSetting(db, SETTINGS.goal, BigInt(typed.replaceAll(".", "")).toString());
-      status.textContent = "Income goal saved.";
+      status.textContent = words.goalSaved;
     } else {
-      status.textContent = `Income goal not saved: type whole rupiah, such as 5.000.000, got "${goal.value}"`;
+      status.textContent = fill(words.goalNotSaved, { typed: goal.value });
       return;
     }
     await redraw();
@@ -721,17 +740,17 @@ export const startPanel = async <E extends PanelElement<E>>(
         maxDrawdown: limitRows.maxDrawdown.input.value,
       });
     } catch (refused) {
-      status.textContent = `Risk limits not saved: ${refusal(refused)}`;
+      status.textContent = fill(words.limitsNotSaved, { reason: refusal(refused) });
       return;
     }
     await putSetting(db, KEPT.limits, storedLimits(limits));
-    status.textContent = "Risk limits saved.";
+    status.textContent = words.limitsSaved;
     await redraw();
   };
 
   const saveChosenPreset = async (): Promise<void> => {
     await putSetting(db, KEPT.feePreset, preset.value);
-    status.textContent = `Fee preset saved: ${preset.value}.`;
+    status.textContent = fill(words.presetSaved, { preset: preset.value });
     await redraw();
   };
 
@@ -740,20 +759,22 @@ export const startPanel = async <E extends PanelElement<E>>(
     try {
       asDay(day, "the day");
     } catch {
-      status.textContent = `Not kept: type the day as a date such as 2025-06-16, got "${movementDay.value}"`;
+      status.textContent = fill(words.dayNotKept, { typed: movementDay.value });
       return;
     }
     const amount = movementAmount.value.trim();
     const rupiah = WHOLE_RUPIAH.test(amount) ? BigInt(amount.replaceAll(".", "")) : 0n;
     if (rupiah <= 0n) {
-      status.textContent = `Not kept: type whole rupiah above 0, such as 1.000.000, got "${movementAmount.value}"`;
+      status.textContent = fill(words.amountNotKept, { typed: movementAmount.value });
       return;
     }
     const kind = movementKind.value === "withdrawal" ? "withdrawal" : "deposit";
-    const [, name] = kind === "withdrawal" ? MOVEMENT_KINDS[1] : MOVEMENT_KINDS[0];
     const money = new Money(rupiah, IDR);
     await recordTyped(db, { day, kind, amount: money, typedAt: inputs.clock() });
-    status.textContent = `${name} of ${money.toString()} on ${day} kept.`;
+    status.textContent = fill(kind === "withdrawal" ? words.withdrawalKept : words.depositKept, {
+      amount: money.toString(),
+      day,
+    });
     await showTyped();
     await redraw();
   };
@@ -761,32 +782,40 @@ export const startPanel = async <E extends PanelElement<E>>(
   const saveTypedExclusions = async (): Promise<void> => {
     const excluded = new Map<string, string>();
     for (const line of exclusions.value.split("\n")) {
-      const words = line.trim();
-      const space = words.search(/\s/u);
-      const code = space === -1 ? words : words.slice(0, space);
-      const reason = space === -1 ? "" : words.slice(space).trim();
+      const entry = line.trim();
+      const space = entry.search(/\s/u);
+      const code = space === -1 ? entry : entry.slice(0, space);
+      const reason = space === -1 ? "" : entry.slice(space).trim();
       const symbol = code.toUpperCase();
       if (symbol === "") {
         continue;
       }
       if (!STOCK_CODE.test(symbol)) {
-        status.textContent = `Exclusions not saved: "${code}" is not a four-letter IDX stock code.`;
+        status.textContent = fill(words.exclusionsNotCode, { code });
         return;
       }
       if (excluded.has(symbol)) {
-        status.textContent = `Exclusions not saved: ${symbol} is listed twice.`;
+        status.textContent = fill(words.exclusionsTwice, { symbol });
         return;
       }
       excluded.set(symbol, reason);
     }
     await putSetting(db, SETTINGS.excluded, [...excluded]);
-    const stocks = excluded.size === 1 ? "stock" : "stocks";
-    status.textContent = `Exclusions saved: ${excluded.size.toString()} ${stocks}.`;
+    status.textContent = fill(
+      excluded.size === 1 ? words.exclusionsSavedOne : words.exclusionsSavedMany,
+      { count: excluded.size.toString() },
+    );
     await redraw();
   };
 
   /** Show every setting as kept, the deposits and withdrawals typed, and the history. */
   const showKept = async (): Promise<void> => {
+    try {
+      speak(languageOf(await settingOf(db, KEPT.language)));
+    } catch {
+      speak("en");
+      status.textContent = words.languageRefused;
+    }
     universe.value = (await keptUniverse(db))?.join(" ") ?? "";
     const keptGoal: unknown = await settingOf(db, SETTINGS.goal);
     goal.value = typeof keptGoal === "string" ? keptGoal : "";
@@ -805,6 +834,15 @@ export const startPanel = async <E extends PanelElement<E>>(
     await showRisk();
   };
 
+  const saveChosenLanguage = async (): Promise<void> => {
+    const chosen = languageOf(languagePicker.value);
+    await putSetting(db, KEPT.language, chosen);
+    speak(chosen);
+    status.textContent = words.languageSaved;
+    await showTyped();
+    await redraw();
+  };
+
   /** Forget everything, then open the history again, empty, whether or not the forget left
    * anything: what it left is named on the status line. */
   const forgetAll = async (): Promise<void> => {
@@ -815,7 +853,7 @@ export const startPanel = async <E extends PanelElement<E>>(
       reads = {};
       await showKept();
     }
-    status.textContent = "Everything is forgotten.";
+    status.textContent = words.forgotten;
     await redraw();
   };
 
@@ -823,7 +861,7 @@ export const startPanel = async <E extends PanelElement<E>>(
   /** Run `job` after everything asked before it; a failure is shown, and the queue goes on. */
   const run = (job: () => Promise<void>): void => {
     queue = queue.then(job).catch((failure: unknown) => {
-      status.textContent = `Something went wrong: ${String(failure)}`;
+      status.textContent = fill(words.wentWrong, { failure: String(failure) });
     });
   };
 
@@ -868,6 +906,9 @@ export const startPanel = async <E extends PanelElement<E>>(
   });
   saveGoal.addEventListener("click", () => {
     run(saveTypedGoal);
+  });
+  saveLanguage.addEventListener("click", () => {
+    run(saveChosenLanguage);
   });
   saveStrategy.addEventListener("click", () => {
     run(saveChosenStrategy);
