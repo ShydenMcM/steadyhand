@@ -27,10 +27,22 @@ from typing import Any, TypedDict
 from steadyhand import IDR, Instrument, Money, Side
 from steadyhand._ratio import ratio_down
 from steadyhand.corporate import PAY_LAG_TRADING_DAYS
-from steadyhand.income import _restated_gross, _share, payment_calendar, run_rate
+from steadyhand.income import (
+    HISTORY_YEARS,
+    IncomeGoal,
+    IncomeSettings,
+    ProjectionOutcome,
+    _restated_gross,
+    _share,
+    dividend_growth,
+    payment_calendar,
+    project,
+    run_rate,
+    years_before,
+)
 from steadyhand.market import PayDates
 from steadyhand.metrics import _rounded
-from steadyhand.notes import TRADE_EXCLUDED, TRADE_FROZEN, Note
+from steadyhand.notes import INCOME_GROWTH_SHORT_HISTORY, TRADE_EXCLUDED, TRADE_FROZEN, Note
 from steadyhand.portfolio import Portfolio
 from steadyhand.risk import RiskLimits, RiskManager, UnitValue
 from steadyhand.sizing import CompoundingSizer
@@ -55,6 +67,7 @@ STRATEGY_PARITY = Path("extension/packages/core/test/parity-strategies.json")
 RESTATED_PARITY = Path("extension/packages/core/test/parity-restated.json")
 GROWTH_PARITY = Path("extension/packages/core/test/parity-dividend-growth.json")
 INCOME_PARITY = Path("extension/packages/core/test/parity-income.json")
+PROJECTION_PARITY = Path("extension/packages/core/test/parity-projection.json")
 HALT_PARITY = Path("extension/packages/core/test/parity-halts.json")
 
 # Each rule file and the Python readers that must accept it before it is converted.
@@ -689,6 +702,131 @@ def income_cases(seed: int = INCOME_SEED, count: int = INCOME_CASES) -> ParityCa
     return {"seed": str(seed), "cases": [_income_case(draw, f"case {n}") for n in range(count)]}
 
 
+PROJECTION_SEED = 254
+PROJECTION_CASES = 80
+# Each year's dividend a share against the year before, as a factor: falls, steady growth and
+# growth past the optimistic cap.
+PROJECTION_GROWTH = (
+    (Decimal("0.70"), Decimal("0.98")),
+    (Decimal("1.00"), Decimal("1.06")),
+    (Decimal("1.08"), Decimal("1.40")),
+)
+PROJECTION_SHORT = 0.2
+PROJECTION_NO_VALUE = 0.1
+PROJECTION_OUTCOMES = {
+    ProjectionOutcome.REACHED: "reached",
+    ProjectionOutcome.NOT_WITHIN: "not-within",
+    ProjectionOutcome.CANNOT: "cannot",
+}
+
+
+def _projection_case(draw: random.Random, name: str) -> dict[str, Any]:
+    """Holdings with five years of dividends, some growing, some falling, some with nothing in
+    the earlier year, and a split between the years for some, with the dividend growth and
+    projection Python's ``dividend_growth`` and ``project`` give (spec §9.1, #254)."""
+    rules = IdxMarketRules()
+    calendar = IdxCalendar.shipped()
+    as_of = date(2024, 6, 1) + timedelta(days=draw.randrange(500))
+    since = years_before(as_of, HISTORY_YEARS)
+    book = Portfolio.empty(IDR)
+    history: dict[Instrument, list[CashDividend | Split]] = {}
+    stocks: list[dict[str, Any]] = []
+    for symbol in sorted(draw.sample(INCOME_STOCKS, draw.randrange(0, 4))):
+        stock = Instrument(symbol, "IDX", IDR)
+        shares = draw.choice((1, draw.randrange(1, 10**4), draw.randrange(1, 10**7)))
+        order = Order(stock, Side.BUY, shares, INCOME_BOUGHT)
+        fill = Fill(order, INCOME_BOUGHT, shares, Money(1, IDR), Costs.zero(IDR))
+        book = book.deposit(Money(shares, IDR), INCOME_BOUGHT).apply_fill(fill, INCOME_BOUGHT)
+        low, high = draw.choice(PROJECTION_GROWTH)
+        per_share = Decimal(draw.choice((draw.randrange(1, 100), draw.randrange(100, 50_000))))
+        first_year = 2 if draw.random() < PROJECTION_SHORT else 0
+        actions: list[CashDividend | Split] = []
+        for year in range(first_year, HISTORY_YEARS):
+            factor = low + (high - low) * Decimal(draw.randrange(101)) / 100
+            per_share = (per_share * factor).quantize(Decimal("0.01"))
+            for _ in range(draw.randrange(1, 3)):
+                day = since + timedelta(days=365 * year + draw.randrange(365))
+                if day <= as_of and per_share > 0:
+                    actions.append(CashDividend(stock, day, per_share / 100))
+        if draw.random() < INCOME_SPLITS:
+            ex_date = as_of - timedelta(days=draw.randrange(0, 4 * 365))
+            actions.append(Split(stock, ex_date, 1, draw.choice((2, 5, 10))))
+        history[stock] = actions
+        stocks.append(
+            {
+                "symbol": symbol,
+                "shares": str(shares),
+                "dividends": [
+                    {
+                        "exDate": action.ex_date.isoformat(),
+                        "paymentDate": calendar.add_trading_days(
+                            action.ex_date, PAY_LAG_TRADING_DAYS
+                        ).isoformat(),
+                        "perShare": str(action.per_share),
+                    }
+                    for action in actions
+                    if isinstance(action, CashDividend)
+                ],
+                "splits": [
+                    {
+                        "exDate": action.ex_date.isoformat(),
+                        "from": "1",
+                        "to": str(action.new_shares),
+                    }
+                    for action in actions
+                    if isinstance(action, Split)
+                ],
+            }
+        )
+    rate = run_rate(book, history, rules, as_of, PAY_LAG_TRADING_DAYS)
+    growth = dividend_growth(rate, history)
+    value = Money(0 if draw.random() < PROJECTION_NO_VALUE else draw.randrange(10**5, 10**11), IDR)
+    target = Money(draw.choice((1, draw.randrange(1, 10**7), draw.randrange(10**7, 10**12))), IDR)
+    given = draw.choice((None, Money(draw.randrange(1, 10**8), IDR)))
+    projection = project(rate, growth, value, IncomeSettings(IncomeGoal(target), given), rules)
+    return {
+        "name": name,
+        "asOf": as_of.isoformat(),
+        "holdingsValue": str(value.amount),
+        "target": str(target.amount),
+        "contribution": str(projection.contribution.amount),
+        "stocks": stocks,
+        "growth": [
+            [found.instrument.symbol, str(found.recent), str(found.earlier), str(found.growth)]
+            for found in growth.holdings
+        ],
+        "portfolioGrowth": str(growth.portfolio),
+        "shortHistory": [
+            note.text.split(":")[0]
+            for note in growth.notes
+            if note.key == INCOME_GROWTH_SHORT_HISTORY
+        ],
+        "scenarios": [
+            {
+                "scenario": found.scenario.value,
+                "start": str(found.starting_gross.amount),
+                "growth": str(found.growth),
+                "outcome": PROJECTION_OUTCOMES[found.outcome],
+                "years": None if found.years is None else str(found.years),
+            }
+            for found in projection.scenarios
+        ],
+    }
+
+
+def projection_cases(seed: int = PROJECTION_SEED, count: int = PROJECTION_CASES) -> ParityCases:
+    """*count* portfolios drawn from *seed*, each with Python's dividend growth and projection,
+    for core's ``dividendGrowth`` and ``project``."""
+    if count < 1:
+        msg = f"the projection parity harness needs a case, got {count}"
+        raise ValueError(msg)
+    draw = random.Random(seed)  # noqa: S311 - seeded test inputs, not secrets
+    return {
+        "seed": str(seed),
+        "cases": [_projection_case(draw, f"case {n}") for n in range(count)],
+    }
+
+
 HALT_SEED = 236
 HALT_JOURNEYS = 60
 # Each draw's daily move of the market value, as a factor: mostly small, with falls large enough
@@ -798,6 +936,7 @@ def outputs() -> dict[Path, str]:
     files[RESTATED_PARITY] = one_case_a_line(restated_cases())
     files[GROWTH_PARITY] = one_case_a_line(growth_cases())
     files[INCOME_PARITY] = one_case_a_line(income_cases())
+    files[PROJECTION_PARITY] = one_case_a_line(projection_cases())
     files[HALT_PARITY] = one_case_a_line(halt_cases())
     return files
 
