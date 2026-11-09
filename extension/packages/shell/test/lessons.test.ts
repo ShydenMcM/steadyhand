@@ -90,7 +90,7 @@ const textsOf = (lesson: Lesson): string[] => [
 /** What spec §13 refuses in a shipped lesson: backtests, paper trading, Yahoo, a command line or
  * the Python configuration file (any "configuration", #548), or a data folder (#544). */
 const FORBIDDEN =
-  /backtest|paper[ -]?trad|paper run|yahoo|steadyhand\.toml|steadyhand-idx|command line|CLI|explain command|configuration|data folder/iu;
+  /backtest|paper[ -]?trad|paper run|yahoo|steadyhand\.toml|steadyhand-idx|command line|\bCLI\b|explain command|configuration|data folder/iu;
 const forbiddenIn = (lesson: Lesson): string[] =>
   textsOf(lesson).filter((text) => FORBIDDEN.test(text));
 
