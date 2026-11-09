@@ -5,7 +5,7 @@ import { lessonFrom, type Lesson } from "../src/lesson-text.ts";
 import { catalogue, LESSONS } from "../src/lessons.ts";
 
 // The lessons the extension ships (#244, spec §13): the Python course's lessons, less those that
-// describe what the extension does not do, thirteen rewritten for it, and six new.
+// describe what the extension does not do, sixteen rewritten for it, and six new.
 
 /** Kept as written: their text is the Python lesson's, word for word. */
 const AS_WRITTEN = [
@@ -15,23 +15,22 @@ const AS_WRITTEN = [
   "idx.auto_reject",
   "idx.lots",
   "idx.settlement",
-  "idx.special_monitoring",
   "idx.ticks",
   "income.calendar",
   "income.goal",
   "income.run_rate",
-  "risk.limits",
   "shares.basics",
   "shares.cost_basis",
   "shares.splits",
-  "tax.dividend",
 ] as const;
 const REWRITTEN = [
   "costs.trading",
   "idx.sessions",
+  "idx.special_monitoring",
   "idx.universe",
   "orders.not_tradable",
   "risk.drawdown",
+  "risk.limits",
   "risk.returns",
   "shares.prices",
   "start.explanations",
@@ -40,6 +39,7 @@ const REWRITTEN = [
   "strategies.dividend_growth",
   "strategies.holding_cash",
   "strategies.monthly_savings",
+  "tax.dividend",
 ] as const;
 const NEW = [
   "broker.reading",
@@ -88,9 +88,9 @@ const textsOf = (lesson: Lesson): string[] => [
 ];
 
 /** What spec §13 refuses in a shipped lesson: backtests, paper trading, Yahoo, a command line or
- * the Python configuration file. */
+ * the Python configuration file (any "configuration", #548), or a data folder (#544). */
 const FORBIDDEN =
-  /backtest|paper[ -]?trad|paper run|yahoo|steadyhand\.toml|steadyhand-idx|command line|\bCLI\b|explain command|configuration file/iu;
+  /backtest|paper[ -]?trad|paper run|yahoo|steadyhand\.toml|steadyhand-idx|command line|\bCLI\b|explain command|configuration|data folder/iu;
 const forbiddenIn = (lesson: Lesson): string[] =>
   textsOf(lesson).filter((text) => FORBIDDEN.test(text));
 
@@ -160,7 +160,7 @@ test.each(AS_WRITTEN)("%s is the Python lesson's text, word for word", (id) => {
 });
 
 test.each(ALL.map((lesson) => lesson.id))(
-  "%s names no backtest, paper trading, Yahoo, command line or configuration file",
+  "%s names no backtest, paper trading, Yahoo, command line, configuration or data folder",
   (id) => {
     expect(
       forbiddenIn(ALL.find((lesson) => lesson.id === id) ?? ALL[0] ?? pythonLesson(id)),
@@ -184,6 +184,13 @@ test("a lesson naming a backtest or a command is refused", () => {
     "Run steadyhand-idx learn.",
     "Paper trading on Yahoo prices.",
   ]);
+});
+
+test("a lesson naming a data folder is refused (#544)", () => {
+  const planted = lessonFrom(
+    '+++\nid = "x.y"\ntitle = "T"\nsummary = "S."\nexplains = []\nmodule = "m"\nposition = 1\nsee_also = []\n+++\n\nKeep the list in your Data Folder.',
+  );
+  expect(forbiddenIn(planted)).toEqual(["Keep the list in your Data Folder."]);
 });
 
 const placed = (id: string, module: string, position: number): Lesson => ({
@@ -211,3 +218,16 @@ test("a lesson in a module the course does not have is refused, naming both", ()
     "x.y is in the module backtesting, which the course does not have",
   );
 });
+
+// A lesson that sends the reader to the next lesson needs one at the next place in its module
+// (#546).
+test.each(ALL.map((lesson) => lesson.id))(
+  "%s sends the reader to no next lesson that does not ship",
+  (id) => {
+    const lesson = ALL.find((one) => one.id === id) ?? pythonLesson(id);
+    const next = ALL.some(
+      (one) => one.module === lesson.module && one.position === lesson.position + 1,
+    );
+    expect(textsOf(lesson).filter((text) => /next lesson/iu.test(text) && !next)).toEqual([]);
+  },
+);
