@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-10 02:20 WIB (overnight, Shyden asleep; peer session `repo-template-c1` relayed: keep working by Priority, park anything that needs him, stop only when everything left waits on him). Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-10 06:40 WIB (peer `repo-template-23` relayed "Shyden says: continue"; Shyden answered four questions by AskUserQuestion at about 06:10). Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -8,22 +8,19 @@
 
 **Standing approval (Shyden 2026-11-04, AskUserQuestion):** squash-merge into develop any PR green on every check on its head.
 
-## For Shyden in the morning
+## Shyden's answers (2026-11-10, AskUserQuestion; each recorded on its ticket)
 
-Everything left waits on you or on the Google read-back quota (it resets 15:00 WIB):
-
-1. **#542 (P0):** panel/core unit tests hit the 1 s timeout when other projects load the laptop (load 25-53; each passes alone in 105-356 ms; steps measured on the ticket). Rewrite the panel tests to about 20 ms each, or keep CI as the judge and run the local unit gate only on a quiet machine (then close or lower #542)?
-2. **#251 scope:** the panel's own words are Indonesian (merged), the lessons follow (quota). Core's notes, refusals and the strategies' reasons reach the panel in English: about 80 message sites in core and the readers. Translate them too (a core change: each note carries a form name and its values; a new story of its own), or ship Indonesian with those in English?
-3. **#251 AC4:** the fluent reader is yours to name. Panel review sheet: `.superpowers/sdd/251-indonesian/review.md`. Words worth your eye: `Saran` for the Advice tab (reads back "Suggestion"), `fraksi harga` (tick), `notasi khusus`.
-4. **#254 (income projection):** spec §9.1 drafted on branch `254/projection-spec` (51a4eeb) with two questions: where the monthly contribution comes from (recommended: an optional Settings field, blank = 0) and where it shows (recommended: under Income goal on the Advice tab). Approve or change, then code starts test first.
-5. **#255/#256 (exemption claims):** the extension cannot see the purchases that reinvest a dividend (Python covers claims from its own fills). Options on #255: infer from holdings between reads, read a trade-history page once the first broker exists, or the user enters each purchase.
+- **#542:** no test rewrite; CI judges, and the local unit gate runs only on a quiet machine. #542 closed not planned.
+- **#251 scope:** Indonesian ships with core's notes, refusals and strategy reasons in English; translating them is #553 (P4, 8 points, blocked by #251).
+- **#254:** spec §9.1 approved: optional Settings field "Monthly amount you add, in rupiah" (blank = 0); the projection shows under Income goal on the Advice tab.
+- **#255/#256:** the user enters each purchase that reinvests a dividend (a form in the panel).
+- **Still his:** #251 AC4, the fluent Indonesian reader (review sheet `.superpowers/sdd/251-indonesian/review.md`). PR #541 (stale handover, conflicting) should be closed: auto mode refused my close; ask him or leave it.
 
 ## Branches and PRs
 
-- `develop`: read with `git rev-parse origin/develop`. Merged overnight: #543 (#251 part 1), #545 (#544), #547 (#546), #549 (#548). #544, #546 and #548 stay open until their Indonesian lesson lands with #251 (each one's AC3).
-- Merged too: #550 (Refs #251), the language switch in the browser suite's Settings journey (probe seen red on CI, run 42678904127, line 400, then undone); 6 tests on each of Chromium, Chrome and Edge.
-- `251/indonesian-lessons` (pushed, WIP, red on purpose until all 37 lessons exist): per-language lesson catalogue, Lessons tab follows the language, tests for every lesson's Indonesian twin, derived list widened (%, rupiah, LQ45, T+2). 9 of 37 built into `extension/packages/shell/lessons/id/`; all 37 drafted in `.superpowers/sdd/251-indonesian/lessons-id/*.txt` (the drafts already carry #544/#546/#548's fixes).
-- `254/projection-spec` (pushed, 51a4eeb): the spec draft above; no PR until approved.
+- **PR #552** `254/projection-spec` (spec §9.1 approved, plus the fourth root taken as Python does, `ln`/`exp` in decimal.js): was green on ec40b3f; develop merged in at f8d705d (the merge hook wants the head to hold develop), CI rerunning. Squash-merge when green on its head.
+- **PR #554** `254/projection-core` (worktree `../steadyhand-254`): core's `incomeGrowth` and `project` in `extension/packages/core/src/projection.ts`, 14 unit tests, 80-portfolio parity harness (`scripts/core_fixtures.py` `projection_cases`, `parity-projection.json`, in `.prettierignore`). Laptop: 3979 unit tests, 100% branches, lint/types/prettier clean; six mutants caught. CI not yet read. After #552 merges, merge develop into it before merging.
+- `251/indonesian-lessons` (pushed, WIP, red on purpose until all 37 lessons exist): 9 of 37 built in `extension/packages/shell/lessons/id/`; all 37 drafted in `.superpowers/sdd/251-indonesian/lessons-id/*.txt`. #544, #546 and #548 stay open until their Indonesian lesson lands (each one's AC3).
 - Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29). Never copy or replay from the slip backups. Local `239/settings-history-lessons` (c4bebaf): leave alone.
 
 ## Shyden's answers (2026-11-08, AskUserQuestion)
@@ -41,12 +38,14 @@ Everything left waits on you or on the Google read-back quota (it resets 15:00 W
 
 ## Running
 
-- Nothing running. Colima not held. GitHub Actions had a major outage 01:20-01:55 WIB; the runs it cut short were re-run or superseded.
+- Nothing local. Colima not held. Outside waits: CI on #552 and #554; the Google day turns at 15:00 WIB (2026-11-09 day: 15,961 of 16,000 used).
 
-## Next steps (after 15:00 WIB, when the Google day turns)
+## Next steps
 
-1. Read back the 28 unread lessons (`lessons-json.py`, diff against `lessons-readback.tsv`, `readback.py`; about 32,000 characters, two Google days), fix what the read-back shows, build with `build-lessons.py`, run the lessons tests, and open the lessons PR once all 37 exist.
-2. Then strategy summaries and help, and the advice view's own headings, in Indonesian; then whatever Shyden decides for core's messages.
+1. Read each PR's verdict: `~/.claude/scripts/pr-verdict.sh 552`, then `554`. Merge #552, merge develop into `254/projection-core`, push, merge #554 when green.
+2. #254 part 2 (new branch from develop, test first): the Settings field (kept like the goal), the Advice tab's lines under Income goal (one per scenario, "Projection, not a promise", years never a date; a missing list when `incomeGrowth` returns missing), and the `income.projection` and `income.growth` lessons (rewritten where they name the backtest or configuration file). New panel words and the two lessons need Indonesian twins, read back by Google after 15:00 WIB.
+3. After 15:00 WIB: the 28 unread #251 lessons (`lessons-json.py`, diff against `lessons-readback.tsv`, `readback.py`; about 32,000 characters, two Google days), then strategy summaries, help and the advice view's headings.
+4. Then #255/#256 with the user-entered purchases ruling.
 
 ## P4 is open (Shyden 2026-11-09)
 
@@ -59,7 +58,7 @@ Everything left waits on you or on the Google read-back quota (it resets 15:00 W
 ## Resume steps
 
 1. `ListAgents`; `git status --short`; `git fetch --prune`; `git rev-parse --abbrev-ref HEAD`.
-2. #242/#243/#245 are parked on the broker account. #348 (SonarCloud) is closed: no SonarCloud for steadyhand (Shyden 2026-11-08). Merge the #539 PR when green, then take the next P4.
+2. #242/#243/#245 are parked on the broker account. #348 (SonarCloud) is closed: no SonarCloud for steadyhand (Shyden 2026-11-08). Then follow Next steps above; the local unit gate runs only when `uptime` load is low (#542 ruling).
 3. Merge rule: squash into develop when every check is green on the head SHA (standing approval 2026-11-04); read the browser suite's per-browser totals and each new guard by name before merging.
 4. Core rules (CI-only guards, a hook refusal is final): no `number` declarations or `Number(...)` in core, no index parameters in callbacks, no generic `test.each<...>(`, no identifier named `window`/`document`/`chrome`/`indexedDB` in core, no `%j` titles over bigints; a `?? fallback` never taken fails 100% branch coverage; scratch copies go in `pristine/`, never `*.bak`. Guards, integration and the browser suite are CI's. Read a gate's `exit=` line, and grep `Errors|Unhandled`, never only `Tests`.
 5. Filing a ticket: `gh issue create`, `gh project item-add 1 --owner ShydenMcM --url <issue>`, `gh project item-edit` (project id `PVT_kwHOCQ_jzM4BkhEb`) with Priority `PVTSSF_lAHOCQ_jzM4BkhEbzhn_bYM` (P0 `2f8059d5`, P1 `ec7925c3`, P4 `6e3c5b78`), Estimate `PVTF_lAHOCQ_jzM4BkhEbzhkUeyc`, Status `PVTSSF_lAHOCQ_jzM4BkhEbzhjRYtk` (Todo `f75ad846`, In Progress `47fc9ee4`, Done `98236657`); read back by repository + issue.
