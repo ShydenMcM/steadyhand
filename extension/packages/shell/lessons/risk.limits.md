@@ -9,8 +9,8 @@ see_also = ["risk.drawdown"]
 
 +++
 
-Every strategy's orders pass through the same limits before they are placed. Each can be set in
-your configuration. These are the defaults:
+Every strategy's orders pass through the same limits before they are placed. Each limit but cash
+only can be changed on Settings. These are the defaults:
 
 - **Cash only.** No borrowing and no short selling. A buy that needs more settled cash than you
   have is cut down or dropped.
