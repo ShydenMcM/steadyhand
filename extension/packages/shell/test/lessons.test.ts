@@ -44,6 +44,7 @@ const REWRITTEN = [
 const NEW = [
   "broker.reading",
   "orders.limit_prices",
+  "strategies.ex_date",
   "strategies.high_yield",
   "strategies.low_volatility",
   "strategies.ma_trend",
@@ -92,6 +93,24 @@ const FORBIDDEN =
   /backtest|paper[ -]?trad|paper run|yahoo|steadyhand\.toml|steadyhand-idx|command line|\bCLI\b|explain command|configuration file/iu;
 const forbiddenIn = (lesson: Lesson): string[] =>
   textsOf(lesson).filter((text) => FORBIDDEN.test(text));
+
+test("the ex-date lesson states what was measured, what was assumed, and that it is a coin flip", () => {
+  const lesson = ALL.find((one) => one.id === "strategies.ex_date");
+  for (const fact of [
+    "258 trades",
+    "+0.25%",
+    "-0.08%",
+    "+0.57%",
+    "52%",
+    "0.15%",
+    "0.25%",
+    "10%",
+    "public data source",
+    "coin flip",
+  ]) {
+    expect(JSON.stringify(lesson?.blocks)).toContain(fact);
+  }
+});
 
 test("the course ships the lessons kept as written, the rewritten ones and the new ones", () => {
   expect(ALL.map((lesson) => lesson.id).sort()).toEqual(
