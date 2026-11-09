@@ -226,7 +226,7 @@ const SLOT = /\{(\w+)\}/gu;
 
 /** The slots in `text`, each once, sorted. */
 export const slotsOf = (text: string): readonly string[] =>
-  [...new Set([...text.matchAll(SLOT)].map((match) => match[1] ?? ""))].sort();
+  [...new Set([...text.matchAll(SLOT)].flatMap((match) => match.slice(1, 2)))].sort();
 
 /** `text` with each slot filled from `values`; a slot with no value, or a value for no slot,
  * is refused by name. */
