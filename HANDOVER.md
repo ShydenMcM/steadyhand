@@ -21,7 +21,7 @@ Everything left waits on you or on the Google read-back quota (it resets 15:00 W
 ## Branches and PRs
 
 - `develop`: read with `git rev-parse origin/develop`. Merged overnight: #543 (#251 part 1), #545 (#544), #547 (#546), #549 (#548). #544, #546 and #548 stay open until their Indonesian lesson lands with #251 (each one's AC3).
-- PR #550 `251/language-in-browser` (Refs #251): the language switch in the browser suite's Settings journey; probe seen red on CI (run 42678904127, line 400) and undone. CI was running on 75f19bc at 02:20; squash-merge when every check is green on its head.
+- Merged too: #550 (Refs #251), the language switch in the browser suite's Settings journey (probe seen red on CI, run 42678904127, line 400, then undone); 6 tests on each of Chromium, Chrome and Edge.
 - `251/indonesian-lessons` (pushed, WIP, red on purpose until all 37 lessons exist): per-language lesson catalogue, Lessons tab follows the language, tests for every lesson's Indonesian twin, derived list widened (%, rupiah, LQ45, T+2). 9 of 37 built into `extension/packages/shell/lessons/id/`; all 37 drafted in `.superpowers/sdd/251-indonesian/lessons-id/*.txt` (the drafts already carry #544/#546/#548's fixes).
 - `254/projection-spec` (pushed, 51a4eeb): the spec draft above; no PR until approved.
 - Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29). Never copy or replay from the slip backups. Local `239/settings-history-lessons` (c4bebaf): leave alone.
@@ -41,7 +41,7 @@ Everything left waits on you or on the Google read-back quota (it resets 15:00 W
 
 ## Running
 
-- Nothing local besides #550's CI waiter (dies with the session; check `gh pr checks 550`). Colima not held. GitHub Actions had a major outage 01:20-01:55 WIB; the runs it cut short were re-run or superseded.
+- Nothing running. Colima not held. GitHub Actions had a major outage 01:20-01:55 WIB; the runs it cut short were re-run or superseded.
 
 ## Next steps (after 15:00 WIB, when the Google day turns)
 
