@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-10 01:40 WIB (overnight, Shyden asleep; peer session `repo-template-c1` relayed: keep working by Priority, park anything that needs him). Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-10 02:20 WIB (overnight, Shyden asleep; peer session `repo-template-c1` relayed: keep working by Priority, park anything that needs him, stop only when everything left waits on him). Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -10,16 +10,20 @@
 
 ## For Shyden in the morning
 
-1. **#542 (P0, parked for your decision):** panel/core unit tests hit the 1 s timeout when other projects load the laptop (load 25-53; each passes alone in 105-356 ms; measured steps on the ticket). Choose: rewrite the panel tests to about 20 ms each, or keep CI as the judge and run the local unit gate only on a quiet machine (and close #542 or lower it).
-2. **GitHub Actions major outage** (githubstatus.com, "Incident with Actions and Checks API", seen 01:20 WIB): PR runs create only some jobs and end "failure" with every created job green. #545, #547, #549 wait on it; their CI is re-run once Actions is operational (cause stated, not a blind retry).
-3. **#251 fluent reader (AC4):** still yours to name. Review sheet for the panel words: `.superpowers/sdd/251-indonesian/review.md` (labels apart from sentences, Google read-back beside each). Words worth your eye: `Saran` for the Advice tab (reads back "Suggestion"), `fraksi harga` (tick), `notasi khusus`.
+Everything left waits on you or on the Google read-back quota (it resets 15:00 WIB):
+
+1. **#542 (P0):** panel/core unit tests hit the 1 s timeout when other projects load the laptop (load 25-53; each passes alone in 105-356 ms; steps measured on the ticket). Rewrite the panel tests to about 20 ms each, or keep CI as the judge and run the local unit gate only on a quiet machine (then close or lower #542)?
+2. **#251 scope:** the panel's own words are Indonesian (merged), the lessons follow (quota). Core's notes, refusals and the strategies' reasons reach the panel in English: about 80 message sites in core and the readers. Translate them too (a core change: each note carries a form name and its values; a new story of its own), or ship Indonesian with those in English?
+3. **#251 AC4:** the fluent reader is yours to name. Panel review sheet: `.superpowers/sdd/251-indonesian/review.md`. Words worth your eye: `Saran` for the Advice tab (reads back "Suggestion"), `fraksi harga` (tick), `notasi khusus`.
+4. **#254 (income projection):** spec §9.1 drafted on branch `254/projection-spec` (51a4eeb) with two questions: where the monthly contribution comes from (recommended: an optional Settings field, blank = 0) and where it shows (recommended: under Income goal on the Advice tab). Approve or change, then code starts test first.
+5. **#255/#256 (exemption claims):** the extension cannot see the purchases that reinvest a dividend (Python covers claims from its own fills). Options on #255: infer from holdings between reads, read a trade-history page once the first broker exists, or the user enters each purchase.
 
 ## Branches and PRs
 
-- `develop`: read with `git rev-parse origin/develop`. #543 (#251 part 1: the language setting and every panel string in English and Indonesian) merged 2026-11-10 as 9ad75da.
-- PR #545 `544/special-monitoring-lesson` (Refs #544), PR #547 `546/tax-lesson-next` (Refs #546), PR #549 `548/limits-lesson-settings` (Refs #548): one-paragraph fixes to English lessons found while translating, each with a test seen red. All three edit `lessons.test.ts`'s as-written/rewritten lists and its "fourteen rewritten" count: after the first merges, merge develop into the next and make the count fifteen, then sixteen. Each ticket stays open until its Indonesian lesson lands with #251.
-- `251/indonesian-lessons` (pushed, WIP, red on purpose): per-language lesson catalogue, Lessons tab follows the language, tests for every lesson's Indonesian twin. 9 of 37 lessons built into `extension/packages/shell/lessons/id/`; all 37 drafted in `.superpowers/sdd/251-indonesian/lessons-id/*.txt`.
-- Worktree `../steadyhand-544` holds `544/special-monitoring-lesson` (remove after #545 merges).
+- `develop`: read with `git rev-parse origin/develop`. Merged overnight: #543 (#251 part 1), #545 (#544), #547 (#546), #549 (#548). #544, #546 and #548 stay open until their Indonesian lesson lands with #251 (each one's AC3).
+- PR #550 `251/language-in-browser` (Refs #251): the language switch in the browser suite's Settings journey; probe seen red on CI (run 42678904127, line 400) and undone. CI was running on 75f19bc at 02:20; squash-merge when every check is green on its head.
+- `251/indonesian-lessons` (pushed, WIP, red on purpose until all 37 lessons exist): per-language lesson catalogue, Lessons tab follows the language, tests for every lesson's Indonesian twin, derived list widened (%, rupiah, LQ45, T+2). 9 of 37 built into `extension/packages/shell/lessons/id/`; all 37 drafted in `.superpowers/sdd/251-indonesian/lessons-id/*.txt` (the drafts already carry #544/#546/#548's fixes).
+- `254/projection-spec` (pushed, 51a4eeb): the spec draft above; no PR until approved.
 - Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29). Never copy or replay from the slip backups. Local `239/settings-history-lessons` (c4bebaf): leave alone.
 
 ## Shyden's answers (2026-11-08, AskUserQuestion)
@@ -37,7 +41,12 @@
 
 ## Running
 
-- Background: a waiter on githubstatus.com for Actions to be operational (dies with this session; re-check by hand). Nothing else local. Colima not held.
+- Nothing local besides #550's CI waiter (dies with the session; check `gh pr checks 550`). Colima not held. GitHub Actions had a major outage 01:20-01:55 WIB; the runs it cut short were re-run or superseded.
+
+## Next steps (after 15:00 WIB, when the Google day turns)
+
+1. Read back the 28 unread lessons (`lessons-json.py`, diff against `lessons-readback.tsv`, `readback.py`; about 32,000 characters, two Google days), fix what the read-back shows, build with `build-lessons.py`, run the lessons tests, and open the lessons PR once all 37 exist.
+2. Then strategy summaries and help, and the advice view's own headings, in Indonesian; then whatever Shyden decides for core's messages.
 
 ## P4 is open (Shyden 2026-11-09)
 
