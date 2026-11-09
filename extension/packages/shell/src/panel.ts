@@ -406,9 +406,8 @@ export const startPanel = async <E extends PanelElement<E>>(
     words = WORDS[chosen];
     languagePicker.value = chosen;
     page.body.setAttribute("lang", chosen);
-    // PROBE (#251): relabel always in English, to see the journey fail.
     for (const [made, key] of said) {
-      made.textContent = WORDS.en[key];
+      made.textContent = words[key];
     }
   };
 
