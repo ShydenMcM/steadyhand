@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import {
   FEE_PRESETS,
   feePresetOf,
+  languageOf,
   limitsOf,
   storedLimits,
   storedStrategy,
@@ -197,4 +198,17 @@ test("a kept fee preset is read back", () => {
 
 test("a kept fee preset that is not shipped is refused", () => {
   expect(() => feePresetOf("stockbit")).toThrow(refused("fee-preset"));
+});
+
+// The language (#251 AC1): English before one is chosen, else the one kept.
+test("the language is English before one is kept", () => {
+  expect(languageOf(undefined)).toBe("en");
+});
+
+test.each(["en", "id"])("a kept language %s is read back", (language) => {
+  expect(languageOf(language)).toBe(language);
+});
+
+test.each([["fr"], [1], [null]])("a kept language %j is refused", (language) => {
+  expect(() => languageOf(language)).toThrow(refused("language"));
 });

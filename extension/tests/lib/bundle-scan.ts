@@ -227,6 +227,6 @@ export const webScripts = (html: string): string[] =>
 /** The advice words in `text` (spec §12.3): steadyhand says what a strategy implies, never what
  * to do. The Indonesian words too (#251 AC5): "merekomendasikan", "rekomendasi", "kami sarankan". */
 export const adviceWords = (text: string): string[] =>
-  [
-    ...text.matchAll(/recommend|we\s+suggest|merekomendasikan|rekomendasi|kami\s+sarankan/giu),
-  ].map((match) => match[0]);
+  [...text.matchAll(/recommend|we\s+suggest|merekomendasikan|rekomendasi|kami\s+sarankan/giu)].map(
+    (match) => match[0],
+  );

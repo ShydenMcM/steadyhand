@@ -11,6 +11,7 @@ import {
   type Strategy,
 } from "@steadyhand/core";
 import { settingOf } from "@steadyhand/history";
+import { LANGUAGES, type Language } from "./words.ts";
 
 /** The strategy chosen in Settings, with the values typed for its settings; a setting with no
  * value takes its default. */
@@ -32,6 +33,7 @@ export const KEPT = {
   strategy: "strategy",
   limits: "risk-limits",
   feePreset: "fee-preset",
+  language: "language",
 } as const;
 
 /** The default strategy (core §8) and fee preset (core spec §4.2's own commission). */
@@ -169,6 +171,18 @@ export const feePresetOf = (value: unknown): string => {
     throw refusedSetting(KEPT.feePreset);
   }
   return value;
+};
+
+/** The language Settings keeps (#251 AC1), or English before one is chosen. */
+export const languageOf = (value: unknown): Language => {
+  if (value === undefined) {
+    return "en";
+  }
+  const found = LANGUAGES.find(([language]) => language === value);
+  if (found === undefined) {
+    throw refusedSetting(KEPT.language);
+  }
+  return found[0];
 };
 
 /** What the panel advises and records under: the strategy, risk limits and fee preset Settings
