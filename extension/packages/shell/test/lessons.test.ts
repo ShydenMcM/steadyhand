@@ -5,7 +5,7 @@ import { lessonFrom, type Lesson } from "../src/lesson-text.ts";
 import { catalogue, LESSONS } from "../src/lessons.ts";
 
 // The lessons the extension ships (#244, spec §13): the Python course's lessons, less those that
-// describe what the extension does not do, fifteen rewritten for it, and six new.
+// describe what the extension does not do, sixteen rewritten for it, and six new.
 
 /** Kept as written: their text is the Python lesson's, word for word. */
 const AS_WRITTEN = [
@@ -22,7 +22,6 @@ const AS_WRITTEN = [
   "shares.basics",
   "shares.cost_basis",
   "shares.splits",
-  "tax.dividend",
 ] as const;
 const REWRITTEN = [
   "costs.trading",
@@ -40,6 +39,7 @@ const REWRITTEN = [
   "strategies.dividend_growth",
   "strategies.holding_cash",
   "strategies.monthly_savings",
+  "tax.dividend",
 ] as const;
 const NEW = [
   "broker.reading",
@@ -218,3 +218,16 @@ test("a lesson in a module the course does not have is refused, naming both", ()
     "x.y is in the module backtesting, which the course does not have",
   );
 });
+
+// A lesson that sends the reader to the next lesson needs one at the next place in its module
+// (#546).
+test.each(ALL.map((lesson) => lesson.id))(
+  "%s sends the reader to no next lesson that does not ship",
+  (id) => {
+    const lesson = ALL.find((one) => one.id === id) ?? pythonLesson(id);
+    const next = ALL.some(
+      (one) => one.module === lesson.module && one.position === lesson.position + 1,
+    );
+    expect(textsOf(lesson).filter((text) => /next lesson/iu.test(text) && !next)).toEqual([]);
+  },
+);
