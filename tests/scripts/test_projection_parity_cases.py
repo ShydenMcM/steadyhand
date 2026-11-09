@@ -1,6 +1,6 @@
 """The income projection's parity harness cases (#254 AC1, spec §9.1): seeded holdings with five
 years of dividends, whose dividend growth and projection Python's ``dividend_growth`` and
-``project`` give, for core's ``dividendGrowth`` and ``project`` to give identically
+``project`` give, for core's ``incomeGrowth`` and ``project`` to give identically
 (``extension/packages/core/test/parity-projection.test.ts``). The committed file is checked
 against a fresh run in ``tests/integration/scripts/test_core_fixtures.py``."""
 

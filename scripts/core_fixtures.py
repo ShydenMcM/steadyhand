@@ -816,7 +816,7 @@ def _projection_case(draw: random.Random, name: str) -> dict[str, Any]:
 
 def projection_cases(seed: int = PROJECTION_SEED, count: int = PROJECTION_CASES) -> ParityCases:
     """*count* portfolios drawn from *seed*, each with Python's dividend growth and projection,
-    for core's ``dividendGrowth`` and ``project``."""
+    for core's ``incomeGrowth`` and ``project``."""
     if count < 1:
         msg = f"the projection parity harness needs a case, got {count}"
         raise ValueError(msg)
