@@ -6,6 +6,7 @@ export * from "./costs.ts";
 export * from "./dividend-growth.ts";
 export * from "./high-yield.ts";
 export * from "./income.ts";
+export * from "./projection.ts";
 export * from "./ma-trend.ts";
 export * from "./low-volatility.ts";
 export * from "./momentum-rotation.ts";
