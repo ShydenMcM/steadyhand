@@ -346,12 +346,12 @@ def exact_node(text: str, *, where: str) -> str:
     return found["version"]
 
 
-def test_the_node_dockerfile_names_node_26_12_1() -> None:
+def test_the_node_dockerfile_names_node_26_13_0() -> None:
     # Shyden, 2026-10-29, every project: "Pin exact, every project" (#440); amended 2026-10-30,
     # "Pin + Dependabot via Docker" (#443, as shyden-labs/repo-template#143): the one file
     # Dependabot's docker ecosystem bumps, read by every setup-node step in CI.
     text = NODE_DOCKERFILE.read_text(encoding="utf-8")
-    assert exact_node(text, where="docker/node/Dockerfile") == "26.12.1"
+    assert exact_node(text, where="docker/node/Dockerfile") == "26.13.0"
 
 
 @pytest.mark.parametrize(
