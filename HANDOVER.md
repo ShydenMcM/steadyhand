@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-10 06:40 WIB (peer `repo-template-23` relayed "Shyden says: continue"; Shyden answered four questions by AskUserQuestion at about 06:10). Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-10 15:45 WIB (laptop shutdown requested via peer `repo-template-23`). Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -18,8 +18,9 @@
 
 ## Branches and PRs
 
-- **PR #552** `254/projection-spec` (spec §9.1 approved, plus the fourth root taken as Python does, `ln`/`exp` in decimal.js): was green on ec40b3f; develop merged in at f8d705d (the merge hook wants the head to hold develop), CI rerunning. Squash-merge when green on its head.
-- **PR #554** `254/projection-core` (worktree `../steadyhand-254`): core's `incomeGrowth` and `project` in `extension/packages/core/src/projection.ts`, 14 unit tests, 80-portfolio parity harness (`scripts/core_fixtures.py` `projection_cases`, `parity-projection.json`, in `.prettierignore`). Laptop: 3979 unit tests, 100% branches, lint/types/prettier clean; six mutants caught. CI not yet read. After #552 merges, merge develop into it before merging.
+- **#556 closed** (P0, Dependabot's Node bump refused with a 400 while the pin lived under `.github/`): PR #557 moved it to `docker/node/Dockerfile` (squash 18820a64); Dependabot then opened **PR #558** (node 26.13.0). #558 is red only on `test_the_node_dockerfile_names_node_26_12_1` (`tests/guards/test_supply_chain.py` lines 349/354, by design): rename the test and set the literal to 26.13.0 on the Dependabot branch, push, merge when green.
+- **PR #552** `254/projection-spec` (spec §9.1 approved, plus the fourth root taken as Python does, `ln`/`exp` in decimal.js): all 11 required checks green on f8d705d9, but BEHIND develop since #557 merged: merge develop in, push, squash-merge when green on the new head.
+- **PR #554** `254/projection-core` (worktree `../steadyhand-254`): core's `incomeGrowth` and `project` in `extension/packages/core/src/projection.ts`, 14 unit tests, 80-portfolio parity harness (`scripts/core_fixtures.py` `projection_cases`, `parity-projection.json`, in `.prettierignore`). Laptop: 3979 unit tests, 100% branches, lint/types/prettier clean; six mutants caught. CI on 83f7dd2b: `extension-guards` FAILED, not yet read (`gh run view <run> --log-failed`). After #552 merges, merge develop into it before merging.
 - `251/indonesian-lessons` (pushed, WIP, red on purpose until all 37 lessons exist): 9 of 37 built in `extension/packages/shell/lessons/id/`; all 37 drafted in `.superpowers/sdd/251-indonesian/lessons-id/*.txt`. #544, #546 and #548 stay open until their Indonesian lesson lands (each one's AC3).
 - Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29). Never copy or replay from the slip backups. Local `239/settings-history-lessons` (c4bebaf): leave alone.
 
@@ -38,11 +39,11 @@
 
 ## Running
 
-- Nothing local. Colima not held. Outside waits: CI on #552 and #554; the Google day turns at 15:00 WIB (2026-11-09 day: 15,961 of 16,000 used).
+- Nothing local. Colima not held. No outside waits: every PR's CI has finished. The Google day turned at 15:00 WIB (a new 16,000).
 
 ## Next steps
 
-1. Read each PR's verdict: `~/.claude/scripts/pr-verdict.sh 552`, then `554`. Merge #552, merge develop into `254/projection-core`, push, merge #554 when green.
+1. #558: fix the version test (above), merge when green. Then #552: merge develop in, merge when green. Then #554: read and fix its `extension-guards` failure, merge develop in, merge when green.
 2. #254 part 2 (new branch from develop, test first): the Settings field (kept like the goal), the Advice tab's lines under Income goal (one per scenario, "Projection, not a promise", years never a date; a missing list when `incomeGrowth` returns missing), and the `income.projection` and `income.growth` lessons (rewritten where they name the backtest or configuration file). New panel words and the two lessons need Indonesian twins, read back by Google after 15:00 WIB.
 3. After 15:00 WIB: the 28 unread #251 lessons (`lessons-json.py`, diff against `lessons-readback.tsv`, `readback.py`; about 32,000 characters, two Google days), then strategy summaries, help and the advice view's headings.
 4. Then #255/#256 with the user-entered purchases ruling.
