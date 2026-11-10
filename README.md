@@ -66,7 +66,7 @@ and format checks, mypy, and the extension's lint, format and type checks, and a
 stops the push, named. It runs no test suite: run the unit suites by hand before each push
 (`uv run --locked pytest`, and `npm test` in `extension/`); CI runs every other suite.
 
-Node is pinned to one exact release, in the one-line `.github/node/Dockerfile`
+Node is pinned to one exact release, in the one-line `docker/node/Dockerfile`
 (`FROM node:x.y.z`). Every CI job reads it before `actions/setup-node`, and a line in any other
 form fails the job. Dependabot's `docker` entry opens a pull request for each new release within
 the major. A new major moves by hand, with `@types/node`, through the

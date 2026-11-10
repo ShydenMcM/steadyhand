@@ -36,7 +36,7 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "chore(deps)"
-    # @types/node describes the Node that CI runs (.github/node/Dockerfile, read before
+    # @types/node describes the Node that CI runs (docker/node/Dockerfile, read before
     # setup-node), so a new major
     # would let tsc accept an API CI's Node lacks (#270). It moves with the runtime, by hand.
     ignore:
@@ -70,7 +70,7 @@ updates:
   # request per Node release. A new major moves by hand, with @types/node, through the
   # aligning-versions-across-projects skill.
   - package-ecosystem: "docker"
-    directory: "/.github/node"
+    directory: "/docker/node"
     target-branch: "develop"
     schedule:
       interval: "weekly"
