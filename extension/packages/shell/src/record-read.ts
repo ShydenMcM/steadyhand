@@ -32,6 +32,8 @@ export const SETTINGS = {
   excluded: "excluded",
   /** The monthly income goal in whole rupiah, as decimal digits. */
   goal: "income-goal",
+  /** The monthly amount the user adds, in whole rupiah, as decimal digits (spec §9.1). */
+  contribution: "monthly-contribution",
 } as const;
 
 /** The fixture broker's chart is made from its own closes, unadjusted (spec §5.3, §6.5). */
@@ -133,12 +135,13 @@ export const excludedOf = (value: unknown): ReadonlyMap<string, string> => {
   return new Map(value);
 };
 
-const goalOf = (value: unknown): Money | undefined => {
+/** Whole rupiah kept under `name` as decimal digits, or `undefined` when none is kept. */
+const rupiahOf = (name: string, value: unknown): Money | undefined => {
   if (value === undefined) {
     return undefined;
   }
   if (!isText(value) || !/^\d+$/u.test(value)) {
-    throw refusedSetting(SETTINGS.goal);
+    throw refusedSetting(name);
   }
   return new Money(BigInt(value), IDR);
 };
@@ -160,6 +163,9 @@ export const recordedFrom = async (db: IDBDatabase, strategy: string): Promise<R
     stored: await storedMemory(db, strategy),
     universe: await keptUniverse(db),
     excluded: excludedOf(await settingOf(db, SETTINGS.excluded)),
-    goal: goalOf(await settingOf(db, SETTINGS.goal)),
+    goal: rupiahOf(SETTINGS.goal, await settingOf(db, SETTINGS.goal)),
+    contribution:
+      rupiahOf(SETTINGS.contribution, await settingOf(db, SETTINGS.contribution)) ??
+      new Money(0n, IDR),
   };
 };
