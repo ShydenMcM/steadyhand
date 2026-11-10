@@ -5,7 +5,7 @@ import { lessonFrom, type Lesson } from "../src/lesson-text.ts";
 import { catalogue, LESSONS } from "../src/lessons.ts";
 
 // The lessons the extension ships (#244, spec §13): the Python course's lessons, less those that
-// describe what the extension does not do, sixteen rewritten for it, and six new.
+// describe what the extension does not do, eighteen rewritten for it, and eight new.
 
 /** Kept as written: their text is the Python lesson's, word for word. */
 const AS_WRITTEN = [
@@ -28,6 +28,8 @@ const REWRITTEN = [
   "idx.sessions",
   "idx.special_monitoring",
   "idx.universe",
+  "income.growth",
+  "income.projection",
   "orders.not_tradable",
   "risk.drawdown",
   "risk.limits",
