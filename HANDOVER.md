@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-11 00:05 WIB (overnight; Shyden asleep until about 06:00, relayed by peer `repo-template-c5`: keep working, never pause for `/clear`, park what only he can approve). Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-11 07:29 WIB (before Shyden's laptop restart for an OS update). Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -8,13 +8,14 @@
 
 **Standing approval (Shyden 2026-11-04, AskUserQuestion):** squash-merge into develop any PR green on every check on its head.
 
-## For Shyden in the morning
+## Open with Shyden
 
-1. **#255 (exemption claims), a new gap** (comment on #255): a claim opens on each dividend paid to the user, for its gross, and the extension cannot see that: it keeps only the latest portfolio read (no shares held on past ex-dates), and the cash movements reader reads deposits and withdrawals only. Routes: (a) the user also enters each dividend received (date, stock, gross) beside the purchases, buildable now (recommended); (b) read dividend credits from the broker's cash page, which waits on the parked broker; (c) start keeping each day's holdings, which misses every dividend before it began. The spec draft waits on this.
-2. **Clean-up refused by auto mode** (parked): deleting the remote branches `308/release-checklist` (PR #524 closed, superseded by #525) and `docs/handover-2026-10-29d` (PR #436 closed). Approve, or leave them.
-3. **PRs only you can close:** #541 (stale handover, conflicting) and #555 (the 15:45 handover, superseded by this one).
+1. **Close PRs #541 and #555** (old handovers): Shyden asked (2026-11-11) for this to be done in his Chrome with Claude in Chrome; not done before the restart. Do it first after the restart.
 
 ## Shyden's answers (2026-11-10)
+
+- **#255 (2026-11-11):** route (a): the user enters each dividend received (date, stock, gross) in a form beside the purchases form (recorded on #255). Spec §9.2 can be drafted.
+- **Clean-up (2026-11-11):** remote branches `308/release-checklist` and `docs/handover-2026-10-29d` deleted.
 
 - **#542:** no test rewrite; CI judges, the local unit gate runs only on a quiet machine. Closed not planned.
 - **#251 scope:** Indonesian ships with core's notes, refusals and strategy reasons in English; translating them is #553 (P4, 8 points, blocked by #251).
@@ -25,7 +26,7 @@
 ## Branches and PRs
 
 - `develop`: read with `git rev-parse origin/develop`. Merged tonight: #558 (Node 26.13.0 and its pin test, 7a58046), #552 (spec §9.1, 81a9881), #559 (Dependabot: @playwright/test 1.65.0, vite 8.3.6; 6 browser tests on each of three browsers; 0f305a7), #554 (#254 part 1: core's `incomeGrowth` and `project`, and the `income.growth` and `income.projection` lessons the lesson-coverage guard asked for; ff3cf37).
-- **PR #560** `254/projection-panel` (worktree `../steadyhand-254`, on develop): commit 30b700a projects the goal under Income goal on the Advice tab (model + view, tests first, mutants caught) and keeps `monthly-contribution` in the record. **Uncommitted on top:** the Settings field (label, input, Save amount, saved/cleared/refused words, tests green); it waits for its 5 Indonesian words' read-back (`.superpowers/sdd/251-indonesian/panel-254.json`, 205 characters). Backup patch: `.superpowers/sdd/254/settings-field-uncommitted.patch`. Commit the field once read back, push (stash nothing then), merge #560 when green. Do not merge #560 before the field lands: its lesson names the Settings field.
+- **PR #560** `254/projection-panel` (worktree `../steadyhand-254`, on develop): commit 30b700a projects the goal under Income goal on the Advice tab (model + view, tests first, mutants caught) and keeps `monthly-contribution` in the record. **Uncommitted on top:** the Settings field (label, input, Save amount, saved/cleared/refused words, tests green); it waits for its 5 Indonesian words' read-back (`.superpowers/sdd/251-indonesian/panel-254.json`, 205 characters). Backup patches: `.superpowers/sdd/254/settings-field-uncommitted.patch` and `-2026-11-11.patch` (9,641 bytes, taken before the restart). Commit the field once read back, push (stash nothing then), merge #560 when green. Do not merge #560 before the field lands: its lesson names the Settings field.
 - `251/indonesian-lessons` (pushed, WIP, red on purpose until all 37 lessons exist): 9 of 37 built. Drafts in `.superpowers/sdd/251-indonesian/lessons-id/*.txt` (39 now: income.growth and income.projection added tonight).
 - Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29). Never copy or replay from the slip backups. Local `239/settings-history-lessons` (c4bebaf): leave alone. Branch tips saved before tonight's clean-up: `.superpowers/sdd/branch-tips-2026-11-10.txt`.
 
@@ -39,12 +40,12 @@
 
 ## Running
 
-- Nothing local. Colima not held. GitHub had a Pull Requests major outage and degraded Actions from about 23:30 WIB; CI runs came through late.
+- Nothing local; nothing dies with the restart. Colima not held. The #254 Settings field is uncommitted in `../steadyhand-254` (files on disk survive a restart; patch backed up).
 
 ## Next steps
 
 1. After 15:00 WIB: the read-back queue above; commit the Settings field on #560 and merge it when green; then the lessons.
-2. #255: spec §9.2 once Shyden answers the claim-gross question.
+2. #255: draft spec §9.2 on route (a) (no Google quota needed; can start before 15:00 WIB).
 
 ## Progress page
 
