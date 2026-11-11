@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-11 15:32 WIB (before a shutdown). Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-12 07:0x WIB. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -10,10 +10,11 @@
 
 ## Open with Shyden
 
-- Nothing open. PRs #541 and #555 were closed in his Chrome on 2026-11-11 (he asked in chat); read back CLOSED.
+- Nothing open.
 
 ## Shyden's answers (2026-11-10)
 
+- **#255 design (2026-11-12, recorded on #255):** exemption switch is a Settings checkbox, off by default; a new Tax tab holds the dividends-received form, the purchases form and the claims list; the deadline counts from the tax year the dividend was received, not the ex-date.
 - **#255 (2026-11-11):** route (a): the user enters each dividend received (date, stock, gross) in a form beside the purchases form (recorded on #255). Spec §9.2 can be drafted.
 - **Clean-up (2026-11-11):** remote branches `308/release-checklist` and `docs/handover-2026-10-29d` deleted.
 
@@ -25,27 +26,29 @@
 
 ## Branches and PRs
 
-- `develop`: read with `git rev-parse origin/develop`. Merged tonight: #558 (Node 26.13.0 and its pin test, 7a58046), #552 (spec §9.1, 81a9881), #559 (Dependabot: @playwright/test 1.65.0, vite 8.3.6; 6 browser tests on each of three browsers; 0f305a7), #554 (#254 part 1: core's `incomeGrowth` and `project`, and the `income.growth` and `income.projection` lessons the lesson-coverage guard asked for; ff3cf37).
-- **PR #560** `254/projection-panel` (worktree `../steadyhand-254`, on develop): commit 30b700a projects the goal under Income goal on the Advice tab (model + view, tests first, mutants caught) and keeps `monthly-contribution` in the record. **Uncommitted on top:** the Settings field (label, input, Save amount, saved/cleared/refused words, tests green); it waits for its 5 Indonesian words' read-back (`.superpowers/sdd/251-indonesian/panel-254.json`, 205 characters). Backup patches: `.superpowers/sdd/254/settings-field-uncommitted.patch` and `-2026-11-11.patch` (9,641 bytes, taken before the restart). Commit the field once read back, push (stash nothing then), merge #560 when green. Do not merge #560 before the field lands: its lesson names the Settings field.
-- `251/indonesian-lessons` (pushed, WIP, red on purpose until all 37 lessons exist): 9 of 37 built. Drafts in `.superpowers/sdd/251-indonesian/lessons-id/*.txt` (39 now: income.growth and income.projection added tonight).
-- Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29). Never copy or replay from the slip backups. Local `239/settings-history-lessons` (c4bebaf): leave alone. Branch tips saved before tonight's clean-up: `.superpowers/sdd/branch-tips-2026-11-10.txt`.
+- `develop`: read with `git rev-parse origin/develop`.
+- **PR #560** `254/projection-panel` (worktree `../steadyhand-254`): the Settings field committed (26076f4, Indonesian read back 2026-11-12), develop merged in (57a15d0, pushed). CI was all green on 26076f4; the merge hook wants the head up to date, so wait for CI on 57a15d0 (`pr-verdict.sh 560`) and squash-merge with `--match-head-commit`.
+- **PR #563** `docs/255-spec-9-2` (worktree `../steadyhand-255`, head 5763824): spec §9.2, the exemption claims, reviewed inline and self-approved. Squash-merge when green.
+- `251/indonesian-lessons` (pushed, WIP, red on purpose until all 37 lessons exist): 9 of 37 built. Drafts in `.superpowers/sdd/251-indonesian/lessons-id/*.txt`.
+- Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29). Never copy or replay from the slip backups. Local `239/settings-history-lessons` (c4bebaf): leave alone.
 
 ## #251 Indonesian: where the read-back stands
 
-- Writer: Claude. Reader: Google Cloud Translation via `.superpowers/sdd/251-indonesian/readback.py <lines.json> <out.tsv>` (shared ledger, never past 16,000 a Google day; the day turns at 15:00 WIB). 2026-11-10 Google day: 15,845 used.
-- Tonight: 11 more lessons read back (`batch-1.tsv`, merged into `lessons-readback.tsv`; side-by-side `side-1.txt`). Fixed after reading every pair: run-rate is now "run-rate" (Google read "laju berjalan" as "walking speed"), dividends.basics "before this day" (read back as "before today"), auto_reject "exactly on the limit", sessions "advice waits", calendar evenness, broker.reading, costs.trading, not_tradable. Those fixes (about 4,800 characters) need reading back again.
-- `pick-batch.py <budget> <out.json>` picks the unread or changed paragraphs, whole lessons only. Then `side.py <tsv>` lines each read-back up with its English paragraph.
-- Queue for the next Google day, in order: the fixes' re-read (about 4,800), `panel-254.json` (205), `advice-id.json` (the Advice tab's 29 lines as slot templates, 952), then the 17 unread lessons and the two new income lessons (about 23,000; two days).
+- Writer: Claude. Reader: Google Cloud Translation via `readback.py <lines.json> <out.tsv>` in `.superpowers/sdd/251-indonesian/` (shared ledger; the Google day turns at 15:00 WIB). Another project shares the ledger: on 2026-11-11 (Pacific) about 10,700 were used elsewhere; read the ledger before planning.
+- 2026-11-12 morning: panel-254 (5 lines) read back and committed; batch 2 (the 9 fixed paragraphs of broker.reading, costs.trading, dividends.basics, idx.auto_reject, idx.sessions, income.calendar) read back, every pair read, merged with `merge-tsv.py`. "Kemerataan" read back as "Equity", so it is now "Kemerataan pembayaran" ("Payment evenness"), read back again.
+- After a draft edit: `python3 lessons-json.py lessons-id.json` before `pick-batch.py`, or the change is not seen.
+- Queue for the next Google day: `advice-id.json` (952), then `pick-batch.py` (22 lessons left, about 28,000: two days).
 - **Build only drafts whose every paragraph is read back** (memory `feedback-build-only-read-back-drafts`).
 
 ## Running
 
-- Nothing local; nothing dies with the restart. Colima not held. The #254 Settings field is uncommitted in `../steadyhand-254` (files on disk survive a restart; patch backed up).
+- Nothing local. Colima not held.
 
 ## Next steps
 
-1. After 15:00 WIB: the read-back queue above; commit the Settings field on #560 and merge it when green; then the lessons.
-2. #255: draft spec §9.2 on route (a) (no Google quota needed). Research done, nothing written: Python `packages/steadyhand/src/steadyhand/exemption.py` (claims, `settle_claims`, `cover_claims`, breaks latest-protection-first) and `packages/steadyhand-idx/src/steadyhand_idx/fees.py:180` (`reinvestment_deadline`, `protection_end` = 31 Dec of purchase year + hold_tax_years - 1). The extension has no claims code and no purchases form yet: §9.2 covers both forms (dividends received, reinvesting purchases), split between #255 and #256. Ask Shyden the design choices (where the exemption switch lives, what the panel shows) before building. #237 (blocker) is CLOSED.
+1. Merge #560 and #563 when green on their heads.
+2. After 15:00 WIB: the read-back queue above; then build the read-back lessons on `251/indonesian-lessons`.
+3. #255 by Priority: TDD from spec §9.2 (port `cover_claims` and the deadline step of `settle_claims`; Python tests one per case).
 
 ## Progress page
 
