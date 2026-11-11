@@ -9,10 +9,12 @@ import {
   NOTE_CODES,
   RuleDecimal,
   Side,
+  type Scenario,
+  type ScenarioProjection,
   type StoredMemory,
 } from "@steadyhand/core";
 import { expect, test } from "vitest";
-import type { AdviceModel } from "../src/advice-model.ts";
+import type { AdviceModel, GoalProjection } from "../src/advice-model.ts";
 import { adviceView, CHOICE_LINE, DISCLAIMER } from "../src/advice-view.ts";
 
 // The panel's advice as text (spec §10.3, #238 AC3): each order with its lots, limit, estimated
@@ -141,19 +143,84 @@ test("stops, missing pages and warnings each have their own list", () => {
   ]);
 });
 
-test("income-goal progress gives the run rate against the goal, and its share", () => {
-  const goal = {
-    state: "progress" as const,
-    progress: {
-      target: rp(4_000_000n),
-      runRate: rp(1_000_000n),
-      runRateShare: new RuleDecimal("0.25"),
-    },
-  };
-  expect(adviceView(advice({ goal }), RULES).at(-1)).toEqual({
+const PROGRESS = {
+  target: rp(4_000_000n),
+  runRate: rp(1_000_000n),
+  runRateShare: new RuleDecimal("0.25"),
+};
+const PROGRESS_LINE = "IDR 1,000,000 a month of the IDR 4,000,000 goal (25.00%).";
+const COSTS_NOTE = note(NOTE_CODES.INCOME_PROJECTION_COSTS_IGNORED, "trading costs are left out");
+
+/** How a scenario ends in a test: its years, or "not-within" or "cannot". */
+type Ending = string;
+
+const scenarioEnding = (scenario: Scenario, ending: Ending): ScenarioProjection => {
+  const common = { scenario, start: rp(1_000_000n), growth: new RuleDecimal("0.05") };
+  if (ending === "not-within" || ending === "cannot") {
+    return { ...common, outcome: ending, years: null };
+  }
+  return { ...common, outcome: "reached", years: new RuleDecimal(ending) };
+};
+
+/** A projection whose pessimistic, base and optimistic scenarios end as given. */
+const projectedAs = (pessimistic: Ending, base: Ending, optimistic: Ending): GoalProjection => ({
+  state: "projected",
+  projection: {
+    target: rp(4_000_000n),
+    contribution: rp(500_000n),
+    scenarios: [
+      scenarioEnding("pessimistic", pessimistic),
+      scenarioEnding("base", base),
+      scenarioEnding("optimistic", optimistic),
+    ],
+    notes: [COSTS_NOTE],
+  },
+  notes: [note(NOTE_CODES.INCOME_GROWTH_SHORT_HISTORY, "UNVR: no dividend was found"), COSTS_NOTE],
+});
+
+const goalWith = (projection: GoalProjection) =>
+  adviceView(advice({ goal: { state: "progress", progress: PROGRESS, projection } }), RULES).at(-1);
+
+test("income-goal progress gives the run rate against the goal, its share and the projection", () => {
+  expect(goalWith(projectedAs("20.1", "12.4", "not-within"))).toEqual({
     heading: "Income goal",
-    lines: ["IDR 1,000,000 a month of the IDR 4,000,000 goal (25.00%)."],
+    lines: [
+      PROGRESS_LINE,
+      "Projection, not a promise, adding IDR 500,000 a month:",
+      "Pessimistic: about 20.1 years.",
+      "Base: about 12.4 years.",
+      "Optimistic: not within 50 years.",
+      "UNVR: no dividend was found.",
+      "Trading costs are left out.",
+    ],
   });
+});
+
+test("a whole number of years keeps its tenth", () => {
+  expect(goalWith(projectedAs("3", "2", "1"))?.lines.slice(2, 5)).toEqual([
+    "Pessimistic: about 3.0 years.",
+    "Base: about 2.0 years.",
+    "Optimistic: about 1.0 years.",
+  ]);
+});
+
+test("a projection with nothing to grow from says so once, with its notes", () => {
+  expect(goalWith(projectedAs("cannot", "cannot", "cannot"))?.lines).toEqual([
+    PROGRESS_LINE,
+    "Projection, not a promise: nothing to project from a zero run-rate or no holdings.",
+    "UNVR: no dividend was found.",
+    "Trading costs are left out.",
+  ]);
+});
+
+test("a projection that lacks dividend pages says what it needs and names each page", () => {
+  const missing = [missingPage("dividends", "TLKM"), missingPage("dividends", "UNVR")];
+  expect(goalWith({ state: "missing", missing })?.lines).toEqual([
+    PROGRESS_LINE,
+    "Projection, not a promise: it needs five years of each holding's dividends.",
+    "Open the dividend page for TLKM.",
+    "Open the dividend page for UNVR.",
+  ]);
 });
 
 test("an income goal that cannot be measured names what is missing", () => {
