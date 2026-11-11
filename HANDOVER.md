@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-11 07:29 WIB (before Shyden's laptop restart for an OS update). Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-11 15:32 WIB (before a shutdown). Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -10,7 +10,7 @@
 
 ## Open with Shyden
 
-1. **Close PRs #541 and #555** (old handovers): Shyden asked (2026-11-11) for this to be done in his Chrome with Claude in Chrome; not done before the restart. Do it first after the restart.
+- Nothing open. PRs #541 and #555 were closed in his Chrome on 2026-11-11 (he asked in chat); read back CLOSED.
 
 ## Shyden's answers (2026-11-10)
 
@@ -45,7 +45,7 @@
 ## Next steps
 
 1. After 15:00 WIB: the read-back queue above; commit the Settings field on #560 and merge it when green; then the lessons.
-2. #255: draft spec §9.2 on route (a) (no Google quota needed; can start before 15:00 WIB).
+2. #255: draft spec §9.2 on route (a) (no Google quota needed). Research done, nothing written: Python `packages/steadyhand/src/steadyhand/exemption.py` (claims, `settle_claims`, `cover_claims`, breaks latest-protection-first) and `packages/steadyhand-idx/src/steadyhand_idx/fees.py:180` (`reinvestment_deadline`, `protection_end` = 31 Dec of purchase year + hold_tax_years - 1). The extension has no claims code and no purchases form yet: §9.2 covers both forms (dividends received, reinvesting purchases), split between #255 and #256. Ask Shyden the design choices (where the exemption switch lives, what the panel shows) before building. #237 (blocker) is CLOSED.
 
 ## Progress page
 
