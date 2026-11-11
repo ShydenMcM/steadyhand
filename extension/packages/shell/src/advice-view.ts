@@ -11,8 +11,10 @@ import {
   type Note,
   type Order,
   type Rejected,
+  type Scenario,
+  type ScenarioProjection,
 } from "@steadyhand/core";
-import type { AdviceModel, Goal } from "./advice-model.ts";
+import type { AdviceModel, Goal, GoalProjection } from "./advice-model.ts";
 
 /** Core §9.8's disclaimer, word for word as Python's `steadyhand.DISCLAIMER`. */
 export const DISCLAIMER =
@@ -76,6 +78,38 @@ const wibTime = (instant: Date): string => {
   return `${shifted.toISOString().slice(0, 10)} ${shifted.toISOString().slice(11, 16)} WIB`;
 };
 
+/** The label every projection carries (spec §9.1): years, never a date. */
+const PROJECTION = "Projection, not a promise";
+
+const SCENARIO_NAMES: Readonly<Record<Scenario, string>> = {
+  pessimistic: "Pessimistic",
+  base: "Base",
+  optimistic: "Optimistic",
+};
+
+const scenarioLine = (each: ScenarioProjection): string =>
+  each.years === null
+    ? `${SCENARIO_NAMES[each.scenario]}: not within 50 years.`
+    : `${SCENARIO_NAMES[each.scenario]}: about ${each.years.toFixed(1)} years.`;
+
+const projectionLines = (read: GoalProjection): readonly string[] => {
+  if (read.state === "missing") {
+    return [
+      `${PROJECTION}: it needs five years of each holding's dividends.`,
+      ...noteLines(read.missing),
+    ];
+  }
+  const { projection } = read;
+  // A zero run-rate or no holdings leaves every scenario with nothing to grow from.
+  const scenarios = projection.scenarios.every((each) => each.outcome === "cannot")
+    ? [`${PROJECTION}: nothing to project from a zero run-rate or no holdings.`]
+    : [
+        `${PROJECTION}, adding ${projection.contribution.toString()} a month:`,
+        ...projection.scenarios.map(scenarioLine),
+      ];
+  return [...scenarios, ...noteLines(read.notes)];
+};
+
 const goalLines = (goal: Goal): readonly string[] => {
   switch (goal.state) {
     case "no goal set":
@@ -87,6 +121,7 @@ const goalLines = (goal: Goal): readonly string[] => {
       return [
         `${progress.runRate.toString()} a month of the ${progress.target.toString()} goal ` +
           `(${percent(progress.runRateShare)}).`,
+        ...projectionLines(goal.projection),
       ];
     }
   }

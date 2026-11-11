@@ -5,10 +5,15 @@ import {
   IDR,
   IdxCalendar,
   IdxMarketRules,
+  incomeGrowth,
   missingPage,
   Money,
+  NOTE_CODES,
+  portfolioView,
+  project,
   RiskLimits,
   riskState,
+  runRate,
   RuleDecimal,
   shippedSessions,
   type Dividends,
@@ -99,6 +104,7 @@ const RECORDED: Recorded = {
   universe: ["BBCA", "TLKM"],
   excluded: new Map(),
   goal: undefined,
+  contribution: rp(0n),
 };
 
 interface Seen {
@@ -350,4 +356,97 @@ test("a goal with every holding's dividends read gives the run rate against it",
   }
   expect(advice.goal.progress.target).toEqual(rp(1_000_000n));
   expect(advice.goal.progress.runRate.amount > 0n).toBe(true);
+  // Read back to 2024 only: growth needs the five years to 17 June 2020 (spec §9.1, #254 AC2).
+  expect(advice.goal.projection).toEqual({
+    state: "missing",
+    missing: [missingPage("dividends", "TLKM")],
+  });
+});
+
+/** TLKM's dividends read back to 2020: `earlier` a share in the year to 17 June 2021. */
+const tlkmSince2020 = (earlier: string | undefined): Dividends => ({
+  symbol: "TLKM",
+  covered: { from: "2020-06-01", to: "2025-06-17" },
+  dividends: [
+    ...(earlier === undefined
+      ? []
+      : [
+          {
+            symbol: "TLKM",
+            exDate: "2021-05-20",
+            paymentDate: "2021-06-10",
+            grossPerShare: new RuleDecimal(earlier),
+          },
+        ]),
+    {
+      symbol: "TLKM",
+      exDate: "2025-05-20",
+      paymentDate: "2025-06-10",
+      grossPerShare: new RuleDecimal("120"),
+    },
+  ],
+});
+
+/** The goal's projection as core makes it from the holdings alone, cash left out (spec §9.1). */
+const projected = (tlkm: Dividends, contribution: Money) => {
+  const dividends = new Map([["TLKM", tlkm]]);
+  const held = portfolioView(RULES, portfolioAt(AFTER_CLOSE).value, "2025-06-17");
+  const read = runRate({
+    rules: RULES,
+    held: held.held,
+    dividends,
+    splits: [],
+    unknownActions: new Map(),
+    asOf: "2025-06-17",
+  });
+  if (read.rate === null) {
+    throw new Error("expected a run rate");
+  }
+  const growth = incomeGrowth(read.rate, dividends, []);
+  if (growth.growth === null) {
+    throw new Error("expected growth");
+  }
+  const projection = project({
+    rate: read.rate,
+    growth: growth.growth,
+    holdingsValue: rp(2_750_000n),
+    target: rp(1_000_000n),
+    contribution,
+    rules: RULES,
+  });
+  return {
+    state: "projected",
+    projection,
+    notes: [...growth.growth.notes, ...projection.notes],
+  };
+};
+
+test("a goal whose dividends reach back five years is projected from the holdings and the amount added", () => {
+  const tlkm = tlkmSince2020("80");
+  const advice = model(FRESH, {
+    goal: rp(1_000_000n),
+    contribution: rp(500_000n),
+    dividends: new Map([["TLKM", tlkm]]),
+  });
+  if (advice.state !== "advice" || advice.goal.state !== "progress") {
+    throw new Error("expected goal progress");
+  }
+  expect(advice.goal.projection).toEqual(projected(tlkm, rp(500_000n)));
+  expect(
+    advice.goal.projection.state === "projected" && advice.goal.projection.projection.contribution,
+  ).toEqual(rp(500_000n));
+});
+
+test("a holding that paid nothing in the earlier year is projected at 0% growth, with its note", () => {
+  const tlkm = tlkmSince2020(undefined);
+  const advice = model(FRESH, { goal: rp(1_000_000n), dividends: new Map([["TLKM", tlkm]]) });
+  if (advice.state !== "advice" || advice.goal.state !== "progress") {
+    throw new Error("expected goal progress");
+  }
+  expect(advice.goal.projection).toEqual(projected(tlkm, rp(0n)));
+  const codes = advice.goal.projection.state === "projected" ? advice.goal.projection.notes : [];
+  expect(codes.map((each) => each.code)).toEqual([
+    NOTE_CODES.INCOME_GROWTH_SHORT_HISTORY,
+    NOTE_CODES.INCOME_PROJECTION_COSTS_IGNORED,
+  ]);
 });

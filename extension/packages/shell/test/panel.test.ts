@@ -655,6 +655,64 @@ test("a goal that is not whole rupiah is refused, naming what was typed, and not
   expect(await settingOf(db, SETTINGS.goal)).toBe("5000000");
 });
 
+// Settings: the monthly amount the user adds, for the income projection (#254, spec §9.1), in
+// whole rupiah, kept like the goal; none kept counts as 0.
+
+const saveContribution = async (
+  page: StandIn,
+  panel: { settled(): Promise<void> },
+  typed: string,
+) => {
+  byId(page, "contribution").value = typed;
+  byId(page, "save-contribution").clicked?.();
+  await panel.settled();
+  return byId(page, "status").textContent;
+};
+
+test("the monthly amount added has a labelled input on Settings holding the kept amount", async () => {
+  await putSetting(db, SETTINGS.contribution, "500000");
+  const { page } = await open();
+  const settings = byId(page, "pane-settings");
+  expect(byId(settings, "contribution").tagName).toBe("input");
+  expect(byId(settings, "contribution").value).toBe("500000");
+  const label = byId(settings, "contribution-label");
+  expect([label.tagName, label.htmlFor, label.textContent]).toEqual([
+    "label",
+    "contribution",
+    "Monthly amount you add, in rupiah",
+  ]);
+  expect(byId(settings, "save-contribution").textContent).toBe("Save amount");
+});
+
+test("the monthly amount input is empty before any amount is kept", async () => {
+  const { page } = await open();
+  expect(byId(page, "contribution").value).toBe("");
+});
+
+test("a monthly amount typed with thousands dots is kept as whole rupiah", async () => {
+  const { page, panel } = await open();
+  expect(await saveContribution(page, panel, " 500.000 ")).toBe("Monthly amount saved.");
+  expect(await settingOf(db, SETTINGS.contribution)).toBe("500000");
+});
+
+test("an empty monthly amount clears the kept amount", async () => {
+  await putSetting(db, SETTINGS.contribution, "500000");
+  const { page, panel } = await open();
+  expect(await saveContribution(page, panel, "  ")).toBe("Monthly amount cleared.");
+  expect(await settingOf(db, SETTINGS.contribution)).toBeUndefined();
+});
+
+test("a monthly amount that is not whole rupiah is refused, naming what was typed, and nothing changes", async () => {
+  await putSetting(db, SETTINGS.contribution, "500000");
+  const { page, panel } = await open();
+  for (const typed of ["500rb", "5.00.000", "500,000", "-500"]) {
+    expect(await saveContribution(page, panel, typed)).toBe(
+      `Monthly amount not saved: type whole rupiah, such as 500.000, got "${typed}"`,
+    );
+  }
+  expect(await settingOf(db, SETTINGS.contribution)).toBe("500000");
+});
+
 // Settings: the risk limits, the rates as percentages and the smallest buy in lots, and the fee
 // preset (#239 AC1).
 

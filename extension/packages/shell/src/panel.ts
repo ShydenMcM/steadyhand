@@ -310,6 +310,14 @@ export const startPanel = async <E extends PanelElement<E>>(
   const goal = named(page.createElement("input"), "goal");
   goalLabel.htmlFor = goal.id;
   const saveGoal = element("button", "save-goal", "saveGoal");
+  const contributionLabel = named(
+    page.createElement("label"),
+    "contribution-label",
+    "contributionLabel",
+  );
+  const contribution = named(page.createElement("input"), "contribution");
+  contributionLabel.htmlFor = contribution.id;
+  const saveContribution = element("button", "save-contribution", "saveContribution");
 
   // The risk limits, the rates as percentages (#239 AC1).
   const limitInput = (limit: keyof TypedLimits) => {
@@ -532,6 +540,9 @@ export const startPanel = async <E extends PanelElement<E>>(
     goalLabel,
     goal,
     saveGoal,
+    contributionLabel,
+    contribution,
+    saveContribution,
     ...Object.values(limitRows).flatMap((row) => [row.label, row.input]),
     saveLimits,
     presetLabel,
@@ -714,21 +725,46 @@ export const startPanel = async <E extends PanelElement<E>>(
     await redraw();
   };
 
-  /** Keep the goal typed, or clear it when nothing is typed (spec §9). */
-  const saveTypedGoal = async (): Promise<void> => {
-    const typed = goal.value.trim();
+  /** Keep the whole rupiah typed in `input` under `setting`, or clear it when nothing is typed,
+   * saying which with the words named. */
+  const saveTypedRupiah = async (
+    input: { readonly value: string },
+    setting: string,
+    said: {
+      readonly cleared: keyof Words;
+      readonly saved: keyof Words;
+      readonly notSaved: keyof Words;
+    },
+  ): Promise<void> => {
+    const typed = input.value.trim();
     if (typed === "") {
-      await putSetting(db, SETTINGS.goal, undefined);
-      status.textContent = words.goalCleared;
+      await putSetting(db, setting, undefined);
+      status.textContent = words[said.cleared];
     } else if (WHOLE_RUPIAH.test(typed)) {
-      await putSetting(db, SETTINGS.goal, BigInt(typed.replaceAll(".", "")).toString());
-      status.textContent = words.goalSaved;
+      await putSetting(db, setting, BigInt(typed.replaceAll(".", "")).toString());
+      status.textContent = words[said.saved];
     } else {
-      status.textContent = fill(words.goalNotSaved, { typed: goal.value });
+      status.textContent = fill(words[said.notSaved], { typed: input.value });
       return;
     }
     await redraw();
   };
+
+  /** Keep the goal typed, or clear it when nothing is typed (spec §9). */
+  const saveTypedGoal = (): Promise<void> =>
+    saveTypedRupiah(goal, SETTINGS.goal, {
+      cleared: "goalCleared",
+      saved: "goalSaved",
+      notSaved: "goalNotSaved",
+    });
+
+  /** Keep the monthly amount added, or clear it so the projection adds 0 (spec §9.1). */
+  const saveTypedContribution = (): Promise<void> =>
+    saveTypedRupiah(contribution, SETTINGS.contribution, {
+      cleared: "contributionCleared",
+      saved: "contributionSaved",
+      notSaved: "contributionNotSaved",
+    });
 
   const saveTypedLimits = async (): Promise<void> => {
     let limits: ReturnType<typeof typedLimits>;
@@ -819,6 +855,8 @@ export const startPanel = async <E extends PanelElement<E>>(
     universe.value = (await keptUniverse(db))?.join(" ") ?? "";
     const keptGoal: unknown = await settingOf(db, SETTINGS.goal);
     goal.value = typeof keptGoal === "string" ? keptGoal : "";
+    const keptContribution: unknown = await settingOf(db, SETTINGS.contribution);
+    contribution.value = typeof keptContribution === "string" ? keptContribution : "";
     showStrategy(await keptOr(db, KEPT.strategy, strategyOf));
     const limits = await keptOr(db, KEPT.limits, limitsOf);
     limitRows.maxWeight.input.value = limits.maxWeight.mul(100).toString();
@@ -906,6 +944,9 @@ export const startPanel = async <E extends PanelElement<E>>(
   });
   saveGoal.addEventListener("click", () => {
     run(saveTypedGoal);
+  });
+  saveContribution.addEventListener("click", () => {
+    run(saveTypedContribution);
   });
   saveLanguage.addEventListener("click", () => {
     run(saveChosenLanguage);
