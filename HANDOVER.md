@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-13 15:41 WIB. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-13 18:19 WIB. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -33,7 +33,7 @@
 
 ## Branches and PRs
 
-- **PR #574** (`573/dividend-lesson-exemption`, worktree `../steadyhand-544`, head 715d3e1, read 15:32 WIB) for **#573** (P0, 1 pt, In Progress, filed today): tax.dividend said the exemption is untracked; now points to the next lesson. Test seen red first; unit 144/144. CI was running at 15:32. Indonesian draft `lessons-id/tax.dividend.txt` already changed to match (not read back: #251 AC8).
+- **#573 closed** 2026-11-13 18:1x WIB: PR #574 squash-merged into develop as 872d53a (every required check green on head 715d3e1). Red-first re-measured (old line: 1 failed, 143 passed; new: 144 passed; logs in `.superpowers/sdd/573/`); evidence per AC on #573. Worktree `../steadyhand-544` and branch removed (local and remote).
 
 - `develop`: read with `git rev-parse origin/develop`.
 - Merged 2026-11-13: #571 (#570 P0, extension integration builds once, proven by strace and per-test assertion counts; 083ccf8). #568 P0 is done: runner counts on CI (probe PR #569, shut unmerged; run 43383498799) prove that the earlier journey merge kept every check. Shyden ruled: keep the 5 browser journeys (shared opening only). `testpypi` environment deleted on his choice (dev-deploy rule); `dev` already allows all branches.
@@ -47,17 +47,17 @@
 - Writer: Claude. Reader: Google Cloud Translation via `readback.py <lines.json> <out.tsv>` in `.superpowers/sdd/251-indonesian/` (shared ledger; the Google day turns at 15:00 WIB). Another project shares the ledger: on 2026-11-11 (Pacific) about 10,700 were used elsewhere; read the ledger before planning.
 - 2026-11-12 morning: panel-254 (5 lines) read back and committed; batch 2 (the 9 fixed paragraphs of broker.reading, costs.trading, dividends.basics, idx.auto_reject, idx.sessions, income.calendar) read back, every pair read, merged with `merge-tsv.py`. "Kemerataan" read back as "Equity", so it is now "Kemerataan pembayaran" ("Payment evenness"), read back again.
 - After a draft edit: `python3 lessons-json.py lessons-id.json` before `pick-batch.py`, or the change is not seen.
-- Queue for the next Google day: `advice-id.json` (952), then `pick-batch.py` (22 lessons left, about 28,000: two days).
+- **2026-11-13 Google day (Pacific), 15,786 of 16,000 used:** `advice-id.json` read back (29 lines); 4 fixed (`hari ini` meant the advice day, not today, in noOrders and stampDuty; projectionNothing; readAgainReason colon) and read back clean; merged into `advice-readback.tsv`. Lesson batch 4 (11 lessons, 65 paragraphs: income.goal/growth/projection/run_rate, orders.not_tradable, risk.drawdown/limits/returns, shares.basics/prices, start.explanations) read back, every pair read, merged into `lessons-readback.tsv`. 7 paragraphs then fixed in the drafts (income.growth#3, risk.returns#4, shares.basics#4, shares.prices#0/#4/#5, start.explanations#2) and NOT yet read back: pick-batch sees them as changed.
+- **Queue for the next Google day (turns 15:00 WIB 2026-11-14):** `python3 lessons-json.py lessons-id.json`, then `python3 -I pick-batch.py 16000 batch-5.json`: 15,683 characters left in all (the 7 fixes plus 11 lessons incl. the changed tax.dividend), one day. Then read every pair, merge, and build the drafts on `251/indonesian-lessons`.
 - **Build only drafts whose every paragraph is read back** (memory `feedback-build-only-read-back-drafts`).
 
 ## Running
-- Nothing local. The PR #574 waiter was stopped (DEAD); re-run: `~/.claude/scripts/pr-verdict.sh 574` (returns at once while CI runs: loop it with a ceiling). Colima not held.
+- Nothing local. Colima not held.
 
 ## Next steps
 
-1. PR #574: read the verdict; if every check is green on its head, squash-merge into develop (standing approval), then shut #573 by hand with each AC's evidence, remove `../steadyhand-544` and the branch.
-2. `board-next` (repo-template `node scripts/board-next.ts PVT_kwHOCQ_jzM4BkhEb steadyhand`) for the next ticket. Everything left in the first release waits on the broker account, so expect a post-launch pick (#256 likely).
-3. #251 read-back queue (the Google day turned at 15:00 WIB; 2026-11-13 Pacific day used 0): `advice-id.json` (29 lines, 952 chars) first, then `pick-batch.py`. Now includes the tax.dividend change (AC8).
+1. #251 read-back (queue above) once the Google day turns, 15:00 WIB 2026-11-14. Read the ledger first (another project shares it).
+2. First release: 24 of 27 stories closed; #242, #243, #245 (21 points) all wait on Shyden's broker account. `board-next` names #242 because its `blocked_by` (#226, #238, #460) are closed; the real wait is the account (memory `project-wait-for-release`). Post-launch pick next: #256 (likely), by Priority.
 
 ## Progress page
 
