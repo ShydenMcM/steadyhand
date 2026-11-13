@@ -46,11 +46,13 @@ import {
   keptSettings,
   languageOf,
   limitsOf,
+  STOCK_CODE,
   storedLimits,
   storedStrategy,
   strategyOf,
   typedLimits,
   typedStrategy,
+  WHOLE_RUPIAH,
   type ChosenStrategy,
   type TypedLimits,
 } from "./settings.ts";
@@ -145,11 +147,6 @@ const SESSIONS = shippedSessions();
 /** What Chrome says when a tab has no content script of the extension to answer. */
 const NO_RECEIVER = "Receiving end does not exist";
 
-/** An IDX stock code: four capital letters. */
-const STOCK_CODE = /^[A-Z]{4}$/u;
-
-/** Whole rupiah as typed: plain digits, or digits in threes after Indonesian thousands dots. */
-const WHOLE_RUPIAH = /^(?:\d+|\d{1,3}(?:\.\d{3})+)$/u;
 
 /** The symbols typed into the universe box: split on spaces, commas and new lines, in capitals,
  * each once, in the order first typed. */

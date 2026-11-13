@@ -46,6 +46,12 @@ export const FEE_PRESETS: readonly string[] = [...shippedTables().fees.presets.k
 export const refusedSetting = (name: string): Error =>
   new Error(`the setting ${name} is not as Settings keeps it`);
 
+/** An IDX stock code: four capital letters. */
+export const STOCK_CODE = /^[A-Z]{4}$/u;
+
+/** Whole rupiah as typed: plain digits, or digits in threes after Indonesian thousands dots. */
+export const WHOLE_RUPIAH = /^(?:\d+|\d{1,3}(?:\.\d{3})+)$/u;
+
 const DIGITS = /^\d+$/u;
 const PERCENTAGE = /^\d+(?:\.\d+)?$/u;
 

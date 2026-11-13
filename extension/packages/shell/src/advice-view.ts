@@ -39,7 +39,8 @@ const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 /** `text` with its full stop: a note written as a whole sentence already has one. */
 const stopped = (text: string): string => (text.endsWith(".") ? text : `${text}.`);
 
-const sentence = (text: string): string =>
+/** `text` as a sentence: capitalised, with its full stop. */
+export const sentence = (text: string): string =>
   stopped(`${text.charAt(0).toUpperCase()}${text.slice(1)}`);
 
 /** `text` after a colon: as written, with its full stop. */
