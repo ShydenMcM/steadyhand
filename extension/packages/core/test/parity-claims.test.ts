@@ -8,6 +8,7 @@ import {
   type Reinvestment,
 } from "../src/claims.ts";
 import { IDR, Money } from "../src/money.ts";
+import { NOTE_CODES } from "../src/notes.ts";
 import { IdxMarketRules } from "../src/rules.ts";
 import fixture from "./parity-claims.json" with { type: "json" };
 
@@ -18,6 +19,9 @@ import fixture from "./parity-claims.json" with { type: "json" };
 // same part to reinvest and the same protections, owe the same tax and say the same notes.
 // Python's claims carry the deadline counted from the day received, as core's do: the case where
 // Python's own engine counts from the ex-date is named in `claims.test.ts`.
+// #256: most cases also read the portfolio after some closes, with the cost basis invested, and
+// Python's `settle_claims` judged each read's breaks: core must hold the same amount on each claim
+// on `today`, until the same day. Python has no `missing.cost_basis` note, which is core's own.
 
 interface Claim {
   readonly symbol: string;
@@ -27,6 +31,8 @@ interface Claim {
   readonly uncovered: string;
   readonly tax: string;
   readonly protections: readonly (readonly string[])[];
+  readonly held: string;
+  readonly heldUntil: string | null;
 }
 
 interface Case {
@@ -34,6 +40,7 @@ interface Case {
   readonly today: string;
   readonly dividends: readonly { received: string; symbol: string; gross: string }[];
   readonly purchases: readonly { day: string; amount: string }[];
+  readonly reads: readonly { day: string; invested: string }[];
   readonly claims: readonly Claim[];
   readonly notExemptable: readonly { symbol: string; received: string; tax: string }[];
   readonly owed: string;
@@ -60,7 +67,8 @@ test(`the harness compares ${CASES.length.toString()} sets of entries from seed 
 });
 
 test.each(CASES)("core's claims report for $name is Python's", (parity) => {
-  const read = claimsReport(RULES, dividendsOf(parity), purchasesOf(parity), parity.today);
+  const reads = parity.reads.map((entry) => ({ day: entry.day, invested: rp(entry.invested) }));
+  const read = claimsReport(RULES, dividendsOf(parity), purchasesOf(parity), parity.today, reads);
   if (read.report === null) {
     throw new Error(`${parity.name}: no report`);
   }
@@ -72,6 +80,8 @@ test.each(CASES)("core's claims report for $name is Python's", (parity) => {
       row.deadline,
       row.toReinvest.amount.toString(),
       row.tax.amount.toString(),
+      row.held.amount.toString(),
+      row.heldUntil,
     ]),
   ).toEqual(
     parity.claims.map((claim) => [
@@ -81,6 +91,8 @@ test.each(CASES)("core's claims report for $name is Python's", (parity) => {
       claim.deadline,
       claim.uncovered,
       claim.tax,
+      claim.held,
+      claim.heldUntil,
     ]),
   );
   expect(
@@ -91,7 +103,10 @@ test.each(CASES)("core's claims report for $name is Python's", (parity) => {
     ]),
   ).toEqual(parity.notExemptable.map((entry) => [entry.symbol, entry.received, entry.tax]));
   expect(read.report.owed.amount.toString()).toBe(parity.owed);
-  expect(read.report.notes.map((found) => found.code)).toEqual(parity.notes);
+  const said = read.report.notes
+    .map((found) => found.code)
+    .filter((code) => code !== NOTE_CODES.MISSING_COST_BASIS);
+  expect(said).toEqual(parity.notes);
 });
 
 test.each(CASES)("core's protections for $name are Python's", (parity) => {

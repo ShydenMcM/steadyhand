@@ -4,11 +4,14 @@ purchases, which Python's ``cover_claims`` and ``settle_claims`` answer, for cor
 (``extension/packages/core/test/parity-claims.test.ts``). The committed file is checked against a
 fresh run in ``tests/integration/scripts/test_core_fixtures.py``."""
 
+from datetime import date
 from functools import cache
 from typing import Any
 
 import core_fixtures
 import pytest
+
+from steadyhand_idx.rules import IdxMarketRules
 
 
 @cache
@@ -56,6 +59,33 @@ def test_some_purchases_are_protected_past_the_dividends_own_year() -> None:
 
 def test_some_cases_enter_no_purchase() -> None:
     assert any(not case["purchases"] for case in _cases())
+
+
+def test_some_cases_break_a_claim() -> None:
+    # #256: portfolio reads after a close judge the breaks (spec §9.2).
+    assert any("exemption.claim_broken" in case["notes"] for case in _cases())
+
+
+def test_some_cases_have_no_portfolio_read() -> None:
+    assert any(not case["reads"] for case in _cases())
+
+
+def test_every_read_is_a_trading_day_no_later_than_today() -> None:
+    rules = IdxMarketRules()
+    for case in _cases():
+        for read in case["reads"]:
+            assert rules.is_trading_day(date.fromisoformat(read["day"]))
+            assert read["day"] <= case["today"]
+
+
+def test_some_reads_have_nothing_invested() -> None:
+    assert any(read["invested"] == "0" for case in _cases() for read in case["reads"])
+
+
+def test_some_protected_claims_are_still_held_and_some_no_longer() -> None:
+    claims = [claim for case in _cases() for claim in case["claims"] if claim["protections"]]
+    assert any(claim["held"] != "0" for claim in claims)
+    assert any(claim["held"] == "0" for claim in claims)
 
 
 @pytest.mark.parametrize("count", [0, -1])

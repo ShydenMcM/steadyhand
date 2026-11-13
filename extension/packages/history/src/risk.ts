@@ -33,6 +33,8 @@ interface ValuationRow {
   readonly readAt: Date;
   readonly value: bigint;
   readonly currency: string;
+  /** The cost basis invested (#256); a row stored before it has none. */
+  readonly invested?: bigint;
 }
 
 interface MovementRow {
@@ -61,8 +63,8 @@ export const amountOf = (amount: string | bigint, currency: string): Money => {
   return new Money(BigInt(amount), IDR);
 };
 
-/** Record the portfolio's value, all cash and every holding at its last price, for the trading
- * day whose close a portfolio read shows, and return that day. A read during a session shows
+/** Record the portfolio's value, all cash and every holding at its last price, and its cost basis
+ * invested (#256), for the trading day whose close a portfolio read shows, and return that day. A read during a session shows
  * no close: it records nothing and returns `null`. A day read twice keeps the later read. */
 export const recordValuation = async (
   db: IDBDatabase,
@@ -73,12 +75,13 @@ export const recordValuation = async (
   if (day === null) {
     return null;
   }
-  const value = portfolioView(rules.market, read.value, day).value;
+  const view = portfolioView(rules.market, read.value, day);
   const row: ValuationRow = {
     day,
     readAt: read.readAt,
-    value: value.amount,
-    currency: value.currency.code,
+    value: view.value.amount,
+    currency: view.value.currency.code,
+    invested: view.invested.amount,
   };
   await putAll(db, STORES.valuations, [row]);
   return day;
@@ -134,6 +137,7 @@ export const riskRecord = async (db: IDBDatabase): Promise<RiskRecord> => {
       day: row.day,
       readAt: row.readAt,
       value: amountOf(row.value, row.currency),
+      ...(row.invested === undefined ? {} : { invested: amountOf(row.invested, row.currency) }),
     })),
     movements: movements.map(movementOf),
     movementReads: movementReads.map(movementReadOf),

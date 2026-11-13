@@ -18,7 +18,7 @@ import argparse
 import json
 import random
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, time, timedelta
 from decimal import ROUND_HALF_EVEN, Context, Decimal
 from pathlib import Path
@@ -835,6 +835,15 @@ CLAIM_FIRST = date(2021, 1, 1)  # the rules' verified date: some dividends come 
 CLAIM_SPAN_DAYS = 2_000  # to mid-2026, so purchases and today stay inside the calendar
 CLAIM_STOCKS = ("BBCA", "BBRI", "TLKM")
 CLAIM_NO_PURCHASE = 0.15
+# #256: how often a case with purchases has no portfolio read, how many reads it has, how long
+# after a purchase each comes, and how often a read is followed by one on its settlement date.
+CLAIM_NO_READ = 0.2
+CLAIM_READS = 4
+CLAIM_READ_AFTER_DAYS = 60
+CLAIM_SETTLEMENT_READ = 0.5
+CLAIM_INVESTED = 2 * 10**8
+CLAIM_SAME_INVESTED = 0.5  # a settlement read with the same cost basis keeps the shortfall
+CLAIM_NOTHING_INVESTED = 0.1  # everything sold: no cost basis at all
 
 
 def _claim_case(draw: random.Random, rules: IdxMarketRules, name: str) -> dict[str, Any]:
@@ -843,7 +852,12 @@ def _claim_case(draw: random.Random, rules: IdxMarketRules, name: str) -> dict[s
 
     Python's claim has an ex-date; the user enters only the day received, so the ex-date here is
     the day before, and the deadline is the rules' deadline counted from the day received
-    (spec §9.2)."""
+    (spec §9.2).
+
+    #256: portfolio reads after a close, on trading days after purchases, each with the cost basis
+    invested, some followed by one on its settlement date. The day's purchases cover first, then
+    Python's ``settle_claims`` judges the read; it is handed each claim with nothing uncovered, so
+    its deadline step stays out, as core's breaks leave it to the deadline step on *today*."""
     dividends = [
         (
             CLAIM_FIRST + timedelta(days=draw.randrange(CLAIM_SPAN_DAYS)),
@@ -857,7 +871,10 @@ def _claim_case(draw: random.Random, rules: IdxMarketRules, name: str) -> dict[s
         (CLAIM_FIRST + timedelta(days=draw.randrange(CLAIM_SPAN_DAYS)), draw.randrange(1, 10**8))
         for _ in range(count)
     ]
-    last = max([day for day, _, _ in dividends] + [day for day, _ in purchases])
+    reads = _claim_reads(draw, rules, [day for day, _ in purchases])
+    last = max(
+        [day for day, _, _ in dividends] + [day for day, _ in purchases] + [day for day, _ in reads]
+    )
     today = last + timedelta(days=draw.randrange(400))
     while not rules.is_trading_day(today):  # Python settles claims on a trading day
         today += timedelta(days=1)
@@ -875,12 +892,27 @@ def _claim_case(draw: random.Random, rules: IdxMarketRules, name: str) -> dict[s
         instrument = Instrument(symbol, "IDX", IDR)
         before = received - timedelta(days=1)
         claims.append(DividendClaim(instrument, before, received, amount, deadline, amount))
-    for day, value in sorted(purchases, key=lambda purchase: purchase[0]):
-        order = Order(Instrument("BBRI", "IDX", IDR), Side.BUY, 1, day)
-        fill = Fill(order, day, 1, Money(value, IDR), Costs(*(Money(0, IDR),) * 3))
-        claims = list(cover_claims(tuple(claims), [fill], rules))
-    settled = settle_claims(Portfolio.empty(IDR), tuple(claims), None, today, rules)
     claims.sort(key=lambda claim: (claim.pay_date, claim.instrument.symbol))
+    full = list(claims)
+    since: date | None = None
+    broken = Money(0, IDR)
+    broken_notes: list[str] = []
+    events = [(day, 0, value) for day, value in purchases] + [
+        (day, 1, value) for day, value in reads
+    ]
+    for day, kind, value in sorted(events, key=lambda event: (event[0], event[1])):
+        if kind == 0:
+            fill = _claim_fill(day, value)
+            claims = list(cover_claims(tuple(claims), [fill], rules))
+            full = list(cover_claims(tuple(full), [fill], rules))
+            continue
+        blank = tuple(replace(claim, uncovered=Money(0, IDR)) for claim in full)
+        judged = settle_claims(_claim_invested(day, value), blank, since, day, rules)
+        since = judged.shortfall_since
+        broken += judged.tax
+        broken_notes += [found.key for found in judged.notes]
+        full = _claims_kept(full, list(judged.claims))
+    settled = settle_claims(Portfolio.empty(IDR), tuple(full), None, today, rules)
     return {
         "name": name,
         "today": today.isoformat(),
@@ -889,6 +921,7 @@ def _claim_case(draw: random.Random, rules: IdxMarketRules, name: str) -> dict[s
             for day, symbol, gross in dividends
         ],
         "purchases": [{"day": day.isoformat(), "amount": str(value)} for day, value in purchases],
+        "reads": [{"day": day.isoformat(), "invested": str(value)} for day, value in reads],
         "claims": [
             {
                 "symbol": claim.instrument.symbol,
@@ -900,12 +933,77 @@ def _claim_case(draw: random.Random, rules: IdxMarketRules, name: str) -> dict[s
                 "protections": [
                     [str(p.amount.amount), p.until.isoformat()] for p in claim.protections
                 ],
+                **_claim_held(judged_claim, today),
             }
-            for claim in claims
+            for claim, judged_claim in zip(claims, full, strict=True)
         ],
         "notExemptable": not_exemptable,
-        "owed": str(settled.tax.amount),
-        "notes": [found.key for found in settled.notes],
+        "owed": str((broken + settled.tax).amount),
+        "notes": broken_notes + [found.key for found in settled.notes],
+    }
+
+
+def _claim_reads(
+    draw: random.Random, rules: IdxMarketRules, purchases: list[date]
+) -> list[tuple[date, int]]:
+    """Portfolio reads after a close, each with the cost basis invested: none without a purchase."""
+    if not purchases or draw.random() < CLAIM_NO_READ:
+        return []
+    reads: list[tuple[date, int]] = []
+    for _ in range(draw.randint(1, CLAIM_READS)):
+        day = draw.choice(purchases) + timedelta(days=draw.randrange(CLAIM_READ_AFTER_DAYS))
+        while not rules.is_trading_day(day):
+            day += timedelta(days=1)
+        reads.append((day, _claim_invested_drawn(draw)))
+        if draw.random() < CLAIM_SETTLEMENT_READ:
+            settles = rules.settlement_date(day)
+            same = draw.random() < CLAIM_SAME_INVESTED
+            invested = reads[-1][1] if same else _claim_invested_drawn(draw)
+            reads.append((settles, invested))
+    return reads
+
+
+def _claim_invested_drawn(draw: random.Random) -> int:
+    """A cost basis for a read: sometimes nothing, as after selling everything."""
+    if draw.random() < CLAIM_NOTHING_INVESTED:
+        return 0
+    return draw.randrange(1, CLAIM_INVESTED)
+
+
+def _claim_fill(day: date, value: int) -> Fill:
+    """A purchase of *value* on *day*, at no cost."""
+    order = Order(Instrument("BBRI", "IDX", IDR), Side.BUY, 1, day)
+    return Fill(order, day, 1, Money(value, IDR), Costs(*(Money(0, IDR),) * 3))
+
+
+def _claim_invested(day: date, value: int) -> Portfolio:
+    """A portfolio on *day* whose cost basis invested is *value*."""
+    book = Portfolio.empty(IDR)
+    if value == 0:
+        return book
+    fill = _claim_fill(day, value)
+    return book.deposit(Money(value, IDR), day).apply_fill(fill, day)
+
+
+def _claims_kept(before: list[DividendClaim], kept: list[DividendClaim]) -> list[DividendClaim]:
+    """*before* with each claim's protections as ``settle_claims`` left them; it closes a claim with
+    nothing left, and keeps the rest in order, so each is found by its day, stock and gross."""
+    after: list[DividendClaim] = []
+    for claim in before:
+        key = (claim.pay_date, claim.instrument.symbol, claim.gross)
+        if kept and (kept[0].pay_date, kept[0].instrument.symbol, kept[0].gross) == key:
+            after.append(replace(claim, protections=kept.pop(0).protections))
+        else:
+            after.append(replace(claim, protections=()))
+    return after
+
+
+def _claim_held(claim: DividendClaim, today: date) -> dict[str, str | None]:
+    """What *claim*'s protections still hold on *today*, and until when."""
+    held = [p for p in claim.protections if p.until >= today]
+    return {
+        "held": str(sum(p.amount.amount for p in held)),
+        "heldUntil": held[-1].until.isoformat() if held else None,
     }
 
 

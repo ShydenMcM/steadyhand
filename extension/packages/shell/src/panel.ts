@@ -994,8 +994,14 @@ export const startPanel = async <E extends PanelElement<E>>(
     );
     const market = CLAIM_RULES;
     const today = wibDay(inputs.clock());
+    // Each portfolio read after a close with its cost basis; one recorded before #256 has none.
+    const reads = (await riskRecord(db)).valuations.flatMap((valuation) =>
+      valuation.invested === undefined
+        ? []
+        : [{ day: valuation.day, invested: valuation.invested }],
+    );
     taxClaims.replaceChildren(
-      ...taxView(claimsReport(market, dividends, purchases, today)).flatMap((section) => [
+      ...taxView(claimsReport(market, dividends, purchases, today, reads)).flatMap((section) => [
         holding("h2", section.heading),
         ...section.lines.map((line) => holding("p", line)),
       ]),

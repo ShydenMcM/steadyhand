@@ -65,6 +65,7 @@ const run = (spendable: bigint, chosen: Decision = decision(), stops: readonly N
       spendable: rp(spendable),
       holdings: new Map([["TLKM", rp(5_000_000n)]]),
       held: new Map([["TLKM", 2_000n]]),
+      invested: rp(4_000_000n),
     },
     tradable: TRADABLE,
     prices: PRICES,
@@ -207,6 +208,7 @@ test("a day with no orders pays no stamp duty, even before the exemption existed
       spendable: rp(0n),
       holdings: new Map([["TLKM", rp(5_000_000n)]]),
       held: new Map([["TLKM", 2_000n]]),
+      invested: rp(4_000_000n),
     },
     tradable: { ...TRADABLE, day: "2021-01-04" },
     prices: PRICES,
@@ -281,6 +283,7 @@ const sellable = (stops: readonly Note[]) =>
       spendable: rp(50_000_000n),
       holdings: new Map([["TLKM", rp(5_000_000n)]]),
       held: new Map([["TLKM", 2_000n]]),
+      invested: rp(4_000_000n),
     },
     tradable: {
       ...TRADABLE,

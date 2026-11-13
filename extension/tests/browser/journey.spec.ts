@@ -352,6 +352,16 @@ test("a deposit typed on Settings is kept and listed, and a dividend on the Tax 
       "BBCA, received 2025-06-10: gross IDR 1,000,000, reinvested IDR 600,000, still to " +
         "reinvest IDR 400,000 by 2026-03-31; if not, the tax owed is IDR 40,000.",
     );
+    // #256: below the claims, what is held and until when; no portfolio page has been read
+    // after a close in this journey, so the cost basis is named as missing.
+    await expect(panel.locator("#tax-claims h2").nth(2)).toHaveText("Held");
+    await expect(panel.locator("#tax-claims p").nth(2)).toHaveText(
+      "BBCA, received 2025-06-10: IDR 600,000 reinvested must stay invested until 2027-12-31.",
+    );
+    await expect(panel.locator("#tax-claims p").nth(3)).toHaveText(
+      "No portfolio page read after a close gives the cost basis still invested: read it, so a " +
+        "reinvested dividend no longer invested can be found.",
+    );
     await panel.locator("#remove-purchase-0").click();
     await expect(status).toHaveText("Entry removed.");
     await expect(panel.locator("#typed-purchases")).toHaveText("");
