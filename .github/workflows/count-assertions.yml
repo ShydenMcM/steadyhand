@@ -43,7 +43,10 @@ jobs:
       - run: uv sync --locked
       - id: node
         run: |
-          version=$(sed -nE 's/^FROM node:([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' docker/node/Dockerfile)
+          # The pin moved from .github/node to docker/node in #556, after #536.
+          pin=docker/node/Dockerfile
+          test -f "$pin" || pin=.github/node/Dockerfile
+          version=$(sed -nE 's/^FROM node:([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' "$pin")
           test -n "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
