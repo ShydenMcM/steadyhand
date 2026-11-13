@@ -234,3 +234,18 @@ test.each(ALL.map((lesson) => lesson.id))(
     expect(textsOf(lesson).filter((text) => /next lesson/iu.test(text) && !next)).toEqual([]);
   },
 );
+
+// The exemption ships (#255): the dividend tax lesson sends the reader to it, and no longer says
+// steadyhand does not track it (#573).
+test("tax.dividend sends the reader to the exemption lesson and never says it is untracked", () => {
+  const lesson = ALL.find((one) => one.id === "tax.dividend") ?? pythonLesson("tax.dividend");
+  const next = ALL.find(
+    (one) => one.module === lesson.module && one.position === lesson.position + 1,
+  );
+  expect(next?.id).toBe("tax.exemption");
+  const texts = textsOf(lesson);
+  expect(texts.filter((text) => /does not track/iu.test(text))).toEqual([]);
+  expect(
+    texts.filter((text) => /exempt.*next lesson|next lesson.*exempt/iu.test(text)),
+  ).toHaveLength(1);
+});
