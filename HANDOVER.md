@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-13 10:5x WIB. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-13 14:4x WIB. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -11,6 +11,11 @@
 ## Open with Shyden
 
 - Nothing open.
+
+## Shyden's answers (2026-11-13)
+
+- Repeated journeys: keep the 5 browser journeys (only their opening repeats); re-prove the earlier merge with runner counts (done, #568). Proof is always measured by the runner, never asked about (CLAUDE.md 2026-11-13).
+- Delete the unused `testpypi` environment (done).
 
 ## Shyden's answers (2026-11-10)
 
@@ -27,7 +32,8 @@
 ## Branches and PRs
 
 - `develop`: read with `git rev-parse origin/develop`.
-- Merged 2026-11-13: #565 (#255 core claims, parity harness, `tax.exemption` lesson; 1954940), #567 (#566 P0 soupsieve CVE, closed with evidence), #564 (Dependabot).
+- Merged 2026-11-13: #571 (#570 P0, extension integration builds once, proven by strace and per-test assertion counts; 083ccf8). #568 P0 is done: runner counts on CI (probe PR #569, shut unmerged; run 43383498799) prove that the earlier journey merge kept every check. Shyden ruled: keep the 5 browser journeys (shared opening only). `testpypi` environment deleted on his choice (dev-deploy rule); `dev` already allows all branches.
+- Also merged 2026-11-13: #565 (#255 core claims, parity harness, `tax.exemption` lesson; 1954940), #567 (#566 P0 soupsieve CVE, closed with evidence), #564 (Dependabot).
 - `255/tax-tab` in worktree `../steadyhand-255b` (local only, never pushed; head read with `git -C ../steadyhand-255b rev-parse HEAD`): stacked on #565's pre-squash tip, so before its PR merge `origin/develop` in (memory `reference-stacked-branch-after-squash`). Done, each test run red first: `shell/src/exemption.ts` (switch, kept entries, `typedEntry` with day/future/early/stock/amount refusals, `wibDay`), `shell/src/tax-view.ts` (claims lines, English like the Advice lines), STOCK_CODE/WHOLE_RUPIAH moved to settings.ts, `sentence` exported from advice-view.ts. Mutation passes done for both.
 - `251/indonesian-lessons` (pushed, WIP, red on purpose): 9 of 37 built, now **38** with `tax.exemption` (tell #251). Drafts in `.superpowers/sdd/251-indonesian/lessons-id/*.txt`.
 - Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29). Never copy or replay from the slip backups. Local `239/settings-history-lessons` (c4bebaf): leave alone.
