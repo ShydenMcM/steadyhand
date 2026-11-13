@@ -5,7 +5,10 @@ import {
   DividendClaim,
   openClaim,
   Protection,
+  settleBreaks,
   settleDeadlines,
+  type BreakDay,
+  type BreakRules,
   type ClaimRules,
   type DeadlineDay,
   type DividendReceived,
@@ -358,4 +361,153 @@ test("an entry dated after today is refused", () => {
   expect(() => claimsReport(RULES, early, [], "2025-09-09")).toThrow(
     new RangeError("an entry is dated 2025-09-10, after today, 2025-09-09"),
   );
+});
+
+// #256: protections falling away, the settlement grace and breaks, ported from the rest of
+// Python's `settle_claims` (`test_exemption.py`, one test per case). Python judges every close
+// and closes a claim with nothing left; here each portfolio read after a close is judged, and
+// every claim stays, because the claims list shows one row per dividend received. The deadline
+// step is #255's `settleDeadlines`.
+
+const JUL1 = "2025-07-01"; // settles on 3 July
+const JUL2 = "2025-07-02";
+const JUL3 = "2025-07-03";
+
+const BREAK_RULES: BreakRules = RULES;
+const breakRules = (rules: ClaimRules): BreakRules => ({
+  ...rules,
+  settlementDate: (day) => RULES.settlementDate(day),
+});
+
+const close = (
+  claims: readonly DividendClaim[],
+  day: string,
+  invested: bigint,
+  since: string | null = null,
+  rules: BreakRules = BREAK_RULES,
+): BreakDay => settleBreaks(claims, rp(invested), since, day, rules);
+
+test("protections past their date fall away and leave the claim with nothing protected", () => {
+  const ending = new Protection(rp(600n), JUL1);
+  const first = close([claim(0n, ending)], JUL1, 0n); // protected through 1 July, still counted
+  expect([first.claims, first.since]).toEqual([[claim(0n, ending)], JUL1]);
+  const after = close([claim(0n, ending)], JUL2, 0n, JUL1);
+  expect([after.claims, after.since, after.tax]).toEqual([[claim(0n)], null, rp(0n)]);
+});
+
+test("a shortfall within the settlement grace keeps the claim", () => {
+  const held = claim(0n, new Protection(rp(1_000n), UNTIL));
+  const first = close([held], JUL1, 400n);
+  expect([first.claims, first.since, first.tax]).toEqual([[held], JUL1, rp(0n)]);
+  const second = close([held], JUL2, 400n, JUL1); // the shortfall's first day is kept
+  expect([second.claims, second.since, second.tax]).toEqual([[held], JUL1, rp(0n)]);
+});
+
+test("a shortfall gone before the grace ends clears its day", () => {
+  const held = claim(0n, new Protection(rp(1_000n), UNTIL));
+  const after = close([held], JUL2, 1_000n, JUL1); // a rotation: bought back within the cycle
+  expect([after.claims, after.since, after.tax]).toEqual([[held], null, rp(0n)]);
+});
+
+test("a shortfall still there at the settlement close breaks", () => {
+  const held = claim(0n, new Protection(rp(1_000n), UNTIL));
+  const after = close([held], JUL3, 400n, JUL1);
+  // 1,000 protected against 400 invested: 600 breaks, and 10% of it is owed.
+  expect(after).toEqual({
+    claims: [claim(0n, new Protection(rp(400n), UNTIL))],
+    since: null,
+    tax: rp(60n),
+    notes: [
+      note(
+        NOTE_CODES.EXEMPTION_CLAIM_BROKEN,
+        "BBCA: IDR 600 reinvested from the dividend received on 2025-06-24 was no longer " +
+          "invested when the settlement grace ended, so its tax of IDR 60 is owed, from " +
+          "2025-06-24",
+      ),
+    ],
+  });
+});
+
+test("breaks take the latest protection first", () => {
+  const older = new DividendClaim("BBCA", "2025-06-10", rp(1_000n), DEADLINE, rp(500n), [
+    new Protection(rp(500n), UNTIL),
+  ]);
+  const later = claim(500n, new Protection(rp(500n), "2028-12-31"));
+  const after = close([older, later], JUL3, 300n, JUL1);
+  // 1,000 protected against 300 invested: 700 breaks, the 2028 protection's 500 first, then
+  // 200 of the 2027 one. Tax is 10% of each claim's part, 20 and 50, in the claims' order.
+  expect(after.claims).toEqual([
+    new DividendClaim("BBCA", "2025-06-10", rp(1_000n), DEADLINE, rp(500n), [
+      new Protection(rp(300n), UNTIL),
+    ]),
+    claim(500n),
+  ]);
+  expect(after.tax).toEqual(rp(70n));
+  expect(after.notes.map((found) => found.text.split(" reinvested")[0])).toEqual([
+    "BBCA: IDR 200",
+    "BBCA: IDR 500",
+  ]);
+});
+
+test("equal dates break the newest claim and its last protection first", () => {
+  const older = new DividendClaim("BBCA", "2025-06-10", rp(1_000n), DEADLINE, rp(0n), [
+    new Protection(rp(1_000n), UNTIL),
+  ]);
+  const newer = claim(0n, new Protection(rp(600n), UNTIL), new Protection(rp(400n), UNTIL));
+  const after = close([older, newer], JUL3, 1_700n, JUL1);
+  // 2,000 protected against 1,700: 300 breaks from the newer claim's last protection.
+  expect(after.claims).toEqual([
+    older,
+    claim(0n, new Protection(rp(600n), UNTIL), new Protection(rp(100n), UNTIL)),
+  ]);
+});
+
+test("claims received on the same day break the later stock first", () => {
+  const bbca = claim(0n, new Protection(rp(500n), UNTIL));
+  const tlkm = new DividendClaim("TLKM", RECEIVED, rp(1_000n), DEADLINE, rp(500n), [
+    new Protection(rp(500n), UNTIL),
+  ]);
+  const after = close([bbca, tlkm], JUL3, 700n, JUL1);
+  expect(after.claims).toEqual([
+    bbca,
+    new DividendClaim("TLKM", RECEIVED, rp(1_000n), DEADLINE, rp(500n), [
+      new Protection(rp(200n), UNTIL),
+    ]),
+  ]);
+});
+
+test("a broken claim is taxed at the rate of the day received", () => {
+  const held = claim(0n, new Protection(rp(1_000n), UNTIL));
+  const after = close([held], "2026-07-03", 400n, "2026-07-01", breakRules(RATE_RISES));
+  expect(after.tax).toEqual(rp(60n)); // 10% as on 24 June 2025, not 2026's 20%
+});
+
+test("an untaxed market breaks the claim without a tax or a note", () => {
+  const held = claim(0n, new Protection(rp(1_000n), UNTIL));
+  const after = close([held], JUL3, 400n, JUL1, breakRules(TAX_FREE));
+  expect([after.tax, after.notes]).toEqual([rp(0n), []]);
+  expect(after.claims).toEqual([claim(0n, new Protection(rp(400n), UNTIL))]);
+});
+
+test("each break rounds its tax up on its own", () => {
+  // Rp2 broken in two pieces of 1 owes 1 + 1 = 2, where the tax on Rp2 at once is 0.2, so 1.
+  const split = new DividendClaim("BBCA", RECEIVED, rp(2n), DEADLINE, rp(0n), [
+    new Protection(rp(1n), UNTIL),
+  ]);
+  const other = new DividendClaim("TLKM", RECEIVED, rp(2n), DEADLINE, rp(0n), [
+    new Protection(rp(1n), UNTIL),
+  ]);
+  const after = close([split, other], JUL3, 0n, JUL1);
+  expect([after.tax, after.notes.length]).toEqual([rp(2n), 2]);
+  expect(RULES.dividendTax(rp(2n), RECEIVED)).toEqual(rp(1n));
+});
+
+test("with no shortfall nothing breaks and no grace starts", () => {
+  const held = claim(0n, new Protection(rp(1_000n), UNTIL));
+  expect(close([held], JUL1, 1_000n)).toEqual({
+    claims: [held],
+    since: null,
+    tax: rp(0n),
+    notes: [],
+  });
 });

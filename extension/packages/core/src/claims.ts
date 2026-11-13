@@ -6,7 +6,8 @@
  * dividends or purchases, so the user enters both. Python counts the deadline from the ex-date
  * because its engine never knew the receipt date; here it counts from the date received
  * (PMK 18/2021). Every figure is an estimate that assumes the yearly realisation reports are filed
- * (docs/research/t-tax.md §7). Breaks against the cost basis still invested are #256. */
+ * (docs/research/t-tax.md §7). Breaks against the cost basis still invested are `settleBreaks`
+ * (#256). */
 
 import type { Day } from "./broker-view.ts";
 import { CurrencyMismatchError, IDR, Money } from "./money.ts";
@@ -212,6 +213,142 @@ export const settleDeadlines = (
     }
   }
   return { claims: kept, tax, notes };
+};
+
+/** The rules a break reads: the claims' three and the settlement date that ends the grace. */
+export type BreakRules = ClaimRules & Pick<IdxMarketRules, "settlementDate">;
+
+/** The claims after a portfolio read is judged, with the tax their breaks owe. */
+export interface BreakDay {
+  readonly claims: readonly DividendClaim[];
+  /** The read a shortfall still inside its settlement grace was first seen on, or `null`. */
+  readonly since: Day | null;
+  readonly tax: Money;
+  readonly notes: readonly Note[];
+}
+
+const claimBroken = (claim: DividendClaim, amount: Money, tax: Money): Note =>
+  note(
+    NOTE_CODES.EXEMPTION_CLAIM_BROKEN,
+    `${claim.symbol}: ${amount.toString()} reinvested from the dividend received on ` +
+      `${claim.received} was no longer invested when the settlement grace ended, so its tax of ` +
+      `${tax.toString()} is owed, from ${claim.received}`,
+  );
+
+const withProtections = (claim: DividendClaim, protections: readonly Protection[]): DividendClaim =>
+  new DividendClaim(
+    claim.symbol,
+    claim.received,
+    claim.gross,
+    claim.deadline,
+    claim.uncovered,
+    protections,
+  );
+
+/** One protection while a break takes from it. */
+interface Piece {
+  readonly slot: BreakSlot;
+  readonly until: Day;
+  left: Money;
+}
+
+/** One claim while a break takes from its protections. */
+interface BreakSlot {
+  readonly claim: DividendClaim;
+  readonly pieces: Piece[];
+  readonly queue: Piece[];
+  removed: Money;
+}
+
+/** Python's `_Close.breaks`: remove protections, latest `until` first, until `shortfall` is
+ * covered; ties go to the newest claim, then to its protection added last. The pieces are listed
+ * a protection place at a time and reversed, so a stable sort on the date and the claim's age
+ * leaves Python's order on the place, then the claim. */
+const breakProtections = (
+  claims: readonly DividendClaim[],
+  shortfall: Money,
+  rules: BreakRules,
+): Omit<BreakDay, "since"> => {
+  const slots = claims.map((claim) => {
+    const slot: BreakSlot = { claim, pieces: [], queue: [], removed: Money.zero(IDR) };
+    for (const protection of claim.protections) {
+      slot.pieces.push({ slot, until: protection.until, left: protection.amount });
+    }
+    slot.queue.push(...slot.pieces);
+    return slot;
+  });
+  const ordered: Piece[] = [];
+  while (slots.some((slot) => slot.queue.length > 0)) {
+    for (const slot of slots) {
+      const next = slot.queue.shift();
+      if (next !== undefined) {
+        ordered.push(next);
+      }
+    }
+  }
+  const keyOf = (piece: Piece): string => `${piece.until} ${ageOf(piece.slot.claim)}`;
+  ordered.reverse();
+  ordered.sort((first, second) => keyOf(second).localeCompare(keyOf(first)));
+  let left = shortfall;
+  for (const piece of ordered) {
+    if (left.amount === 0n) {
+      break;
+    }
+    const taken = piece.left.lt(left) ? piece.left : left;
+    piece.left = piece.left.minus(taken);
+    piece.slot.removed = piece.slot.removed.plus(taken);
+    left = left.minus(taken);
+  }
+  let tax = Money.zero(IDR);
+  const notes: Note[] = [];
+  const kept = slots.map((slot) => {
+    if (slot.removed.amount > 0n) {
+      const owed = rules.dividendTax(slot.removed, slot.claim.received);
+      if (owed.amount > 0n) {
+        tax = tax.plus(owed);
+        notes.push(claimBroken(slot.claim, slot.removed, owed));
+      }
+    }
+    const rest = slot.pieces.filter((piece) => piece.left.amount > 0n);
+    return withProtections(
+      slot.claim,
+      rest.map((piece) => new Protection(piece.left, piece.until)),
+    );
+  });
+  return { claims: kept, tax, notes };
+};
+
+/** The rest of Python's `settle_claims`, judged on a portfolio read after `day`'s close:
+ * protections past their date fall away, then the protected amount is compared with the cost
+ * basis still `invested`. A shortfall still there on a read on or after the settlement date of
+ * the read it was first seen on breaks protections, at the rate of the day each claim was
+ * received. Every claim stays, so the claims list keeps a row for each dividend. */
+export const settleBreaks = (
+  claims: readonly DividendClaim[],
+  invested: Money,
+  since: Day | null,
+  day: Day,
+  rules: BreakRules,
+): BreakDay => {
+  const current = claims.map((claim) =>
+    withProtections(
+      claim,
+      claim.protections.filter((protection) => protection.until >= day),
+    ),
+  );
+  const held = current.reduce(
+    (sum, claim) =>
+      claim.protections.reduce((total, protection) => total.plus(protection.amount), sum),
+    Money.zero(IDR),
+  );
+  if (!held.gt(invested)) {
+    return { claims: current, since: null, tax: Money.zero(IDR), notes: [] };
+  }
+  const first = since ?? day;
+  if (day < rules.settlementDate(first)) {
+    return { claims: current, since: first, tax: Money.zero(IDR), notes: [] };
+  }
+  return { ...breakProtections(current, held.minus(invested), rules), since: null };
 };
 
 /** One dividend received, as the claims list shows it. */
