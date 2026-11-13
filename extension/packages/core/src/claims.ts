@@ -105,9 +105,9 @@ export class DividendClaim {
   }
 }
 
-/** The order claims are covered in: oldest receipt first, then the stock. */
-const byAge = (first: DividendClaim, second: DividendClaim): ReturnType<string["localeCompare"]> =>
-  first.received.localeCompare(second.received) || first.symbol.localeCompare(second.symbol);
+/** The order claims are covered in: oldest receipt first, then the stock. Days are all ten
+ * characters, so the day then the stock sorts as the two in turn. */
+const ageOf = (claim: DividendClaim): string => `${claim.received} ${claim.symbol}`;
 
 /** The claim `dividend` opens, or `null` when no exemption applies on the day it was received. */
 export const openClaim = (rules: ClaimRules, dividend: DividendReceived): DividendClaim | null => {
@@ -134,7 +134,9 @@ export const coverClaims = (
   rules: ClaimRules,
 ): DividendClaim[] => {
   const slots = claims.map((claim) => ({ claim }));
-  const oldestFirst = [...slots].sort((first, second) => byAge(first.claim, second.claim));
+  const oldestFirst = [...slots].sort((first, second) =>
+    ageOf(first.claim).localeCompare(ageOf(second.claim)),
+  );
   for (const purchase of purchases) {
     let left = purchase.amount;
     for (const slot of oldestFirst) {
@@ -276,7 +278,7 @@ export const claimsReport = (
       claims.push(claim);
     }
   }
-  claims.sort(byAge);
+  claims.sort((first, second) => ageOf(first).localeCompare(ageOf(second)));
   const idle: Reinvestment[] = [];
   const byDay = [...purchases].sort((first, second) => first.day.localeCompare(second.day));
   for (const purchase of byDay) {
