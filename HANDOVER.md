@@ -34,6 +34,7 @@
 
 ## Branches and PRs
 
+- **#256 (8 pts, In Progress): PR #575** (`256/claim-breaks`, worktree `../steadyhand-256`, head 996ca7b, 3 commits: f1da857 settleBreaks, 10f39c1 report + parity + lesson, 996ca7b cost basis + Tax tab Held). CI running; waiter = scratchpad `wait575.sh` (dies with the session; re-run `~/.claude/scripts/pr-verdict.sh 575` in a loop). Plan, evidence logs and state: `.superpowers/sdd/256/plan.md`. On green: squash-merge (standing approval), shut the ticket by hand with evidence per AC (AC1 parity 150 cases/12 breaks + Held report; AC2 lesson shipped in #565 and extended; AC3 gates + red logs), remove the worktree.
 - **#573 closed** 2026-11-13 18:1x WIB: PR #574 squash-merged into develop as 872d53a (every required check green on head 715d3e1). Red-first re-measured (old line: 1 failed, 143 passed; new: 144 passed; logs in `.superpowers/sdd/573/`); evidence per AC on #573. Worktree `../steadyhand-544` and branch removed (local and remote).
 
 - `develop`: read with `git rev-parse origin/develop`.
