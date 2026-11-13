@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-13 23:34 WIB. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-14 06:36 WIB. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -10,7 +10,11 @@
 
 ## Open with Shyden
 
-- #339 / #345: still wanted now their template designs are cancelled? (see Next steps 1)
+- Nothing open.
+
+## Shyden's answers (2026-11-14)
+
+- #339 and #345 shut as not planned (their repo-template designs were cancelled 2026-10-30; the extension logs nothing; the Python paper account stays the frozen reference).
 
 ## Shyden's answers (2026-11-13)
 
@@ -58,9 +62,8 @@
 
 ## Next steps
 
-1. **#339 and #345 parked on Shyden (asked 2026-11-13 ~23:4x WIB by AskUserQuestion):** both adopt repo-template designs (repo-template#19 logging, #25 audit trail) that were shut NOT PLANNED on 2026-10-30 (keep it simple). Facts commented on both tickets. Recommended: shut both not planned (the extension promises nothing leaves the machine and logs nothing; the Python paper account is the frozen reference). Act on his answer.
-2. #251 read-back (queue above) once the Google day turns, 15:00 WIB 2026-11-14; read the ledger first (another project shares it).
-3. First release: 24 of 27 stories; #242, #243, #245 (21 points) wait on Shyden's broker account. #252, #253, #257, #258 wait on the readers; #553 on #251.
+1. #251 read-back (queue above) once the Google day turns, 15:00 WIB 2026-11-14; read the ledger first (another project shares it). Then build the read-back drafts on `251/indonesian-lessons`.
+2. First release: 24 of 27 stories; #242, #243, #245 (21 points) wait on Shyden's broker account. #252, #253, #257, #258 wait on the readers; #553 on #251.
 
 ## Progress page
 
