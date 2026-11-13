@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-13 14:53 WIB. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-13 15:41 WIB. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -13,6 +13,8 @@
 - Nothing open.
 
 ## Shyden's answers (2026-11-13)
+
+- #544, #546 (and #548, same handling): AC3 (the Indonesian lesson) moved to #251 as its AC7, AC8, AC9; the three tickets shut with evidence on each. No questions open.
 
 - Repeated journeys: keep the 5 browser journeys (only their opening repeats); re-prove the earlier merge with runner counts (done, #568). Proof is always measured by the runner, never asked about (CLAUDE.md 2026-11-13).
 - Delete the unused `testpypi` environment (done).
@@ -31,6 +33,8 @@
 
 ## Branches and PRs
 
+- **PR #574** (`573/dividend-lesson-exemption`, worktree `../steadyhand-544`, head 715d3e1, read 15:32 WIB) for **#573** (P0, 1 pt, In Progress, filed today): tax.dividend said the exemption is untracked; now points to the next lesson. Test seen red first; unit 144/144. CI was running at 15:32. Indonesian draft `lessons-id/tax.dividend.txt` already changed to match (not read back: #251 AC8).
+
 - `develop`: read with `git rev-parse origin/develop`.
 - Merged 2026-11-13: #571 (#570 P0, extension integration builds once, proven by strace and per-test assertion counts; 083ccf8). #568 P0 is done: runner counts on CI (probe PR #569, shut unmerged; run 43383498799) prove that the earlier journey merge kept every check. Shyden ruled: keep the 5 browser journeys (shared opening only). `testpypi` environment deleted on his choice (dev-deploy rule); `dev` already allows all branches.
 - Also merged 2026-11-13: #565 (#255 core claims, parity harness, `tax.exemption` lesson; 1954940), #567 (#566 P0 soupsieve CVE, closed with evidence), #564 (Dependabot).
@@ -47,12 +51,13 @@
 - **Build only drafts whose every paragraph is read back** (memory `feedback-build-only-read-back-drafts`).
 
 ## Running
-- Nothing local. No background waiters. Colima not held.
+- Nothing local. The PR #574 waiter was stopped (DEAD); re-run: `~/.claude/scripts/pr-verdict.sh 574` (returns at once while CI runs: loop it with a ceiling). Colima not held.
 
 ## Next steps
 
-1. #256 (P? read it on the board; 8 points, now unblocked: #255 closed): exemption claims part 2, protection, grace, breaks and the report (Python M4b S7/S8: tests 19-30 of `tests/engine/test_exemption.py`). Pick by Priority first (`board-next`); new branch from `origin/develop`, tests first.
-2. After 15:00 WIB: the #251 read-back queue (advice-id.json 952, then pick-batch.py); read the ledger first (2026-11-12 Pacific day used 1,204 so far).
+1. PR #574: read the verdict; if every check is green on its head, squash-merge into develop (standing approval), then shut #573 by hand with each AC's evidence, remove `../steadyhand-544` and the branch.
+2. `board-next` (repo-template `node scripts/board-next.ts PVT_kwHOCQ_jzM4BkhEb steadyhand`) for the next ticket. Everything left in the first release waits on the broker account, so expect a post-launch pick (#256 likely).
+3. #251 read-back queue (the Google day turned at 15:00 WIB; 2026-11-13 Pacific day used 0): `advice-id.json` (29 lines, 952 chars) first, then `pick-batch.py`. Now includes the tax.dividend change (AC8).
 
 ## Progress page
 
