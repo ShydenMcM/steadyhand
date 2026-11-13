@@ -9,12 +9,15 @@
 
 import {
   asDay,
+  claimsReport,
   IDR,
   IdxCalendar,
+  IdxMarketRules,
   Money,
   resume,
   riskState,
   shippedSessions,
+  shippedTables,
   STRATEGIES,
   type Covered,
   type Day,
@@ -35,6 +38,17 @@ import {
 } from "@steadyhand/history";
 import { adviceModel, type PanelReads } from "./advice-model.ts";
 import { adviceView } from "./advice-view.ts";
+import {
+  dividendsOf,
+  EXEMPTION,
+  exemptionOf,
+  purchasesOf,
+  storedDividends,
+  storedPurchases,
+  typedEntry,
+  wibDay,
+} from "./exemption.ts";
+import { taxView } from "./tax-view.ts";
 import type { Block, Spans } from "./lesson-text.ts";
 import type { LessonModule } from "./lessons.ts";
 import { isSnapshot, type Ask } from "./messages.ts";
@@ -74,10 +88,16 @@ export interface PanelElement<E> {
 /** The panel's page as the panel uses it: the browser's `document` is one. */
 export interface PanelDocument<E extends PanelElement<E>> {
   readonly body: E;
-  createElement(tag: "textarea" | "select" | "input" | "option"): E & {
+  createElement(tag: "textarea" | "select" | "option"): E & {
     value: string;
     /** A file input's files: the browser's `FileList` is one. */
     readonly files: ChosenFiles | null;
+  };
+  createElement(tag: "input"): E & {
+    value: string;
+    readonly files: ChosenFiles | null;
+    /** A checkbox's tick. */
+    checked: boolean;
   };
   createElement(tag: "label"): E & { htmlFor: string };
   createElement(tag: ContainerTag): E;
@@ -143,10 +163,11 @@ export interface Panel {
 
 const CALENDAR = IdxCalendar.shipped();
 const SESSIONS = shippedSessions();
+/** The rules the claims are counted by: they read no fee, so the default preset serves. */
+const CLAIM_RULES = new IdxMarketRules(shippedTables(), feePresetOf(undefined));
 
 /** What Chrome says when a tab has no content script of the extension to answer. */
 const NO_RECEIVER = "Receiving end does not exist";
-
 
 /** The symbols typed into the universe box: split on spaces, commas and new lines, in capitals,
  * each once, in the order first typed. */
@@ -200,6 +221,7 @@ const TABS = [
   ["settings", "tabSettings"],
   ["history", "tabHistory"],
   ["lessons", "tabLessons"],
+  ["tax", "tabTax"],
 ] as const satisfies readonly (readonly [string, Said])[];
 type Tab = (typeof TABS)[number][0];
 
@@ -315,6 +337,44 @@ export const startPanel = async <E extends PanelElement<E>>(
   const contribution = named(page.createElement("input"), "contribution");
   contributionLabel.htmlFor = contribution.id;
   const saveContribution = element("button", "save-contribution", "saveContribution");
+
+  // The dividend reinvestment exemption (#255, spec §9.2): off until ticked; the Tax tab shows
+  // only while it is on.
+  const exemptionLabel = named(page.createElement("label"), "exemption-label", "exemptionLabel");
+  const exemption = named(page.createElement("input"), "exemption");
+  exemption.setAttribute("type", "checkbox");
+  exemptionLabel.htmlFor = exemption.id;
+
+  // The Tax tab's forms (#255 AC1): each an input per part, labelled, and its button.
+  const entryForm = (
+    form: "dividend" | "purchase",
+    [day, stock, amount]: readonly [Said, Said, Said],
+    amountPart: string,
+    add: Said,
+  ) => {
+    const part = (id: string, name: Said) => {
+      const input = named(page.createElement("input"), `${form}-${id}`);
+      const partLabel = named(page.createElement("label"), `${input.id}-label`, name);
+      partLabel.htmlFor = input.id;
+      return { input, label: partLabel };
+    };
+    const parts = [part("day", day), part("stock", stock), part(amountPart, amount)] as const;
+    const button = element("button", `add-${form}`, add);
+    return { parts, button, list: element("section", `typed-${form}s`) };
+  };
+  const dividendForm = entryForm(
+    "dividend",
+    ["dividendDayLabel", "entryStockLabel", "dividendGrossLabel"],
+    "gross",
+    "addDividend",
+  );
+  const purchaseForm = entryForm(
+    "purchase",
+    ["purchaseDayLabel", "entryStockLabel", "purchaseAmountLabel"],
+    "amount",
+    "addPurchase",
+  );
+  const taxClaims = element("section", "tax-claims");
 
   // The risk limits, the rates as percentages (#239 AC1).
   const limitInput = (limit: keyof TypedLimits) => {
@@ -492,6 +552,7 @@ export const startPanel = async <E extends PanelElement<E>>(
     settings: element("section", "pane-settings"),
     history: element("section", "pane-history"),
     lessons: element("section", "pane-lessons"),
+    tax: element("section", "pane-tax"),
   };
   const tabs = TABS.map(([tab, name]) => {
     const button = element("button", `tab-${tab}`, name);
@@ -502,10 +563,24 @@ export const startPanel = async <E extends PanelElement<E>>(
     pane.setAttribute("aria-labelledby", button.id);
     return { tab, button, pane };
   });
+  let showing: Tab = "advice";
   const show = (chosen: Tab): void => {
+    showing = chosen;
     for (const { tab, button, pane } of tabs) {
       pane.hidden = tab !== chosen;
       button.setAttribute("aria-selected", String(tab === chosen));
+    }
+  };
+  /** Tick the switch as `claimed` and show the Tax tab only while it is; leaving Tax for Advice. */
+  const showExemption = (claimed: boolean): void => {
+    exemption.checked = claimed;
+    for (const { tab, button } of tabs) {
+      if (tab === "tax") {
+        button.hidden = !claimed;
+      }
+    }
+    if (!claimed && showing === "tax") {
+      show("advice");
     }
   };
   for (const { tab, button } of tabs) {
@@ -540,6 +615,8 @@ export const startPanel = async <E extends PanelElement<E>>(
     contributionLabel,
     contribution,
     saveContribution,
+    exemptionLabel,
+    exemption,
     ...Object.values(limitRows).flatMap((row) => [row.label, row.input]),
     saveLimits,
     presetLabel,
@@ -554,6 +631,14 @@ export const startPanel = async <E extends PanelElement<E>>(
     exclusionsLabel,
     exclusions,
     saveExclusions,
+  );
+  panes.tax.append(
+    ...[dividendForm, purchaseForm].flatMap((form) => [
+      ...form.parts.flatMap(({ label: partLabel, input }) => [partLabel, input]),
+      form.button,
+      form.list,
+    ]),
+    taxClaims,
   );
   panes.history.append(recordingNote, stocksRecorded, forget, forgetConfirm);
   // Lessons (#239 AC3): each module's heading, then each of its lessons as a section.
@@ -861,6 +946,8 @@ export const startPanel = async <E extends PanelElement<E>>(
     limitRows.dailyLoss.input.value = limits.dailyLoss.mul(100).toString();
     limitRows.maxDrawdown.input.value = limits.maxDrawdown.mul(100).toString();
     preset.value = await keptOr(db, KEPT.feePreset, feePresetOf);
+    showExemption(await keptOr(db, EXEMPTION.claimed, exemptionOf));
+    await showTax();
     await showTyped();
     exclusions.value = [...(await keptOr(db, SETTINGS.excluded, excludedOf))]
       .map(([symbol, reason]) => `${symbol} ${reason}`.trim())
@@ -869,12 +956,122 @@ export const startPanel = async <E extends PanelElement<E>>(
     await showRisk();
   };
 
+  /** The kept dividends and purchases, each listed with its Remove button, and the claims on
+   * today in WIB. */
+  const showTax = async (): Promise<void> => {
+    const dividends = await keptOr(db, EXEMPTION.dividends, dividendsOf);
+    const purchases = await keptOr(db, EXEMPTION.purchases, purchasesOf);
+    const entryRow = (form: "dividend" | "purchase", text: string, place: number): E => {
+      const row = element("div", "");
+      const remove = element("button", `remove-${form}-${place.toString()}`, "remove");
+      remove.addEventListener("click", () => {
+        run(() => removeEntry(form, place));
+      });
+      row.append(holding("p", text), remove);
+      return row;
+    };
+    dividendForm.list.replaceChildren(
+      ...dividends.map((entry, place) =>
+        entryRow(
+          "dividend",
+          fill(words.dividendLine, {
+            day: entry.received,
+            symbol: entry.symbol,
+            amount: entry.gross.toString(),
+          }),
+          place,
+        ),
+      ),
+    );
+    purchaseForm.list.replaceChildren(
+      ...purchases.map((entry, place) =>
+        entryRow(
+          "purchase",
+          fill(words.purchaseLine, {
+            day: entry.day,
+            symbol: entry.symbol,
+            amount: entry.amount.toString(),
+          }),
+          place,
+        ),
+      ),
+    );
+    const market = CLAIM_RULES;
+    const today = wibDay(inputs.clock());
+    taxClaims.replaceChildren(
+      ...taxView(claimsReport(market, dividends, purchases, today)).flatMap((section) => [
+        holding("h2", section.heading),
+        ...section.lines.map((line) => holding("p", line)),
+      ]),
+    );
+  };
+
+  /** Keep the entry typed in `form`, or name the part refused. */
+  const keepEntry = async (form: "dividend" | "purchase"): Promise<void> => {
+    const [day, stock, amount] = (form === "dividend" ? dividendForm : purchaseForm).parts;
+    const typed = { day: day.input.value, symbol: stock.input.value, amount: amount.input.value };
+    const today = wibDay(inputs.clock());
+    const market = CLAIM_RULES;
+    const entry = typedEntry(typed, today, market.verifiedFrom);
+    if (typeof entry === "string") {
+      const trimmed = typed.day.trim();
+      const refused: Readonly<Record<typeof entry, string>> = {
+        day: fill(words.dayNotKept, { typed: typed.day }),
+        future: fill(words.entryFuture, { day: trimmed, today }),
+        early: fill(words.entryEarly, { day: trimmed, first: market.verifiedFrom }),
+        stock: fill(words.stockNotKept, { typed: typed.symbol }),
+        amount: fill(words.amountNotKept, { typed: typed.amount }),
+      };
+      status.textContent = refused[entry];
+      return;
+    }
+    const said = { amount: entry.amount.toString(), symbol: entry.symbol, day: entry.day };
+    if (form === "dividend") {
+      const kept = await keptOr(db, EXEMPTION.dividends, dividendsOf);
+      const received = { received: entry.day, symbol: entry.symbol, gross: entry.amount };
+      await putSetting(db, EXEMPTION.dividends, storedDividends([...kept, received]));
+      status.textContent = fill(words.dividendKept, said);
+    } else {
+      const kept = await keptOr(db, EXEMPTION.purchases, purchasesOf);
+      await putSetting(db, EXEMPTION.purchases, storedPurchases([...kept, entry]));
+      status.textContent = fill(words.purchaseKept, said);
+    }
+    await showTax();
+  };
+
+  /** Take the entry at `place` off `form`'s list. */
+  const removeEntry = async (form: "dividend" | "purchase", place: number): Promise<void> => {
+    if (form === "dividend") {
+      const kept = await keptOr(db, EXEMPTION.dividends, dividendsOf);
+      await putSetting(
+        db,
+        EXEMPTION.dividends,
+        storedDividends(kept.filter((_, at) => at !== place)),
+      );
+    } else {
+      const kept = await keptOr(db, EXEMPTION.purchases, purchasesOf);
+      await putSetting(
+        db,
+        EXEMPTION.purchases,
+        storedPurchases(kept.filter((_, at) => at !== place)),
+      );
+    }
+    status.textContent = words.entryRemoved;
+    await showTax();
+  };
+
+  const saveExemption = async (): Promise<void> => {
+    await putSetting(db, EXEMPTION.claimed, exemption.checked);
+    showExemption(exemption.checked);
+  };
+
   const saveChosenLanguage = async (): Promise<void> => {
     const chosen = languageOf(languagePicker.value);
     await putSetting(db, KEPT.language, chosen);
     speak(chosen);
     status.textContent = words.languageSaved;
     await showTyped();
+    await showTax();
     await redraw();
   };
 
@@ -944,6 +1141,15 @@ export const startPanel = async <E extends PanelElement<E>>(
   });
   saveContribution.addEventListener("click", () => {
     run(saveTypedContribution);
+  });
+  dividendForm.button.addEventListener("click", () => {
+    run(() => keepEntry("dividend"));
+  });
+  purchaseForm.button.addEventListener("click", () => {
+    run(() => keepEntry("purchase"));
+  });
+  exemption.addEventListener("change", () => {
+    run(saveExemption);
   });
   saveLanguage.addEventListener("click", () => {
     run(saveChosenLanguage);
