@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-13 18:19 WIB. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-13 23:34 WIB. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -34,7 +34,7 @@
 
 ## Branches and PRs
 
-- **#256 (8 pts, In Progress): PR #575** (`256/claim-breaks`, worktree `../steadyhand-256`, head 996ca7b, 3 commits: f1da857 settleBreaks, 10f39c1 report + parity + lesson, 996ca7b cost basis + Tax tab Held). CI running; waiter = scratchpad `wait575.sh` (dies with the session; re-run `~/.claude/scripts/pr-verdict.sh 575` in a loop). Plan, evidence logs and state: `.superpowers/sdd/256/plan.md`. On green: squash-merge (standing approval), shut the ticket by hand with evidence per AC (AC1 parity 150 cases/12 breaks + Held report; AC2 lesson shipped in #565 and extended; AC3 gates + red logs), remove the worktree.
+- **#256 shut** 2026-11-13 ~23:2x WIB: PR #575 squash-merged into develop as 159c8cd (every required check green on 996ca7b; browser 6/6 on Chromium, Chrome, Edge; CI run 43462803816). Evidence per AC on #256; worktree and branch removed. Session logs: `.superpowers/sdd/256/`.
 - **#573 closed** 2026-11-13 18:1x WIB: PR #574 squash-merged into develop as 872d53a (every required check green on head 715d3e1). Red-first re-measured (old line: 1 failed, 143 passed; new: 144 passed; logs in `.superpowers/sdd/573/`); evidence per AC on #573. Worktree `../steadyhand-544` and branch removed (local and remote).
 
 - `develop`: read with `git rev-parse origin/develop`.
@@ -50,7 +50,7 @@
 - 2026-11-12 morning: panel-254 (5 lines) read back and committed; batch 2 (the 9 fixed paragraphs of broker.reading, costs.trading, dividends.basics, idx.auto_reject, idx.sessions, income.calendar) read back, every pair read, merged with `merge-tsv.py`. "Kemerataan" read back as "Equity", so it is now "Kemerataan pembayaran" ("Payment evenness"), read back again.
 - After a draft edit: `python3 lessons-json.py lessons-id.json` before `pick-batch.py`, or the change is not seen.
 - **2026-11-13 Google day (Pacific), 15,786 of 16,000 used:** `advice-id.json` read back (29 lines); 4 fixed (`hari ini` meant the advice day, not today, in noOrders and stampDuty; projectionNothing; readAgainReason colon) and read back clean; merged into `advice-readback.tsv`. Lesson batch 4 (11 lessons, 65 paragraphs: income.goal/growth/projection/run_rate, orders.not_tradable, risk.drawdown/limits/returns, shares.basics/prices, start.explanations) read back, every pair read, merged into `lessons-readback.tsv`. 7 paragraphs then fixed in the drafts (income.growth#3, risk.returns#4, shares.basics#4, shares.prices#0/#4/#5, start.explanations#2) and NOT yet read back: pick-batch sees them as changed.
-- **Queue for the next Google day (turns 15:00 WIB 2026-11-14):** `python3 lessons-json.py lessons-id.json`, then `python3 -I pick-batch.py 16000 batch-5.json`: 15,683 characters left in all (the 7 fixes plus 11 lessons incl. the changed tax.dividend), one day. Then read every pair, merge, and build the drafts on `251/indonesian-lessons`.
+- **Queue for the next Google days (turn 15:00 WIB 2026-11-14 and -15):** `python3 lessons-json.py lessons-id.json`, then `python3 -I pick-batch.py 16000 batch-5.json` (day 1: the 7 fixes and 11 lessons, 15,683) and the next day `batch-6` (`tax.exemption`, 4,299: drafted 2026-11-13 from the #256 English, 9 paragraphs like the English, never read back). Read every pair, merge with `merge-tsv.py`, then build the drafts on `251/indonesian-lessons`.
 - **Build only drafts whose every paragraph is read back** (memory `feedback-build-only-read-back-drafts`).
 
 ## Running
@@ -58,8 +58,9 @@
 
 ## Next steps
 
-1. #251 read-back (queue above) once the Google day turns, 15:00 WIB 2026-11-14. Read the ledger first (another project shares it).
-2. First release: 24 of 27 stories closed; #242, #243, #245 (21 points) all wait on Shyden's broker account. `board-next` names #242 because its `blocked_by` (#226, #238, #460) are closed; the real wait is the account (memory `project-wait-for-release`). Post-launch pick next: #256 (likely), by Priority.
+1. **#339** (P4, 5 pts; its blockers #231, #239, #336 and repo-template#19 are all shut): the extension's log kept on the user's machine, built from repo-template's one logging design (repo-template#19 shipped it; read it there, read-only). Read the whole ticket first; it says the design wins over the ACs, and nothing leaves the machine. Then #345 (P4, 5 pts, blockers shut).
+2. #251 read-back (queue above) once the Google day turns, 15:00 WIB 2026-11-14; read the ledger first (another project shares it).
+3. First release: 24 of 27 stories; #242, #243, #245 (21 points) wait on Shyden's broker account. #252, #253, #257, #258 wait on the readers; #553 on #251.
 
 ## Progress page
 
