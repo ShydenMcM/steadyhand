@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-13 14:48 WIB. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-13 14:53 WIB. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -34,7 +34,7 @@
 - `develop`: read with `git rev-parse origin/develop`.
 - Merged 2026-11-13: #571 (#570 P0, extension integration builds once, proven by strace and per-test assertion counts; 083ccf8). #568 P0 is done: runner counts on CI (probe PR #569, shut unmerged; run 43383498799) prove that the earlier journey merge kept every check. Shyden ruled: keep the 5 browser journeys (shared opening only). `testpypi` environment deleted on his choice (dev-deploy rule); `dev` already allows all branches.
 - Also merged 2026-11-13: #565 (#255 core claims, parity harness, `tax.exemption` lesson; 1954940), #567 (#566 P0 soupsieve CVE, closed with evidence), #564 (Dependabot).
-- **PR #572** (`255/tax-tab`, worktree `../steadyhand-255b`, head 3d996303 read 14:48 WIB, re-read with `git -C ../steadyhand-255b rev-parse HEAD`): the #255 Settings switch and Tax tab (forms, refusals, Remove, claims, forget, Indonesian words read back: `.superpowers/sdd/255/panel-tax.tsv`), journey Tax assertions; origin/develop merged in. Local gate green incl. guards. CI was running at 14:48 WIB. Dropped on purpose: "unticking while on Tax opens Advice" (unreachable: the checkbox is on Settings).
+- Merged 2026-11-13 14:5x WIB: **#572** (squash 4a8e0bd): the #255 Settings switch and Tax tab. CI run 43388166515 all green, browser 6/6 on Chromium, Chrome, Edge. **#255 closed** with every AC checked (comment on #255). Worktree `../steadyhand-255b` and branch removed. Dropped on purpose: "unticking while on Tax opens Advice" (unreachable: the checkbox is on Settings).
 - `251/indonesian-lessons` (pushed, WIP, red on purpose): 9 of 37 built, now **38** with `tax.exemption` (tell #251). Drafts in `.superpowers/sdd/251-indonesian/lessons-id/*.txt`.
 - Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29). Never copy or replay from the slip backups. Local `239/settings-history-lessons` (c4bebaf): leave alone.
 
@@ -47,11 +47,11 @@
 - **Build only drafts whose every paragraph is read back** (memory `feedback-build-only-read-back-drafts`).
 
 ## Running
-- Nothing local. A background PR #572 verdict waiter in the session that wrote this dies with /clear: re-run step 1 by hand. Colima not held.
+- Nothing local. No background waiters. Colima not held.
 
 ## Next steps
 
-1. PR #572: read its verdict (`~/.claude/scripts/pr-verdict.sh 572`, match case-blind); green on every check with per-browser totals read: squash into develop, then check #255 ACs 1-3 case by case before closing #255 by hand (AC1 parity was #565; AC2 the "No dividend received is entered" line; AC3 the gate). Red: fix on the branch (tests first).
+1. #256 (P? read it on the board; 8 points, now unblocked: #255 closed): exemption claims part 2, protection, grace, breaks and the report (Python M4b S7/S8: tests 19-30 of `tests/engine/test_exemption.py`). Pick by Priority first (`board-next`); new branch from `origin/develop`, tests first.
 2. After 15:00 WIB: the #251 read-back queue (advice-id.json 952, then pick-batch.py); read the ledger first (2026-11-12 Pacific day used 1,204 so far).
 
 ## Progress page
