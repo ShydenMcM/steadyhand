@@ -1,5 +1,5 @@
-# #568 probe, never merged: count the assertions each integration and browser test executes,
-# from the runners themselves, at the commit before #536, at #536, and at develop today.
+# #568 / #570 probe, never merged: count what the runners execute. #570: the extension's
+# integration suite, before and after, with each test's assertions and the builds it ran.
 name: count-assertions
 
 on:
@@ -13,40 +13,29 @@ jobs:
   count:
     name: count (${{ matrix.label }})
     runs-on: ubuntu-26.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         include:
-          - label: before-536
-            sha: 8886e370d077a08585032598c5e5c0d4018e05e6
-          - label: at-536
-            sha: 3d8419d0b7a98cf2bfd74f3a392ac6c707873084
-          - label: develop
+          - label: develop-before-570
             sha: 1954940b29ecd652887d1276c0269e0b5f487c40
+          - label: pr-571
+            sha: bb08efb77cee1b7979969dc96cec59a59f3edd41
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ matrix.sha }}
-          fetch-depth: 0
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           path: probe-src
       - name: Name the commit counted
-        run: git rev-parse HEAD | tee "${RUNNER_TEMP}/sha.txt"
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          version: "0.12.18"
-          enable-cache: false
-      - run: uv sync --locked
+        run: git rev-parse HEAD
       - id: node
         run: |
-          # The pin moved from .github/node to docker/node in #556, after #536.
-          pin=docker/node/Dockerfile
-          test -f "$pin" || pin=.github/node/Dockerfile
-          version=$(sed -nE 's/^FROM node:([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' "$pin")
+          version=$(sed -nE 's/^FROM node:([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' docker/node/Dockerfile)
           test -n "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -54,35 +43,19 @@ jobs:
           node-version: ${{ steps.node.outputs.version }}
       - run: npm ci --ignore-scripts
         working-directory: extension
-      - name: The Python integration suite, counting each passing assert
+      - run: sudo apt-get install -y strace
+      - name: The integration suite, traced, counting each test's assertions
+        working-directory: extension
         run: |
+          set -o pipefail
           mkdir -p "${RUNNER_TEMP}/counts"
-          cp probe-src/probe/count_asserts.py tests/plugins/count_asserts.py
-          ASSERT_COUNT_OUT="${RUNNER_TEMP}/counts/python-integration.json" \
-            uv run --locked pytest -W error --suite integration -p no:cacheprovider \
-            -p count_asserts -o enable_assertion_pass_hook=true -q 2>&1 | tail -5
-          test "${PIPESTATUS[0]}" -eq 0
-      - name: The extension's integration suite, listed
-        working-directory: extension
-        run: set -o pipefail; npx vitest run --project integration --reporter=verbose 2>&1 | tee "${RUNNER_TEMP}/counts/extension-integration.txt" | tail -30
-      - name: Chromium, Chrome and Edge
-        working-directory: extension
-        run: npx playwright install --with-deps chromium chrome msedge
-      - name: A screen with a window manager for the side panel
-        run: |
-          sudo apt-get install -y xvfb openbox xdotool imagemagick
-          Xvfb :99 -screen 0 1280x800x24 &
-          timeout 10 sh -c 'until DISPLAY=:99 xdotool getdisplaygeometry; do sleep 0.2; done'
-          DISPLAY=:99 openbox &
-          echo "DISPLAY=:99" >> "$GITHUB_ENV"
-      - name: The browser suite on each browser, counting each expect step
-        working-directory: extension
-        run: |
-          cp ../probe-src/probe/count-expects.ts count-expects.ts
-          for browser in chromium chrome msedge; do
-            EXPECT_COUNT_OUT="${RUNNER_TEMP}/counts/browser-${browser}.json" \
-              npm run test:browser -- --project="${browser}" --reporter=list,./count-expects.ts
-          done
+          cp ../probe-src/probe/vitest.count.config.ts ../probe-src/probe/count-setup.ts .
+          VITEST_COUNT_OUT="${RUNNER_TEMP}/counts/vitest-counts.jsonl" \
+            strace -f -qq -e trace=openat -o "${RUNNER_TEMP}/counts/openat.trace" \
+            npx vitest run --config vitest.count.config.ts --reporter=verbose 2>&1 \
+            | tee "${RUNNER_TEMP}/counts/vitest.txt" | tail -35
+          echo "builds (side-panel.js written):"
+          grep -E 'side-panel\.js", O_WRONLY\|O_CREAT|side-panel\.js", O_RDWR\|O_CREAT' "${RUNNER_TEMP}/counts/openat.trace" | tee "${RUNNER_TEMP}/counts/builds.txt" | wc -l
       - name: Keep the counts
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
