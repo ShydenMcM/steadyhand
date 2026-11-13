@@ -48,7 +48,6 @@
 
 ## Running
 - Nothing local. A background PR #572 verdict waiter in the session that wrote this dies with /clear: re-run step 1 by hand. Colima not held.
-- Nothing local. Colima not held. No background waiters.
 
 ## Next steps
 
