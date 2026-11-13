@@ -71,8 +71,16 @@ test("an after-close portfolio read records the portfolio's value for its day", 
       readAt: wib("2025-06-17T16:02:00"),
       value: 5_415_000n,
       currency: "IDR",
+      // #256: the cost basis, 200 BBCA at 8,500 and 1,000 TLKM at 2,900.
+      invested: 4_600_000n,
     },
   ]);
+});
+
+test("a valuation stored before #256 reads back with no cost basis", async () => {
+  const row = { day: "2025-06-17", readAt: wib("2025-06-17T16:02:00"), value: 5_415_000n };
+  await putAll(db, STORES.valuations, [{ ...row, currency: "IDR" }]);
+  expect((await riskRecord(db)).valuations).toEqual([{ ...row, value: rp(5_415_000n) }]);
 });
 
 test("a read during a session records no valuation", async () => {
@@ -144,8 +152,18 @@ test("everything recorded reads back as the record the halts are judged from", a
   await recordResume(db, { haltDay: "2025-06-17", at: resumedAt, strategy: "buy-and-hold" });
   expect(await riskRecord(db)).toEqual({
     valuations: [
-      { day: "2025-06-16", readAt: wib("2025-06-16T16:02:00"), value: rp(5_415_000n) },
-      { day: "2025-06-17", readAt: wib("2025-06-17T16:02:00"), value: rp(5_415_000n) },
+      {
+        day: "2025-06-16",
+        readAt: wib("2025-06-16T16:02:00"),
+        value: rp(5_415_000n),
+        invested: rp(4_600_000n),
+      },
+      {
+        day: "2025-06-17",
+        readAt: wib("2025-06-17T16:02:00"),
+        value: rp(5_415_000n),
+        invested: rp(4_600_000n),
+      },
     ],
     movements: [
       { day: "2025-06-02", kind: "deposit", amount: rp(5_000_000n) },

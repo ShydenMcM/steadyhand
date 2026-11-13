@@ -31,6 +31,8 @@ export interface PortfolioView {
 /** A portfolio view with the shares of each holding. */
 export interface HeldView extends PortfolioView {
   readonly held: ReadonlyMap<string, bigint>;
+  /** The cost basis still invested: each holding's average price times its shares (#256). */
+  readonly invested: Money;
 }
 
 export const instrument = (symbol: string, rules: IdxMarketRules): Instrument => ({
@@ -48,7 +50,9 @@ export const portfolioView = (rules: IdxMarketRules, portfolio: Portfolio, day: 
   const holdings = new Map<string, Money>();
   const held = new Map<string, bigint>();
   const cash = portfolio.cashSettled.plus(portfolio.cashUnsettled);
+  const none = new Money(0n, cash.currency);
   let value = cash;
+  let invested = none;
   for (const holding of portfolio.holdings) {
     if (held.has(holding.symbol)) {
       throw new Error(`the portfolio lists ${holding.symbol} twice`);
@@ -58,11 +62,11 @@ export const portfolioView = (rules: IdxMarketRules, portfolio: Portfolio, day: 
     held.set(holding.symbol, shares);
     holdings.set(holding.symbol, worth);
     value = value.plus(worth);
+    invested = invested.plus(holding.averagePrice.times(shares));
   }
-  const none = new Money(0n, cash.currency);
   const within = portfolio.cashAvailable.gt(cash) ? cash : portfolio.cashAvailable;
   const spendable = within.lt(none) ? none : within;
-  return { value, spendable, holdings, held };
+  return { value, spendable, holdings, held, invested };
 };
 
 /** The last close of `symbol` in `prices`, refused by name when there is none. */

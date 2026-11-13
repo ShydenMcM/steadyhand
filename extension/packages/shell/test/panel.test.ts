@@ -399,6 +399,10 @@ test("a purchase typed is kept, listed, and counted against the claim", async ()
   expect(textOf(byId(page, "tax-claims")).slice(3)).toEqual([
     "BBCA, received 2025-06-10: gross IDR 1,000,000, reinvested IDR 600,000, still to reinvest " +
       "IDR 400,000 by 2026-03-31; if not, the tax owed is IDR 40,000.",
+    "Held",
+    "BBCA, received 2025-06-10: IDR 600,000 reinvested must stay invested until 2027-12-31.",
+    "No portfolio page read after a close gives the cost basis still invested: read it, so a " +
+      "reinvested dividend no longer invested can be found.",
   ]);
 });
 
@@ -1895,5 +1899,33 @@ test("choosing Indonesian says the Tax tab's kept entries in Indonesian", async 
   expect(textOf(byId(opened.page, "typed-purchases"))).toEqual([
     "2025-06-12: BBCA, dibeli seharga IDR 1",
     "Hapus",
+  ]);
+});
+
+// #256: the Tax tab judges breaks on the cost basis of each portfolio read recorded after a close.
+// 600,000 held against 100,000 invested on Thursday 12 June, still so on Monday 16 June, when
+// 12 June's trades settle: 500,000 breaks and 50,000 is owed.
+test("the Tax tab judges breaks on the cost basis each portfolio read recorded", async () => {
+  await putSetting(db, EXEMPTION.dividends, [KEPT_BBCA]);
+  await putSetting(db, EXEMPTION.purchases, [
+    { day: "2025-06-12", symbol: "BBCA", amount: "600000" },
+  ]);
+  const read = (day: string): object => ({
+    day,
+    readAt: new Date(`${day}T19:00:00+07:00`),
+    value: 9_000_000n,
+    currency: "IDR",
+    invested: 100_000n,
+  });
+  await putRows(STORES.valuations, [read("2025-06-12"), read("2025-06-16")]);
+  const { page } = await open();
+  expect(textOf(byId(page, "tax-claims")).slice(4)).toEqual([
+    "Held",
+    "BBCA, received 2025-06-10: IDR 100,000 reinvested must stay invested until 2027-12-31.",
+    "Tax owed",
+    "IDR 50,000 in all.",
+    "BBCA: IDR 500,000 reinvested from the dividend received on 2025-06-10 was no longer " +
+      "invested when the settlement grace ended, so its tax of IDR 50,000 is owed, from " +
+      "2025-06-10.",
   ]);
 });

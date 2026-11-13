@@ -2,7 +2,14 @@
  * panel writes, in English like the Advice tab's lines (#553 translates them). Pure: the panel
  * only puts each line on the page. */
 
-import type { ClaimRow, ClaimsRead, NotExemptable, Note, Reinvestment } from "@steadyhand/core";
+import {
+  NOTE_CODES,
+  type ClaimRow,
+  type ClaimsRead,
+  type NotExemptable,
+  type Note,
+  type Reinvestment,
+} from "@steadyhand/core";
 import { sentence, type Section } from "./advice-view.ts";
 
 /** Every figure assumes the yearly realisation reports are filed (docs/research/t-tax.md §7). */
@@ -30,6 +37,15 @@ const claimLine = (row: ClaimRow): string => {
   );
 };
 
+/** A claim still held, as a line; a claim holding nothing has no day and no line. */
+const heldLines = (row: ClaimRow): string[] =>
+  row.heldUntil === null
+    ? []
+    : [
+        `${row.symbol}, received ${row.received}: ${row.held.toString()} reinvested must stay ` +
+          `invested until ${row.heldUntil}.`,
+      ];
+
 const notExemptableLine = (entry: NotExemptable): string =>
   `${entry.symbol}, received ${entry.received}: no exemption on that day, so the tax of ` +
   `${entry.tax.toString()} is owed.`;
@@ -38,8 +54,10 @@ const idleLine = (purchase: Reinvestment): string =>
   `The purchase of ${purchase.symbol} on ${purchase.day} for ${purchase.amount.toString()} ` +
   "covered no claim: no dividend was open before it, or every deadline had passed.";
 
-/** The Tax tab's sections: the estimate line, the claims, and the tax owed when a deadline is
- * missed. With no dividend entered, the claims say so and show no figure (#255 AC2). */
+/** The Tax tab's sections: the estimate line, the claims, what is still held (#256, the report
+ * below the claims list) and the tax owed when a deadline is missed or a part breaks. With no
+ * dividend entered, the claims say so and show no figure (#255 AC2). The cost basis named as
+ * missing goes with what is held, not the tax owed. */
 export const taxView = (read: ClaimsRead): readonly Section[] => {
   const estimate: Section = { heading: "Estimate", lines: [ESTIMATE_LINE] };
   const { report } = read;
@@ -54,15 +72,14 @@ export const taxView = (read: ClaimsRead): readonly Section[] => {
       ...report.idle.map(idleLine),
     ],
   };
-  if (report.owed.amount === 0n) {
-    return [estimate, claims];
-  }
-  return [
-    estimate,
-    claims,
-    {
-      heading: "Tax owed",
-      lines: [`${report.owed.toString()} in all.`, ...noteLines(report.notes)],
-    },
-  ];
+  const missing = report.notes.filter((each) => each.code === NOTE_CODES.MISSING_COST_BASIS);
+  const said = report.notes.filter((each) => each.code !== NOTE_CODES.MISSING_COST_BASIS);
+  const heldNow = report.rows.flatMap(heldLines);
+  const held: Section[] =
+    heldNow.length === 0 ? [] : [{ heading: "Held", lines: [...heldNow, ...noteLines(missing)] }];
+  const owed: Section[] =
+    report.owed.amount === 0n
+      ? []
+      : [{ heading: "Tax owed", lines: [`${report.owed.toString()} in all.`, ...noteLines(said)] }];
+  return [estimate, claims, ...held, ...owed];
 };
