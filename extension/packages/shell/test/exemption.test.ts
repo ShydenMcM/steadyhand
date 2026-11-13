@@ -8,6 +8,7 @@ import {
   storedDividends,
   storedPurchases,
   typedEntry,
+  wibDay,
 } from "../src/exemption.ts";
 
 // What the panel keeps for the dividend reinvestment exemption (spec §9.2): the switch, the
@@ -143,15 +144,16 @@ test("a kept purchase that is missing is refused", () => {
 });
 
 const TODAY = "2025-08-01";
+const FIRST = "2021-01-01";
 
 test("a typed entry is read as its day, its stock in capitals and its rupiah", () => {
-  expect(typedEntry({ day: " 2025-07-01 ", symbol: " bbri ", amount: "1.250.000" }, TODAY)).toEqual(
-    { day: "2025-07-01", symbol: "BBRI", amount: rupiah(1_250_000n) },
-  );
+  expect(
+    typedEntry({ day: " 2025-07-01 ", symbol: " bbri ", amount: "1.250.000" }, TODAY, FIRST),
+  ).toEqual({ day: "2025-07-01", symbol: "BBRI", amount: rupiah(1_250_000n) });
 });
 
 test("a typed entry dated today is kept", () => {
-  expect(typedEntry({ day: TODAY, symbol: "BBRI", amount: "1" }, TODAY)).toEqual({
+  expect(typedEntry({ day: TODAY, symbol: "BBRI", amount: "1" }, TODAY, FIRST)).toEqual({
     day: TODAY,
     symbol: "BBRI",
     amount: rupiah(1n),
@@ -159,21 +161,48 @@ test("a typed entry dated today is kept", () => {
 });
 
 test("a typed entry with a day that is not a day is refused by its day", () => {
-  expect(typedEntry({ day: "1 July", symbol: "BBRI", amount: "1000" }, TODAY)).toBe("day");
+  expect(typedEntry({ day: "1 July", symbol: "BBRI", amount: "1000" }, TODAY, FIRST)).toBe("day");
 });
 
 test("a typed entry dated after today is refused by its day", () => {
-  expect(typedEntry({ day: "2025-08-02", symbol: "BBRI", amount: "1000" }, TODAY)).toBe("future");
+  expect(typedEntry({ day: "2025-08-02", symbol: "BBRI", amount: "1000" }, TODAY, FIRST)).toBe(
+    "future",
+  );
 });
 
 test("a typed entry with a stock that is not a code is refused by its stock", () => {
-  expect(typedEntry({ day: "2025-07-01", symbol: "BBRI4", amount: "1000" }, TODAY)).toBe("stock");
+  expect(typedEntry({ day: "2025-07-01", symbol: "BBRI4", amount: "1000" }, TODAY, FIRST)).toBe(
+    "stock",
+  );
 });
 
 test("a typed entry with an amount that is not whole rupiah is refused by its amount", () => {
-  expect(typedEntry({ day: "2025-07-01", symbol: "BBRI", amount: "1,5" }, TODAY)).toBe("amount");
+  expect(typedEntry({ day: "2025-07-01", symbol: "BBRI", amount: "1,5" }, TODAY, FIRST)).toBe(
+    "amount",
+  );
 });
 
 test("a typed entry of nothing is refused by its amount", () => {
-  expect(typedEntry({ day: "2025-07-01", symbol: "BBRI", amount: "0" }, TODAY)).toBe("amount");
+  expect(typedEntry({ day: "2025-07-01", symbol: "BBRI", amount: "0" }, TODAY, FIRST)).toBe(
+    "amount",
+  );
+});
+
+test("a typed entry dated the rules' first day is kept", () => {
+  expect(typedEntry({ day: FIRST, symbol: "BBRI", amount: "1" }, TODAY, FIRST)).toEqual({
+    day: FIRST,
+    symbol: "BBRI",
+    amount: rupiah(1n),
+  });
+});
+
+test("a typed entry dated before the rules' first day is refused by its day", () => {
+  expect(typedEntry({ day: "2020-12-31", symbol: "BBRI", amount: "1" }, TODAY, FIRST)).toBe(
+    "early",
+  );
+});
+
+test("today is the day in WIB, seven hours ahead of UTC", () => {
+  expect(wibDay(new Date("2025-06-17T16:59:59Z"))).toBe("2025-06-17");
+  expect(wibDay(new Date("2025-06-17T17:00:00Z"))).toBe("2025-06-18");
 });

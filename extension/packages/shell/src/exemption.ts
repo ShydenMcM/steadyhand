@@ -113,15 +113,17 @@ export interface TypedEntry {
   readonly amount: string;
 }
 
-/** The part of a typed entry that is wrong: a day that is no day, a day after today, a stock
- * that is no IDX code, or an amount that is not whole rupiah above 0. */
-export type EntryRefusal = "day" | "future" | "stock" | "amount";
+/** The part of a typed entry that is wrong: a day that is no day, a day after today, a day
+ * before the rules' first, a stock that is no IDX code, or an amount not whole rupiah above 0. */
+export type EntryRefusal = "day" | "future" | "early" | "stock" | "amount";
 
 /** `typed` as a day, a stock in capitals and an amount in rupiah, or the part refused. An entry
- * dated after `today` is refused: the claims are counted up to today. */
+ * dated after `today` is refused, as the claims are counted up to today, and so is one before
+ * `first`, the first day the market rules are verified from. */
 export const typedEntry = (
   typed: TypedEntry,
   today: string,
+  first: string,
 ): { day: string; symbol: string; amount: Money } | EntryRefusal => {
   const day = typed.day.trim();
   if (!isRealDay(day)) {
@@ -129,6 +131,9 @@ export const typedEntry = (
   }
   if (day > today) {
     return "future";
+  }
+  if (day < first) {
+    return "early";
   }
   const symbol = typed.symbol.trim().toUpperCase();
   if (!STOCK_CODE.test(symbol)) {
@@ -141,3 +146,10 @@ export const typedEntry = (
   }
   return { day, symbol, amount: new Money(rupiah, IDR) };
 };
+
+/** WIB is seven hours ahead of UTC all year. */
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+/** The day `instant` falls on in WIB, as an ISO day. */
+export const wibDay = (instant: Date): string =>
+  new Date(instant.getTime() + WIB_OFFSET_MS).toISOString().slice(0, 10);
