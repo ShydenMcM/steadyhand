@@ -39,6 +39,7 @@ const PYTHON_CODES_KEPT = [
 ];
 const NEW_CODES = [
   "missing.deposits",
+  "missing.dividends",
   "missing.history",
   "missing.page",
   "missing.reread",
