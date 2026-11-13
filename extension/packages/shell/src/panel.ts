@@ -563,24 +563,20 @@ export const startPanel = async <E extends PanelElement<E>>(
     pane.setAttribute("aria-labelledby", button.id);
     return { tab, button, pane };
   });
-  let showing: Tab = "advice";
   const show = (chosen: Tab): void => {
-    showing = chosen;
     for (const { tab, button, pane } of tabs) {
       pane.hidden = tab !== chosen;
       button.setAttribute("aria-selected", String(tab === chosen));
     }
   };
-  /** Tick the switch as `claimed` and show the Tax tab only while it is; leaving Tax for Advice. */
+  /** Tick the switch as `claimed` and show the Tax tab only while it is. The switch is on
+   * Settings, so the Tax pane is never showing when it is unticked. */
   const showExemption = (claimed: boolean): void => {
     exemption.checked = claimed;
     for (const { tab, button } of tabs) {
       if (tab === "tax") {
         button.hidden = !claimed;
       }
-    }
-    if (!claimed && showing === "tax") {
-      show("advice");
     }
   };
   for (const { tab, button } of tabs) {

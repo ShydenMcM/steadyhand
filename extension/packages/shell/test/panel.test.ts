@@ -294,21 +294,7 @@ test("ticking the exemption keeps it and shows the Tax tab; reopened, it stays t
   expect(byId(reopened.page, "tab-tax").hidden).toBe(false);
 });
 
-test("unticking the exemption while on Tax hides the tab and opens Advice", async () => {
-  await putSetting(db, EXEMPTION.claimed, true);
-  const { page, panel } = await open();
-  await panel.settled();
-  byId(page, "tab-tax").clicked?.();
-  const box = byId(page, "exemption");
-  box.checked = false;
-  box.changed?.();
-  await panel.settled();
-  expect(await settingOf(db, EXEMPTION.claimed)).toBe(false);
-  expect([byId(page, "tab-tax").hidden, byId(page, "pane-tax").hidden]).toEqual([true, true]);
-  expect(shown(page)).toEqual(["advice"]);
-});
-
-test("unticking the exemption while on another tab leaves that tab showing", async () => {
+test("unticking the exemption on Settings keeps it off, hides the tab and stays on Settings", async () => {
   await putSetting(db, EXEMPTION.claimed, true);
   const { page, panel } = await open();
   await panel.settled();
@@ -317,8 +303,9 @@ test("unticking the exemption while on another tab leaves that tab showing", asy
   box.checked = false;
   box.changed?.();
   await panel.settled();
+  expect(await settingOf(db, EXEMPTION.claimed)).toBe(false);
   expect(shown(page)).toEqual(["settings"]);
-  expect(byId(page, "tab-tax").hidden).toBe(true);
+  expect([byId(page, "tab-tax").hidden, byId(page, "pane-tax").hidden]).toEqual([true, true]);
 });
 
 test("an exemption switch not kept as true or false opens unticked", async () => {
