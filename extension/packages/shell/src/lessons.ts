@@ -41,6 +41,7 @@ import strategiesMomentumRotation from "../lessons/strategies.momentum_rotation.
 import strategiesMonthlySavings from "../lessons/strategies.monthly_savings.md";
 import strategiesTotalReturn from "../lessons/strategies.total_return.md";
 import taxDividend from "../lessons/tax.dividend.md";
+import taxExemption from "../lessons/tax.exemption.md";
 import { lessonFrom, type Lesson } from "./lesson-text.ts";
 
 export interface LessonModule {
@@ -101,6 +102,7 @@ const WRITTEN: readonly Lesson[] = [
   strategiesMonthlySavings,
   strategiesTotalReturn,
   taxDividend,
+  taxExemption,
 ].map(lessonFrom);
 
 /** The modules of `lessons`, in the course's order, each with its lessons by place; a lesson in a

@@ -42,6 +42,7 @@ const REWRITTEN = [
   "strategies.holding_cash",
   "strategies.monthly_savings",
   "tax.dividend",
+  "tax.exemption",
 ] as const;
 const NEW = [
   "broker.reading",

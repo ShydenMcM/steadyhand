@@ -11,3 +11,4 @@ packages/core/test/parity-dividend-growth.json
 packages/core/test/parity-income.json
 packages/core/test/parity-halts.json
 packages/core/test/parity-projection.json
+packages/core/test/parity-claims.json

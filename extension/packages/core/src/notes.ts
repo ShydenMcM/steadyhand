@@ -24,6 +24,7 @@ export const NOTE_CODES = {
   LIMIT_WEIGHT_CUT: "limit.weight.cut",
   LIMIT_WEIGHT_FULL: "limit.weight.full",
   MISSING_DEPOSITS: "missing.deposits",
+  MISSING_DIVIDENDS: "missing.dividends",
   MISSING_HISTORY: "missing.history",
   MISSING_PAGE: "missing.page",
   MISSING_REREAD: "missing.reread",
@@ -97,6 +98,14 @@ export const missingDeposits = (since: Day): Note =>
     NOTE_CODES.MISSING_DEPOSITS,
     `deposits and withdrawals since ${since} are not recorded: open the cash movement page, ` +
       "or enter each one (or none)",
+  );
+
+/** `missing.dividends`: the exemption claims need each dividend received, which only the user
+ * knows (spec §9.2). */
+export const missingDividends = (): Note =>
+  note(
+    NOTE_CODES.MISSING_DIVIDENDS,
+    "no dividend received is entered: enter each one on the Tax tab",
   );
 
 /** `missing.reread`: a deposit or withdrawal dated `day` was recorded after that day's portfolio

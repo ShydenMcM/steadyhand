@@ -27,6 +27,7 @@ from typing import Any, TypedDict
 from steadyhand import IDR, Instrument, Money, Side
 from steadyhand._ratio import ratio_down
 from steadyhand.corporate import PAY_LAG_TRADING_DAYS
+from steadyhand.exemption import DividendClaim, cover_claims, settle_claims
 from steadyhand.income import (
     HISTORY_YEARS,
     IncomeGoal,
@@ -68,6 +69,7 @@ RESTATED_PARITY = Path("extension/packages/core/test/parity-restated.json")
 GROWTH_PARITY = Path("extension/packages/core/test/parity-dividend-growth.json")
 INCOME_PARITY = Path("extension/packages/core/test/parity-income.json")
 PROJECTION_PARITY = Path("extension/packages/core/test/parity-projection.json")
+CLAIM_PARITY = Path("extension/packages/core/test/parity-claims.json")
 HALT_PARITY = Path("extension/packages/core/test/parity-halts.json")
 
 # Each rule file and the Python readers that must accept it before it is converted.
@@ -827,6 +829,100 @@ def projection_cases(seed: int = PROJECTION_SEED, count: int = PROJECTION_CASES)
     }
 
 
+CLAIM_SEED = 255
+CLAIM_CASES = 150
+CLAIM_FIRST = date(2021, 1, 1)  # the rules' verified date: some dividends come before PMK 18/2021
+CLAIM_SPAN_DAYS = 2_000  # to mid-2026, so purchases and today stay inside the calendar
+CLAIM_STOCKS = ("BBCA", "BBRI", "TLKM")
+CLAIM_NO_PURCHASE = 0.15
+
+
+def _claim_case(draw: random.Random, rules: IdxMarketRules, name: str) -> dict[str, Any]:
+    """Dividends received and purchases on drawn days, with Python's claims after the purchases
+    cover them (one day at a time, in date order) and its deadline tax on *today*.
+
+    Python's claim has an ex-date; the user enters only the day received, so the ex-date here is
+    the day before, and the deadline is the rules' deadline counted from the day received
+    (spec §9.2)."""
+    dividends = [
+        (
+            CLAIM_FIRST + timedelta(days=draw.randrange(CLAIM_SPAN_DAYS)),
+            draw.choice(CLAIM_STOCKS),
+            draw.randrange(1, 10**8),
+        )
+        for _ in range(draw.randint(1, 5))
+    ]
+    count = 0 if draw.random() < CLAIM_NO_PURCHASE else draw.randint(1, 6)
+    purchases = [
+        (CLAIM_FIRST + timedelta(days=draw.randrange(CLAIM_SPAN_DAYS)), draw.randrange(1, 10**8))
+        for _ in range(count)
+    ]
+    last = max([day for day, _, _ in dividends] + [day for day, _ in purchases])
+    today = last + timedelta(days=draw.randrange(400))
+    while not rules.is_trading_day(today):  # Python settles claims on a trading day
+        today += timedelta(days=1)
+    claims: list[DividendClaim] = []
+    not_exemptable: list[dict[str, str]] = []
+    for received, symbol, gross in dividends:
+        deadline = rules.reinvestment_deadline(received)
+        amount = Money(gross, IDR)
+        if deadline is None:
+            tax = rules.dividend_tax(amount, on=received)
+            not_exemptable.append(
+                {"symbol": symbol, "received": received.isoformat(), "tax": str(tax.amount)}
+            )
+            continue
+        instrument = Instrument(symbol, "IDX", IDR)
+        before = received - timedelta(days=1)
+        claims.append(DividendClaim(instrument, before, received, amount, deadline, amount))
+    for day, value in sorted(purchases, key=lambda purchase: purchase[0]):
+        order = Order(Instrument("BBRI", "IDX", IDR), Side.BUY, 1, day)
+        fill = Fill(order, day, 1, Money(value, IDR), Costs(*(Money(0, IDR),) * 3))
+        claims = list(cover_claims(tuple(claims), [fill], rules))
+    settled = settle_claims(Portfolio.empty(IDR), tuple(claims), None, today, rules)
+    claims.sort(key=lambda claim: (claim.pay_date, claim.instrument.symbol))
+    return {
+        "name": name,
+        "today": today.isoformat(),
+        "dividends": [
+            {"received": day.isoformat(), "symbol": symbol, "gross": str(gross)}
+            for day, symbol, gross in dividends
+        ],
+        "purchases": [{"day": day.isoformat(), "amount": str(value)} for day, value in purchases],
+        "claims": [
+            {
+                "symbol": claim.instrument.symbol,
+                "received": claim.pay_date.isoformat(),
+                "gross": str(claim.gross.amount),
+                "deadline": claim.deadline.isoformat(),
+                "uncovered": str(claim.uncovered.amount),
+                "tax": str(rules.dividend_tax(claim.uncovered, on=claim.pay_date).amount),
+                "protections": [
+                    [str(p.amount.amount), p.until.isoformat()] for p in claim.protections
+                ],
+            }
+            for claim in claims
+        ],
+        "notExemptable": not_exemptable,
+        "owed": str(settled.tax.amount),
+        "notes": [found.key for found in settled.notes],
+    }
+
+
+def claim_cases(seed: int = CLAIM_SEED, count: int = CLAIM_CASES) -> ParityCases:
+    """*count* sets of entries drawn from *seed*, each with Python's claims, for core's
+    ``coverClaims`` and ``claimsReport``."""
+    if count < 1:
+        msg = f"the claim parity harness needs a case, got {count}"
+        raise ValueError(msg)
+    draw = random.Random(seed)  # noqa: S311 - seeded test inputs, not secrets
+    rules = IdxMarketRules()
+    return {
+        "seed": str(seed),
+        "cases": [_claim_case(draw, rules, f"case {n}") for n in range(count)],
+    }
+
+
 HALT_SEED = 236
 HALT_JOURNEYS = 60
 # Each draw's daily move of the market value, as a factor: mostly small, with falls large enough
@@ -938,6 +1034,7 @@ def outputs() -> dict[Path, str]:
     files[INCOME_PARITY] = one_case_a_line(income_cases())
     files[PROJECTION_PARITY] = one_case_a_line(projection_cases())
     files[HALT_PARITY] = one_case_a_line(halt_cases())
+    files[CLAIM_PARITY] = one_case_a_line(claim_cases())
     return files
 
 
