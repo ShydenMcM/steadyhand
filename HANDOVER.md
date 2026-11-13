@@ -10,7 +10,7 @@
 
 ## Open with Shyden
 
-- Nothing open.
+- #339 / #345: still wanted now their template designs are cancelled? (see Next steps 1)
 
 ## Shyden's answers (2026-11-13)
 
@@ -58,7 +58,7 @@
 
 ## Next steps
 
-1. **#339** (P4, 5 pts; its blockers #231, #239, #336 and repo-template#19 are all shut): the extension's log kept on the user's machine, built from repo-template's one logging design (repo-template#19 shipped it; read it there, read-only). Read the whole ticket first; it says the design wins over the ACs, and nothing leaves the machine. Then #345 (P4, 5 pts, blockers shut).
+1. **#339 and #345 parked on Shyden (asked 2026-11-13 ~23:4x WIB by AskUserQuestion):** both adopt repo-template designs (repo-template#19 logging, #25 audit trail) that were shut NOT PLANNED on 2026-10-30 (keep it simple). Facts commented on both tickets. Recommended: shut both not planned (the extension promises nothing leaves the machine and logs nothing; the Python paper account is the frozen reference). Act on his answer.
 2. #251 read-back (queue above) once the Google day turns, 15:00 WIB 2026-11-14; read the ledger first (another project shares it).
 3. First release: 24 of 27 stories; #242, #243, #245 (21 points) wait on Shyden's broker account. #252, #253, #257, #258 wait on the readers; #553 on #251.
 
