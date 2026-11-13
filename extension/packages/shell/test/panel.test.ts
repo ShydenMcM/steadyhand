@@ -12,6 +12,7 @@ import {
 import { IDBFactory } from "fake-indexeddb";
 import { beforeEach, expect, test } from "vitest";
 import { CHOICE_LINE, DISCLAIMER } from "../src/advice-view.ts";
+import { EXEMPTION } from "../src/exemption.ts";
 import type { Snapshot } from "../src/messages.ts";
 import {
   startPanel,
@@ -46,6 +47,8 @@ class StandIn implements PanelElement<StandIn> {
   id = "";
   htmlFor = "";
   value = "";
+  /** A checkbox's tick. */
+  checked = false;
   textContent = "";
   hidden = false;
   /** The files chosen, as a file input's `files` gives them. */
@@ -252,6 +255,267 @@ test("the status line and the disclaimer stay outside the tabs, shown on every o
   }
   expect(byId(page, "status").tagName).toBe("p");
   expect(byId(page, "notice").tagName).toBe("footer");
+});
+
+// The dividend reinvestment exemption (#255, spec §9.2): a Settings checkbox, off by default;
+// the Tax tab shows only while it is ticked.
+test("the exemption checkbox is on Settings, unticked, and the Tax tab is hidden", async () => {
+  const { page, panel } = await open();
+  await panel.settled();
+  const box = byId(byId(page, "pane-settings"), "exemption");
+  expect([box.tagName, box.attributes.get("type"), box.checked]).toEqual([
+    "input",
+    "checkbox",
+    false,
+  ]);
+  const boxLabel = byId(page, "exemption-label");
+  expect([boxLabel.htmlFor, boxLabel.textContent]).toEqual([
+    "exemption",
+    "I claim the dividend reinvestment exemption",
+  ]);
+  expect(byId(page, "tab-tax").textContent).toBe("Tax");
+  expect([byId(page, "tab-tax").hidden, byId(page, "pane-tax").hidden]).toEqual([true, true]);
+});
+
+test("ticking the exemption keeps it and shows the Tax tab; reopened, it stays ticked", async () => {
+  const { page, panel } = await open();
+  const box = byId(page, "exemption");
+  box.checked = true;
+  box.changed?.();
+  await panel.settled();
+  expect(await settingOf(db, EXEMPTION.claimed)).toBe(true);
+  expect(byId(page, "tab-tax").hidden).toBe(false);
+  byId(page, "tab-tax").clicked?.();
+  expect(byId(page, "pane-tax").hidden).toBe(false);
+  expect(byId(page, "tab-tax").attributes.get("aria-selected")).toBe("true");
+  const reopened = await open();
+  await reopened.panel.settled();
+  expect(byId(reopened.page, "exemption").checked).toBe(true);
+  expect(byId(reopened.page, "tab-tax").hidden).toBe(false);
+});
+
+test("unticking the exemption on Settings keeps it off, hides the tab and stays on Settings", async () => {
+  await putSetting(db, EXEMPTION.claimed, true);
+  const { page, panel } = await open();
+  await panel.settled();
+  byId(page, "tab-settings").clicked?.();
+  const box = byId(page, "exemption");
+  box.checked = false;
+  box.changed?.();
+  await panel.settled();
+  expect(await settingOf(db, EXEMPTION.claimed)).toBe(false);
+  expect(shown(page)).toEqual(["settings"]);
+  expect([byId(page, "tab-tax").hidden, byId(page, "pane-tax").hidden]).toEqual([true, true]);
+});
+
+test("an exemption switch not kept as true or false opens unticked", async () => {
+  await putSetting(db, EXEMPTION.claimed, "yes");
+  const { page, panel } = await open();
+  await panel.settled();
+  expect(byId(page, "exemption").checked).toBe(false);
+  expect(byId(page, "tab-tax").hidden).toBe(true);
+});
+
+// The Tax tab (#255 AC1-AC3): the dividends received and the purchases that reinvest them, each
+// typed in its form and listed with a Remove button, then core's claims list on today (WIB).
+const KEPT_BBCA = { received: "2025-06-10", symbol: "BBCA", gross: "1000000" } as const;
+const NO_DIVIDEND = [
+  "Estimate",
+  "Every figure here is an estimate: it assumes the yearly realisation reports are filed.",
+  "Claims",
+  "No dividend received is entered: enter each one on the Tax tab.",
+];
+/** Type `typed` into the form named `form` ("dividend" or "purchase") and keep it. */
+const typeEntry = async (
+  page: StandIn,
+  panel: { settled(): Promise<void> },
+  form: "dividend" | "purchase",
+  [day, stock, amount]: readonly [string, string, string],
+): Promise<void> => {
+  const amountId = form === "dividend" ? "dividend-gross" : "purchase-amount";
+  byId(page, `${form}-day`).value = day;
+  byId(page, `${form}-stock`).value = stock;
+  byId(page, amountId).value = amount;
+  byId(page, `add-${form}`).clicked?.();
+  await panel.settled();
+};
+
+test("the Tax tab has the two forms, labelled, and with nothing entered the claims say so", async () => {
+  const { page, panel } = await open();
+  await panel.settled();
+  const tax = byId(page, "pane-tax");
+  const labels = [
+    ["dividend-day", "Day the dividend was received, such as 2025-06-16"],
+    ["dividend-stock", "Stock code, such as BBCA"],
+    ["dividend-gross", "Gross dividend, in rupiah"],
+    ["purchase-day", "Day of the purchase, such as 2025-06-16"],
+    ["purchase-stock", "Stock code, such as BBCA"],
+    ["purchase-amount", "Amount reinvested, in rupiah"],
+  ] as const;
+  for (const [id, text] of labels) {
+    const label = byId(tax, `${id}-label`);
+    expect([byId(tax, id).tagName, label.htmlFor, label.textContent]).toEqual(["input", id, text]);
+  }
+  expect(byId(tax, "add-dividend").textContent).toBe("Keep this dividend");
+  expect(byId(tax, "add-purchase").textContent).toBe("Keep this purchase");
+  expect(textOf(byId(tax, "typed-dividends"))).toEqual([]);
+  expect(textOf(byId(tax, "typed-purchases"))).toEqual([]);
+  expect(textOf(byId(tax, "tax-claims"))).toEqual(NO_DIVIDEND);
+});
+
+test("a dividend typed is kept, listed with a Remove button, and its claim shown", async () => {
+  const { page, panel } = await open();
+  await typeEntry(page, panel, "dividend", [" 2025-06-10 ", "bbca", "1.000.000"]);
+  expect(await settingOf(db, EXEMPTION.dividends)).toEqual([KEPT_BBCA]);
+  expect(byId(page, "status").textContent).toBe(
+    "Dividend of IDR 1,000,000 from BBCA, received on 2025-06-10, kept.",
+  );
+  expect(textOf(byId(page, "typed-dividends"))).toEqual([
+    "2025-06-10: BBCA, gross dividend IDR 1,000,000",
+    "Remove",
+  ]);
+  expect(byId(page, "remove-dividend-0").tagName).toBe("button");
+  expect(textOf(byId(page, "tax-claims")).slice(2)).toEqual([
+    "Claims",
+    "BBCA, received 2025-06-10: gross IDR 1,000,000, reinvested IDR 0, still to reinvest " +
+      "IDR 1,000,000 by 2026-03-31; if not, the tax owed is IDR 100,000.",
+  ]);
+});
+
+test("a purchase typed is kept, listed, and counted against the claim", async () => {
+  await putSetting(db, EXEMPTION.dividends, [KEPT_BBCA]);
+  const { page, panel } = await open();
+  await typeEntry(page, panel, "purchase", ["2025-06-12", "BBCA", "600.000"]);
+  expect(await settingOf(db, EXEMPTION.purchases)).toEqual([
+    { day: "2025-06-12", symbol: "BBCA", amount: "600000" },
+  ]);
+  expect(byId(page, "status").textContent).toBe(
+    "Purchase of BBCA for IDR 600,000 on 2025-06-12 kept.",
+  );
+  expect(textOf(byId(page, "typed-purchases"))).toEqual([
+    "2025-06-12: BBCA, bought for IDR 600,000",
+    "Remove",
+  ]);
+  expect(textOf(byId(page, "tax-claims")).slice(3)).toEqual([
+    "BBCA, received 2025-06-10: gross IDR 1,000,000, reinvested IDR 600,000, still to reinvest " +
+      "IDR 400,000 by 2026-03-31; if not, the tax owed is IDR 40,000.",
+  ]);
+});
+
+test("a dividend whose day is no day is refused, naming what was typed", async () => {
+  const { page, panel } = await open();
+  await typeEntry(page, panel, "dividend", ["10 June", "BBCA", "1000"]);
+  expect(byId(page, "status").textContent).toBe(
+    'Not kept: type the day as a date such as 2025-06-16, got "10 June"',
+  );
+  expect(await settingOf(db, EXEMPTION.dividends)).toBeUndefined();
+});
+
+test("a dividend dated after today (WIB) is refused", async () => {
+  const { page, panel } = await open();
+  await typeEntry(page, panel, "dividend", ["2025-06-18", "BBCA", "1000"]);
+  expect(byId(page, "status").textContent).toBe("Not kept: 2025-06-18 is after today, 2025-06-17.");
+  expect(await settingOf(db, EXEMPTION.dividends)).toBeUndefined();
+});
+
+test("a dividend dated today (WIB) is kept", async () => {
+  const { page, panel } = await open();
+  await typeEntry(page, panel, "dividend", ["2025-06-17", "BBCA", "1000"]);
+  expect(await settingOf(db, EXEMPTION.dividends)).toEqual([
+    { received: "2025-06-17", symbol: "BBCA", gross: "1000" },
+  ]);
+});
+
+test("just after midnight WIB, while UTC is still on the day before, today is the WIB day", async () => {
+  const { page, panel } = await open(undefined, () => new Date("2025-06-18T00:30:00+07:00"));
+  await typeEntry(page, panel, "dividend", ["2025-06-18", "BBCA", "1000"]);
+  expect(await settingOf(db, EXEMPTION.dividends)).toEqual([
+    { received: "2025-06-18", symbol: "BBCA", gross: "1000" },
+  ]);
+});
+
+test("a dividend or purchase typed joins those kept, after them", async () => {
+  const purchase = { day: "2025-06-12", symbol: "BBCA", amount: "1" };
+  await putSetting(db, EXEMPTION.dividends, [KEPT_BBCA]);
+  await putSetting(db, EXEMPTION.purchases, [purchase]);
+  const { page, panel } = await open();
+  await typeEntry(page, panel, "dividend", ["2025-03-03", "TLKM", "250000"]);
+  await typeEntry(page, panel, "purchase", ["2025-06-13", "TLKM", "2"]);
+  expect(await settingOf(db, EXEMPTION.dividends)).toEqual([
+    KEPT_BBCA,
+    { received: "2025-03-03", symbol: "TLKM", gross: "250000" },
+  ]);
+  expect(await settingOf(db, EXEMPTION.purchases)).toEqual([
+    purchase,
+    { day: "2025-06-13", symbol: "TLKM", amount: "2" },
+  ]);
+});
+
+test("a dividend before the market rules' first day is refused, naming that day", async () => {
+  const { page, panel } = await open();
+  await typeEntry(page, panel, "dividend", ["2020-12-31", "BBCA", "1000"]);
+  expect(byId(page, "status").textContent).toBe(
+    "Not kept: the market rules are known from 2021-01-01, and 2020-12-31 is before it.",
+  );
+  expect(await settingOf(db, EXEMPTION.dividends)).toBeUndefined();
+});
+
+test("a dividend whose stock is no IDX code is refused, naming what was typed", async () => {
+  const { page, panel } = await open();
+  await typeEntry(page, panel, "dividend", ["2025-06-10", "BB CA", "1000"]);
+  expect(byId(page, "status").textContent).toBe(
+    'Not kept: type a stock code such as BBCA, got "BB CA"',
+  );
+  expect(await settingOf(db, EXEMPTION.dividends)).toBeUndefined();
+});
+
+test("a dividend whose amount is not whole rupiah above 0 is refused, naming what was typed", async () => {
+  const { page, panel } = await open();
+  await typeEntry(page, panel, "dividend", ["2025-06-10", "BBCA", "0"]);
+  expect(byId(page, "status").textContent).toBe(
+    'Not kept: type whole rupiah above 0, such as 1.000.000, got "0"',
+  );
+  expect(await settingOf(db, EXEMPTION.dividends)).toBeUndefined();
+});
+
+test("a purchase is refused the same way, and nothing is kept", async () => {
+  const { page, panel } = await open();
+  await typeEntry(page, panel, "purchase", ["2025-06-12", "b@nk", "600.000"]);
+  expect(byId(page, "status").textContent).toBe(
+    'Not kept: type a stock code such as BBCA, got "b@nk"',
+  );
+  expect(await settingOf(db, EXEMPTION.purchases)).toBeUndefined();
+});
+
+test("Remove takes that entry off, keeps the rest, and the claims are counted again", async () => {
+  const second = { received: "2025-03-03", symbol: "TLKM", gross: "250000" };
+  await putSetting(db, EXEMPTION.dividends, [KEPT_BBCA, second]);
+  await putSetting(db, EXEMPTION.purchases, [{ day: "2025-06-12", symbol: "BBCA", amount: "1" }]);
+  const { page, panel } = await open();
+  await panel.settled();
+  byId(page, "remove-dividend-0").clicked?.();
+  await panel.settled();
+  expect(await settingOf(db, EXEMPTION.dividends)).toEqual([second]);
+  expect(byId(page, "status").textContent).toBe("Entry removed.");
+  expect(textOf(byId(page, "typed-dividends"))).toEqual([
+    "2025-03-03: TLKM, gross dividend IDR 250,000",
+    "Remove",
+  ]);
+  expect(textOf(byId(page, "tax-claims")).join("\n")).not.toContain("BBCA, received");
+  byId(page, "remove-purchase-0").clicked?.();
+  await panel.settled();
+  expect(await settingOf(db, EXEMPTION.purchases)).toEqual([]);
+  expect(textOf(byId(page, "typed-purchases"))).toEqual([]);
+});
+
+test("entries not kept as the panel keeps them show as none entered", async () => {
+  await putSetting(db, EXEMPTION.dividends, "junk");
+  await putSetting(db, EXEMPTION.purchases, [{ day: "no day" }]);
+  const { page, panel } = await open();
+  await panel.settled();
+  expect(textOf(byId(page, "typed-dividends"))).toEqual([]);
+  expect(textOf(byId(page, "typed-purchases"))).toEqual([]);
+  expect(textOf(byId(page, "tax-claims"))).toEqual(NO_DIVIDEND);
 });
 
 test("before any read the panel says which pages to open", async () => {
@@ -1114,10 +1378,16 @@ test('"Keep everything" closes the question and forgets nothing', async () => {
 // own record and settings are.
 test("forgetting everything empties the history and the storage, and reads back empty", async () => {
   const storage = standInStorage({ "kept-by-the-shell": true });
+  await putSetting(db, EXEMPTION.claimed, true);
+  await putSetting(db, EXEMPTION.dividends, [KEPT_BBCA]);
+  await putSetting(db, EXEMPTION.purchases, [
+    { day: "2025-06-12", symbol: "BBCA", amount: "600000" },
+  ]);
   const opened = await open(undefined, undefined, storage);
   await readPages(opened, ["portfolio"]);
   await putSetting(db, SETTINGS.universe, ["BBCA", "TLKM"]);
   const { page, panel } = opened;
+  expect(textOf(byId(page, "typed-dividends"))).toHaveLength(2);
   byId(page, "forget").clicked?.();
   byId(page, "forget-yes").clicked?.();
   await panel.settled();
@@ -1125,6 +1395,10 @@ test("forgetting everything empties the history and the storage, and reads back 
   expect(byId(page, "forget-confirm").hidden).toBe(true);
   expect(historyLines(page)).toEqual(["Nothing is recorded yet."]);
   expect(byId(page, "universe").value).toBe("");
+  expect(byId(page, "exemption").checked).toBe(false);
+  expect(byId(page, "tab-tax").hidden).toBe(true);
+  expect(textOf(byId(page, "typed-dividends"))).toEqual([]);
+  expect(textOf(byId(page, "typed-purchases"))).toEqual([]);
   expect(storage.held.size).toBe(0);
   const reopened = await openHistory(factory);
   for (const store of Object.values(STORES)) {
@@ -1606,4 +1880,20 @@ test("forgetting everything forgets the language too, and the panel speaks Engli
   expect(byId(page, "status").textContent).toBe("Everything is forgotten.");
   expect(byId(page, "tab-history").textContent).toBe("History");
   expect(byId(page, "language").value).toBe("en");
+});
+
+test("choosing Indonesian says the Tax tab's kept entries in Indonesian", async () => {
+  await putSetting(db, EXEMPTION.dividends, [KEPT_BBCA]);
+  await putSetting(db, EXEMPTION.purchases, [{ day: "2025-06-12", symbol: "BBCA", amount: "1" }]);
+  const opened = await open();
+  await opened.panel.settled();
+  await chooseLanguage(opened, "id");
+  expect(textOf(byId(opened.page, "typed-dividends"))).toEqual([
+    "2025-06-10: BBCA, dividen bruto IDR 1,000,000",
+    "Hapus",
+  ]);
+  expect(textOf(byId(opened.page, "typed-purchases"))).toEqual([
+    "2025-06-12: BBCA, dibeli seharga IDR 1",
+    "Hapus",
+  ]);
 });

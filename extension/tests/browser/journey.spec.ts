@@ -310,18 +310,56 @@ test("a portfolio page pasted, and a watchlist page chosen from a file, are read
   });
 });
 
-test("a deposit typed on Settings is kept and listed", async () => {
+test("a deposit typed on Settings is kept and listed, and a dividend on the Tax tab is claimed", async () => {
   await withPanel(async ({ panel }) => {
+    const status = panel.locator("#status");
     await panel.getByRole("tab", { name: "Settings" }).click();
     await panel.getByLabel("Day, such as 2025-06-16").pressSequentially("2025-06-16");
     await panel.getByLabel("Amount, in rupiah").pressSequentially("1.000.000");
     await panel.getByRole("button", { name: "Keep this deposit or withdrawal" }).click();
-    await expect(panel.locator("#status")).toHaveText(
-      "Deposit of IDR 1,000,000 on 2025-06-16 kept.",
-    );
+    await expect(status).toHaveText("Deposit of IDR 1,000,000 on 2025-06-16 kept.");
     await expect(panel.locator("#typed-movements")).toHaveText(
       "2025-06-16: deposit of IDR 1,000,000",
     );
+    // The dividend reinvestment exemption (#255): the Tax tab shows only while it is ticked.
+    const tax = panel.getByRole("tab", { name: "Tax" });
+    await expect(tax).toBeHidden();
+    const claimed = panel.getByLabel("I claim the dividend reinvestment exemption");
+    await claimed.click();
+    await expect(claimed).toBeChecked();
+    await tax.click();
+    await expect(panel.locator("#pane-tax")).toBeVisible();
+    await panel
+      .getByLabel("Day the dividend was received, such as 2025-06-16")
+      .pressSequentially("2025-06-10");
+    await panel.locator("#dividend-stock").pressSequentially("bbca");
+    await panel.getByLabel("Gross dividend, in rupiah").pressSequentially("1.000.000");
+    await panel.getByRole("button", { name: "Keep this dividend" }).click();
+    await expect(status).toHaveText(
+      "Dividend of IDR 1,000,000 from BBCA, received on 2025-06-10, kept.",
+    );
+    await expect(panel.locator("#typed-dividends")).toHaveText(
+      "2025-06-10: BBCA, gross dividend IDR 1,000,000Remove",
+    );
+    await panel
+      .getByLabel("Day of the purchase, such as 2025-06-16")
+      .pressSequentially("2025-06-12");
+    await panel.locator("#purchase-stock").pressSequentially("BBCA");
+    await panel.getByLabel("Amount reinvested, in rupiah").pressSequentially("600.000");
+    await panel.getByRole("button", { name: "Keep this purchase" }).click();
+    await expect(status).toHaveText("Purchase of BBCA for IDR 600,000 on 2025-06-12 kept.");
+    await expect(panel.locator("#tax-claims p").nth(1)).toHaveText(
+      "BBCA, received 2025-06-10: gross IDR 1,000,000, reinvested IDR 600,000, still to " +
+        "reinvest IDR 400,000 by 2026-03-31; if not, the tax owed is IDR 40,000.",
+    );
+    await panel.locator("#remove-purchase-0").click();
+    await expect(status).toHaveText("Entry removed.");
+    await expect(panel.locator("#typed-purchases")).toHaveText("");
+    // Unticked on Settings, the Tax tab goes.
+    await panel.getByRole("tab", { name: "Settings" }).click();
+    await claimed.click();
+    await expect(claimed).not.toBeChecked();
+    await expect(tax).toBeHidden();
   });
 });
 
