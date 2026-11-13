@@ -995,7 +995,9 @@ export const startPanel = async <E extends PanelElement<E>>(
     const market = CLAIM_RULES;
     const today = wibDay(inputs.clock());
     taxClaims.replaceChildren(
-      ...taxView(claimsReport(market, dividends, purchases, today)).flatMap((section) => [
+      // The cost basis of each portfolio read is recorded by #256's next step; until then no
+      // break is judged and the report names the cost basis as missing.
+      ...taxView(claimsReport(market, dividends, purchases, today, [])).flatMap((section) => [
         holding("h2", section.heading),
         ...section.lines.map((line) => holding("p", line)),
       ]),

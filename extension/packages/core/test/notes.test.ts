@@ -38,6 +38,7 @@ const PYTHON_CODES_KEPT = [
   "trade.refused",
 ];
 const NEW_CODES = [
+  "missing.cost_basis",
   "missing.deposits",
   "missing.dividends",
   "missing.history",
@@ -46,7 +47,7 @@ const NEW_CODES = [
   "missing.rules_year",
 ];
 
-test("the codes are Python's dotted codes and the four missing ones", () => {
+test("the codes are Python's dotted codes and the extension's missing ones", () => {
   expect([...Object.values(NOTE_CODES)].sort()).toEqual(
     [...PYTHON_CODES_KEPT, ...NEW_CODES].sort(),
   );

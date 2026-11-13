@@ -10,6 +10,7 @@ import {
   type BreakDay,
   type BreakRules,
   type ClaimRules,
+  type CostBasisRead,
   type DeadlineDay,
   type DividendReceived,
   type Reinvestment,
@@ -269,7 +270,7 @@ test("a dividend received before PMK 18/2021 opens no claim", () => {
 });
 
 test("with no dividend entered the claims are missing and give no figure", () => {
-  expect(claimsReport(RULES, [], [buy("2025-07-01", 600n)], "2026-04-01")).toEqual({
+  expect(claimsReport(RULES, [], [buy("2025-07-01", 600n)], "2026-04-01", READS)).toEqual({
     report: null,
     missing: [
       note(
@@ -279,6 +280,10 @@ test("with no dividend entered the claims are missing and give no figure", () =>
     ],
   });
 });
+
+const read = (day: string, invested: bigint): CostBasisRead => ({ day, invested: rp(invested) });
+/** A portfolio read after the close with more invested than any claim holds: nothing breaks. */
+const READS = [read("2025-07-01", 10_000n)];
 
 const DIVIDENDS = [
   received("2025-09-10", "TLKM", 2_000n),
@@ -292,7 +297,7 @@ const PURCHASES = [buy("2025-10-01", 500n), buy("2025-06-01", 500n), buy("2025-0
 const LATE = buy("2026-05-01", 100n); // after every deadline
 
 test("each dividend received is a row, oldest first, with what is left and its deadline", () => {
-  const read = claimsReport(RULES, DIVIDENDS, PURCHASES, "2026-03-31");
+  const read = claimsReport(RULES, DIVIDENDS, PURCHASES, "2026-03-31", READS);
   expect(read.report?.rows).toEqual([
     {
       symbol: "BBCA",
@@ -303,6 +308,8 @@ test("each dividend received is a row, oldest first, with what is left and its d
       deadline: DEADLINE,
       tax: rp(0n),
       missed: false,
+      held: rp(1_000n),
+      heldUntil: UNTIL,
     },
     {
       symbol: "TLKM",
@@ -313,6 +320,8 @@ test("each dividend received is a row, oldest first, with what is left and its d
       deadline: DEADLINE,
       tax: rp(150n), // owed if 31 March 2026 passes with 1,500 left
       missed: false,
+      held: rp(500n),
+      heldUntil: UNTIL,
     },
   ]);
   expect(read.report?.owed).toEqual(rp(0n));
@@ -320,7 +329,7 @@ test("each dividend received is a row, oldest first, with what is left and its d
 });
 
 test("a deadline passed shows its tax as owed, with the note", () => {
-  const read = claimsReport(RULES, DIVIDENDS, PURCHASES, "2026-04-01");
+  const read = claimsReport(RULES, DIVIDENDS, PURCHASES, "2026-04-01", READS);
   expect(read.report?.rows.map((row) => [row.symbol, row.missed, row.tax])).toEqual([
     ["BBCA", false, rp(0n)],
     ["TLKM", true, rp(150n)],
@@ -336,29 +345,29 @@ test("a deadline passed shows its tax as owed, with the note", () => {
 });
 
 test("a dividend received before the exemption is listed with the tax it owes", () => {
-  const read = claimsReport(RULES, DIVIDENDS, PURCHASES, "2026-04-01");
+  const read = claimsReport(RULES, DIVIDENDS, PURCHASES, "2026-04-01", READS);
   expect(read.report?.notExemptable).toEqual([
     { symbol: "BBRI", received: "2021-01-15", gross: rp(1_000n), tax: rp(100n) },
   ]);
 });
 
 test("a purchase that covers nothing is listed as such", () => {
-  const read = claimsReport(RULES, DIVIDENDS, [LATE, ...PURCHASES], "2026-05-01");
+  const read = claimsReport(RULES, DIVIDENDS, [LATE, ...PURCHASES], "2026-05-01", READS);
   expect(read.report?.idle).toEqual([buy("2025-06-01", 500n), LATE]);
 });
 
 test("purchases cover in the order of their dates, whatever order they were entered in", () => {
-  const entered = claimsReport(RULES, DIVIDENDS, PURCHASES, "2026-04-01");
-  const sorted = claimsReport(RULES, DIVIDENDS, [...PURCHASES].reverse(), "2026-04-01");
+  const entered = claimsReport(RULES, DIVIDENDS, PURCHASES, "2026-04-01", READS);
+  const sorted = claimsReport(RULES, DIVIDENDS, [...PURCHASES].reverse(), "2026-04-01", READS);
   expect(sorted).toEqual(entered);
 });
 
 test("an entry dated after today is refused", () => {
-  expect(() => claimsReport(RULES, DIVIDENDS, [LATE], "2026-02-01")).toThrow(
+  expect(() => claimsReport(RULES, DIVIDENDS, [LATE], "2026-02-01", READS)).toThrow(
     new RangeError("an entry is dated 2026-05-01, after today, 2026-02-01"),
   );
   const early = [received("2025-09-10", "TLKM", 2_000n)];
-  expect(() => claimsReport(RULES, early, [], "2025-09-09")).toThrow(
+  expect(() => claimsReport(RULES, early, [], "2025-09-09", READS)).toThrow(
     new RangeError("an entry is dated 2025-09-10, after today, 2025-09-09"),
   );
 });
@@ -510,4 +519,103 @@ test("with no shortfall nothing breaks and no grace starts", () => {
     tax: rp(0n),
     notes: [],
   });
+});
+
+// #256: the claims list judges breaks on each portfolio read after a close (spec §9.2). Held
+// after the purchases: BBCA 1,000 from 1 July and TLKM 500 from 1 October 2025, both through
+// 31 December 2027. A read on Thursday 2 October settles on Monday 6 October.
+
+const BROKEN_TLKM = note(
+  NOTE_CODES.EXEMPTION_CLAIM_BROKEN,
+  "TLKM: IDR 500 reinvested from the dividend received on 2025-09-10 was no longer invested " +
+    "when the settlement grace ended, so its tax of IDR 50 is owed, from 2025-09-10",
+);
+
+const heldOf = (found: ReturnType<typeof claimsReport>): unknown =>
+  found.report?.rows.map((row) => [row.symbol, row.held, row.heldUntil]);
+
+test("a read with less invested than is held breaks at the settlement close, newest first", () => {
+  const reads = [read("2025-10-02", 1_000n), read("2025-10-06", 1_000n)];
+  const found = claimsReport(RULES, DIVIDENDS, PURCHASES, "2026-03-31", reads);
+  expect(heldOf(found)).toEqual([
+    ["BBCA", rp(1_000n), UNTIL],
+    ["TLKM", rp(0n), null],
+  ]);
+  expect(found.report?.owed).toEqual(rp(50n));
+  expect(found.report?.notes).toEqual([BROKEN_TLKM]);
+});
+
+test("a shortfall bought back within the grace breaks nothing", () => {
+  const reads = [
+    read("2025-10-02", 1_000n),
+    read("2025-10-03", 1_500n),
+    read("2025-10-06", 1_000n),
+  ];
+  const found = claimsReport(RULES, DIVIDENDS, PURCHASES, "2026-03-31", reads);
+  expect(heldOf(found)).toEqual([
+    ["BBCA", rp(1_000n), UNTIL],
+    ["TLKM", rp(500n), UNTIL],
+  ]);
+  expect([found.report?.owed, found.report?.notes]).toEqual([rp(0n), []]);
+});
+
+test("a purchase on a read's day covers before the read is judged", () => {
+  // The 1 October purchase makes 1,500 held against 1,000 that day, so the grace starts on
+  // 1 October and ends on 3 October, when the shortfall is still there.
+  const reads = [read("2025-10-01", 1_000n), read("2025-10-03", 1_000n)];
+  const found = claimsReport(RULES, DIVIDENDS, PURCHASES, "2026-03-31", reads);
+  expect(found.report?.notes).toEqual([BROKEN_TLKM]);
+});
+
+test("reads are judged in the order of their days, whatever order they come in", () => {
+  const reads = [read("2025-10-06", 1_000n), read("2025-10-02", 1_000n)];
+  const found = claimsReport(RULES, DIVIDENDS, PURCHASES, "2026-03-31", reads);
+  expect(found.report?.notes).toEqual([BROKEN_TLKM]);
+});
+
+test("a break's tax and a missed deadline's are both owed, the break said first", () => {
+  const reads = [read("2025-10-02", 1_000n), read("2025-10-06", 1_000n)];
+  const found = claimsReport(RULES, DIVIDENDS, PURCHASES, "2026-04-01", reads);
+  expect(found.report?.owed).toEqual(rp(200n)); // 50 broken and 150 not reinvested
+  expect(found.report?.notes.map((said) => said.code)).toEqual([
+    NOTE_CODES.EXEMPTION_CLAIM_BROKEN,
+    NOTE_CODES.EXEMPTION_DEADLINE_MISSED,
+  ]);
+});
+
+test("with no portfolio read the cost basis is missing and no break is judged", () => {
+  const found = claimsReport(RULES, DIVIDENDS, PURCHASES, "2026-03-31", []);
+  expect(found.report?.owed).toEqual(rp(0n));
+  expect(found.report?.notes).toEqual([
+    note(
+      NOTE_CODES.MISSING_COST_BASIS,
+      "no portfolio page read after a close gives the cost basis still invested: read it, so " +
+        "a reinvested dividend no longer invested can be found",
+    ),
+  ]);
+});
+
+test("with nothing held no cost basis is needed", () => {
+  const found = claimsReport(RULES, DIVIDENDS, [], "2026-03-31", []);
+  expect(found.report?.notes).toEqual([]);
+});
+
+test("protections past their date are no longer held, and need no cost basis", () => {
+  const found = claimsReport(RULES, DIVIDENDS, PURCHASES, "2028-01-03", []);
+  expect(heldOf(found)).toEqual([
+    ["BBCA", rp(0n), null],
+    ["TLKM", rp(0n), null],
+  ]);
+  expect(found.report?.notes.map((said) => said.code)).toEqual([
+    NOTE_CODES.EXEMPTION_DEADLINE_MISSED,
+  ]);
+});
+
+test("a row held by purchases of two years is held until the later year's end", () => {
+  const purchases = [...PURCHASES, buy("2026-02-02", 600n)];
+  const found = claimsReport(RULES, DIVIDENDS, purchases, "2026-03-31", READS);
+  expect(heldOf(found)).toEqual([
+    ["BBCA", rp(1_000n), UNTIL],
+    ["TLKM", rp(1_100n), "2028-12-31"],
+  ]);
 });

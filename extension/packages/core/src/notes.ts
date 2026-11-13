@@ -23,6 +23,7 @@ export const NOTE_CODES = {
   LIMIT_MIN_LOTS: "limit.min_lots",
   LIMIT_WEIGHT_CUT: "limit.weight.cut",
   LIMIT_WEIGHT_FULL: "limit.weight.full",
+  MISSING_COST_BASIS: "missing.cost_basis",
   MISSING_DEPOSITS: "missing.deposits",
   MISSING_DIVIDENDS: "missing.dividends",
   MISSING_HISTORY: "missing.history",
@@ -106,6 +107,15 @@ export const missingDividends = (): Note =>
   note(
     NOTE_CODES.MISSING_DIVIDENDS,
     "no dividend received is entered: enter each one on the Tax tab",
+  );
+
+/** `missing.cost_basis`: a reinvested dividend must stay invested, which only the cost basis of a
+ * portfolio read after a close shows (spec §9.2, #256). */
+export const missingCostBasis = (): Note =>
+  note(
+    NOTE_CODES.MISSING_COST_BASIS,
+    "no portfolio page read after a close gives the cost basis still invested: read it, so " +
+      "a reinvested dividend no longer invested can be found",
   );
 
 /** `missing.reread`: a deposit or withdrawal dated `day` was recorded after that day's portfolio

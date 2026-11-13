@@ -15,7 +15,7 @@ test("the estimate line names the yearly realisation reports", () => {
 });
 
 test("with no dividend entered the list says so and shows no figure", () => {
-  expect(taxView(claimsReport(RULES, [], [], "2025-08-01"))).toEqual([
+  expect(taxView(claimsReport(RULES, [], [], "2025-08-01", []))).toEqual([
     { heading: "Estimate", lines: [ESTIMATE_LINE] },
     {
       heading: "Claims",
@@ -30,6 +30,7 @@ test("a claim still open shows what is left and the tax if its deadline is misse
     [{ received: "2025-06-10", symbol: "BBCA", gross: rupiah(1_000_000n) }],
     [{ day: "2025-07-01", symbol: "BBRI", amount: rupiah(600_000n) }],
     "2025-08-01",
+    [],
   );
   expect(taxView(read)[1]).toEqual({
     heading: "Claims",
@@ -46,6 +47,7 @@ test("a claim reinvested in full shows nothing left and no tax", () => {
     [{ received: "2025-06-10", symbol: "BBCA", gross: rupiah(1_000_000n) }],
     [{ day: "2025-07-01", symbol: "BBRI", amount: rupiah(1_000_000n) }],
     "2025-08-01",
+    [],
   );
   expect(taxView(read)[1]?.lines).toEqual([
     "BBCA, received 2025-06-10: gross IDR 1,000,000, reinvested IDR 1,000,000, nothing left to " +
@@ -59,6 +61,7 @@ test("a missed deadline shows the tax owed, with its note and the total", () => 
     [{ received: "2025-06-10", symbol: "BBCA", gross: rupiah(1_000_000n) }],
     [],
     "2026-07-01",
+    [],
   );
   expect(taxView(read).slice(1)).toEqual([
     {
@@ -85,6 +88,7 @@ test("a dividend from before the exemption is listed as not exemptable with its 
     [{ received: "2021-02-01", symbol: "TLKM", gross: rupiah(500_000n) }],
     [],
     "2025-08-01",
+    [],
   );
   expect(taxView(read)[1]?.lines).toEqual([
     "TLKM, received 2021-02-01: no exemption on that day, so the tax of IDR 50,000 is owed.",
@@ -100,6 +104,7 @@ test("a purchase that covers nothing is listed as such", () => {
       { day: "2025-07-01", symbol: "BBRI", amount: rupiah(1_000_000n) },
     ],
     "2025-08-01",
+    [],
   );
   expect(taxView(read)[1]?.lines).toEqual([
     "BBCA, received 2025-06-10: gross IDR 1,000,000, reinvested IDR 1,000,000, nothing left to " +

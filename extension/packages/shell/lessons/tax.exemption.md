@@ -2,7 +2,12 @@
 id = "tax.exemption"
 title = "The dividend tax exemption"
 summary = "A resident individual's dividend is free of tax if it is reinvested in Indonesia in time and kept invested."
-explains = ["exemption.deadline_missed", "missing.dividends"]
+explains = [
+  "exemption.claim_broken",
+  "exemption.deadline_missed",
+  "missing.cost_basis",
+  "missing.dividends",
+]
 module = "costs-and-tax"
 position = 5
 see_also = ["tax.dividend"]
@@ -42,8 +47,17 @@ claim per dividend, and every figure it gives is an estimate:
   must stay invested until 31 December of the second year after the purchase.
 - **Still to reinvest** is the rest, with its deadline. A dividend received before 17 February
   2021, when the rule came into force, gets no claim, and its tax is listed as owed.
-- **Tax owed** is 10% of what was still to reinvest when its deadline passed, at the rate in
-  force when the dividend was received, owed from that day.
+- **Held** is what purchases still protect, with the day the last of it may be sold.
+- **Tax owed** is 10% of what was still to reinvest when its deadline passed, and of any part
+  that broke (below), at the rate in force when the dividend was received, owed from that day.
+
+A part you reinvested must stay invested until its date. Each time the portfolio page is read
+after a close, steadyhand compares what is held with the cost basis still invested: each
+holding's average price times its shares. If less is invested than is held, the shortfall may be
+a sale whose money is about to buy something else, so nothing breaks yet. If it is still there
+on a read on or after the day the trades of the first such read settle, the parts held longest
+into the future break first, and their tax is owed. Until the portfolio page has been read after
+a close, the tab says the cost basis is missing and judges no break.
 
 A purchase that covers nothing, because no claim was open before it or every deadline had passed,
 is listed as such.
