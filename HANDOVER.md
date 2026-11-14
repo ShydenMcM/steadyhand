@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-14 06:36 WIB. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-14 08:06 WIB. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -45,7 +45,7 @@
 - Merged 2026-11-13: #571 (#570 P0, extension integration builds once, proven by strace and per-test assertion counts; 083ccf8). #568 P0 is done: runner counts on CI (probe PR #569, shut unmerged; run 43383498799) prove that the earlier journey merge kept every check. Shyden ruled: keep the 5 browser journeys (shared opening only). `testpypi` environment deleted on his choice (dev-deploy rule); `dev` already allows all branches.
 - Also merged 2026-11-13: #565 (#255 core claims, parity harness, `tax.exemption` lesson; 1954940), #567 (#566 P0 soupsieve CVE, closed with evidence), #564 (Dependabot).
 - Merged 2026-11-13 14:5x WIB: **#572** (squash 4a8e0bd): the #255 Settings switch and Tax tab. CI run 43388166515 all green, browser 6/6 on Chromium, Chrome, Edge. **#255 closed** with every AC checked (comment on #255). Worktree `../steadyhand-255b` and branch removed. Dropped on purpose: "unticking while on Tax opens Advice" (unreachable: the checkbox is on Settings).
-- `251/indonesian-lessons` (pushed, WIP, red on purpose): 9 of 37 built, now **38** with `tax.exemption` (tell #251). Drafts in `.superpowers/sdd/251-indonesian/lessons-id/*.txt`.
+- `251/indonesian-lessons` (pushed, WIP, red on purpose; worktree `../steadyhand-251`, `npm ci` done): develop merged in (7dfcec2, panel.test.ts conflict kept both sides), then 3b1b496 builds 14 more read-back lessons: **23 of 40 built** (evidence on #251, comment 6869018816). Unit red only by the 17 missing imports in `lessons-id.ts` plus 1 s timeouts under load. Drafts in `.superpowers/sdd/251-indonesian/lessons-id/*.txt`; build a chosen set with `python3 -I build-some.py ../steadyhand-251 <lesson ...>`, then `npx prettier --write` the id folder; find what is ready with `python3 -I <scratch>/ready.py` (recreate: lessons whose every key in lessons-id.json equals lessons-readback.tsv).
 - Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29). Never copy or replay from the slip backups. Local `239/settings-history-lessons` (c4bebaf): leave alone.
 
 ## #251 Indonesian: where the read-back stands
@@ -54,7 +54,7 @@
 - 2026-11-12 morning: panel-254 (5 lines) read back and committed; batch 2 (the 9 fixed paragraphs of broker.reading, costs.trading, dividends.basics, idx.auto_reject, idx.sessions, income.calendar) read back, every pair read, merged with `merge-tsv.py`. "Kemerataan" read back as "Equity", so it is now "Kemerataan pembayaran" ("Payment evenness"), read back again.
 - After a draft edit: `python3 lessons-json.py lessons-id.json` before `pick-batch.py`, or the change is not seen.
 - **2026-11-13 Google day (Pacific), 15,786 of 16,000 used:** `advice-id.json` read back (29 lines); 4 fixed (`hari ini` meant the advice day, not today, in noOrders and stampDuty; projectionNothing; readAgainReason colon) and read back clean; merged into `advice-readback.tsv`. Lesson batch 4 (11 lessons, 65 paragraphs: income.goal/growth/projection/run_rate, orders.not_tradable, risk.drawdown/limits/returns, shares.basics/prices, start.explanations) read back, every pair read, merged into `lessons-readback.tsv`. 7 paragraphs then fixed in the drafts (income.growth#3, risk.returns#4, shares.basics#4, shares.prices#0/#4/#5, start.explanations#2) and NOT yet read back: pick-batch sees them as changed.
-- **Queue for the next Google days (turn 15:00 WIB 2026-11-14 and -15):** `python3 lessons-json.py lessons-id.json`, then `python3 -I pick-batch.py 16000 batch-5.json` (day 1: the 7 fixes and 11 lessons, 15,683) and the next day `batch-6` (`tax.exemption`, 4,299: drafted 2026-11-13 from the #256 English, 9 paragraphs like the English, never read back). Read every pair, merge with `merge-tsv.py`, then build the drafts on `251/indonesian-lessons`.
+- **Queue for the next Google days (turn 15:00 WIB 2026-11-14 and -15):** `python3 lessons-json.py lessons-id.json`, then `python3 -I pick-batch.py 16000 batch-5.json` (day 1: the 7 fixes and 11 lessons, 15,683) and the next day `batch-6` (`tax.exemption`, 4,299: drafted 2026-11-13 from the #256 English, 9 paragraphs like the English, never read back). Read every pair, merge with `merge-tsv.py`, then build the 17 remaining drafts on `251/indonesian-lessons` (worktree `../steadyhand-251`); when all 40 are in, the branch goes green: open the PR.
 - **Build only drafts whose every paragraph is read back** (memory `feedback-build-only-read-back-drafts`).
 
 ## Running
