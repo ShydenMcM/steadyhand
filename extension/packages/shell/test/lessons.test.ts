@@ -6,7 +6,7 @@ import { catalogue, LESSONS } from "../src/lessons.ts";
 import { identicalAllowed } from "../src/words.ts";
 
 // The lessons the extension ships (#244, spec §13): the Python course's lessons, less those that
-// describe what the extension does not do, sixteen rewritten for it, and six new.
+// describe what the extension does not do, eighteen rewritten for it, and eight new.
 
 /** Kept as written: their text is the Python lesson's, word for word. */
 const AS_WRITTEN = [
@@ -29,6 +29,8 @@ const REWRITTEN = [
   "idx.sessions",
   "idx.special_monitoring",
   "idx.universe",
+  "income.growth",
+  "income.projection",
   "orders.not_tradable",
   "risk.drawdown",
   "risk.limits",
@@ -41,6 +43,7 @@ const REWRITTEN = [
   "strategies.holding_cash",
   "strategies.monthly_savings",
   "tax.dividend",
+  "tax.exemption",
 ] as const;
 const NEW = [
   "broker.reading",
@@ -329,3 +332,18 @@ test.each(ALL.map((lesson) => lesson.id))(
     expect(textsOf(lesson).filter((text) => /next lesson/iu.test(text) && !next)).toEqual([]);
   },
 );
+
+// The exemption ships (#255): the dividend tax lesson sends the reader to it, and no longer says
+// steadyhand does not track it (#573).
+test("tax.dividend sends the reader to the exemption lesson and never says it is untracked", () => {
+  const lesson = ALL.find((one) => one.id === "tax.dividend") ?? pythonLesson("tax.dividend");
+  const next = ALL.find(
+    (one) => one.module === lesson.module && one.position === lesson.position + 1,
+  );
+  expect(next?.id).toBe("tax.exemption");
+  const texts = textsOf(lesson);
+  expect(texts.filter((text) => /does not track/iu.test(text))).toEqual([]);
+  expect(
+    texts.filter((text) => /exempt.*next lesson|next lesson.*exempt/iu.test(text)),
+  ).toHaveLength(1);
+});

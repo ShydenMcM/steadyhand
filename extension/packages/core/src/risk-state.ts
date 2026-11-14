@@ -27,6 +27,8 @@ export interface Valuation {
   readonly day: Day;
   readonly readAt: Date;
   readonly value: Money;
+  /** The cost basis still invested on the read (#256); reads stored before it have none. */
+  readonly invested?: Money;
 }
 
 /** The period a cash-movement page read covered, and when it was read; reads stored before

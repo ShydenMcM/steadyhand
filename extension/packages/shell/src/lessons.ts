@@ -16,6 +16,8 @@ import idxTicks from "../lessons/idx.ticks.md";
 import idxUniverse from "../lessons/idx.universe.md";
 import incomeCalendar from "../lessons/income.calendar.md";
 import incomeGoal from "../lessons/income.goal.md";
+import incomeGrowth from "../lessons/income.growth.md";
+import incomeProjection from "../lessons/income.projection.md";
 import incomeRunRate from "../lessons/income.run_rate.md";
 import ordersLimitPrices from "../lessons/orders.limit_prices.md";
 import ordersNotTradable from "../lessons/orders.not_tradable.md";
@@ -39,6 +41,7 @@ import strategiesMomentumRotation from "../lessons/strategies.momentum_rotation.
 import strategiesMonthlySavings from "../lessons/strategies.monthly_savings.md";
 import strategiesTotalReturn from "../lessons/strategies.total_return.md";
 import taxDividend from "../lessons/tax.dividend.md";
+import taxExemption from "../lessons/tax.exemption.md";
 import { lessonFrom, type Lesson } from "./lesson-text.ts";
 import { WRITTEN_IN_INDONESIAN } from "./lessons-id.ts";
 import type { Language } from "./words.ts";
@@ -76,6 +79,8 @@ const WRITTEN: readonly Lesson[] = [
   idxUniverse,
   incomeCalendar,
   incomeGoal,
+  incomeGrowth,
+  incomeProjection,
   incomeRunRate,
   ordersLimitPrices,
   ordersNotTradable,
@@ -99,6 +104,7 @@ const WRITTEN: readonly Lesson[] = [
   strategiesMonthlySavings,
   strategiesTotalReturn,
   taxDividend,
+  taxExemption,
 ].map(lessonFrom);
 
 /** The modules of `lessons`, in the course's order, each titled in `language` with its lessons by

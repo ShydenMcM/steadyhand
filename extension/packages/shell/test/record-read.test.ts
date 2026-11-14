@@ -189,6 +189,7 @@ test("an empty record reads back as nothing recorded and nothing set", async () 
     universe: undefined,
     excluded: new Map(),
     goal: undefined,
+    contribution: new Money(0n, IDR),
   });
 });
 
@@ -202,6 +203,7 @@ test("the record reads back with the strategy's memory and the settings kept", a
   await putSetting(db, SETTINGS.universe, ["BBCA", "TLKM"]);
   await putSetting(db, SETTINGS.excluded, [["TLKM", "sold the business"]]);
   await putSetting(db, SETTINGS.goal, "1500000");
+  await putSetting(db, SETTINGS.contribution, "750000");
   const actions = await corporateActionRecord(db);
   expect(await recordedFrom(db, "dividend-growth")).toEqual({
     closes: await recordedCloses(db),
@@ -213,6 +215,7 @@ test("the record reads back with the strategy's memory and the settings kept", a
     universe: ["BBCA", "TLKM"],
     excluded: new Map([["TLKM", "sold the business"]]),
     goal: new Money(1500000n, IDR),
+    contribution: new Money(750000n, IDR),
   });
 });
 
@@ -224,6 +227,8 @@ test.each([
   [SETTINGS.excluded, [["TLKM", 7n]]],
   [SETTINGS.goal, 1500000n],
   [SETTINGS.goal, "1.5 million"],
+  [SETTINGS.contribution, 750000n],
+  [SETTINGS.contribution, "750.000"],
 ])("the setting %s kept as %s is refused, naming it", async (name, value) => {
   await putSetting(db, name, value);
   await expect(recordedFrom(db, "dividend-growth")).rejects.toThrow(`the setting ${name}`);

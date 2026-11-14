@@ -310,18 +310,66 @@ test("a portfolio page pasted, and a watchlist page chosen from a file, are read
   });
 });
 
-test("a deposit typed on Settings is kept and listed", async () => {
+test("a deposit typed on Settings is kept and listed, and a dividend on the Tax tab is claimed", async () => {
   await withPanel(async ({ panel }) => {
+    const status = panel.locator("#status");
     await panel.getByRole("tab", { name: "Settings" }).click();
     await panel.getByLabel("Day, such as 2025-06-16").pressSequentially("2025-06-16");
     await panel.getByLabel("Amount, in rupiah").pressSequentially("1.000.000");
     await panel.getByRole("button", { name: "Keep this deposit or withdrawal" }).click();
-    await expect(panel.locator("#status")).toHaveText(
-      "Deposit of IDR 1,000,000 on 2025-06-16 kept.",
-    );
+    await expect(status).toHaveText("Deposit of IDR 1,000,000 on 2025-06-16 kept.");
     await expect(panel.locator("#typed-movements")).toHaveText(
       "2025-06-16: deposit of IDR 1,000,000",
     );
+    // The dividend reinvestment exemption (#255): the Tax tab shows only while it is ticked.
+    const tax = panel.getByRole("tab", { name: "Tax" });
+    await expect(tax).toBeHidden();
+    const claimed = panel.getByLabel("I claim the dividend reinvestment exemption");
+    await claimed.click();
+    await expect(claimed).toBeChecked();
+    await tax.click();
+    await expect(panel.locator("#pane-tax")).toBeVisible();
+    await panel
+      .getByLabel("Day the dividend was received, such as 2025-06-16")
+      .pressSequentially("2025-06-10");
+    await panel.locator("#dividend-stock").pressSequentially("bbca");
+    await panel.getByLabel("Gross dividend, in rupiah").pressSequentially("1.000.000");
+    await panel.getByRole("button", { name: "Keep this dividend" }).click();
+    await expect(status).toHaveText(
+      "Dividend of IDR 1,000,000 from BBCA, received on 2025-06-10, kept.",
+    );
+    await expect(panel.locator("#typed-dividends")).toHaveText(
+      "2025-06-10: BBCA, gross dividend IDR 1,000,000Remove",
+    );
+    await panel
+      .getByLabel("Day of the purchase, such as 2025-06-16")
+      .pressSequentially("2025-06-12");
+    await panel.locator("#purchase-stock").pressSequentially("BBCA");
+    await panel.getByLabel("Amount reinvested, in rupiah").pressSequentially("600.000");
+    await panel.getByRole("button", { name: "Keep this purchase" }).click();
+    await expect(status).toHaveText("Purchase of BBCA for IDR 600,000 on 2025-06-12 kept.");
+    await expect(panel.locator("#tax-claims p").nth(1)).toHaveText(
+      "BBCA, received 2025-06-10: gross IDR 1,000,000, reinvested IDR 600,000, still to " +
+        "reinvest IDR 400,000 by 2026-03-31; if not, the tax owed is IDR 40,000.",
+    );
+    // #256: below the claims, what is held and until when; no portfolio page has been read
+    // after a close in this journey, so the cost basis is named as missing.
+    await expect(panel.locator("#tax-claims h2").nth(2)).toHaveText("Held");
+    await expect(panel.locator("#tax-claims p").nth(2)).toHaveText(
+      "BBCA, received 2025-06-10: IDR 600,000 reinvested must stay invested until 2027-12-31.",
+    );
+    await expect(panel.locator("#tax-claims p").nth(3)).toHaveText(
+      "No portfolio page read after a close gives the cost basis still invested: read it, so a " +
+        "reinvested dividend no longer invested can be found.",
+    );
+    await panel.locator("#remove-purchase-0").click();
+    await expect(status).toHaveText("Entry removed.");
+    await expect(panel.locator("#typed-purchases")).toHaveText("");
+    // Unticked on Settings, the Tax tab goes.
+    await panel.getByRole("tab", { name: "Settings" }).click();
+    await claimed.click();
+    await expect(claimed).not.toBeChecked();
+    await expect(tax).toBeHidden();
   });
 });
 
@@ -355,7 +403,7 @@ test("a fall past the daily limit halts buying until the strategy's name is type
   }, MONDAY_AFTER_CLOSE);
 });
 
-test("Settings keeps the strategy, the goal and the exclusions, and Lessons shows the course", async () => {
+test("Settings keeps the strategy, the goal, the exclusions and the language, and Lessons shows the course", async () => {
   await withPanel(async ({ panel }) => {
     const status = panel.locator("#status");
     await panel.getByRole("tab", { name: "Settings" }).click();
@@ -389,5 +437,24 @@ test("Settings keeps the strategy, the goal and the exclusions, and Lessons show
     await expect(lessons.locator("h2").first()).toHaveText("Start here");
     await expect(lessons.locator("h2").last()).toHaveText("Strategies");
     await expect(panel.locator("#lesson-start\\.welcome h3")).toHaveText("Start here");
+    // The language (#251): Bahasa Indonesia chosen by key on Settings speaks on every tab, and
+    // English chosen again brings it back.
+    await panel.getByRole("tab", { name: "Settings" }).click();
+    await panel.getByLabel("Language").press("ArrowDown");
+    await panel.getByRole("button", { name: "Save language" }).click();
+    await expect(status).toHaveText("Bahasa disimpan.");
+    await expect(panel.locator("body")).toHaveAttribute("lang", "id");
+    for (const name of ["Saran", "Pengaturan", "Riwayat", "Pelajaran"]) {
+      await expect(panel.getByRole("tab", { name })).toBeVisible();
+    }
+    await expect(panel.locator("#choice")).toHaveText(
+      "steadyhand menghitung apa yang tersirat dari strategi yang Anda pilih; pilihan dan " +
+        "semua pesanannya adalah milik Anda",
+    );
+    await panel.getByLabel("Bahasa", { exact: true }).press("ArrowUp");
+    await panel.getByRole("button", { name: "Simpan bahasa" }).click();
+    await expect(status).toHaveText("Language saved.");
+    await expect(panel.locator("body")).toHaveAttribute("lang", "en");
+    await expect(panel.getByRole("tab", { name: "Advice" })).toBeVisible();
   });
 });

@@ -277,6 +277,18 @@ test("the shares held are each holding's lots times the lot size", () => {
   expect([...seen.held]).toEqual([["BBCA", 300n]]);
 });
 
+// #256 (spec §9.2): the cost basis still invested, which the exemption's breaks are judged on.
+test("the cost basis invested is each holding's average price times its shares", () => {
+  const bbca = { ...holding("BBCA", 2n, 9_000n), averagePrice: rp(8_500n) };
+  const tlkm = { ...holding("TLKM", 3n, 2_500n), averagePrice: rp(3_000n) };
+  const seen = portfolioView(RULES, brokerPortfolio([bbca, tlkm]), DAY);
+  expect(seen.invested).toEqual(rp(200n * 8_500n + 300n * 3_000n));
+});
+
+test("with no holding nothing is invested, whatever the cash", () => {
+  expect(portfolioView(RULES, brokerPortfolio([]), DAY).invested).toEqual(rp(0n));
+});
+
 test("a stock listed twice in the portfolio is refused by name", () => {
   const twice = brokerPortfolio([holding("BBCA", 1n, 9_000n), holding("BBCA", 2n, 9_000n)]);
   expect(() => portfolioView(RULES, twice, DAY)).toThrow(

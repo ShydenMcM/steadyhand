@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import * as esbuild from "esbuild";
 import { build, ENTRY_POINTS } from "../../build.ts";
+import { adviceWords, scan, webScripts } from "../lib/bundle-scan.ts";
 
 let outdir = "";
 let built: Promise<void> | undefined;
@@ -82,4 +83,25 @@ test("the built manifest has exactly spec §10.1's permissions, host matches and
         "form-action 'none'; frame-ancestors 'none'",
     },
   });
+});
+
+// The scan of the same build (#240 AC1-AC4, spec §11, §12.3), here so the build runs once (#570).
+// Each forbidden form, planted, is found by the unit suite (tests/bundle-scan.test.ts); here every
+// bundle the build ships, and the panel page, are held to it. The lessons ship inside the panel's
+// bundle, so its wording check is theirs too.
+
+test.each(ENTRY_POINTS)("%s reaches no network and runs no code made from text", async (name) => {
+  const verdict = scan(await bundle(name), name === "content-script");
+  expect(verdict.found).toEqual([]);
+  expect(verdict.judged).toBeGreaterThan(0);
+});
+
+test.each(ENTRY_POINTS)("%s holds no advice words", async (name) => {
+  expect(adviceWords(await bundle(name))).toEqual([]);
+});
+
+test("the panel page loads no script from the web and holds no advice words", async () => {
+  const page = await readFile(join(await output(), "side-panel.html"), "utf8");
+  expect(webScripts(page)).toEqual([]);
+  expect(adviceWords(page)).toEqual([]);
 });

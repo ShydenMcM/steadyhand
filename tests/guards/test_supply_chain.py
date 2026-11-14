@@ -301,7 +301,7 @@ def test_sub_path_actions_are_grouped_above_the_patch_group() -> None:
 
 SETUP_NODE = "actions/setup-node@"
 PACKAGE_JSON = ROOT / "extension/package.json"
-NODE_DOCKERFILE = ROOT / ".github/node/Dockerfile"
+NODE_DOCKERFILE = ROOT / "docker/node/Dockerfile"
 MAJOR = re.compile(r"(?P<major>\d+)(?:\.[\dx]+)*")
 # Measured on 2026-10-30 (#446 removed mutations.yml and record-floors.yml): five, all in ci.yml.
 SETUP_NODE_STEPS = 5
@@ -346,12 +346,12 @@ def exact_node(text: str, *, where: str) -> str:
     return found["version"]
 
 
-def test_the_node_dockerfile_names_node_26_12_1() -> None:
+def test_the_node_dockerfile_names_node_26_13_0() -> None:
     # Shyden, 2026-10-29, every project: "Pin exact, every project" (#440); amended 2026-10-30,
     # "Pin + Dependabot via Docker" (#443, as shyden-labs/repo-template#143): the one file
     # Dependabot's docker ecosystem bumps, read by every setup-node step in CI.
     text = NODE_DOCKERFILE.read_text(encoding="utf-8")
-    assert exact_node(text, where=".github/node/Dockerfile") == "26.12.1"
+    assert exact_node(text, where="docker/node/Dockerfile") == "26.13.0"
 
 
 @pytest.mark.parametrize(
@@ -428,7 +428,7 @@ def test_a_node_dockerfile_that_is_not_one_exact_line_is_refused_by_name(text: s
 
 
 NODE_READ_RUN = (
-    "version=$(sed -nE 's/^FROM node:([0-9]+\\.[0-9]+\\.[0-9]+)$/\\1/p' .github/node/Dockerfile)\n"
+    "version=$(sed -nE 's/^FROM node:([0-9]+\\.[0-9]+\\.[0-9]+)$/\\1/p' docker/node/Dockerfile)\n"
     'test -n "$version"\n'
     'echo "version=$version" >> "$GITHUB_OUTPUT"\n'
 )
@@ -521,9 +521,9 @@ def test_each_other_node_setup_is_found(steps: list[dict[str, Any]], found: list
 
 
 def test_dependabot_bumps_the_node_dockerfile_but_never_a_major() -> None:
-    assert update_for("docker", "/.github/node") == {
+    assert update_for("docker", "/docker/node") == {
         "package-ecosystem": "docker",
-        "directory": "/.github/node",
+        "directory": "/docker/node",
         "target-branch": "develop",
         "schedule": {"interval": "weekly"},
         "commit-message": {"prefix": "chore(deps)"},
@@ -540,7 +540,7 @@ def test_types_node_follows_the_node_that_ci_runs() -> None:
 
 def test_dependabot_s_types_node_comment_names_the_dockerfile() -> None:
     text = (ROOT / ".github/dependabot.yml").read_text(encoding="utf-8")
-    assert "(.github/node/Dockerfile, read before" in text
+    assert "(docker/node/Dockerfile, read before" in text
 
 
 def test_dependabot_never_moves_types_node_past_the_runtime() -> None:

@@ -10,10 +10,13 @@ import {
   closesFrom,
   freshness,
   goalProgress,
+  incomeGrowth,
   lastUnknownAction,
   memoryFor,
+  Money,
   missingPage,
   portfolioView,
+  project,
   riskState,
   runRate,
   storedAfter,
@@ -30,12 +33,13 @@ import {
   type HeldView,
   type IdxCalendar,
   type IdxMarketRules,
-  type Money,
   type Note,
   type Part,
   type Portfolio,
+  type Projection,
   type RiskLimits,
   type RiskRecord,
+  type RunRate,
   type SessionRow,
   type Split,
   type StoredMemory,
@@ -63,6 +67,8 @@ export interface Recorded {
   readonly excluded: ReadonlyMap<string, string>;
   /** The monthly income goal, or `undefined` when none is set. */
   readonly goal: Money | undefined;
+  /** What the user adds each month, for the projection: 0 when Settings has none (spec §9.1). */
+  readonly contribution: Money;
 }
 
 export interface ModelInputs {
@@ -77,10 +83,24 @@ export interface ModelInputs {
   readonly now: Date;
 }
 
+/** The goal's projection (spec §9.1), or the dividend pages it still needs. */
+export type GoalProjection =
+  | { readonly state: "missing"; readonly missing: readonly Note[] }
+  | {
+      readonly state: "projected";
+      readonly projection: Projection;
+      /** The growth's notes, then the projection's. */
+      readonly notes: readonly Note[];
+    };
+
 export type Goal =
   | { readonly state: "no goal set" }
   | { readonly state: "missing"; readonly missing: readonly Note[] }
-  | { readonly state: "progress"; readonly progress: GoalProgress };
+  | {
+      readonly state: "progress";
+      readonly progress: GoalProgress;
+      readonly projection: GoalProjection;
+    };
 
 export type AdviceModel =
   | {
@@ -101,6 +121,37 @@ export type AdviceModel =
       /** The memory to keep for the day (spec §4.3). */
       readonly remember: StoredMemory;
     });
+
+/** How long the holdings take to meet `target`, from their value alone: idle cash is not
+ * assumed invested (spec §9.1). */
+const projectionOf = (
+  rate: RunRate,
+  target: Money,
+  inputs: ModelInputs,
+  held: HeldView,
+): GoalProjection => {
+  const read = incomeGrowth(rate, inputs.recorded.dividends, inputs.recorded.splits);
+  if (read.growth === null) {
+    return { state: "missing", missing: read.missing };
+  }
+  const holdingsValue = [...held.holdings.values()].reduce(
+    (total, worth) => total.plus(worth),
+    new Money(0n, target.currency),
+  );
+  const projection = project({
+    rate,
+    growth: read.growth,
+    holdingsValue,
+    target,
+    contribution: inputs.recorded.contribution,
+    rules: inputs.rules,
+  });
+  return {
+    state: "projected",
+    projection,
+    notes: [...read.growth.notes, ...projection.notes],
+  };
+};
 
 /** The income goal's progress on `day`, from the holdings' dividend reads (spec §9). */
 const goalOf = (
@@ -123,7 +174,11 @@ const goalOf = (
   });
   return read.rate === null
     ? { state: "missing", missing: read.missing }
-    : { state: "progress", progress: goalProgress(target, read.rate) };
+    : {
+        state: "progress",
+        progress: goalProgress(target, read.rate),
+        projection: projectionOf(read.rate, target, inputs, held),
+      };
 };
 
 export const adviceModel = (inputs: ModelInputs): AdviceModel => {

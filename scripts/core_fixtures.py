@@ -18,7 +18,7 @@ import argparse
 import json
 import random
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, time, timedelta
 from decimal import ROUND_HALF_EVEN, Context, Decimal
 from pathlib import Path
@@ -27,10 +27,23 @@ from typing import Any, TypedDict
 from steadyhand import IDR, Instrument, Money, Side
 from steadyhand._ratio import ratio_down
 from steadyhand.corporate import PAY_LAG_TRADING_DAYS
-from steadyhand.income import _restated_gross, _share, payment_calendar, run_rate
+from steadyhand.exemption import DividendClaim, cover_claims, settle_claims
+from steadyhand.income import (
+    HISTORY_YEARS,
+    IncomeGoal,
+    IncomeSettings,
+    ProjectionOutcome,
+    _restated_gross,
+    _share,
+    dividend_growth,
+    payment_calendar,
+    project,
+    run_rate,
+    years_before,
+)
 from steadyhand.market import PayDates
 from steadyhand.metrics import _rounded
-from steadyhand.notes import TRADE_EXCLUDED, TRADE_FROZEN, Note
+from steadyhand.notes import INCOME_GROWTH_SHORT_HISTORY, TRADE_EXCLUDED, TRADE_FROZEN, Note
 from steadyhand.portfolio import Portfolio
 from steadyhand.risk import RiskLimits, RiskManager, UnitValue
 from steadyhand.sizing import CompoundingSizer
@@ -55,6 +68,8 @@ STRATEGY_PARITY = Path("extension/packages/core/test/parity-strategies.json")
 RESTATED_PARITY = Path("extension/packages/core/test/parity-restated.json")
 GROWTH_PARITY = Path("extension/packages/core/test/parity-dividend-growth.json")
 INCOME_PARITY = Path("extension/packages/core/test/parity-income.json")
+PROJECTION_PARITY = Path("extension/packages/core/test/parity-projection.json")
+CLAIM_PARITY = Path("extension/packages/core/test/parity-claims.json")
 HALT_PARITY = Path("extension/packages/core/test/parity-halts.json")
 
 # Each rule file and the Python readers that must accept it before it is converted.
@@ -689,6 +704,323 @@ def income_cases(seed: int = INCOME_SEED, count: int = INCOME_CASES) -> ParityCa
     return {"seed": str(seed), "cases": [_income_case(draw, f"case {n}") for n in range(count)]}
 
 
+PROJECTION_SEED = 254
+PROJECTION_CASES = 80
+# Each year's dividend a share against the year before, as a factor: falls, steady growth and
+# growth past the optimistic cap.
+PROJECTION_GROWTH = (
+    (Decimal("0.70"), Decimal("0.98")),
+    (Decimal("1.00"), Decimal("1.06")),
+    (Decimal("1.08"), Decimal("1.40")),
+)
+PROJECTION_SHORT = 0.2
+PROJECTION_NO_VALUE = 0.1
+PROJECTION_OUTCOMES = {
+    ProjectionOutcome.REACHED: "reached",
+    ProjectionOutcome.NOT_WITHIN: "not-within",
+    ProjectionOutcome.CANNOT: "cannot",
+}
+
+
+def _projection_case(draw: random.Random, name: str) -> dict[str, Any]:
+    """Holdings with five years of dividends, some growing, some falling, some with nothing in
+    the earlier year, and a split between the years for some, with the dividend growth and
+    projection Python's ``dividend_growth`` and ``project`` give (spec §9.1, #254)."""
+    rules = IdxMarketRules()
+    calendar = IdxCalendar.shipped()
+    as_of = date(2024, 6, 1) + timedelta(days=draw.randrange(500))
+    since = years_before(as_of, HISTORY_YEARS)
+    book = Portfolio.empty(IDR)
+    history: dict[Instrument, list[CashDividend | Split]] = {}
+    stocks: list[dict[str, Any]] = []
+    for symbol in sorted(draw.sample(INCOME_STOCKS, draw.randrange(0, 4))):
+        stock = Instrument(symbol, "IDX", IDR)
+        shares = draw.choice((1, draw.randrange(1, 10**4), draw.randrange(1, 10**7)))
+        order = Order(stock, Side.BUY, shares, INCOME_BOUGHT)
+        fill = Fill(order, INCOME_BOUGHT, shares, Money(1, IDR), Costs.zero(IDR))
+        book = book.deposit(Money(shares, IDR), INCOME_BOUGHT).apply_fill(fill, INCOME_BOUGHT)
+        low, high = draw.choice(PROJECTION_GROWTH)
+        per_share = Decimal(draw.choice((draw.randrange(1, 100), draw.randrange(100, 50_000))))
+        first_year = 2 if draw.random() < PROJECTION_SHORT else 0
+        actions: list[CashDividend | Split] = []
+        for year in range(first_year, HISTORY_YEARS):
+            factor = low + (high - low) * Decimal(draw.randrange(101)) / 100
+            per_share = (per_share * factor).quantize(Decimal("0.01"))
+            for _ in range(draw.randrange(1, 3)):
+                day = since + timedelta(days=365 * year + draw.randrange(365))
+                if day <= as_of and per_share > 0:
+                    actions.append(CashDividend(stock, day, per_share / 100))
+        if draw.random() < INCOME_SPLITS:
+            ex_date = as_of - timedelta(days=draw.randrange(0, 4 * 365))
+            actions.append(Split(stock, ex_date, 1, draw.choice((2, 5, 10))))
+        history[stock] = actions
+        stocks.append(
+            {
+                "symbol": symbol,
+                "shares": str(shares),
+                "dividends": [
+                    {
+                        "exDate": action.ex_date.isoformat(),
+                        "paymentDate": calendar.add_trading_days(
+                            action.ex_date, PAY_LAG_TRADING_DAYS
+                        ).isoformat(),
+                        "perShare": str(action.per_share),
+                    }
+                    for action in actions
+                    if isinstance(action, CashDividend)
+                ],
+                "splits": [
+                    {
+                        "exDate": action.ex_date.isoformat(),
+                        "from": "1",
+                        "to": str(action.new_shares),
+                    }
+                    for action in actions
+                    if isinstance(action, Split)
+                ],
+            }
+        )
+    rate = run_rate(book, history, rules, as_of, PAY_LAG_TRADING_DAYS)
+    growth = dividend_growth(rate, history)
+    value = Money(0 if draw.random() < PROJECTION_NO_VALUE else draw.randrange(10**5, 10**11), IDR)
+    target = Money(draw.choice((1, draw.randrange(1, 10**7), draw.randrange(10**7, 10**12))), IDR)
+    given = draw.choice((None, Money(draw.randrange(1, 10**8), IDR)))
+    projection = project(rate, growth, value, IncomeSettings(IncomeGoal(target), given), rules)
+    return {
+        "name": name,
+        "asOf": as_of.isoformat(),
+        "holdingsValue": str(value.amount),
+        "target": str(target.amount),
+        "contribution": str(projection.contribution.amount),
+        "stocks": stocks,
+        "growth": [
+            [found.instrument.symbol, str(found.recent), str(found.earlier), str(found.growth)]
+            for found in growth.holdings
+        ],
+        "portfolioGrowth": str(growth.portfolio),
+        "shortHistory": [
+            note.text.split(":")[0]
+            for note in growth.notes
+            if note.key == INCOME_GROWTH_SHORT_HISTORY
+        ],
+        "scenarios": [
+            {
+                "scenario": found.scenario.value,
+                "start": str(found.starting_gross.amount),
+                "growth": str(found.growth),
+                "outcome": PROJECTION_OUTCOMES[found.outcome],
+                "years": None if found.years is None else str(found.years),
+            }
+            for found in projection.scenarios
+        ],
+    }
+
+
+def projection_cases(seed: int = PROJECTION_SEED, count: int = PROJECTION_CASES) -> ParityCases:
+    """*count* portfolios drawn from *seed*, each with Python's dividend growth and projection,
+    for core's ``incomeGrowth`` and ``project``."""
+    if count < 1:
+        msg = f"the projection parity harness needs a case, got {count}"
+        raise ValueError(msg)
+    draw = random.Random(seed)  # noqa: S311 - seeded test inputs, not secrets
+    return {
+        "seed": str(seed),
+        "cases": [_projection_case(draw, f"case {n}") for n in range(count)],
+    }
+
+
+CLAIM_SEED = 255
+CLAIM_CASES = 150
+CLAIM_FIRST = date(2021, 1, 1)  # the rules' verified date: some dividends come before PMK 18/2021
+CLAIM_SPAN_DAYS = 2_000  # to mid-2026, so purchases and today stay inside the calendar
+CLAIM_STOCKS = ("BBCA", "BBRI", "TLKM")
+CLAIM_NO_PURCHASE = 0.15
+# #256: how often a case with purchases has no portfolio read, how many reads it has, how long
+# after a purchase each comes, and how often a read is followed by one on its settlement date.
+CLAIM_NO_READ = 0.2
+CLAIM_READS = 4
+CLAIM_READ_AFTER_DAYS = 60
+CLAIM_SETTLEMENT_READ = 0.5
+CLAIM_INVESTED = 2 * 10**8
+CLAIM_SAME_INVESTED = 0.5  # a settlement read with the same cost basis keeps the shortfall
+CLAIM_NOTHING_INVESTED = 0.1  # everything sold: no cost basis at all
+
+
+def _claim_case(draw: random.Random, rules: IdxMarketRules, name: str) -> dict[str, Any]:
+    """Dividends received and purchases on drawn days, with Python's claims after the purchases
+    cover them (one day at a time, in date order) and its deadline tax on *today*.
+
+    Python's claim has an ex-date; the user enters only the day received, so the ex-date here is
+    the day before, and the deadline is the rules' deadline counted from the day received
+    (spec §9.2).
+
+    #256: portfolio reads after a close, on trading days after purchases, each with the cost basis
+    invested, some followed by one on its settlement date. The day's purchases cover first, then
+    Python's ``settle_claims`` judges the read; it is handed each claim with nothing uncovered, so
+    its deadline step stays out, as core's breaks leave it to the deadline step on *today*."""
+    dividends = [
+        (
+            CLAIM_FIRST + timedelta(days=draw.randrange(CLAIM_SPAN_DAYS)),
+            draw.choice(CLAIM_STOCKS),
+            draw.randrange(1, 10**8),
+        )
+        for _ in range(draw.randint(1, 5))
+    ]
+    count = 0 if draw.random() < CLAIM_NO_PURCHASE else draw.randint(1, 6)
+    purchases = [
+        (CLAIM_FIRST + timedelta(days=draw.randrange(CLAIM_SPAN_DAYS)), draw.randrange(1, 10**8))
+        for _ in range(count)
+    ]
+    reads = _claim_reads(draw, rules, [day for day, _ in purchases])
+    last = max(
+        [day for day, _, _ in dividends] + [day for day, _ in purchases] + [day for day, _ in reads]
+    )
+    today = last + timedelta(days=draw.randrange(400))
+    while not rules.is_trading_day(today):  # Python settles claims on a trading day
+        today += timedelta(days=1)
+    claims: list[DividendClaim] = []
+    not_exemptable: list[dict[str, str]] = []
+    for received, symbol, gross in dividends:
+        deadline = rules.reinvestment_deadline(received)
+        amount = Money(gross, IDR)
+        if deadline is None:
+            tax = rules.dividend_tax(amount, on=received)
+            not_exemptable.append(
+                {"symbol": symbol, "received": received.isoformat(), "tax": str(tax.amount)}
+            )
+            continue
+        instrument = Instrument(symbol, "IDX", IDR)
+        before = received - timedelta(days=1)
+        claims.append(DividendClaim(instrument, before, received, amount, deadline, amount))
+    claims.sort(key=lambda claim: (claim.pay_date, claim.instrument.symbol))
+    full = list(claims)
+    since: date | None = None
+    broken = Money(0, IDR)
+    broken_notes: list[str] = []
+    events = [(day, 0, value) for day, value in purchases] + [
+        (day, 1, value) for day, value in reads
+    ]
+    for day, kind, value in sorted(events, key=lambda event: (event[0], event[1])):
+        if kind == 0:
+            fill = _claim_fill(day, value)
+            claims = list(cover_claims(tuple(claims), [fill], rules))
+            full = list(cover_claims(tuple(full), [fill], rules))
+            continue
+        blank = tuple(replace(claim, uncovered=Money(0, IDR)) for claim in full)
+        judged = settle_claims(_claim_invested(day, value), blank, since, day, rules)
+        since = judged.shortfall_since
+        broken += judged.tax
+        broken_notes += [found.key for found in judged.notes]
+        full = _claims_kept(full, list(judged.claims))
+    settled = settle_claims(Portfolio.empty(IDR), tuple(full), None, today, rules)
+    return {
+        "name": name,
+        "today": today.isoformat(),
+        "dividends": [
+            {"received": day.isoformat(), "symbol": symbol, "gross": str(gross)}
+            for day, symbol, gross in dividends
+        ],
+        "purchases": [{"day": day.isoformat(), "amount": str(value)} for day, value in purchases],
+        "reads": [{"day": day.isoformat(), "invested": str(value)} for day, value in reads],
+        "claims": [
+            {
+                "symbol": claim.instrument.symbol,
+                "received": claim.pay_date.isoformat(),
+                "gross": str(claim.gross.amount),
+                "deadline": claim.deadline.isoformat(),
+                "uncovered": str(claim.uncovered.amount),
+                "tax": str(rules.dividend_tax(claim.uncovered, on=claim.pay_date).amount),
+                "protections": [
+                    [str(p.amount.amount), p.until.isoformat()] for p in claim.protections
+                ],
+                **_claim_held(judged_claim, today),
+            }
+            for claim, judged_claim in zip(claims, full, strict=True)
+        ],
+        "notExemptable": not_exemptable,
+        "owed": str((broken + settled.tax).amount),
+        "notes": broken_notes + [found.key for found in settled.notes],
+    }
+
+
+def _claim_reads(
+    draw: random.Random, rules: IdxMarketRules, purchases: list[date]
+) -> list[tuple[date, int]]:
+    """Portfolio reads after a close, each with the cost basis invested: none without a purchase."""
+    if not purchases or draw.random() < CLAIM_NO_READ:
+        return []
+    reads: list[tuple[date, int]] = []
+    for _ in range(draw.randint(1, CLAIM_READS)):
+        day = draw.choice(purchases) + timedelta(days=draw.randrange(CLAIM_READ_AFTER_DAYS))
+        while not rules.is_trading_day(day):
+            day += timedelta(days=1)
+        reads.append((day, _claim_invested_drawn(draw)))
+        if draw.random() < CLAIM_SETTLEMENT_READ:
+            settles = rules.settlement_date(day)
+            same = draw.random() < CLAIM_SAME_INVESTED
+            invested = reads[-1][1] if same else _claim_invested_drawn(draw)
+            reads.append((settles, invested))
+    return reads
+
+
+def _claim_invested_drawn(draw: random.Random) -> int:
+    """A cost basis for a read: sometimes nothing, as after selling everything."""
+    if draw.random() < CLAIM_NOTHING_INVESTED:
+        return 0
+    return draw.randrange(1, CLAIM_INVESTED)
+
+
+def _claim_fill(day: date, value: int) -> Fill:
+    """A purchase of *value* on *day*, at no cost."""
+    order = Order(Instrument("BBRI", "IDX", IDR), Side.BUY, 1, day)
+    return Fill(order, day, 1, Money(value, IDR), Costs(*(Money(0, IDR),) * 3))
+
+
+def _claim_invested(day: date, value: int) -> Portfolio:
+    """A portfolio on *day* whose cost basis invested is *value*."""
+    book = Portfolio.empty(IDR)
+    if value == 0:
+        return book
+    fill = _claim_fill(day, value)
+    return book.deposit(Money(value, IDR), day).apply_fill(fill, day)
+
+
+def _claims_kept(before: list[DividendClaim], kept: list[DividendClaim]) -> list[DividendClaim]:
+    """*before* with each claim's protections as ``settle_claims`` left them; it closes a claim with
+    nothing left, and keeps the rest in order, so each is found by its day, stock and gross."""
+    after: list[DividendClaim] = []
+    for claim in before:
+        key = (claim.pay_date, claim.instrument.symbol, claim.gross)
+        if kept and (kept[0].pay_date, kept[0].instrument.symbol, kept[0].gross) == key:
+            after.append(replace(claim, protections=kept.pop(0).protections))
+        else:
+            after.append(replace(claim, protections=()))
+    return after
+
+
+def _claim_held(claim: DividendClaim, today: date) -> dict[str, str | None]:
+    """What *claim*'s protections still hold on *today*, and until when."""
+    held = [p for p in claim.protections if p.until >= today]
+    return {
+        "held": str(sum(p.amount.amount for p in held)),
+        "heldUntil": held[-1].until.isoformat() if held else None,
+    }
+
+
+def claim_cases(seed: int = CLAIM_SEED, count: int = CLAIM_CASES) -> ParityCases:
+    """*count* sets of entries drawn from *seed*, each with Python's claims, for core's
+    ``coverClaims`` and ``claimsReport``."""
+    if count < 1:
+        msg = f"the claim parity harness needs a case, got {count}"
+        raise ValueError(msg)
+    draw = random.Random(seed)  # noqa: S311 - seeded test inputs, not secrets
+    rules = IdxMarketRules()
+    return {
+        "seed": str(seed),
+        "cases": [_claim_case(draw, rules, f"case {n}") for n in range(count)],
+    }
+
+
 HALT_SEED = 236
 HALT_JOURNEYS = 60
 # Each draw's daily move of the market value, as a factor: mostly small, with falls large enough
@@ -798,7 +1130,9 @@ def outputs() -> dict[Path, str]:
     files[RESTATED_PARITY] = one_case_a_line(restated_cases())
     files[GROWTH_PARITY] = one_case_a_line(growth_cases())
     files[INCOME_PARITY] = one_case_a_line(income_cases())
+    files[PROJECTION_PARITY] = one_case_a_line(projection_cases())
     files[HALT_PARITY] = one_case_a_line(halt_cases())
+    files[CLAIM_PARITY] = one_case_a_line(claim_cases())
     return files
 
 

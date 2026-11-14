@@ -3,7 +3,7 @@ import { scan, webScripts, adviceWords } from "./lib/bundle-scan.ts";
 
 // The scan of each built bundle (#240 AC1-AC4, spec §11, §12.3). Code is read as acorn's parse
 // tree, never as text, so a name in a string, a comment or an object key is not code. Here each
-// forbidden form is planted and found; tests/integration/bundle-scan.test.ts scans the real build.
+// forbidden form is planted and found; tests/integration/build.test.ts scans the real build.
 
 /** What `scan` finds in `code`, the place cut off. */
 const whats = (code: string, contentScript = false): string[] =>

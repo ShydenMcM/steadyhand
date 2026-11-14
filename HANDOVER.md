@@ -1,62 +1,62 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-09. #246, #248, #249, #250 (not planned), #247, #308, #348 (not planned), #400, #499, #528, #535 shut. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-11 00:05 WIB (overnight; Shyden asleep until about 06:00, relayed by peer `repo-template-c5`: keep working, never pause for `/clear`, park what only he can approve). Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
-**Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here (desktop extension; phones unavailable anyway).
+**Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
 **Ruling 2026-10-30 (every project):** keep it simple, product work first. Value test before every decision.
 
 **Standing approval (Shyden 2026-11-04, AskUserQuestion):** squash-merge into develop any PR green on every check on its head.
 
-## Branches and heads
+## For Shyden in the morning
 
-- `develop`: read with `git rev-parse origin/develop`. No other worktree; merged branches `400/release-cut`, `528/panel-path-by-browser`, `238/extension-shell` deleted after their tips matched PRs #527, #529, #500.
-- Slip backups, **never copy or replay from them**: `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06). Local `239/settings-history-lessons` (c4bebaf): leave alone.
-- Backups (keep 30 days): `377/wip-backup-2026-10-28` (to 2026-11-27); `365/exact-values-backup-2026-10-27` (to 2026-11-26), `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29).
+1. **#255 (exemption claims), a new gap** (comment on #255): a claim opens on each dividend paid to the user, for its gross, and the extension cannot see that: it keeps only the latest portfolio read (no shares held on past ex-dates), and the cash movements reader reads deposits and withdrawals only. Routes: (a) the user also enters each dividend received (date, stock, gross) beside the purchases, buildable now (recommended); (b) read dividend credits from the broker's cash page, which waits on the parked broker; (c) start keeping each day's holdings, which misses every dividend before it began. The spec draft waits on this.
+2. **Clean-up refused by auto mode** (parked): deleting the remote branches `308/release-checklist` (PR #524 closed, superseded by #525) and `docs/handover-2026-10-29d` (PR #436 closed). Approve, or leave them.
+3. **PRs only you can close:** #541 (stale handover, conflicting) and #555 (the 15:45 handover, superseded by this one).
 
-## Shyden's answers (2026-11-08, AskUserQuestion)
+## Shyden's answers (2026-11-10)
 
-- **Broker account:** cannot be opened yet (a personal prerequisite; never write its details in this public repo). #242, #243 and #245 stay parked until he says otherwise.
-- **#308:** a release checklist step (`RELEASING.md`), not a scheduled job. Done; closed.
-- **#400:** closed 2026-11-08. Probe PR #531 (release/probe-400, Shyden approved by AskUserQuestion): release-cut posted success and the merge state read CLEAN; closed unmerged, branch deleted. A non-release probe is refused by the release-from-a-cut hook.
-- **#528:** one route to the side panel on every browser (Extensions button, then the menu's tile below the toolbar row).
+- **#542:** no test rewrite; CI judges, the local unit gate runs only on a quiet machine. Closed not planned.
+- **#251 scope:** Indonesian ships with core's notes, refusals and strategy reasons in English; translating them is #553 (P4, 8 points, blocked by #251).
+- **#251 AC4 (23:2x WIB):** "no manual reviews, just complete it": no fluent human reader; the Google read-back of every line is the review (recorded on #251).
+- **#254:** spec §9.1 approved: optional Settings field "Monthly amount you add, in rupiah" (blank = 0); the projection shows under Income goal on the Advice tab.
+- **#255/#256:** the user enters each purchase that reinvests a dividend (a form in the panel).
+
+## Branches and PRs
+
+- `develop`: read with `git rev-parse origin/develop`. Merged tonight: #558 (Node 26.13.0 and its pin test, 7a58046), #552 (spec §9.1, 81a9881), #559 (Dependabot: @playwright/test 1.65.0, vite 8.3.6; 6 browser tests on each of three browsers; 0f305a7), #554 (#254 part 1: core's `incomeGrowth` and `project`, and the `income.growth` and `income.projection` lessons the lesson-coverage guard asked for; ff3cf37).
+- **PR #560** `254/projection-panel` (worktree `../steadyhand-254`, on develop): commit 30b700a projects the goal under Income goal on the Advice tab (model + view, tests first, mutants caught) and keeps `monthly-contribution` in the record. **Uncommitted on top:** the Settings field (label, input, Save amount, saved/cleared/refused words, tests green); it waits for its 5 Indonesian words' read-back (`.superpowers/sdd/251-indonesian/panel-254.json`, 205 characters). Backup patch: `.superpowers/sdd/254/settings-field-uncommitted.patch`. Commit the field once read back, push (stash nothing then), merge #560 when green. Do not merge #560 before the field lands: its lesson names the Settings field.
+- `251/indonesian-lessons` (pushed, WIP, red on purpose until all 37 lessons exist): 9 of 37 built. Drafts in `.superpowers/sdd/251-indonesian/lessons-id/*.txt` (39 now: income.growth and income.projection added tonight).
+- Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29). Never copy or replay from the slip backups. Local `239/settings-history-lessons` (c4bebaf): leave alone. Branch tips saved before tonight's clean-up: `.superpowers/sdd/branch-tips-2026-11-10.txt`.
+
+## #251 Indonesian: where the read-back stands
+
+- Writer: Claude. Reader: Google Cloud Translation via `.superpowers/sdd/251-indonesian/readback.py <lines.json> <out.tsv>` (shared ledger, never past 16,000 a Google day; the day turns at 15:00 WIB). 2026-11-10 Google day: 15,845 used.
+- Tonight: 11 more lessons read back (`batch-1.tsv`, merged into `lessons-readback.tsv`; side-by-side `side-1.txt`). Fixed after reading every pair: run-rate is now "run-rate" (Google read "laju berjalan" as "walking speed"), dividends.basics "before this day" (read back as "before today"), auto_reject "exactly on the limit", sessions "advice waits", calendar evenness, broker.reading, costs.trading, not_tradable. Those fixes (about 4,800 characters) need reading back again.
+- `pick-batch.py <budget> <out.json>` picks the unread or changed paragraphs, whole lessons only. Then `side.py <tsv>` lines each read-back up with its English paragraph.
+- Queue for the next Google day, in order: the fixes' re-read (about 4,800), `panel-254.json` (205), `advice-id.json` (the Advice tab's 29 lines as slot templates, 952), then the 17 unread lessons and the two new income lessons (about 23,000; two days).
+- **Build only drafts whose every paragraph is read back** (memory `feedback-build-only-read-back-drafts`).
 
 ## Running
 
-- The #539 PR, CI running; its waiter dies with this session, so re-run `~/.claude/scripts/pr-verdict.sh <pr>` on resume.
+- Nothing local. Colima not held. GitHub had a Pull Requests major outage and degraded Actions from about 23:30 WIB; CI runs came through late.
 
-## P4 is open (Shyden 2026-11-09, AskUserQuestion)
+## Next steps
 
-- The broker account is still not open, and he lifted the no-P4 ruling: **P4 stories start by Priority before the first release**. All P4s tie, so lowest number with every blocker closed.
-- Each strategy story's first AC is a spec amendment he approves before code. Measure the readings first with `.superpowers/sdd/247-low-volatility/measure.py` (point-in-time LQ45 cache in `.superpowers/sdd/m7-lq45`), ask, write spec §7.3, ask approval, then test first.
-- **Strategies settled 2026-11-09:** #247 low-volatility shipped (PR #538). Dropped after measuring, closed not planned: #246 dual-momentum, #248 breakout, #249 rsi-reversion, #250 dividend-capture (it becomes #539's lesson). Figures on each ticket and in spec §7.3. Scripts: `.superpowers/sdd/{246-dual-momentum,247-low-volatility,248-breakout,249-rsi,250-capture}/measure.py`.
-- **#539** (ex-date lesson): PR open from `539/ex-date-lesson`. When merged, read its ACs off and shut it by hand.
-- **Next: #251 (Indonesian, 8 points).** Before starting, ask Shyden which fluent reader reviews it (its AC4); every line needs the Google read-back (global rule). Then #254, #255, #256, #339, #345. #252, #253, #257 and #258 are blocked on the parked readers.
-- **New tests (global rule "One journey, all its assertions"):** before writing any e2e, journey, device or integration test, look for that journey and add the assertion there. Agent briefs carry this.
-
-## Waiting on Shyden
-
-- #242, #243, #245: parked (above).
+1. After 15:00 WIB: the read-back queue above; commit the Settings field on #560 and merge it when green; then the lessons.
+2. #255: spec §9.2 once Shyden answers the claim-gross question.
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe ("steadyhand: the road to the first release", Shyden 2026-11-07: shared with anyone with the link, launch = the first release #245, its own slate and green look). Modelled on Yawelo Idle's page.
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe ("steadyhand: the road to the first release"). Refresh steps: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with the date and time and a "Changed since the last update" list.
 
 ## Resume steps
 
-1. `ListAgents`; `git status --short`; `git fetch --prune`; `git rev-parse --abbrev-ref HEAD`.
-2. #242/#243/#245 are parked on the broker account. #348 (SonarCloud) is closed: no SonarCloud for steadyhand (Shyden 2026-11-08). Merge the #539 PR when green, then take the next P4.
-3. Merge rule: squash into develop when every check is green on the head SHA (standing approval 2026-11-04); read the browser suite's per-browser totals and each new guard by name before merging.
-4. Core rules (CI-only guards, a hook refusal is final): no `number` declarations or `Number(...)` in core, no index parameters in callbacks, no generic `test.each<...>(`, no identifier named `window`/`document`/`chrome`/`indexedDB` in core, no `%j` titles over bigints; a `?? fallback` never taken fails 100% branch coverage; scratch copies go in `pristine/`, never `*.bak`. Guards, integration and the browser suite are CI's. Read a gate's `exit=` line, and grep `Errors|Unhandled`, never only `Tests`.
-5. Filing a ticket: `gh issue create`, `gh project item-add 1 --owner ShydenMcM --url <issue>`, `gh project item-edit` (project id `PVT_kwHOCQ_jzM4BkhEb`) with Priority `PVTSSF_lAHOCQ_jzM4BkhEbzhn_bYM` (P0 `2f8059d5`, P1 `ec7925c3`, P4 `6e3c5b78`), Estimate `PVTF_lAHOCQ_jzM4BkhEbzhkUeyc`, Status `PVTSSF_lAHOCQ_jzM4BkhEbzhjRYtk` (Todo `f75ad846`, In Progress `47fc9ee4`, Done `98236657`); read back by repository + issue.
-6. **Every session ends by refreshing the progress page** (Shyden 2026-11-07): run `.superpowers/sdd/estimates/progress.py` (headline figures) and `stories.py` (every EXT and post-launch story, for the milestone counts); `Artifact action:"read"` the page URL above, write its body (from `<title>`) to a scratchpad file with the edits (date, counts, points, pace, waits), then publish it with that `url`. Each refresh shows "Updated <d Month yyyy>, <HH:MM> WIB" (`date '+%-d %B %Y, %H:%M %Z'`) and a "Changed since the last update" list of 2-5 bullets near the top (Shyden 2026-11-08, global rule). Plain wording, no "we", measured vs assumed stated.
+1. `ListAgents`; `git status --short`; `git fetch --prune`; read open `docs/handover-*` PRs before asking Shyden anything (memory `feedback-newest-handover-may-be-in-a-pr`).
+2. #242/#243/#245 parked on the broker account. Merge rule: squash into develop when every check is green on the head SHA; read the browser suite's per-browser totals. `pr-verdict.sh` returns at once before CI registers: loop it (memory `reference-pr-verdict-no-runs-yet`).
+3. Core rules (CI-only guards, a hook refusal is final): no `number` declarations or `Number(...)` in core, no index parameters in callbacks, no generic `test.each<...>(`, no identifier named `window`/`document`/`chrome`/`indexedDB` in core, no `%j` titles over bigints; a `?? fallback` never taken fails 100% branch coverage. Read a gate's `exit=` line, and grep `Errors|Unhandled`.
+4. Filing a ticket: project id `PVT_kwHOCQ_jzM4BkhEb`, Priority `PVTSSF_lAHOCQ_jzM4BkhEbzhn_bYM` (P0 `2f8059d5`, P1 `ec7925c3`, P4 `6e3c5b78`), Estimate `PVTF_lAHOCQ_jzM4BkhEbzhkUeyc`, Status `PVTSSF_lAHOCQ_jzM4BkhEbzhjRYtk` (Todo `f75ad846`, In Progress `47fc9ee4`, Done `98236657`); read back by repository + issue.
 
 ## Notes
 
-- pre-push refuses an uncommitted tree: `git stash push HANDOVER.md`, push, `git stash pop`. `git commit --amend` is refused by auto mode: add a commit.
-- Throwaway probe files carry a file-level `# ruff: noqa` / `/* eslint-disable */` so pre-push passes.
-- A PreToolUse refusal drops the whole command, edits included: re-apply them.
-- The editor's TypeScript diagnostics disagree with `tsc --noEmit`; tsc is the authority.
-- Test runs queue machine-wide behind other projects: background long runs.
-- A CI job's log: `gh run view <run> --log --job <job id>`.
-- Wi-Fi is unstable: name the network as a possible cause of a failed fetch or push; no retries.
+- pre-push refuses an uncommitted tree: `git stash push HANDOVER.md`, push, `git stash pop`. A new worktree needs `npm ci` in `extension/` before its first push, in a separate call from the `worktree add`.

@@ -208,6 +208,34 @@ Outside the first release's six (decision 22). Each is added here once its exact
 - A holding whose dividends for the window have not been read is listed as missing, and the goal shows no figure until every holding is covered.
 - Later stories, filed now: income received; the projection ("projection, not a promise"); the dividend tax-exemption claims.
 
+### 9.1 The income projection (#254, approved by Shyden 2026-11-10)
+
+Ported from Python's `dividend_growth` and `project` (`packages/steadyhand/src/steadyhand/income.py`), with parity:
+
+- **Growth:** each paying holding's dividends a share over the trailing year against the year ending 4 years earlier (`GROWTH_YEARS`), both restated onto today's shares (§6.6). Its yearly rate is the fourth root of their ratio, less 1, rounded to `RATIO_PLACES`; a holding with nothing in the earlier year counts as 0% and gets an `income.growth.short_history` note. The portfolio's growth is the holdings' weighted by their run-rate gross. Python takes the root as `exp(ln(r) / 4)` at 50 digits, half-even; the port does the same with `decimal.js` in the same context (`Ratio`), and parity tests check the two agree.
+- **Projection:** three scenarios, as Python: pessimistic (80% of the run-rate, growth at most 0%), base (growth capped at 5%) and optimistic (capped at 10%). Each starts from the run-rate's gross and the holdings' value (idle cash not assumed invested), reinvests the take-home income plus the monthly contribution each month at the holdings' own yield, grows dividends once a year, and stops when the monthly take-home meets the target, or after 50 years. Years are rounded up to a tenth. Trading costs are left out, and the `income.projection.costs_ignored` note says so.
+- **Label:** "Projection, not a promise", in years, never a date.
+- **Monthly contribution:** an optional Settings field, "Monthly amount you add, in rupiah", blank meaning 0, kept like the goal (Shyden 2026-11-10).
+- **Where it shows:** under the Income goal section of the Advice tab, one line per scenario ("Base: about 12.4 years") (Shyden 2026-11-10).
+- **Missing:** the projection needs each paying holding's dividends from 5 years before the advice day (`HISTORY_YEARS`). A holding whose dividend page has not been read that far back is listed under Missing, and no projection is shown until every holding is covered (#254 AC2).
+- **Lessons:** `income.projection` and `income.growth` return, rewritten where they name the backtest or the configuration file.
+
+### 9.2 The dividend tax-exemption claims (#255, #256; rulings by Shyden 2026-11-10 to 2026-11-12)
+
+A resident individual receives an IDX dividend gross; its 10% tax is not owed if the dividend is reinvested in time and the investment is held for 3 tax years (docs/research/t-tax.md §2 to §4). The extension cannot see past holdings or dividend credits, so the user enters them. Every figure is an estimate that assumes the yearly realisation reports are filed (t-tax.md §7), and the Tax tab says so.
+
+- **Switch:** a Settings checkbox, "I claim the dividend reinvestment exemption", off by default. Off, nothing below is shown and everything stays taxed at 10% as today. The income goal's run-rate (§9) stays after the 10% tax either way.
+- **Tax tab:** a fifth tab, shown only while the switch is on. It holds two forms and the claims list.
+- **Dividends received:** date received, stock, gross in rupiah. Each opens a claim when `fees.json` `dividend_exemption` has a row on that date; with none (before PMK 18/2021) it is listed as not exemptable, with the tax it owes.
+- **Reinvesting purchases:** date, stock, amount in rupiah (the purchase's value, not its costs).
+- **Entries:** kept in the extension's storage like the goal, each removable on its own, and cleared by forgetting everything. A purchase covers any open claim, whatever stock it buys (t-tax.md §4: any qualifying IDX stock).
+- **Deadline:** the last day of `reinvest_by_month` in the year after the year the dividend was **received** (PMK 18/2021). Python counts from the ex-date year because the engine never knew the receipt date; the port differs from it only where the ex-date and receipt fall in different years, and the parity tests name that case.
+- **Covering (#255):** ported from Python's `cover_claims`: each purchase covers the open claims received on or before its date whose deadline it meets, oldest receipt first, then stock; each amount covered is protected until `protection_end` of the purchase date (31 December of the purchase year + `hold_tax_years` - 1).
+- **Deadline tax (#255):** ported from `settle_claims`' deadline step: what is still uncovered after its deadline owes 10% of it, at the rate of the date received, rounded up to the rupiah, with the `exemption.deadline_missed` note.
+- **Claims list (#255):** one row per dividend: stock, date received, gross, reinvested, still to reinvest, deadline, and the tax owed if the deadline is missed. A purchase that covers nothing (no open claim before it, or every deadline passed) is listed as such.
+- **Missing (#255 AC2):** with the switch on and no dividend entered, the list says so and shows no figure.
+- **Breaks and the report (#256):** the protected amount is checked against the cost basis still invested, read from the portfolio (each holding's average price × shares). A shortfall that lasts to the settlement date of its first day breaks protections, latest first, as `settle_claims`, with the `exemption.claim_broken` note; a portfolio not yet read lists the cost basis as missing and no break is judged. The exemption report (Python M4b S8) shows on the Tax tab, and the `tax.exemption` lesson returns.
+
 ## 10. The extension
 
 ### 10.1 Manifest V3

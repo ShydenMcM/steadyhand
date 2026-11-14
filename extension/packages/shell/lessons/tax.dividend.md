@@ -14,8 +14,8 @@ is final.
 
 Nothing is taken off before the money reaches you: the company pays the dividend in full, and
 your account receives the gross amount. If the tax is due, you pay it yourself, by the 15th of
-the following month. It is not due if you reinvest the dividend in Indonesia under the tax
-rules for that, which steadyhand does not track yet.
+the following month. It is not due if you reinvest the dividend in Indonesia under the
+exemption rules that the next lesson explains.
 
 steadyhand's figures:
 
