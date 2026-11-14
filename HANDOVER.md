@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-11 00:05 WIB (overnight; Shyden asleep until about 06:00, relayed by peer `repo-template-c5`: keep working, never pause for `/clear`, park what only he can approve). Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-14 15:10 WIB. The 15:00 read-back of batch 5 was LOST: `pick-batch.py` sized it by plain text, `readback.py` is charged the HTML it sends (spans) and stopped at the cap after 15,135 paid characters, saving nothing (it wrote its TSV only at the end). Both scripts fixed (save after every group; size by `as_html`), the stop path proven with Google stubbed (old: no file; new: 16 of 63 rows kept). 865 characters left today: nothing more until 15:00 WIB 2026-11-15. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -8,13 +8,27 @@
 
 **Standing approval (Shyden 2026-11-04, AskUserQuestion):** squash-merge into develop any PR green on every check on its head.
 
-## For Shyden in the morning
+## Open with Shyden
 
-1. **#255 (exemption claims), a new gap** (comment on #255): a claim opens on each dividend paid to the user, for its gross, and the extension cannot see that: it keeps only the latest portfolio read (no shares held on past ex-dates), and the cash movements reader reads deposits and withdrawals only. Routes: (a) the user also enters each dividend received (date, stock, gross) beside the purchases, buildable now (recommended); (b) read dividend credits from the broker's cash page, which waits on the parked broker; (c) start keeping each day's holdings, which misses every dividend before it began. The spec draft waits on this.
-2. **Clean-up refused by auto mode** (parked): deleting the remote branches `308/release-checklist` (PR #524 closed, superseded by #525) and `docs/handover-2026-10-29d` (PR #436 closed). Approve, or leave them.
-3. **PRs only you can close:** #541 (stale handover, conflicting) and #555 (the 15:45 handover, superseded by this one).
+- Nothing open.
+
+## Shyden's answers (2026-11-14)
+
+- #339 and #345 shut as not planned (their repo-template designs were cancelled 2026-10-30; the extension logs nothing; the Python paper account stays the frozen reference).
+
+## Shyden's answers (2026-11-13)
+
+- **#256 (18:2x WIB):** the exemption report shows on the Tax tab, below the claims list (recorded on #256). Shyden is AFK, possibly for days: keep working by Priority; keep this file current for compaction.
+- #544, #546 (and #548, same handling): AC3 (the Indonesian lesson) moved to #251 as its AC7, AC8, AC9; the three tickets shut with evidence on each. No questions open.
+
+- Repeated journeys: keep the 5 browser journeys (only their opening repeats); re-prove the earlier merge with runner counts (done, #568). Proof is always measured by the runner, never asked about (CLAUDE.md 2026-11-13).
+- Delete the unused `testpypi` environment (done).
 
 ## Shyden's answers (2026-11-10)
+
+- **#255 design (2026-11-12, recorded on #255):** exemption switch is a Settings checkbox, off by default; a new Tax tab holds the dividends-received form, the purchases form and the claims list; the deadline counts from the tax year the dividend was received, not the ex-date.
+- **#255 (2026-11-11):** route (a): the user enters each dividend received (date, stock, gross) in a form beside the purchases form (recorded on #255). Spec §9.2 can be drafted.
+- **Clean-up (2026-11-11):** remote branches `308/release-checklist` and `docs/handover-2026-10-29d` deleted.
 
 - **#542:** no test rewrite; CI judges, the local unit gate runs only on a quiet machine. Closed not planned.
 - **#251 scope:** Indonesian ships with core's notes, refusals and strategy reasons in English; translating them is #553 (P4, 8 points, blocked by #251).
@@ -24,27 +38,32 @@
 
 ## Branches and PRs
 
-- `develop`: read with `git rev-parse origin/develop`. Merged tonight: #558 (Node 26.13.0 and its pin test, 7a58046), #552 (spec §9.1, 81a9881), #559 (Dependabot: @playwright/test 1.65.0, vite 8.3.6; 6 browser tests on each of three browsers; 0f305a7), #554 (#254 part 1: core's `incomeGrowth` and `project`, and the `income.growth` and `income.projection` lessons the lesson-coverage guard asked for; ff3cf37).
-- **PR #560** `254/projection-panel` (worktree `../steadyhand-254`, on develop): commit 30b700a projects the goal under Income goal on the Advice tab (model + view, tests first, mutants caught) and keeps `monthly-contribution` in the record. **Uncommitted on top:** the Settings field (label, input, Save amount, saved/cleared/refused words, tests green); it waits for its 5 Indonesian words' read-back (`.superpowers/sdd/251-indonesian/panel-254.json`, 205 characters). Backup patch: `.superpowers/sdd/254/settings-field-uncommitted.patch`. Commit the field once read back, push (stash nothing then), merge #560 when green. Do not merge #560 before the field lands: its lesson names the Settings field.
-- `251/indonesian-lessons` (pushed, WIP, red on purpose until all 37 lessons exist): 9 of 37 built. Drafts in `.superpowers/sdd/251-indonesian/lessons-id/*.txt` (39 now: income.growth and income.projection added tonight).
-- Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29). Never copy or replay from the slip backups. Local `239/settings-history-lessons` (c4bebaf): leave alone. Branch tips saved before tonight's clean-up: `.superpowers/sdd/branch-tips-2026-11-10.txt`.
+- **#256 shut** 2026-11-13 ~23:2x WIB: PR #575 squash-merged into develop as 159c8cd (every required check green on 996ca7b; browser 6/6 on Chromium, Chrome, Edge; CI run 43462803816). Evidence per AC on #256; worktree and branch removed. Session logs: `.superpowers/sdd/256/`.
+- **#573 closed** 2026-11-13 18:1x WIB: PR #574 squash-merged into develop as 872d53a (every required check green on head 715d3e1). Red-first re-measured (old line: 1 failed, 143 passed; new: 144 passed; logs in `.superpowers/sdd/573/`); evidence per AC on #573. Worktree `../steadyhand-544` and branch removed (local and remote).
+
+- `develop`: read with `git rev-parse origin/develop`.
+- Merged 2026-11-13: #571 (#570 P0, extension integration builds once, proven by strace and per-test assertion counts; 083ccf8). #568 P0 is done: runner counts on CI (probe PR #569, shut unmerged; run 43383498799) prove that the earlier journey merge kept every check. Shyden ruled: keep the 5 browser journeys (shared opening only). `testpypi` environment deleted on his choice (dev-deploy rule); `dev` already allows all branches.
+- Also merged 2026-11-13: #565 (#255 core claims, parity harness, `tax.exemption` lesson; 1954940), #567 (#566 P0 soupsieve CVE, closed with evidence), #564 (Dependabot).
+- Merged 2026-11-13 14:5x WIB: **#572** (squash 4a8e0bd): the #255 Settings switch and Tax tab. CI run 43388166515 all green, browser 6/6 on Chromium, Chrome, Edge. **#255 closed** with every AC checked (comment on #255). Worktree `../steadyhand-255b` and branch removed. Dropped on purpose: "unticking while on Tax opens Advice" (unreachable: the checkbox is on Settings).
+- `251/indonesian-lessons` (pushed, WIP, red on purpose; worktree `../steadyhand-251`, `npm ci` done): develop merged in (7dfcec2, panel.test.ts conflict kept both sides), then 3b1b496 builds 14 more read-back lessons: **23 of 40 built** (evidence on #251, comment 6869018816). Unit red only by the 17 missing imports in `lessons-id.ts` plus 1 s timeouts under load. Drafts in `.superpowers/sdd/251-indonesian/lessons-id/*.txt`; build a chosen set with `python3 -I build-some.py ../steadyhand-251 <lesson ...>`, then `npx prettier --write` the id folder; find what is ready with `python3 -I ready.py` in that folder.
+- Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29). Never copy or replay from the slip backups. Local `239/settings-history-lessons` (c4bebaf): leave alone.
 
 ## #251 Indonesian: where the read-back stands
 
-- Writer: Claude. Reader: Google Cloud Translation via `.superpowers/sdd/251-indonesian/readback.py <lines.json> <out.tsv>` (shared ledger, never past 16,000 a Google day; the day turns at 15:00 WIB). 2026-11-10 Google day: 15,845 used.
-- Tonight: 11 more lessons read back (`batch-1.tsv`, merged into `lessons-readback.tsv`; side-by-side `side-1.txt`). Fixed after reading every pair: run-rate is now "run-rate" (Google read "laju berjalan" as "walking speed"), dividends.basics "before this day" (read back as "before today"), auto_reject "exactly on the limit", sessions "advice waits", calendar evenness, broker.reading, costs.trading, not_tradable. Those fixes (about 4,800 characters) need reading back again.
-- `pick-batch.py <budget> <out.json>` picks the unread or changed paragraphs, whole lessons only. Then `side.py <tsv>` lines each read-back up with its English paragraph.
-- Queue for the next Google day, in order: the fixes' re-read (about 4,800), `panel-254.json` (205), `advice-id.json` (the Advice tab's 29 lines as slot templates, 952), then the 17 unread lessons and the two new income lessons (about 23,000; two days).
+- Writer: Claude. Reader: Google Cloud Translation via `readback.py <lines.json> <out.tsv>` in `.superpowers/sdd/251-indonesian/` (shared ledger; the Google day turns at 15:00 WIB). Another project shares the ledger: on 2026-11-11 (Pacific) about 10,700 were used elsewhere; read the ledger before planning.
+- 2026-11-12 morning: panel-254 (5 lines) read back and committed; batch 2 (the 9 fixed paragraphs of broker.reading, costs.trading, dividends.basics, idx.auto_reject, idx.sessions, income.calendar) read back, every pair read, merged with `merge-tsv.py`. "Kemerataan" read back as "Equity", so it is now "Kemerataan pembayaran" ("Payment evenness"), read back again.
+- After a draft edit: `python3 lessons-json.py lessons-id.json` before `pick-batch.py`, or the change is not seen.
+- **2026-11-13 Google day (Pacific), 15,786 of 16,000 used:** `advice-id.json` read back (29 lines); 4 fixed (`hari ini` meant the advice day, not today, in noOrders and stampDuty; projectionNothing; readAgainReason colon) and read back clean; merged into `advice-readback.tsv`. Lesson batch 4 (11 lessons, 65 paragraphs: income.goal/growth/projection/run_rate, orders.not_tradable, risk.drawdown/limits/returns, shares.basics/prices, start.explanations) read back, every pair read, merged into `lessons-readback.tsv`. 7 paragraphs then fixed in the drafts (income.growth#3, risk.returns#4, shares.basics#4, shares.prices#0/#4/#5, start.explanations#2) and NOT yet read back: pick-batch sees them as changed.
+- **Queue for the next Google days (turn 15:00 WIB 2026-11-15 and -16):** `batch-5.json` is already re-picked by as-sent size (15,571: the 7 fixes and 10 lessons; `python3 -I readback.py batch-5.json batch-5.tsv`); the next day `python3 -I pick-batch.py 15900 batch-6.json` for `tax.dividend` (1,372) and `tax.exemption` (4,355). Read every pair, merge with `merge-tsv.py`, then build the 17 remaining drafts on `251/indonesian-lessons` (worktree `../steadyhand-251`); when all 40 are in, the branch goes green: open the PR. Backups of the pre-fix scripts: `readback.before-save-fix-2026-11-14.py`, `pick-batch.before-html-size-2026-11-14.py`.
 - **Build only drafts whose every paragraph is read back** (memory `feedback-build-only-read-back-drafts`).
 
 ## Running
-
-- Nothing local. Colima not held. GitHub had a Pull Requests major outage and degraded Actions from about 23:30 WIB; CI runs came through late.
+- Nothing local. Colima not held.
 
 ## Next steps
 
-1. After 15:00 WIB: the read-back queue above; commit the Settings field on #560 and merge it when green; then the lessons.
-2. #255: spec §9.2 once Shyden answers the claim-gross question.
+1. #251 read-back (queue above) once the Google day turns, 15:00 WIB 2026-11-15; read the ledger first (another project shares it). Then build the read-back drafts on `251/indonesian-lessons`.
+2. First release: 24 of 27 stories; #242, #243, #245 (21 points) wait on Shyden's broker account. #252, #253, #257, #258 wait on the readers; #553 on #251.
 
 ## Progress page
 
