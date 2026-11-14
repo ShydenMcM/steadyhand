@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-14 09:35 WIB (resumed at 09:3x: every open ticket still waits on the broker account, the readers or #251's read-back; nothing buildable before the Google day turns at 15:00 WIB; progress page republished, version 32). Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-14 13:25 WIB (resumed at 13:20: every open ticket still waits on the broker account, the readers or #251's read-back; nothing buildable before the Google day turns at 15:00 WIB; progress page republished, version 33). Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
