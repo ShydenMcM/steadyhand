@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-14 13:25 WIB (resumed at 13:20: every open ticket still waits on the broker account, the readers or #251's read-back; nothing buildable before the Google day turns at 15:00 WIB; progress page republished, version 33). Current state only. Older history: `git show 4c29764:HANDOVER.md`.
+**Updated:** 2026-11-14 15:10 WIB. The 15:00 read-back of batch 5 was LOST: `pick-batch.py` sized it by plain text, `readback.py` is charged the HTML it sends (spans) and stopped at the cap after 15,135 paid characters, saving nothing (it wrote its TSV only at the end). Both scripts fixed (save after every group; size by `as_html`), the stop path proven with Google stubbed (old: no file; new: 16 of 63 rows kept). 865 characters left today: nothing more until 15:00 WIB 2026-11-15. Current state only. Older history: `git show 4c29764:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -54,7 +54,7 @@
 - 2026-11-12 morning: panel-254 (5 lines) read back and committed; batch 2 (the 9 fixed paragraphs of broker.reading, costs.trading, dividends.basics, idx.auto_reject, idx.sessions, income.calendar) read back, every pair read, merged with `merge-tsv.py`. "Kemerataan" read back as "Equity", so it is now "Kemerataan pembayaran" ("Payment evenness"), read back again.
 - After a draft edit: `python3 lessons-json.py lessons-id.json` before `pick-batch.py`, or the change is not seen.
 - **2026-11-13 Google day (Pacific), 15,786 of 16,000 used:** `advice-id.json` read back (29 lines); 4 fixed (`hari ini` meant the advice day, not today, in noOrders and stampDuty; projectionNothing; readAgainReason colon) and read back clean; merged into `advice-readback.tsv`. Lesson batch 4 (11 lessons, 65 paragraphs: income.goal/growth/projection/run_rate, orders.not_tradable, risk.drawdown/limits/returns, shares.basics/prices, start.explanations) read back, every pair read, merged into `lessons-readback.tsv`. 7 paragraphs then fixed in the drafts (income.growth#3, risk.returns#4, shares.basics#4, shares.prices#0/#4/#5, start.explanations#2) and NOT yet read back: pick-batch sees them as changed.
-- **Queue for the next Google days (turn 15:00 WIB 2026-11-14 and -15):** `python3 lessons-json.py lessons-id.json`, then `python3 -I pick-batch.py 16000 batch-5.json` (day 1: the 7 fixes and 11 lessons, 15,683) and the next day `batch-6` (`tax.exemption`, 4,299: drafted 2026-11-13 from the #256 English, 9 paragraphs like the English, never read back). Read every pair, merge with `merge-tsv.py`, then build the 17 remaining drafts on `251/indonesian-lessons` (worktree `../steadyhand-251`); when all 40 are in, the branch goes green: open the PR.
+- **Queue for the next Google days (turn 15:00 WIB 2026-11-15 and -16):** `batch-5.json` is already re-picked by as-sent size (15,571: the 7 fixes and 10 lessons; `python3 -I readback.py batch-5.json batch-5.tsv`); the next day `python3 -I pick-batch.py 15900 batch-6.json` for `tax.dividend` (1,372) and `tax.exemption` (4,355). Read every pair, merge with `merge-tsv.py`, then build the 17 remaining drafts on `251/indonesian-lessons` (worktree `../steadyhand-251`); when all 40 are in, the branch goes green: open the PR. Backups of the pre-fix scripts: `readback.before-save-fix-2026-11-14.py`, `pick-batch.before-html-size-2026-11-14.py`.
 - **Build only drafts whose every paragraph is read back** (memory `feedback-build-only-read-back-drafts`).
 
 ## Running
@@ -62,7 +62,7 @@
 
 ## Next steps
 
-1. #251 read-back (queue above) once the Google day turns, 15:00 WIB 2026-11-14; read the ledger first (another project shares it). Then build the read-back drafts on `251/indonesian-lessons`.
+1. #251 read-back (queue above) once the Google day turns, 15:00 WIB 2026-11-15; read the ledger first (another project shares it). Then build the read-back drafts on `251/indonesian-lessons`.
 2. First release: 24 of 27 stories; #242, #243, #245 (21 points) wait on Shyden's broker account. #252, #253, #257, #258 wait on the readers; #553 on #251.
 
 ## Progress page
