@@ -40,7 +40,6 @@ known-first-party = [
     "steadyhand_idx",
     "ci_scope",
     "lock_fast_path",
-    "run_tool",
     "pre_push",
 ]
 
