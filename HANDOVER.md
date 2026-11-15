@@ -58,7 +58,9 @@
 - **Build only drafts whose every paragraph is read back** (memory `feedback-build-only-read-back-drafts`).
 
 ## Running
-- Nothing local. Colima not held.
+- Nothing. The waiter for the 15:00 WIB Google day turn was stopped for the laptop shutdown: DEAD. Re-run: after 15:00 WIB 2026-11-16 (when `TZ=America/Los_Angeles date +%F` prints 2026-11-16), run the #251 queue above from `.superpowers/sdd/251-indonesian/`. Colima not held; no subagents.
+- Branches: `251/indonesian-lessons` at 4efc97c, pushed, everything committed (worktree `../steadyhand-251`). This branch (`docs/handover-2026-11-11-restart`) carries this file.
+- Parked questions for Shyden: none.
 
 ## Next steps
 
