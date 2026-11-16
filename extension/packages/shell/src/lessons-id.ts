@@ -15,6 +15,8 @@ import idxTicks from "../lessons/id/idx.ticks.md";
 import idxUniverse from "../lessons/id/idx.universe.md";
 import incomeCalendar from "../lessons/id/income.calendar.md";
 import incomeGoal from "../lessons/id/income.goal.md";
+import incomeGrowth from "../lessons/id/income.growth.md";
+import incomeProjection from "../lessons/id/income.projection.md";
 import incomeRunRate from "../lessons/id/income.run_rate.md";
 import ordersLimitPrices from "../lessons/id/orders.limit_prices.md";
 import ordersNotTradable from "../lessons/id/orders.not_tradable.md";
@@ -38,6 +40,7 @@ import strategiesMomentumRotation from "../lessons/id/strategies.momentum_rotati
 import strategiesMonthlySavings from "../lessons/id/strategies.monthly_savings.md";
 import strategiesTotalReturn from "../lessons/id/strategies.total_return.md";
 import taxDividend from "../lessons/id/tax.dividend.md";
+import taxExemption from "../lessons/id/tax.exemption.md";
 
 export const WRITTEN_IN_INDONESIAN: readonly string[] = [
   brokerReading,
@@ -54,6 +57,8 @@ export const WRITTEN_IN_INDONESIAN: readonly string[] = [
   idxUniverse,
   incomeCalendar,
   incomeGoal,
+  incomeGrowth,
+  incomeProjection,
   incomeRunRate,
   ordersLimitPrices,
   ordersNotTradable,
@@ -77,4 +82,5 @@ export const WRITTEN_IN_INDONESIAN: readonly string[] = [
   strategiesMonthlySavings,
   strategiesTotalReturn,
   taxDividend,
+  taxExemption,
 ];

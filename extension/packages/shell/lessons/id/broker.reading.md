@@ -29,7 +29,7 @@ tidak, panel menyebutkan halaman yang perlu dibaca ulang.
 
 **Apa yang kurang.** Ketika strategi membutuhkan sesuatu yang belum terbaca, seperti dividen atau
 grafik sebuah saham, atau grafik yang tidak mencakup waktu cukup jauh ke belakang, panel
-mencantumkannya di bagian Data kurang, dan tidak memberikan order sampai hal itu terbaca.
+mencantumkannya di bagian Data yang kurang, dan tidak memberikan order sampai hal itu terbaca.
 
 **Halaman yang Anda simpan.** Halaman broker yang Anda simpan bisa ditempel ke tab Saran, atau
 dibuka dari berkas. Halaman itu dibaca di dalam panel, seperti halaman lainnya, dan tidak dikirim

@@ -305,7 +305,8 @@ test.each(IDS)("%s in Indonesian is not its English left untranslated", (id) => 
   const english = new Set(proseOf(englishOf(id)));
   const indonesian = indonesianOf(id);
   const left = (indonesian === undefined ? ["(missing)"] : proseOf(indonesian)).filter(
-    (text) => english.has(text) && !identicalAllowed(text.trim()),
+    // A span with no letter (", " between two code spans) has no English to leave untranslated.
+    (text) => /\p{L}/u.test(text) && english.has(text) && !identicalAllowed(text.trim()),
   );
   expect(left).toEqual([]);
 });
