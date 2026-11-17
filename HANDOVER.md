@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-17 06:50 WIB. Resumed 06:15 on "you can continue" (relayed by repo-template-c9; the devices news does not concern steadyhand). New always-on rule (same tests on every device and browser first): steadyhand already meets it: develop run 43775335922 (98bb0b1, 2026-11-15) ran Chromium 6, Chrome 6, Edge 6, 0 skipped; `one-suite.test.ts` refuses skips; no phones. Told repo-template-c9, which agreed. #251: batch 6 read back (29 lines, 10,005), 5 paragraphs fixed and read back (2,326), one 75-char probe; **40 of 40 built** in ce7df13 (pushed; evidence: #251 comment 6932656156). Unit on lessons.test.ts: 264 passed, 2 red ("Run-rate" identical in income.goal and income.run_rate; the gloss is drafted and waits for the read-back). Filed **#579** (`unified-tests` label, new; P4, 3 points, Todo): switch the browser tests to the shared `shyden-labs/playwright-devices` package. Blocked by playwright-devices#16 and #17 (REST links and body read back). Keep `one-suite.test.ts` and the browser config until then, and do not extend them. The package session has what the guard checks and the Chromium-family-only need. Progress page v40 published 09:20 WIB. Current state only. Older history: `git show a40c835:HANDOVER.md`.
+**Updated:** 2026-11-17 13:10 WIB. Weekly clean-up done 13:05 (logged in reference-cleanup.md, `cleanup-done.sh steadyhand` recorded): 21 loose scratch files of closed tickets and 4 Actions caches of merged PRs (194 MB) removed; nothing else stale. Progress page v41 published 13:08 WIB (the local source `.superpowers/sdd/progress-page/` was stale at v39: restored from v40 first; stale copy kept as `progress-page-backup-2026-11-17-1315.html`). Only #251 batch 7 is workable, after 15:00 WIB. Earlier today: 40 of 40 lessons built (ce7df13), #579 filed (P4, blocked by playwright-devices#16/#17), the same-tests rule already met (Chromium/Chrome/Edge 6 each, 0 skipped). Current state only. Older history: `git show a40c835:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -70,7 +70,7 @@
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe ("steadyhand: the road to the first release"). Refresh steps: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with the date and time and a "Changed since the last update" list.
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe ("steadyhand: the road to the first release"), v41. Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html` (publish from there). Refresh steps: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with the date and time and a "Changed since the last update" list.
 
 ## Resume steps
 
