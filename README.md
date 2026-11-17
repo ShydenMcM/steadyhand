@@ -4,6 +4,8 @@ Self-hosted, open-source toolkit for building a **dividend income portfolio**, s
 
 > steadyhand is example software that you run yourself, on your own account, and you make your own decisions with it. It is not financial advice. You can lose money.
 
+**Progress:** [the road to the first release](https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe), updated at the end of every work session.
+
 ## Status
 
 **Early development, and changing direction.** steadyhand is becoming a Chrome extension: epic #214,
