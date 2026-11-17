@@ -23,7 +23,7 @@ COMMANDS = [
     "npm ci --ignore-scripts",
     # #240 AC5: an advisory against any installed package, dev tools too, fails the job, except
     # one Shyden excepted by name until its expiry (#586, extension/audit.ts).
-    "npm run audit",
+    'npm run audit -- "$(date -u +%F)"',
     "npm run lint",
     "npm run format:check",
     "npm run typecheck",

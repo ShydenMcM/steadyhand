@@ -81,16 +81,22 @@ export const readReport = (printed: string): AuditReport => {
   return parsed as AuditReport;
 };
 
-/** Audit when Node runs this file as its program (`npm run audit`), and do nothing when it is
- * imported: a unit test runs both arms in-process with npm stood in. Returns the exit code. */
+/** Audit when Node runs this file as its program (`npm run audit -- "$(date -u +%F)"`), and do
+ * nothing when it is imported: a unit test runs both arms in-process with npm stood in. The date
+ * comes from the caller, since no unit file reads a clock. Returns the exit code. */
 export const main = (
   isProgram: boolean | undefined,
   audit: () => { readonly stdout: string | Uint8Array },
-  today: string,
+  today: string | undefined,
   say: (line: string) => void,
 ): number => {
   if (!isProgram) {
     return 0;
+  }
+  if (today === undefined || !/^\d{4}-\d{2}-\d{2}$/u.test(today)) {
+    throw new Error(
+      'npm run audit needs today\'s UTC date as YYYY-MM-DD: npm run audit -- "$(date -u +%F)"',
+    );
   }
   const found = problems(readReport(audit().stdout.toString()), EXCEPTIONS, today);
   if (found.length === 0) {
@@ -108,11 +114,11 @@ export const main = (
   return 1;
 };
 
-// The program's arm passes spawnSync bound to `npm audit --json`, and
+// The program's arm passes spawnSync bound to `npm audit --json`, the date it was given, and
 // `console.log`, so no line here runs only as the program (the unit test imports this file).
 process.exitCode = main(
   import.meta.main,
   spawnSync.bind(undefined, "npm", ["audit", "--json"], { encoding: "utf8" }),
-  new Date().toISOString().slice(0, 10),
+  process.argv[2],
   console.log,
 );

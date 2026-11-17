@@ -88,7 +88,7 @@ test.each([
 });
 
 /** The program's arms, run in-process with npm stood in. */
-const run = (isProgram: boolean, printed: string) => {
+const run = (isProgram: boolean, printed: string, today: string | undefined) => {
   const lines: string[] = [];
   let audited = 0;
   const code = main(
@@ -97,18 +97,22 @@ const run = (isProgram: boolean, printed: string) => {
       audited += 1;
       return { stdout: printed };
     },
-    "2026-11-18",
+    today,
     (line) => lines.push(line),
   );
   return { code, lines, audited };
 };
 
 test("imported, the program audits nothing", () => {
-  expect(run(false, JSON.stringify(ONLY_PICOMATCH))).toEqual({ code: 0, lines: [], audited: 0 });
+  expect(run(false, JSON.stringify(ONLY_PICOMATCH), "2026-11-18")).toEqual({
+    code: 0,
+    lines: [],
+    audited: 0,
+  });
 });
 
 test("run, a report with only the excepted advisory exits 0 and says so", () => {
-  expect(run(true, JSON.stringify(ONLY_PICOMATCH))).toEqual({
+  expect(run(true, JSON.stringify(ONLY_PICOMATCH), "2026-11-18")).toEqual({
     code: 0,
     lines: ["npm audit: nothing but GHSA-fc5q-39xc-vjpf, excepted until 2026-12-01 (#586)"],
     audited: 1,
@@ -117,9 +121,36 @@ test("run, a report with only the excepted advisory exits 0 and says so", () => 
 
 test("run, a report with an advisory not excepted exits 1, naming it", () => {
   const found = report(advisory(PICOMATCH, TITLE, "high"), advisory(OTHER, "a flaw", "low"));
-  expect(run(true, JSON.stringify(found))).toEqual({
+  expect(run(true, JSON.stringify(found), "2026-11-18")).toEqual({
     code: 1,
     lines: [`not excepted: ${OTHER} (a flaw)`],
     audited: 1,
   });
+});
+
+// The date comes from the caller (CI passes `date -u +%F`): no unit file reads a clock (#586).
+test.each([
+  ["no date", undefined],
+  ["a date not as YYYY-MM-DD", "18/11/2026"],
+  ["a date with more after it", "2026-11-18T00:00"],
+])("run with %s, the audit is refused by name before npm runs", (_, today) => {
+  expect(() => run(true, JSON.stringify(ONLY_PICOMATCH), today)).toThrow(
+    'npm run audit needs today\'s UTC date as YYYY-MM-DD: npm run audit -- "$(date -u +%F)"',
+  );
+});
+
+test("run with no date, nothing is audited", () => {
+  let audited = 0;
+  expect(() =>
+    main(
+      true,
+      () => {
+        audited += 1;
+        return { stdout: JSON.stringify(ONLY_PICOMATCH) };
+      },
+      undefined,
+      () => undefined,
+    ),
+  ).toThrow();
+  expect(audited).toBe(0);
 });
