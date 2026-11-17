@@ -1,6 +1,6 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-17 13:10 WIB. Weekly clean-up done 13:05 (logged in reference-cleanup.md, `cleanup-done.sh steadyhand` recorded): 21 loose scratch files of closed tickets and 4 Actions caches of merged PRs (194 MB) removed; nothing else stale. Progress page v41 published 13:08 WIB (the local source `.superpowers/sdd/progress-page/` was stale at v39: restored from v40 first; stale copy kept as `progress-page-backup-2026-11-17-1315.html`). Only #251 batch 7 is workable, after 15:00 WIB. Earlier today: 40 of 40 lessons built (ce7df13), #579 filed (P4, blocked by playwright-devices#16/#17), the same-tests rule already met (Chromium/Chrome/Edge 6 each, 0 skipped). Current state only. Older history: `git show a40c835:HANDOVER.md`.
+**Updated:** 2026-11-17 20:10 WIB. #251 batch 7 read back (3 lines, every pair read, merged; 0 lesson paragraphs left unread), built and pushed as 6454cdc; **PR #580** open into develop. Its CI: every required check green except `extension-guards`: "no extension file mocks a module" timed out at 5230 ms (develop: 3011 ms). Measured cause: the runner was ~1.7x slow on all 12 guards timed in both runs; the guards sit at 45-60% of the 5 s limit. Filed **#581** (P0, 3 points, Todo; #251 now blocked by it on GitHub); AC1 profile posted on #581. Progress page v42 published 20:05 WIB. Local unit run of 6454cdc at load 33: 13 timeouts in rules/panel tests (not quiet; #542 ruling, CI judges). Current state only. Older history: `git show a40c835:HANDOVER.md`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -45,7 +45,7 @@
 - Merged 2026-11-13: #571 (#570 P0, extension integration builds once, proven by strace and per-test assertion counts; 083ccf8). #568 P0 is done: runner counts on CI (probe PR #569, shut unmerged; run 43383498799) prove that the earlier journey merge kept every check. Shyden ruled: keep the 5 browser journeys (shared opening only). `testpypi` environment deleted on his choice (dev-deploy rule); `dev` already allows all branches.
 - Also merged 2026-11-13: #565 (#255 core claims, parity harness, `tax.exemption` lesson; 1954940), #567 (#566 P0 soupsieve CVE, closed with evidence), #564 (Dependabot).
 - Merged 2026-11-13 14:5x WIB: **#572** (squash 4a8e0bd): the #255 Settings switch and Tax tab. CI run 43388166515 all green, browser 6/6 on Chromium, Chrome, Edge. **#255 closed** with every AC checked (comment on #255). Worktree `../steadyhand-255b` and branch removed. Dropped on purpose: "unticking while on Tax opens Advice" (unreachable: the checkbox is on Settings).
-- `251/indonesian-lessons` (pushed, WIP, red on purpose; worktree `../steadyhand-251`): ce7df13, everything committed. Full unit run before the import fix: 12 failed of 4604; after it and the test change, lessons.test.ts has 2 failed of 266 (the Run-rate pair). Drafts in `.superpowers/sdd/251-indonesian/lessons-id/*.txt`; build with `python3 -I build-some.py /Users/shyden/Developer/Repos/steadyhand-251 <lesson ...>`, then `npx prettier --write packages/shell/lessons/id`.
+- `251/indonesian-lessons` at 6454cdc, pushed, PR #580 (merge state BEHIND develop; worktree `../steadyhand-251`).
 - Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29). Never copy or replay from the slip backups. Local `239/settings-history-lessons` (c4bebaf): leave alone.
 
 ## #251 Indonesian: where the read-back stands
@@ -54,23 +54,24 @@
 - 2026-11-12 morning: panel-254 (5 lines) read back and committed; batch 2 (the 9 fixed paragraphs of broker.reading, costs.trading, dividends.basics, idx.auto_reject, idx.sessions, income.calendar) read back, every pair read, merged with `merge-tsv.py`. "Kemerataan" read back as "Equity", so it is now "Kemerataan pembayaran" ("Payment evenness"), read back again.
 - After a draft edit: `python3 lessons-json.py lessons-id.json` before `pick-batch.py`, or the change is not seen.
 - **2026-11-13 Google day (Pacific), 15,786 of 16,000 used:** `advice-id.json` read back (29 lines); 4 fixed (`hari ini` meant the advice day, not today, in noOrders and stampDuty; projectionNothing; readAgainReason colon) and read back clean; merged into `advice-readback.tsv`. Lesson batch 4 (11 lessons, 65 paragraphs: income.goal/growth/projection/run_rate, orders.not_tradable, risk.drawdown/limits/returns, shares.basics/prices, start.explanations) read back, every pair read, merged into `lessons-readback.tsv`. 7 paragraphs then fixed in the drafts (income.growth#3, risk.returns#4, shares.basics#4, shares.prices#0/#4/#5, start.explanations#2) and NOT yet read back: pick-batch sees them as changed.
-- **Queue for the next Google day (turns 15:00 WIB 2026-11-17; `TZ=America/Los_Angeles date +%F` prints 2026-11-17):** in `.superpowers/sdd/251-indonesian/`, read the ledger, then `python3 -I readback.py batch-7.json batch-7.tsv` (625 chars: income.goal list with "**Run-rate (laju pendapatan)**", income.run_rate title "Run-rate (laju pendapatan)" and #0, which replaces "Run-rate (run-rate)"). Read each pair against the English, `merge-tsv.py lessons-readback.tsv batch-7.tsv`, build income.goal + income.run_rate, prettier, run unit in full (`npm test` in extension/), commit, push. If green, open the PR into develop (Refs #251) and check every #251 AC before any close.
+- **Done 2026-11-17:** batch 7 read back (ledger 2026-11-17: 3491 after it), merged into `lessons-readback.tsv` (backup `lessons-readback.backup-2026-11-17-1950.tsv`), built, committed 6454cdc. #251 AC check done in session: AC2/AC3/AC5 evidenced on PR #543; AC7-9 read-backs say the same as the English; AC4 replaced by Google read-back (Shyden 2026-11-11). AC6 waits on #580's CI after #581.
 - **Build only drafts whose every paragraph is read back** (memory `feedback-build-only-read-back-drafts`).
 
 ## Running
 - Nothing. No simulator, Colima or USB claims held (steadyhand never needs them). No waiter, no subagents. The artifact live-watch on the progress page dies with the session (harmless).
-- Branches: `251/indonesian-lessons` at ce7df13, pushed, everything committed (worktree `../steadyhand-251`). This branch (`docs/handover-2026-11-11-restart`) carries this file.
+- Branches: `251/indonesian-lessons` at 6454cdc (PR #580, worktree `../steadyhand-251`). This branch (`docs/handover-2026-11-11-restart`) carries this file.
 - Parked questions for Shyden: none.
 
 ## Next steps
 
-1. #251 batch 7 (queue above) after 15:00 WIB 2026-11-17, then the PR.
-2. First release: 24 of 27 stories; #242, #243, #245 (21 points) wait on Shyden's broker account. #252, #253, #257, #258, #578 (Stockbit) wait on the readers; #553 on #251. Later features: 5 of 12 closed, 56 points open.
-3. When shyden.co.uk PR #1175 (Node 26.13.1) merges, align steadyhand's Node pin (skill `aligning-versions-across-projects`).
+1. **#581 (P0)**: fresh branch `581/guards-parse-once` off develop. Fix found and trialled (AC1 comment on #581; script `.superpowers/sdd/581/profile.mts`): `parse` in `extension/tests/lib/source.ts` runs `ts.transpileModule` (an emit, ~78% of readSource) only for syntax errors; parse once with `createSourceFile` and take `program.getSyntacticDiagnostics` from a one-file program (noLib, noResolve) = 307 vs 1268 ms over 179 files, same codes on 5 broken inputs. Test first (red), keep per-guard test counts equal, CI log must show the slowest guard <= 2,000 ms (AC3).
+2. Then merge develop into `251/indonesian-lessons`, push, read #580's verdict (loop `pr-verdict.sh` until nothing is in_progress/queued/MISSING), squash-merge if every check is green, close #251 with per-AC evidence by hand, clean its worktree and branches.
+3. First release: 24 of 27 stories; #242, #243, #245 (21 points) wait on Shyden's broker account. #252, #253, #257, #258, #578 (Stockbit) wait on the readers; #553 on #251. Later features: 5 of 12 closed, 56 points open.
+4. When shyden.co.uk PR #1175 (Node 26.13.1) merges, align steadyhand's Node pin (skill `aligning-versions-across-projects`).
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe ("steadyhand: the road to the first release"), v41. Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html` (publish from there). Refresh steps: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with the date and time and a "Changed since the last update" list.
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe ("steadyhand: the road to the first release"), v42. Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html` (publish from there). Refresh steps: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with the date and time and a "Changed since the last update" list.
 
 ## Resume steps
 
