@@ -257,8 +257,9 @@ jobs:
       - run: npm ci --ignore-scripts
         if: steps.scope.outputs.docs_only != 'true'
         working-directory: extension
-      # #240 AC5: an advisory against any installed package, dev tools too, fails the job.
-      - run: npm audit
+      # #240 AC5: an advisory against any installed package, dev tools too, fails the job, except
+      # one Shyden excepted by name until its expiry (#586, extension/audit.ts).
+      - run: npm run audit
         if: steps.scope.outputs.docs_only != 'true'
         working-directory: extension
       - run: npm run lint

@@ -15,6 +15,7 @@
     "node": "^24.16.0 || >=26.3.0"
   },
   "scripts": {
+    "audit": "node audit.ts",
     "lint": "eslint . --max-warnings 0",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",

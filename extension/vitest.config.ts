@@ -22,6 +22,7 @@ export const INTEGRATION = "tests/integration/**/*.test.ts";
 export const UNIT_COVERED = [
   ...COVERED.map((name) => `packages/${name}/src/**/*.ts`),
   "packages/shell/src/**/*.ts",
+  "audit.ts",
   "build.ts",
   "eslint.config.js",
   "playwright.config.ts",
