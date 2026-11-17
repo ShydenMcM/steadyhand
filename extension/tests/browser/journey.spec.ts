@@ -403,7 +403,7 @@ test("a fall past the daily limit halts buying until the strategy's name is type
   }, MONDAY_AFTER_CLOSE);
 });
 
-test("Settings keeps the strategy, the goal, the exclusions and the language, and Lessons shows the course", async () => {
+test("Settings keeps the strategy, the goal and the exclusions, offers no language, and Lessons shows the course", async () => {
   await withPanel(async ({ panel }) => {
     const status = panel.locator("#status");
     await panel.getByRole("tab", { name: "Settings" }).click();
@@ -437,24 +437,12 @@ test("Settings keeps the strategy, the goal, the exclusions and the language, an
     await expect(lessons.locator("h2").first()).toHaveText("Start here");
     await expect(lessons.locator("h2").last()).toHaveText("Strategies");
     await expect(panel.locator("#lesson-start\\.welcome h3")).toHaveText("Start here");
-    // The language (#251): Bahasa Indonesia chosen by key on Settings speaks on every tab, and
-    // English chosen again brings it back.
+    // English only (#584): Settings, opened by a click, offers no language, and the panel says
+    // it speaks English.
     await panel.getByRole("tab", { name: "Settings" }).click();
-    await panel.getByLabel("Language").press("ArrowDown");
-    await panel.getByRole("button", { name: "Save language" }).click();
-    await expect(status).toHaveText("Bahasa disimpan.");
-    await expect(panel.locator("body")).toHaveAttribute("lang", "id");
-    for (const name of ["Saran", "Pengaturan", "Riwayat", "Pelajaran"]) {
-      await expect(panel.getByRole("tab", { name })).toBeVisible();
-    }
-    await expect(panel.locator("#choice")).toHaveText(
-      "steadyhand menghitung apa yang tersirat dari strategi yang Anda pilih; pilihan dan " +
-        "semua pesanannya adalah milik Anda",
-    );
-    await panel.getByLabel("Bahasa", { exact: true }).press("ArrowUp");
-    await panel.getByRole("button", { name: "Simpan bahasa" }).click();
-    await expect(status).toHaveText("Language saved.");
+    await expect(panel.getByRole("button", { name: "Save strategy" })).toBeVisible();
+    await expect(panel.getByLabel("Language")).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: "Save language" })).toHaveCount(0);
     await expect(panel.locator("body")).toHaveAttribute("lang", "en");
-    await expect(panel.getByRole("tab", { name: "Advice" })).toBeVisible();
   });
 });
