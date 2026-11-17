@@ -18,7 +18,7 @@ Pelacak target menunjukkan dua cara mengukur kemajuan, masing-masing sebagai bag
 
 - **Diterima**: rata-rata bulanan pendapatan bersih dari dividen yang benar-benar dibayarkan
   selama setahun terakhir.
-- **Run-rate**: pendapatan bersih bulanan yang akan dibayarkan kepemilikan Anda
+- **Run-rate (laju pendapatan)**: pendapatan bersih bulanan yang akan dibayarkan kepemilikan Anda
   saat ini selama setahun.
 
 Dengan target 5.000.000 sebulan, run-rate bersih sebesar 1.250.000 menutup 25% darinya.

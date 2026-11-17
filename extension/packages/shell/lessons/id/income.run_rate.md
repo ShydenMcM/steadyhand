@@ -1,6 +1,6 @@
 +++
 id = "income.run_rate"
-title = "Run-rate"
+title = "Run-rate (laju pendapatan)"
 summary = "Berapa yang akan dibayarkan dividen dari saham yang Anda pegang sekarang selama setahun jika tidak ada yang berubah."
 explains = []
 module = "income-goal"
@@ -9,7 +9,7 @@ see_also = ["tax.dividend"]
 
 +++
 
-Run-rate (run-rate) mengambil setiap kepemilikan Anda hari ini, dan setiap dividen per lembar
+Run-rate (laju pendapatan) mengambil setiap kepemilikan Anda hari ini, dan setiap dividen per lembar
 yang dibayarkan saham itu selama setahun terakhir, lalu mengalikan keduanya. Jika dijumlahkan,
 itulah pendapatan tahunan yang akan dihasilkan kepemilikan Anda saat ini jika setiap perusahaan
 membayar jumlah yang sama lagi dan Anda tidak mengubah apa pun.
