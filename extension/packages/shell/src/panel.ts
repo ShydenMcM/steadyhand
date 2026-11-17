@@ -58,7 +58,6 @@ import {
   feePresetOf,
   KEPT,
   keptSettings,
-  languageOf,
   limitsOf,
   STOCK_CODE,
   storedLimits,
@@ -70,7 +69,7 @@ import {
   type ChosenStrategy,
   type TypedLimits,
 } from "./settings.ts";
-import { fill, LANGUAGES, WORDS, type Language, type Words } from "./words.ts";
+import { fill, WORDS, type Words } from "./words.ts";
 
 /** An element as the panel uses one, whose children are elements `E` (the browser's
  * `HTMLElement` is one, with `E` = `HTMLElement`). */
@@ -245,25 +244,22 @@ export const startPanel = async <E extends PanelElement<E>>(
 ): Promise<Panel> => {
   const { page } = inputs;
   let { db } = inputs;
-  // The language (#251): every element given a key keeps it, and `speak` rewrites each one's
-  // text in the language chosen.
-  let language: Language = "en";
-  let words: Words = WORDS[language];
-  const said: (readonly [E, Said])[] = [];
+  // English only (#584): the panel says so to the browser and screen readers.
+  const words = WORDS;
+  page.body.setAttribute("lang", "en");
   /** `made` with its id and its text: the words under `key`, or `text` as given. */
   const named = <T extends E>(made: T, id: string, key?: Said, text = ""): T => {
     made.id = id;
     if (key === undefined) {
       made.textContent = text;
     } else {
-      said.push([made, key]);
       made.textContent = words[key];
     }
     return made;
   };
   const element = (tag: ContainerTag, id: string, key?: Said) =>
     named(page.createElement(tag), id, key);
-  /** A container holding `text` as given, in no language of the panel's. */
+  /** A container holding `text` as given, not one of the panel's words. */
   const holding = (tag: ContainerTag, text: string) =>
     named(page.createElement(tag), "", undefined, text);
 
@@ -453,29 +449,6 @@ export const startPanel = async <E extends PanelElement<E>>(
   exclusionsLabel.htmlFor = exclusions.id;
   const saveExclusions = element("button", "save-exclusions", "saveExclusions");
 
-  // The language (#251 AC1): each named in its own language.
-  const languageLabel = named(page.createElement("label"), "language-label", "languageLabel");
-  const languagePicker = named(page.createElement("select"), "language");
-  languageLabel.htmlFor = languagePicker.id;
-  languagePicker.append(
-    ...LANGUAGES.map(([code, name]) => {
-      const option = named(page.createElement("option"), "", undefined, name);
-      option.value = code;
-      return option;
-    }),
-  );
-  const saveLanguage = element("button", "save-language", "saveLanguage");
-  /** Speak `chosen`: every element with a key says its words in it, and the page says which. */
-  const speak = (chosen: Language): void => {
-    language = chosen;
-    words = WORDS[chosen];
-    languagePicker.value = chosen;
-    page.body.setAttribute("lang", chosen);
-    for (const [made, key] of said) {
-      made.textContent = words[key];
-    }
-  };
-
   // The strategy and its settings (#239 AC1): a labelled input per setting, its help read with it.
   const strategyLabel = named(page.createElement("label"), "strategy-label", "strategyLabel");
   const picker = named(page.createElement("select"), "strategy");
@@ -597,9 +570,6 @@ export const startPanel = async <E extends PanelElement<E>>(
     advice,
   );
   panes.settings.append(
-    languageLabel,
-    languagePicker,
-    saveLanguage,
     strategyLabel,
     picker,
     summary,
@@ -924,12 +894,6 @@ export const startPanel = async <E extends PanelElement<E>>(
 
   /** Show every setting as kept, the deposits and withdrawals typed, and the history. */
   const showKept = async (): Promise<void> => {
-    try {
-      speak(languageOf(await settingOf(db, KEPT.language)));
-    } catch {
-      speak("en");
-      status.textContent = words.languageRefused;
-    }
     universe.value = (await keptUniverse(db))?.join(" ") ?? "";
     const keptGoal: unknown = await settingOf(db, SETTINGS.goal);
     goal.value = typeof keptGoal === "string" ? keptGoal : "";
@@ -1067,16 +1031,6 @@ export const startPanel = async <E extends PanelElement<E>>(
     showExemption(exemption.checked);
   };
 
-  const saveChosenLanguage = async (): Promise<void> => {
-    const chosen = languageOf(languagePicker.value);
-    await putSetting(db, KEPT.language, chosen);
-    speak(chosen);
-    status.textContent = words.languageSaved;
-    await showTyped();
-    await showTax();
-    await redraw();
-  };
-
   /** Forget everything, then open the history again, empty, whether or not the forget left
    * anything: what it left is named on the status line. */
   const forgetAll = async (): Promise<void> => {
@@ -1152,9 +1106,6 @@ export const startPanel = async <E extends PanelElement<E>>(
   });
   exemption.addEventListener("change", () => {
     run(saveExemption);
-  });
-  saveLanguage.addEventListener("click", () => {
-    run(saveChosenLanguage);
   });
   saveStrategy.addEventListener("click", () => {
     run(saveChosenStrategy);
