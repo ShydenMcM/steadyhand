@@ -1,6 +1,17 @@
 # Handover: steadyhand
 
-**Updated:** 2026-11-17 23:19 WIB. **Ruling (Shyden, 2026-11-17): steadyhand is English only** (memory `project-english-only`): remove every Indonesian text the panel shows; keep the broker-page reading and Indonesian legal names inside English lessons. #251 and #553 closed not planned; PR #580 closed unmerged; its worktree and local branch removed (remote delete was queued on the test lock when this was written: check `git ls-remote origin 251/indonesian-lessons`). Removal ticket **#584** (P2, 3 pts, Todo). **#581** (P0, guard speed) still valid, AC1 profile on it. #582 done: README links the progress page (PR #583, 394514c). Old-host search for repo-template-54: 0 in code, 0 Actions variables (repo and dev env); the variables reply could not be delivered (peer busy). Current state only. Older history: `git show a40c835:HANDOVER.md`.
+## Morning list (Shyden)
+
+Nothing needs you this morning. No PR waits on you, no release is cut, and nothing waits on a sudo prompt or upload.
+1. FYI only (0 min): picomatch GHSA-fc5q-39xc-vjpf is excepted in CI until 2026-12-01 by your ruling (#586). If no fix ships by then, CI goes red on purpose and you'll be asked what to do.
+
+**Updated:** 2026-11-18 02:57 WIB (overnight session, run on the peer relay "keep working all night"). Current state only. Older history: `git show 5cd0c07:HANDOVER.md`.
+
+**Done tonight:**
+- **#581 (P0) closed:** the guards parse once (no emit). Slowest single guard on CI 1,842 ms (was 3,011). PR #585, squash c965536.
+- **#586 (P0) filed, exception landed in the same PR #585:** `npm run audit -- "$(date -u +%F)"` (`extension/audit.ts`). PR #587 was closed in favour of #585, because each fix needed the other to go green. #586 stays **open (Todo)** for AC4: remove the exception when picomatch ships a fix.
+- **#584 closed:** English only. PR #588, squash 93aec9a. Browser suite: 6/6 on Chromium, Chrome and Edge.
+- Memory: `feedback-tooling-takes-the-date-from-its-caller`.
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device or phone work here.
 
@@ -36,35 +47,23 @@
 
 ## Branches and PRs
 
-- **#256 shut** 2026-11-13 ~23:2x WIB: PR #575 squash-merged into develop as 159c8cd (every required check green on 996ca7b; browser 6/6 on Chromium, Chrome, Edge; CI run 43462803816). Evidence per AC on #256; worktree and branch removed. Session logs: `.superpowers/sdd/256/`.
-- **#573 closed** 2026-11-13 18:1x WIB: PR #574 squash-merged into develop as 872d53a (every required check green on head 715d3e1). Red-first re-measured (old line: 1 failed, 143 passed; new: 144 passed; logs in `.superpowers/sdd/573/`); evidence per AC on #573. Worktree `../steadyhand-544` and branch removed (local and remote).
-
-- `develop`: read with `git rev-parse origin/develop`.
-- Merged 2026-11-13: #571 (#570 P0, extension integration builds once, proven by strace and per-test assertion counts; 083ccf8). #568 P0 is done: runner counts on CI (probe PR #569, shut unmerged; run 43383498799) prove that the earlier journey merge kept every check. Shyden ruled: keep the 5 browser journeys (shared opening only). `testpypi` environment deleted on his choice (dev-deploy rule); `dev` already allows all branches.
-- Also merged 2026-11-13: #565 (#255 core claims, parity harness, `tax.exemption` lesson; 1954940), #567 (#566 P0 soupsieve CVE, closed with evidence), #564 (Dependabot).
-- Merged 2026-11-13 14:5x WIB: **#572** (squash 4a8e0bd): the #255 Settings switch and Tax tab. CI run 43388166515 all green, browser 6/6 on Chromium, Chrome, Edge. **#255 closed** with every AC checked (comment on #255). Worktree `../steadyhand-255b` and branch removed. Dropped on purpose: "unticking while on Tax opens Advice" (unreachable: the checkbox is on Settings).
-- No feature branches open.
+- `develop` = 93aec9a (read with `git rev-parse origin/develop`). No feature branches or worktrees open; no open PRs except handover PR #562 (this branch).
 - Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27); `~/.claude/hooks/test-isolation{,.test}.py.bak-2026-10-30-direct-path` (to 2026-11-29). Never copy or replay from the slip backups. Local `239/settings-history-lessons` (c4bebaf): leave alone.
 
-## #251 Indonesian
-
-- Closed not planned 2026-11-17 by the English-only ruling. Scratch `.superpowers/sdd/251-indonesian/` can go at the next weekly clean-up.
-
 ## Running
-- Nothing. No simulator, Colima or USB claims held (steadyhand never needs them). No waiter, no subagents. The artifact live-watch on the progress page dies with the session (harmless).
-- Branches: only `docs/handover-2026-11-11-restart`, which carries this file.
-- Parked questions for Shyden: none.
+
+- Nothing. No waiter, no subagents, no Colima, simulator or USB claims (steadyhand needs none).
 
 ## Next steps
 
-1. **#581 (P0)**: fresh branch `581/guards-parse-once` off develop. Fix found and trialled (AC1 comment on #581; script `.superpowers/sdd/581/profile.mts`): `parse` in `extension/tests/lib/source.ts` runs `ts.transpileModule` (an emit, ~78% of readSource) only for syntax errors; parse once with `createSourceFile` and take `program.getSyntacticDiagnostics` from a one-file program (noLib, noResolve) = 307 vs 1268 ms over 179 files, same codes on 5 broken inputs. Test first (red), keep per-guard test counts equal, CI log must show the slowest guard <= 2,000 ms (AC3).
-2. **#584 (P2)**: English only. Tests first: Settings has no language choice; words.ts English only; a stored pre-change language value is harmless. Keep `indonesian-number.ts`, readers, fixtures.
-3. First release: 24 of 27 stories; #242, #243, #245 (21 points) wait on Shyden's broker account. #252, #253, #257, #258, #578 (Stockbit) wait on the readers; Later features: 5 of 12 closed, 56 points open.
-4. When shyden.co.uk PR #1175 (Node 26.13.1) merges, align steadyhand's Node pin (skill `aligning-versions-across-projects`).
+1. **Every session start:** run the picomatch check (`~/.claude/global-rules/picomatch-audit-exception-check.md`). If a patched version exists: update the lockfile, delete the entry in `extension/audit.ts` `EXCEPTIONS` and its tests (tests first: the "matches nothing" test goes red when the fix lands), prove audit clean on CI, close #586.
+2. Open board (6 tickets, 26 points): #242, #243, #245 wait on Shyden's broker account; #579 waits on shyden-labs/playwright-devices#16 and #17; #586 waits on upstream picomatch; #214 is the epic (Estimate 0 on purpose). Nothing is workable until one of those clears: check them first.
+3. When shyden.co.uk PR #1175 (Node 26.13.1) merges, align steadyhand's Node pin (skill `aligning-versions-across-projects`).
+4. Local unit runs time out at 1 s under heavy machine load (load 120-170 tonight from other sessions); per #542 CI judges. Focused file runs passed.
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe ("steadyhand: the road to the first release"), v43. Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html` (publish from there). Refresh steps: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with the date and time and a "Changed since the last update" list.
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe ("steadyhand: the road to the first release"), v44 (2026-11-18 02:57 WIB). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html` (publish from there). Refresh steps: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with the date and time and a "Changed since the last update" list.
 
 ## Resume steps
 
