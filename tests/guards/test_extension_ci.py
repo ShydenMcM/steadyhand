@@ -21,8 +21,9 @@ WORKFLOWS = ROOT / ".github/workflows"
 # The npm commands the job runs, in order, and the tool behind each script (AC4).
 COMMANDS = [
     "npm ci --ignore-scripts",
-    # #240 AC5: an advisory against any installed package, dev tools too, fails the job.
-    "npm audit",
+    # #240 AC5: an advisory against any installed package, dev tools too, fails the job, except
+    # one Shyden excepted by name until its expiry (#586, extension/audit.ts).
+    'npm run audit -- "$(date -u +%F)"',
     "npm run lint",
     "npm run format:check",
     "npm run typecheck",
@@ -30,6 +31,7 @@ COMMANDS = [
     "npm run build",
 ]
 TOOLS = {
+    "audit": "node audit.ts",
     "lint": "eslint . --max-warnings 0",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
