@@ -92,6 +92,28 @@ test("a declaration file with a syntax error is refused by its own name", () => 
   );
 });
 
+test("a JavaScript file with a syntax error is refused by name, line and column", () => {
+  expect(() => parse("const = 1;\n", "broken.js")).toThrow(
+    new UnreadableSourceError(
+      "broken.js(1,7): error TS1134: Variable declaration expected.\n" +
+        "broken.js(1,9): error TS1134: Variable declaration expected.",
+    ),
+  );
+});
+
+/**
+ * #581: an emit (`ts.transpileModule`) cost ~78% of every read only to report syntax errors,
+ * putting the whole-repo guards near their limit; the reader takes them from its one parse.
+ */
+test("the reader checks syntax from its parse, never by emitting the file", () => {
+  const file = readSource("tests/lib/source.ts");
+  const emits = nodes(file).filter(
+    (node) =>
+      ts.isIdentifier(node) && node.text === "ts" && compilerUse(node) === "ts.transpileModule",
+  );
+  expect(emits.map((node) => lineOf(file, node))).toEqual([]);
+});
+
 test("a file that is neither TypeScript nor JavaScript is refused by name", () => {
   expect(() => parse("# notes\n", "notes.md")).toThrow(
     new UnreadableSourceError("notes.md: not a TypeScript or JavaScript file"),

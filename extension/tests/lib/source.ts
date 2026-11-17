@@ -34,25 +34,28 @@ const FORMAT: ts.FormatDiagnosticsHost = {
   getNewLine: () => "\n",
 };
 
-/** The parse tree of `text`; a file of another kind or with a syntax error is refused by name. */
+/** The compiler options of the one-file program `parse` reads syntax errors from: no library and
+ * no imports followed, so it holds the file alone. */
+const ALONE: ts.CompilerOptions = { noLib: true, noResolve: true, allowJs: true };
+
+/**
+ * The parse tree of `text`; a file of another kind or with a syntax error is refused by name. The
+ * syntax errors come from the parse itself, read through a program holding only this file (#581:
+ * an emit to report them cost ~78% of every read, putting the whole-repo guards near their limit).
+ */
 export const parse = (text: string, fileName: string): ts.SourceFile => {
   const kind = KINDS[extname(fileName)];
   if (kind === undefined) {
     throw new UnreadableSourceError(`${fileName}: not a TypeScript or JavaScript file`);
   }
-  // TypeScript emits nothing for a declaration file and fails transpiling one under its own
-  // name (#244), so its syntax is checked under the name of the source file it declares for.
-  const checked = fileName.replace(/\.d\.ts$/u, ".ts");
-  const { diagnostics = [] } = ts.transpileModule(text, {
-    fileName: checked,
-    reportDiagnostics: true,
-  });
+  const file = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, kind);
+  const host = ts.createCompilerHost(ALONE);
+  host.getSourceFile = () => file;
+  const diagnostics = ts.createProgram([fileName], ALONE, host).getSyntacticDiagnostics(file);
   if (diagnostics.length > 0) {
-    throw new UnreadableSourceError(
-      ts.formatDiagnostics(diagnostics, FORMAT).trim().replaceAll(`${checked}(`, `${fileName}(`),
-    );
+    throw new UnreadableSourceError(ts.formatDiagnostics(diagnostics, FORMAT).trim());
   }
-  return ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, kind);
+  return file;
 };
 
 /** The parse tree of the file at `path`, relative to `extension/`. */
