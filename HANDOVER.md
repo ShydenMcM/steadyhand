@@ -2,11 +2,11 @@
 
 ## Morning list (Shyden)
 
-Nothing needs you. FYI: picomatch GHSA-fc5q-39xc-vjpf is still unpatched (checked 2026-11-18 06:30 WIB: npm 4.0.7, first_patched_version None); the exception lasts to 2026-12-01 (#586).
+Nothing needs you. FYI: picomatch GHSA-fc5q-39xc-vjpf is still unpatched (checked 2026-11-18 07:25 WIB: npm 4.0.7, first_patched_version None); the exception lasts to 2026-12-01 (#586).
 
-**Updated:** 2026-11-18 07:15 WIB, after the laptop restart. Current state only. Older history: `git show dee262b:HANDOVER.md`.
+**Updated:** 2026-11-18 07:28 WIB. Current state only. Older history: `git show dee262b:HANDOVER.md`.
 
-**This session:** #589 done: PR #590 squash-merged (eb8979b), census re-run shows steadyhand 0 behind, evidence on #589, closed; worktree and branches removed. Picomatch still unpatched (npm 4.0.7, first_patched_version None, checked after the restart).
+**This session (07:25 WIB):** re-checked after /clear: picomatch still unpatched; every open ticket still waits (#579 blockers playwright-devices#16/#17 both open); progress page v47. Previous session: #589 closed (PR #590, eb8979b).
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device work.
 
@@ -57,7 +57,7 @@ Nothing needs you. FYI: picomatch GHSA-fc5q-39xc-vjpf is still unpatched (checke
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v46 (2026-11-18 07:12 WIB). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v47 (2026-11-18 07:27 WIB). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
 
 ## Resume steps
 
