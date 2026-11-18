@@ -4,9 +4,9 @@
 
 Nothing needs you. FYI: picomatch GHSA-fc5q-39xc-vjpf is still unpatched (checked 2026-11-18 06:30 WIB: npm 4.0.7, first_patched_version None); the exception lasts to 2026-12-01 (#586).
 
-**Updated:** 2026-11-18 06:45 WIB, before Shyden's laptop restart. Current state only. Older history: `git show dee262b:HANDOVER.md`.
+**Updated:** 2026-11-18 07:15 WIB, after the laptop restart. Current state only. Older history: `git show dee262b:HANDOVER.md`.
 
-**This session:** version census (skill `aligning-versions-across-projects`): steadyhand 6 packages behind. Filed **#589** (P3, 2 pts, In Progress); told ShyTalk, playwright-devices, repo-template, shyden.co.uk, shydesk, yawelo-idle sessions their own rows (shydesk filed shydesk#208; repo-template has repo-template#203). shyden.co.uk PR #1175 closed unmerged, but its develop already runs node 26.13.1.
+**This session:** #589 done: PR #590 squash-merged (eb8979b), census re-run shows steadyhand 0 behind, evidence on #589, closed; worktree and branches removed. Picomatch still unpatched (npm 4.0.7, first_patched_version None, checked after the restart).
 
 **Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device work.
 
@@ -40,25 +40,24 @@ Nothing needs you. FYI: picomatch GHSA-fc5q-39xc-vjpf is still unpatched (checke
 
 ## Branches and PRs
 
-- `develop` = 93aec9a (read with `git rev-parse origin/develop`).
-- **#589 in flight:** worktree `../steadyhand-589`, branch `589/align-versions`, draft **PR #590**. Pushed: 626b42b (red phase: Node pin test now wants 26.13.1). **Committed locally, NOT pushed:** 1b0a59b (bumps @playwright/test 1.65.1, eslint 10.15.0, prettier 3.10.1, typescript-eslint 8.72.2, vite 8.3.8; lockfile regenerated; format:check, lint, typecheck, audit all exit 0 locally). Dockerfile still 26.13.0: not yet changed.
-- CI run 44200621122 on 626b42b: `guards (py3.13)` FAILED as expected, but its log was unreadable while the run was still in progress: confirm the failure is `test_the_node_dockerfile_names_node_26_13_1` and nothing else.
+- `develop`: read with `git rev-parse origin/develop` (last merge: #590, eb8979b).
+- No feature branch or worktree open.
 - Handover PR #562 (this branch). Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27). Never replay from slip backups. Local `239/settings-history-lessons`: leave alone.
 
 ## Running
 
-- Nothing local. No waiter, subagents, Colima, simulator or USB claims. Remote CI run 44200621122 may still be running.
+- Nothing local. No waiter, subagents, Colima, simulator or USB claims.
 
 ## Next steps
 
 1. **Every session start:** picomatch check (`~/.claude/global-rules/picomatch-audit-exception-check.md`).
-2. **#589:** read guards log of run 44200621122 (`gh run view --job 134453440272 --log | grep -E 'FAILED|passed|failed'`); confirm only the pin test is red. Then in `../steadyhand-589`: `sed -i '' 's/^FROM node:26.13.0$/FROM node:26.13.1/' docker/node/Dockerfile`, commit (Refs #589), push both commits together, mark PR #590 ready. Merge when every check is green on the head SHA, browser totals equal on Chromium/Chrome/Edge. Re-run the census to prove 0 behind for steadyhand, comment the evidence on #589, close it, clean the worktree and branches.
+2. Board: nothing workable (all open tickets wait, see 3). Take the top Priority if a wait clears.
 3. Rest of board: #242/#243/#245 wait on Shyden's broker account; #579 waits on shyden-labs/playwright-devices#16/#17; #586 waits on upstream picomatch; #214 epic.
 4. Refresh the progress page (below) at every close-out.
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v45 (2026-11-18 06:47 WIB). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v46 (2026-11-18 07:12 WIB). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
 
 ## Resume steps
 
