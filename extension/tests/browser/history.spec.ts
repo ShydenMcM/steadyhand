@@ -66,3 +66,12 @@ test("the store records, keeps across a reopen and forgets, in the browser's Ind
   });
   expect(seen).toEqual({ day: "2025-06-17", kept: ["BBRI 4120"], left: [] });
 });
+
+// PROBE ONLY (#579): each shared one-suite check is seen failing once. Never merged.
+test.skip("planted: a skipped test", () => {});
+test("planted: a group tag with no reason", { tag: "@desktop" }, () => {});
+test("planted: a test marked to fail", () => {
+  test.fail();
+  expect(1).toBe(2);
+});
+test("planted: a test one browser does not run", () => {});

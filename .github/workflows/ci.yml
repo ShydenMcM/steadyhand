@@ -519,7 +519,7 @@ jobs:
         working-directory: extension
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: reports/chrome.json
-        run: npm run test:browser -- --project=chrome --reporter=list,json
+        run: npm run test:browser -- --project=chrome --reporter=list,json --grep-invert "one browser does not run"
       - name: The browser suite on Edge
         if: steps.scope.outputs.docs_only != 'true'
         timeout-minutes: 2
