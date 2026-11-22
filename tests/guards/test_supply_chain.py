@@ -538,6 +538,13 @@ def test_types_node_follows_the_node_that_ci_runs() -> None:
     assert major_of(pinned, where="@types/node") == major_of(runtime, where="Dockerfile")
 
 
+def test_the_shared_playwright_devices_package_is_never_pinned() -> None:
+    # Every project moves to each new release (Shyden, 2026-11-20: "if it's updated we want all
+    # projects to move to the latest version every time"), so the range accepts every newer one.
+    declared = json.loads(PACKAGE_JSON.read_text(encoding="utf-8"))["devDependencies"]
+    assert re.fullmatch(r">=\d+\.\d+\.\d+", declared["@shyden-labs/playwright-devices"])
+
+
 def test_dependabot_s_types_node_comment_names_the_dockerfile() -> None:
     text = (ROOT / ".github/dependabot.yml").read_text(encoding="utf-8")
     assert "(docker/node/Dockerfile, read before" in text
