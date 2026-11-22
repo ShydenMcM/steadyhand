@@ -9,8 +9,12 @@ const config = defineConfig({
   forbidOnly: true,
   // One suite, run unchanged on every browser the extension supports (Shyden's global rule
   // 2026-11-05, #501), on the browsers every project shares (#579): the extension is a Chrome one,
-  // so it runs on the Chromium family. No project filters or skips a test.
-  projects: desktopProjects(["chromium", "chrome", "msedge"]),
+  // so it runs on the Chromium family. No project filters or skips a test. Each keeps only its
+  // browser: the journeys open a real window (viewport null), which no device descriptor may set.
+  projects: desktopProjects(["chromium", "chrome", "msedge"]).map((project) => ({
+    ...project,
+    use: project.use?.channel === undefined ? {} : { channel: project.use.channel },
+  })),
 });
 
 export default config;

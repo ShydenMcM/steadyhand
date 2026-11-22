@@ -26,7 +26,11 @@ const STAND_INS = new Map(
       "export const globalIgnores = (ignores) => ({ stoodInIgnores: ignores });",
     "@playwright/test": "export const defineConfig = (config) => ({ stoodIn: config });",
     "@shyden-labs/playwright-devices/desktop":
-      "export const desktopProjects = (chosen) => ({ stoodInDesktopProjects: chosen });",
+      // Each shared project as the package builds it: a desktop descriptor, and Chrome and Edge's
+      // channel (measured on CI 2026-11-22, run 45052602463).
+      "export const desktopProjects = (chosen) => chosen.map((name) => ({ name, use: {" +
+      " deviceScaleFactor: 1, viewport: { width: 1280, height: 720 }, userAgent: 'stood-in'," +
+      " ...(name === 'chromium' ? {} : { channel: name }) } }));",
   }).map(([tool, source]) => [import.meta.resolve(tool), source]),
 );
 
@@ -63,7 +67,14 @@ test("Playwright runs the browser tests on the shared Chromium, Chrome and Edge,
       retries: 0,
       forbidOnly: true,
       // The shared desktop browsers (#579); a Chrome extension runs on the Chromium family only.
-      projects: { stoodInDesktopProjects: ["chromium", "chrome", "msedge"] },
+      // Each keeps only its browser: the journeys open a real window (viewport null), which no
+      // device descriptor may set (CI run 45052602463: "deviceScaleFactor" option is not
+      // supported with null "viewport").
+      projects: [
+        { name: "chromium", use: {} },
+        { name: "chrome", use: { channel: "chrome" } },
+        { name: "msedge", use: { channel: "msedge" } },
+      ],
     },
   });
 });
