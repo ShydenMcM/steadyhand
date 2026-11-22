@@ -538,6 +538,13 @@ def test_types_node_follows_the_node_that_ci_runs() -> None:
     assert major_of(pinned, where="@types/node") == major_of(runtime, where="Dockerfile")
 
 
+def test_the_shared_playwright_devices_package_accepts_every_newer_release() -> None:
+    # Never pinned (Shyden, 2026-11-20: "if it's updated we want all projects to move to the
+    # latest version every time"): a range from the release first used, with no ceiling.
+    declared = json.loads(PACKAGE_JSON.read_text(encoding="utf-8"))["devDependencies"]
+    assert re.fullmatch(r">=\d+\.\d+\.\d+", declared["@shyden-labs/playwright-devices"])
+
+
 def test_dependabot_s_types_node_comment_names_the_dockerfile() -> None:
     text = (ROOT / ".github/dependabot.yml").read_text(encoding="utf-8")
     assert "(docker/node/Dockerfile, read before" in text
@@ -750,8 +757,10 @@ OWN_IGNORES = {"@types/node": [held_back("@types/node", "26.0.0")]}
 def test_the_peer_ceilings_are_the_ones_measured() -> None:
     # Measured on 2026-10-20 (#350): none of the four next lines is released yet but TypeScript 7.
     # acorn joined on 2026-10-23 (#394, the coverage converter's parser): acorn-jsx, under eslint,
-    # admits acorn up to 8.
+    # admits acorn up to 8. @playwright/test joined on 2026-11-22 (#579): the shared
+    # @shyden-labs/playwright-devices admits it up to 1.
     assert [name for name in direct_versions() if ceilings(name)] == [
+        "@playwright/test",
         "acorn",
         "esbuild",
         "eslint",

@@ -48,6 +48,15 @@ def test_the_integration_job_runs_the_integration_suite_alone_with_one_limit() -
 
 
 BROWSERS = ("chromium", "chrome", "msedge")
+# Each browser's run writes its JSON report, which the shared one-suite checks read (#579).
+BROWSER_RUN = "npm run test:browser -- --project={browser} --reporter=list,json"
+FIRST_BROWSER_RUN = BROWSER_RUN.format(browser=BROWSERS[0])
+ONE_SUITE_STEP = "The same tests on every browser"
+ONE_SUITE_RUN = (
+    "npx playwright test --list --reporter=json > reports/list.json\n"
+    "npx one-suite --group desktop=chromium,chrome,msedge --list reports/list.json \\\n"
+    "  --report reports/chromium.json --report reports/chrome.json --report reports/msedge.json\n"
+)
 
 
 def test_the_extension_integration_job_runs_its_suites_each_with_one_limit() -> None:
@@ -56,14 +65,37 @@ def test_the_extension_integration_job_runs_its_suites_each_with_one_limit() -> 
     assert [step["run"] for step in npm] == [
         "npm ci --ignore-scripts",
         "npm run test:integration",
-        *(f"npm run test:browser -- --project={browser}" for browser in BROWSERS),
+        *(BROWSER_RUN.format(browser=browser) for browser in BROWSERS),
     ]
     assert [step.get("working-directory") for step in npm] == ["extension"] * 5
+    one_suite = steps[[step.get("name") for step in steps].index(ONE_SUITE_STEP)]
     limited = [step for step in steps if "timeout-minutes" in step]
-    assert limited == npm[1:]
+    assert limited == [*npm[1:], one_suite]
     # The integration suite measured on the laptop on 2026-10-13: 3 s. The browser suite runs
     # only in CI (#231): its limit is set from its first CI run, the same on each browser (#501).
-    assert [step["timeout-minutes"] for step in limited] == [1, 2, 2, 2]
+    # The one-suite checks only list the tests and read three reports (#579).
+    assert [step["timeout-minutes"] for step in limited] == [1, 2, 2, 2, 1]
+
+
+def test_each_browser_run_writes_its_own_json_report() -> None:
+    steps = job("extension-integration")["steps"]
+    runs = [step.get("run") for step in steps]
+    for browser in BROWSERS:
+        step = steps[runs.index(BROWSER_RUN.format(browser=browser))]
+        assert step["env"] == {"PLAYWRIGHT_JSON_OUTPUT_FILE": f"reports/{browser}.json"}
+
+
+def test_the_shared_one_suite_checks_read_every_browser_s_report_after_the_last_run() -> None:
+    # One suite, unchanged on every browser (#579, shyden-labs/playwright-devices#16): the list of
+    # what each browser should run, checked against what each ran, in one group.
+    steps = job("extension-integration")["steps"]
+    names = [step.get("name") for step in steps]
+    runs = [step.get("run") for step in steps]
+    at = names.index(ONE_SUITE_STEP)
+    assert steps[at]["run"] == ONE_SUITE_RUN
+    assert steps[at]["working-directory"] == "extension"
+    assert steps[at]["if"] == "steps.scope.outputs.docs_only != 'true'"
+    assert at > runs.index(BROWSER_RUN.format(browser=BROWSERS[-1]))
 
 
 def test_every_browser_is_installed_by_the_locked_playwright_before_the_browser_suite() -> None:
@@ -72,7 +104,7 @@ def test_every_browser_is_installed_by_the_locked_playwright_before_the_browser_
     steps = job("extension-integration")["steps"]
     runs = [step.get("run") for step in steps]
     install = runs.index("npx playwright install --with-deps " + " ".join(BROWSERS))
-    assert install < runs.index("npm run test:browser -- --project=chromium")
+    assert install < runs.index(FIRST_BROWSER_RUN)
     assert steps[install].get("working-directory") == "extension"
 
 
@@ -110,7 +142,7 @@ def test_the_browser_suite_runs_on_a_screen_with_a_window_manager() -> None:
     assert "DISPLAY=:99 openbox &" in run
     assert 'echo "DISPLAY=:99" >> "$GITHUB_ENV"' in run
     runs = [step.get("run") for step in steps]
-    assert names.index(SCREEN_STEP) < runs.index("npm run test:browser -- --project=chromium")
+    assert names.index(SCREEN_STEP) < runs.index(FIRST_BROWSER_RUN)
 
 
 FAILED_SCREENS_STEP = "Keep what the screen showed when the browser suite failed"

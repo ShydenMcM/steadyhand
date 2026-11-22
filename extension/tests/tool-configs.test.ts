@@ -25,6 +25,8 @@ const STAND_INS = new Map(
       "export const defineConfig = (...configs) => configs;\n" +
       "export const globalIgnores = (ignores) => ({ stoodInIgnores: ignores });",
     "@playwright/test": "export const defineConfig = (config) => ({ stoodIn: config });",
+    "@shyden-labs/playwright-devices/desktop":
+      "export const desktopProjects = (chosen) => ({ stoodInDesktopProjects: chosen });",
   }).map(([tool, source]) => [import.meta.resolve(tool), source]),
 );
 
@@ -54,17 +56,14 @@ test("ESLint ignores the build and coverage output, then applies each rule set i
   ]);
 });
 
-test("Playwright runs the browser tests on Chromium, Chrome and Edge, with no retry and no focused test", () => {
+test("Playwright runs the browser tests on the shared Chromium, Chrome and Edge, with no retry and no focused test", () => {
   expect(playwright).toEqual({
     stoodIn: {
       testDir: "tests/browser",
       retries: 0,
       forbidOnly: true,
-      projects: [
-        { name: "chromium", use: { channel: "chromium" } },
-        { name: "chrome", use: { channel: "chrome" } },
-        { name: "msedge", use: { channel: "msedge" } },
-      ],
+      // The shared desktop browsers (#579); a Chrome extension runs on the Chromium family only.
+      projects: { stoodInDesktopProjects: ["chromium", "chrome", "msedge"] },
     },
   });
 });
