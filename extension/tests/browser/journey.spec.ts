@@ -117,16 +117,15 @@ const withPanel = async (
   const info = test.info();
   const extension = info.outputPath("extension");
   await build(extension, esbuild);
+  // The shared projects (#579): Chrome and Edge name their channel; Chromium names none, which
+  // launches the Chromium build the locked @playwright/test installs.
   const { channel } = info.project.use;
-  if (channel === undefined) {
-    throw new Error(`project ${info.project.name} names no browser channel`);
-  }
   // Not pinned (#528): every browser opens the panel from its Extensions menu, one route.
   const profile = info.outputPath("profile");
   // A window on the display the CI step gives it: the side panel is browser UI, which has no
   // headless form a person could click.
   const context = await chromium.launchPersistentContext(profile, {
-    channel,
+    ...(channel === undefined ? {} : { channel }),
     headless: false,
     viewport: null,
     args: [

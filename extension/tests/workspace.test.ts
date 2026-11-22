@@ -61,11 +61,19 @@ test("core's only runtime dependency is decimal.js", () => {
   ]);
 });
 
-test.each(MANIFESTS)("%s pins every dependency to one exact version", (path) => {
+/** Never pinned (Shyden, 2026-11-20: "if it's updated we want all projects to move to the latest
+ * version every time"): a range from the release first used, with no ceiling (#579). */
+const UNPINNED = "@shyden-labs/playwright-devices";
+
+test.each(MANIFESTS)("%s pins every other dependency to one exact version", (path) => {
   const { dependencies = {}, devDependencies = {} } = manifest(path);
   const specs = Object.entries({ ...dependencies, ...devDependencies });
   expect(specs.length).toBeGreaterThan(0);
-  expect(specs.filter(([, spec]) => !EXACT.test(spec))).toEqual([]);
+  expect(specs.filter(([name, spec]) => name !== UNPINNED && !EXACT.test(spec))).toEqual([]);
+});
+
+test("the shared playwright-devices package accepts every newer release", () => {
+  expect(manifest("package.json").devDependencies?.[UNPINNED]).toMatch(/^>=\d+\.\d+\.\d+$/);
 });
 
 test("every locked package comes from the npm registry with a sha512 integrity", () => {
