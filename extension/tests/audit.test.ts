@@ -1,9 +1,10 @@
 import { expect, test } from "vitest";
-import { EXCEPTIONS, main, problems, readReport } from "../audit.ts";
+import { type AuditException, EXCEPTIONS, main, problems, readReport } from "../audit.ts";
 
 // CI's dependency audit (#240 AC5, #586): every advisory against any installed package fails the
 // job, dev tools too, except one Shyden excepted by name until its expiry. The report's shape is
-// npm audit --json's own, recorded 2026-11-18 (picomatch via fdir, as npm printed it).
+// npm audit --json's own, recorded 2026-11-18 (picomatch via fdir, as npm printed it). The
+// picomatch exception is kept here as the recorded case of an exception; the program has none.
 
 const PICOMATCH = "https://github.com/advisories/GHSA-fc5q-39xc-vjpf";
 const TITLE = "picomatch vulnerable to ReDoS through single-branch repeated extglobs";
@@ -29,23 +30,24 @@ const report = (...advisories: readonly ReturnType<typeof advisory>[]) => ({
 });
 
 const ONLY_PICOMATCH = report(advisory(PICOMATCH, TITLE, "high"));
+const RECORDED = [
+  { advisory: "GHSA-fc5q-39xc-vjpf", expires: "2026-12-01", ticket: "ShydenMcM/steadyhand#586" },
+] as const;
 
-test("the one exception is picomatch's advisory, until 2026-12-01, recorded on #586", () => {
-  expect(EXCEPTIONS).toEqual([
-    { advisory: "GHSA-fc5q-39xc-vjpf", expires: "2026-12-01", ticket: "ShydenMcM/steadyhand#586" },
-  ]);
+test("no advisory is excepted: GitHub withdrew picomatch's on 2026-11-18 (#586)", () => {
+  expect(EXCEPTIONS).toEqual([]);
 });
 
 test("the excepted advisory alone, before its expiry, passes", () => {
-  expect(problems(ONLY_PICOMATCH, EXCEPTIONS, "2026-11-18")).toEqual([]);
+  expect(problems(ONLY_PICOMATCH, RECORDED, "2026-11-18")).toEqual([]);
 });
 
 test("the exception still holds on its last day", () => {
-  expect(problems(ONLY_PICOMATCH, EXCEPTIONS, "2026-12-01")).toEqual([]);
+  expect(problems(ONLY_PICOMATCH, RECORDED, "2026-12-01")).toEqual([]);
 });
 
 test("the exception fails the day after its expiry, naming its ticket", () => {
-  expect(problems(ONLY_PICOMATCH, EXCEPTIONS, "2026-12-02")).toEqual([
+  expect(problems(ONLY_PICOMATCH, RECORDED, "2026-12-02")).toEqual([
     "exception for GHSA-fc5q-39xc-vjpf expired on 2026-12-01 (ShydenMcM/steadyhand#586)",
   ]);
 });
@@ -54,12 +56,12 @@ test.each(["low", "moderate", "high", "critical"])(
   "another advisory of %s severity fails by its url and title",
   (severity) => {
     const found = report(advisory(PICOMATCH, TITLE, "high"), advisory(OTHER, "a flaw", severity));
-    expect(problems(found, EXCEPTIONS, "2026-11-18")).toEqual([`not excepted: ${OTHER} (a flaw)`]);
+    expect(problems(found, RECORDED, "2026-11-18")).toEqual([`not excepted: ${OTHER} (a flaw)`]);
   },
 );
 
 test("an exception that matches nothing fails, so it is removed once the fix lands", () => {
-  expect(problems(report(), EXCEPTIONS, "2026-11-18")).toEqual([
+  expect(problems(report(), RECORDED, "2026-11-18")).toEqual([
     "exception for GHSA-fc5q-39xc-vjpf matches nothing: remove it (ShydenMcM/steadyhand#586)",
   ]);
 });
@@ -88,7 +90,12 @@ test.each([
 });
 
 /** The program's arms, run in-process with npm stood in. */
-const run = (isProgram: boolean, printed: string, today: string | undefined) => {
+const run = (
+  isProgram: boolean,
+  printed: string,
+  today: string | undefined,
+  exceptions: readonly AuditException[] = RECORDED,
+) => {
   const lines: string[] = [];
   let audited = 0;
   const code = main(
@@ -99,6 +106,7 @@ const run = (isProgram: boolean, printed: string, today: string | undefined) => 
     },
     today,
     (line) => lines.push(line),
+    exceptions,
   );
   return { code, lines, audited };
 };
@@ -115,6 +123,22 @@ test("run, a report with only the excepted advisory exits 0 and says so", () => 
   expect(run(true, JSON.stringify(ONLY_PICOMATCH), "2026-11-18")).toEqual({
     code: 0,
     lines: ["npm audit: nothing but GHSA-fc5q-39xc-vjpf, excepted until 2026-12-01 (#586)"],
+    audited: 1,
+  });
+});
+
+test("run with no exception, a clean report exits 0 and says so", () => {
+  expect(run(true, JSON.stringify(report()), "2026-11-23", [])).toEqual({
+    code: 0,
+    lines: ["npm audit: no advisories"],
+    audited: 1,
+  });
+});
+
+test("run with no exception, picomatch's withdrawn advisory, if listed again, exits 1", () => {
+  expect(run(true, JSON.stringify(ONLY_PICOMATCH), "2026-11-23", [])).toEqual({
+    code: 1,
+    lines: [`not excepted: ${PICOMATCH} (${TITLE})`],
     audited: 1,
   });
 });
@@ -150,6 +174,7 @@ test("run with no date, nothing is audited", () => {
       },
       undefined,
       () => undefined,
+      RECORDED,
     ),
   ).toThrow();
   expect(audited).toBe(0);

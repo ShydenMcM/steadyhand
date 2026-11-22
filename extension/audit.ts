@@ -16,14 +16,11 @@ export interface AuditException {
 }
 
 /**
- * picomatch <= 4.0.7 ReDoS, reached only through glob patterns an attacker supplies; here
- * picomatch is dev tooling (vitest, vite, typescript-eslint) running our own patterns, and no
- * patched version exists (Shyden, 2026-11-18: "temporary exception"). Every session start checks
- * for a fix (`~/.claude/global-rules/picomatch-audit-exception-check.md`).
+ * None. The one there was, picomatch's GHSA-fc5q-39xc-vjpf (Shyden, 2026-11-18: "temporary
+ * exception"), went when GitHub withdrew the advisory on 2026-11-18 (#586). A new one names its
+ * advisory, its expiry and the ticket recording Shyden's ruling.
  */
-export const EXCEPTIONS: readonly AuditException[] = [
-  { advisory: "GHSA-fc5q-39xc-vjpf", expires: "2026-12-01", ticket: "ShydenMcM/steadyhand#586" },
-];
+export const EXCEPTIONS: readonly AuditException[] = [];
 
 /** An advisory as npm lists it in a package's `via`; a plain string there names a package. */
 interface Advisory {
@@ -89,6 +86,7 @@ export const main = (
   audit: () => { readonly stdout: string | Uint8Array },
   today: string | undefined,
   say: (line: string) => void,
+  exceptions: readonly AuditException[],
 ): number => {
   if (!isProgram) {
     return 0;
@@ -98,13 +96,17 @@ export const main = (
       'npm run audit needs today\'s UTC date as YYYY-MM-DD: npm run audit -- "$(date -u +%F)"',
     );
   }
-  const found = problems(readReport(audit().stdout.toString()), EXCEPTIONS, today);
+  const found = problems(readReport(audit().stdout.toString()), exceptions, today);
   if (found.length === 0) {
     say(
-      EXCEPTIONS.map(
-        ({ advisory, expires, ticket }) =>
-          `npm audit: nothing but ${advisory}, excepted until ${expires} (${ticket.slice(ticket.indexOf("#"))})`,
-      ).join("\n"),
+      exceptions.length === 0
+        ? "npm audit: no advisories"
+        : exceptions
+            .map(
+              ({ advisory, expires, ticket }) =>
+                `npm audit: nothing but ${advisory}, excepted until ${expires} (${ticket.slice(ticket.indexOf("#"))})`,
+            )
+            .join("\n"),
     );
     return 0;
   }
@@ -114,11 +116,12 @@ export const main = (
   return 1;
 };
 
-// The program's arm passes spawnSync bound to `npm audit --json`, the date it was given, and
-// `console.log`, so no line here runs only as the program (the unit test imports this file).
+// The program's arm passes spawnSync bound to `npm audit --json`, the date it was given,
+// `console.log` and the exceptions, so no line here runs only as the program (the unit test imports this file).
 process.exitCode = main(
   import.meta.main,
   spawnSync.bind(undefined, "npm", ["audit", "--json"], { encoding: "utf8" }),
   process.argv[2],
   console.log,
+  EXCEPTIONS,
 );
