@@ -2,19 +2,12 @@
 
 ## Morning list (Shyden)
 
-Nothing needs you. FYI: picomatch GHSA-fc5q-39xc-vjpf is still unpatched (checked 2026-11-18 07:25 WIB: npm 4.0.7, first_patched_version None); the exception lasts to 2026-12-01 (#586).
-
-**Updated:** 2026-11-18 07:28 WIB. Current state only. Older history: `git show dee262b:HANDOVER.md`.
-
-**This session (07:25 WIB):** re-checked after /clear: picomatch still unpatched; every open ticket still waits (#579 blockers playwright-devices#16/#17 both open); progress page v47. Previous session: #589 closed (PR #590, eb8979b).
-
-**Direction (#214):** a TypeScript Chrome extension reading the user's broker page; spec `docs/superpowers/specs/2026-10-06-broker-view-extension-design.md`. No device work.
-
-**Rulings:** keep it simple, value test first (2026-10-30). Standing approval (2026-11-04): squash-merge into develop any PR green on every check on its head.
+1. **Question parked for you (#579 AC2):** the ticket says to delete `extension/tests/guards/one-suite.test.ts` once the shared package's checks run. Reading the package's code (0.1.5, `check.js`) shows it does not catch `test.fail()`: a test marked to fail that does fail reports status "expected". The local guard refuses it today. Not yet measured on CI (the probe PR plants one to measure it). Options: keep a narrowed local guard for what the package misses, or delete it as the AC says and ticket the gap in playwright-devices.
+2. **FYI #586:** GitHub withdrew picomatch's GHSA-fc5q-39xc-vjpf on 2026-11-18 15:38 UTC, so the audit exception matched nothing and failed every PR's `extension` job. Removed on branch `586/remove-withdrawn-exception` (worktree `../steadyhand-586`); evidence on #586. No answer needed.
 
 ## Open with Shyden
 
-- Nothing open.
+- #579 AC2: keep or delete the local one-suite guard (Morning list 1).
 
 ## Shyden's answers (2026-11-14)
 
@@ -40,19 +33,20 @@ Nothing needs you. FYI: picomatch GHSA-fc5q-39xc-vjpf is still unpatched (checke
 
 ## Branches and PRs
 
-- `develop`: read with `git rev-parse origin/develop` (last merge: #590, eb8979b).
-- No feature branch or worktree open.
-- Handover PR #562 (this branch). Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` (to 2026-11-26) and `-10-28` (to 2026-11-27). Never replay from slip backups. Local `239/settings-history-lessons`: leave alone.
+- `develop`: read with `git rev-parse origin/develop` (eb8979b on 2026-11-22).
+- **#579 In Progress, attempt 3**: branch `579/shared-playwright-devices-3`, worktree `../steadyhand-579c`, from develop 81cd465. Test edits uncommitted (script `tests579c.py` in the session scratchpad applied them): `extension/tests/workspace.test.ts` (exact pins except playwright-devices, which must be `>=x.y.z`), `extension/tests/tool-configs.test.ts`, `extension/tests/browser/journey.spec.ts`, `tests/guards/test_supply_chain.py` (`@playwright/test` peer ceiling), `tests/repo/test_integration_ci.py`; package.json/lock hold 0.1.5 exact as the compile stub. Next: run the unit suites red, commit the tests alone, draft PR, read every new test red by name on CI, then the code (steps in Next steps), then the probe.
+- Attempts 1 and 2 closed 2026-11-22 as TDD slips: PR #591 (+ probe #592), ci.yml changed before `tests/repo/test_integration_ci.py`; PR #593, the `>=` range before `workspace.test.ts`'s exact-pin test. Branches deleted; never replay from them.
+- Handover PR #562 (this branch). Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` and `-10-28` (to 2026-11-26/27). Local `239/settings-history-lessons`: leave alone.
 
 ## Running
 
-- Nothing local. No waiter, subagents, Colima, simulator or USB claims.
+- No subagents, Colima, simulator or USB claims. Local runs and waiters die with /clear (see #579 above for what to re-run).
 
 ## Next steps
 
-1. **Every session start:** picomatch check (`~/.claude/global-rules/picomatch-audit-exception-check.md`).
-2. Board: nothing workable (all open tickets wait, see 3). Take the top Priority if a wait clears.
-3. Rest of board: #242/#243/#245 wait on Shyden's broker account; #579 waits on shyden-labs/playwright-devices#16/#17; #586 waits on upstream picomatch; #214 epic.
+1. #586 closed (PR #594 merged, 81cd465).
+2. **#579:** (a) done. (b) Code commit (edits in the worktree, uncommitted): `playwright.config.ts` `projects: desktopProjects(["chromium", "chrome", "msedge"])`; package range `>=0.1.5`; dependabot.yml ignore `@playwright/test` semver-major (`# @shyden-labs/playwright-devices: ^1.65.1`); ci.yml: each browser step `--reporter=list,json` with env `PLAYWRIGHT_JSON_OUTPUT_FILE: reports/<browser>.json`, plus the step "The same tests on every browser" (timeout 1, run text = the test's `ONE_SUITE_RUN`) before the failure-screens step. (c) Probe draft PR off the code commit: plant `test.skip`, a `@desktop` tag with no reason, a failing `test.fail()`, and `--grep-invert` on one browser step; read each one-suite problem line; close it. (d) AC2's guard deletion waits on Shyden (Morning list 1).
+3. Rest of board: #242/#243/#245 wait on Shyden's broker account; #214 epic.
 4. Refresh the progress page (below) at every close-out.
 
 ## Progress page
