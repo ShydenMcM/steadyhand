@@ -40,7 +40,8 @@
 
 ## Running
 
-- No subagents, Colima, simulator or USB claims. Local runs and waiters die with /clear (see #579 above for what to re-run).
+- Nothing running (2026-11-23 23:35 WIB shutdown close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD to re-run. Worktree `../steadyhand-579c` (clean, branch `579/shared-playwright-devices-3`, draft PR #596) is kept for #595's ruling. Backup branches are inside their 30 days.
+- Board 2026-11-23: EXT first release 24 of 27 stories, 21 points left; open #214, #242, #243, #245, #579, #595.
 
 ## Next steps
 
@@ -51,7 +52,7 @@
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v47 (2026-11-18 07:27 WIB). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v53 (2026-11-23 23:35 WIB, shutdown close-out). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
 
 ## Resume steps
 
