@@ -5,8 +5,6 @@ import { expect, test } from "vitest";
 // #501): no browser test is expected to fail, slowed, or filtered out of the suite. Skips are
 // caught by the shared one-suite checks on CI (#595).
 const SKIPS = [
-  /\.skip\b/,
-  /\.fixme\b/,
   /\.fail\b/,
   /\.slow\b/,
   /\bgrep(?:Invert)?\s*:/,
@@ -16,7 +14,7 @@ const SKIPS = [
   /--project\b/,
 ] as const;
 
-/** Each line of `text` that skips or filters a browser test, as `line N: text`. */
+/** Each line of `text` that hides a failure, slows or filters a browser test, as `line N: text`. */
 const skipsIn = (text: string): string[] =>
   text
     .split("\n")
