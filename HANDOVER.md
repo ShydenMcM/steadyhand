@@ -6,7 +6,7 @@
 
 ## Open with Shyden
 
-- Dependabot #600 (vitest group) and #601 (npm minor/patch) are green (6/6/6, 0 skipped) but BEHIND develop after #599 merged; my `@dependabot rebase` comment was refused by the auto-mode classifier. Shyden: comment `@dependabot rebase` on each (or allow it), then they merge on green.
+- Dependabot #600 (vitest group) and #601 (npm minor/patch) were BEHIND develop; Shyden allowed the `@dependabot rebase` comments, posted on both 2026-11-25 ~06:10 WIB (old heads 84e30859 / 825ffbf6). A local waiter for the rebase + CI dies with `/clear`: on resume run `~/.claude/scripts/pr-verdict.sh 600` and `601`, and squash-merge each into develop when its head is new, every required check is success, and the browser suite reads 6/6/6 with 0 skipped.
 
 ## Shyden's answers (2026-11-14)
 
