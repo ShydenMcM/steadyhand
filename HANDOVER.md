@@ -6,7 +6,7 @@
 
 ## Open with Shyden
 
-- Dependabot #600 and #601 squash-merged 2026-11-25 (da0bc298 at 06:40 WIB; f314f29c at ~06:50 WIB), each on a rebased head with every required check success and browsers 6/6/6, 0 skipped. Nothing open with Shyden. A local waiter on develop's CI for f314f29c dies with `/clear`: on resume read `gh run list --branch develop --commit f314f29c8b0cb5c2c8d9171f602a1d3a3c0d01b3` and tell Shyden if any run is not success.
+- Dependabot #600 and #601 squash-merged 2026-11-25 (da0bc298 at 06:40 WIB; f314f29c at ~06:50 WIB), each on a rebased head with every required check success and browsers 6/6/6, 0 skipped. Nothing open with Shyden. develop CI read green on both merge commits (ci: success).
 
 ## Shyden's answers (2026-11-14)
 
