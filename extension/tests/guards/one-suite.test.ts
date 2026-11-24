@@ -2,10 +2,9 @@ import { readdirSync, readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 
 // One suite, run unchanged on every browser, nothing skipped (Shyden's global rule, 2026-11-05;
-// #501): no browser test is skipped, marked to fix later, or filtered to some browsers only.
+// #501): no browser test is expected to fail, slowed, or filtered out of the suite. Skips are
+// caught by the shared one-suite checks on CI (#595).
 const SKIPS = [
-  /\.skip\b/,
-  /\.fixme\b/,
   /\.fail\b/,
   /\.slow\b/,
   /\bgrep(?:Invert)?\s*:/,
@@ -15,7 +14,7 @@ const SKIPS = [
   /--project\b/,
 ] as const;
 
-/** Each line of `text` that skips or filters a browser test, as `line N: text`. */
+/** Each line of `text` that hides a failure, slows or filters a browser test, as `line N: text`. */
 const skipsIn = (text: string): string[] =>
   text
     .split("\n")
@@ -24,11 +23,7 @@ const skipsIn = (text: string): string[] =>
     .map(({ line, at }) => `line ${String(at + 1)}: ${line.trim()}`);
 
 test.each([
-  ["a skipped test", 'test.skip("a", async () => {});'],
-  ["a conditional skip", 'test.skip(browserName === "webkit");'],
-  ["a test to fix later", 'test.fixme("a", async () => {});'],
   ["a test expected to fail", "test.fail();"],
-  ["a described skip", 'test.describe.skip("a", () => {});'],
   ["a slowed test", "test.slow();"],
   ["a project grep", "grep: /@chrome/,"],
   ["a project grepInvert", "grepInvert: /@mobile/,"],
@@ -38,6 +33,18 @@ test.each([
   ["one project's run", "playwright test --project=chrome"],
 ])("%s is refused", (_name, code) => {
   expect(skipsIn(code)).toEqual([`line 1: ${code}`]);
+});
+
+// The shared one-suite checks (playwright-devices, CI step "The same tests on every browser")
+// fail a run whose report holds a skipped test, so skips are theirs; this guard keeps what a
+// report cannot show (#595, Shyden 2026-11-24).
+test.each([
+  ["a skipped test", 'test.skip("a", async () => {});'],
+  ["a conditional skip", 'test.skip(browserName === "webkit");'],
+  ["a test to fix later", 'test.fixme("a", async () => {});'],
+  ["a described skip", 'test.describe.skip("a", () => {});'],
+])("%s is left to the shared checks", (_name, code) => {
+  expect(skipsIn(code)).toEqual([]);
 });
 
 test("a plain test is not refused", () => {
