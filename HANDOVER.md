@@ -39,19 +39,19 @@
 
 ## Running
 
-- 2026-11-24 15:15 WIB: CI on PR #596 head 128336c (tests commit) was running. The local verdict waiter dies with this session: DEAD; re-run `~/.claude/scripts/pr-verdict.sh 596` (loop it until runs appear). No subagents, Colima, simulator or USB claims. Worktree `../steadyhand-579c` (branch `579/shared-playwright-devices-3`, clean).
+- 2026-11-24 15:15 WIB: CI on PR #596 (d8343e8) and probe #598 running. Local waiter dies with this session: DEAD; re-run `~/.claude/scripts/pr-verdict.sh 596` and `598` (loop until runs settle). No subagents, Colima, simulator or USB claims. Worktree `../steadyhand-579c` (branch `579/shared-playwright-devices-3`, clean).
 - Board 2026-11-24: EXT first release 24 of 27 stories, 21 points left; open #214, #242, #243, #245, #579, #595.
 
 ## Next steps
 
 1. #586 closed (PR #594 merged, 81cd465).
-2. **#579 (#595 ruled 2026-11-24):** tests commit 128336c on PR #596 (`one-suite.test.ts`: the four skip cases now expect `[]`, "left to the shared checks"). Guards are CI-only: read those four red by name on its run, then the code commit: remove `/\.skip\b/` and `/\.fixme\b/` from `SKIPS`. Then a probe draft PR off it planting `test.fixme`, `test.describe.skip` and `test.skip(cond)`; read each one-suite "skipped" line; close it, delete branch and worktree. Then PR #596 ready, merge on green, close #595 and #579 with evidence.
+2. **#579 (#595 ruled 2026-11-24):** tests commit 128336c red on CI exactly as planned (run 45354338718, four new `one-suite.test.ts` cases). Code commit d8343e8 (skip/fixme patterns removed) pushed to PR #596. Probe PR #598 (branch `579/probe-skips-4`, worktree `../steadyhand-579-probe4`) plants `test.fixme`, `test.describe.skip`, a chromium-only `test.skip`: read the "The same tests on every browser" step for a `skipped` line per plant, record on #595/#579, close #598, delete branch and worktree. Then PR #596 ready, merge on green head, close #595 and #579 with evidence, clean the 579c worktree and branch.
 3. Rest of board: #242/#243/#245 wait on Shyden's broker account; #214 epic.
 4. Refresh the progress page (below) at every close-out.
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v54 (2026-11-24 15:15 WIB, #595 ruled). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v55 (2026-11-24 15:45 WIB, #579 code pushed, probe #598 on CI). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
 
 ## Resume steps
 
