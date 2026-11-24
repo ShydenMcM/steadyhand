@@ -1,13 +1,12 @@
 # Handover: steadyhand
 
-## Morning list (Shyden)
+## Shyden's answers (2026-11-24)
 
-1. **Question parked for you (#579 AC2, filed as #595):** the ticket says to delete `extension/tests/guards/one-suite.test.ts` once the shared package's checks run. Reading the package's code (0.1.5, `check.js`) shows it does not catch `test.fail()`: a test marked to fail that does fail reports status "expected". The local guard refuses it today. Measured on CI since (probe PR #597, run 45055941975): a failing `test.fail()` is not caught; a skip, a dropped test and an untagged group test are. Everything else in #579 is done and green on PR #596 (draft until this ruling). Options: keep a narrowed local guard for what the package misses, or delete it as the AC says and ticket the gap in playwright-devices.
-2. **FYI #586:** GitHub withdrew picomatch's GHSA-fc5q-39xc-vjpf on 2026-11-18 15:38 UTC, so the audit exception matched nothing and failed every PR's `extension` job. Removed on branch `586/remove-withdrawn-exception` (worktree `../steadyhand-586`); evidence on #586. No answer needed.
+- **#595 (#579 AC2):** keep the local one-suite guard, narrowed: drop only its `.skip`/`.fixme` patterns (the shared checks fail a skipped status); keep `test.fail`, `test.slow` and the config/command filters, which the shared checks cannot see (read from 0.1.5 `check.js`; recorded on #595). First answered "test.fail only", re-asked after the read found two more gaps.
 
 ## Open with Shyden
 
-- #579 AC2: keep or delete the local one-suite guard (Morning list 1).
+- Nothing.
 
 ## Shyden's answers (2026-11-14)
 
@@ -40,19 +39,19 @@
 
 ## Running
 
-- Nothing running (2026-11-23 23:35 WIB shutdown close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD to re-run. Worktree `../steadyhand-579c` (clean, branch `579/shared-playwright-devices-3`, draft PR #596) is kept for #595's ruling. Backup branches are inside their 30 days.
-- Board 2026-11-23: EXT first release 24 of 27 stories, 21 points left; open #214, #242, #243, #245, #579, #595.
+- 2026-11-24 15:15 WIB: CI on PR #596 head 128336c (tests commit) was running. The local verdict waiter dies with this session: DEAD; re-run `~/.claude/scripts/pr-verdict.sh 596` (loop it until runs appear). No subagents, Colima, simulator or USB claims. Worktree `../steadyhand-579c` (branch `579/shared-playwright-devices-3`, clean).
+- Board 2026-11-24: EXT first release 24 of 27 stories, 21 points left; open #214, #242, #243, #245, #579, #595.
 
 ## Next steps
 
 1. #586 closed (PR #594 merged, 81cd465).
-2. **#579:** (a) done. (b) Code commit (edits in the worktree, uncommitted): `playwright.config.ts` `projects: desktopProjects(["chromium", "chrome", "msedge"])`; package range `>=0.1.5`; dependabot.yml ignore `@playwright/test` semver-major (`# @shyden-labs/playwright-devices: ^1.65.1`); ci.yml: each browser step `--reporter=list,json` with env `PLAYWRIGHT_JSON_OUTPUT_FILE: reports/<browser>.json`, plus the step "The same tests on every browser" (timeout 1, run text = the test's `ONE_SUITE_RUN`) before the failure-screens step. (c) Probe draft PR off the code commit: plant `test.skip`, a `@desktop` tag with no reason, a failing `test.fail()`, and `--grep-invert` on one browser step; read each one-suite problem line; close it. (d) AC2's guard deletion waits on Shyden (Morning list 1).
+2. **#579 (#595 ruled 2026-11-24):** tests commit 128336c on PR #596 (`one-suite.test.ts`: the four skip cases now expect `[]`, "left to the shared checks"). Guards are CI-only: read those four red by name on its run, then the code commit: remove `/\.skip\b/` and `/\.fixme\b/` from `SKIPS`. Then a probe draft PR off it planting `test.fixme`, `test.describe.skip` and `test.skip(cond)`; read each one-suite "skipped" line; close it, delete branch and worktree. Then PR #596 ready, merge on green, close #595 and #579 with evidence.
 3. Rest of board: #242/#243/#245 wait on Shyden's broker account; #214 epic.
 4. Refresh the progress page (below) at every close-out.
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v53 (2026-11-23 23:35 WIB, shutdown close-out). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v54 (2026-11-24 15:15 WIB, #595 ruled). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
 
 ## Resume steps
 
