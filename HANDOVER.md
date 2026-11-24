@@ -32,26 +32,23 @@
 
 ## Branches and PRs
 
-- `develop`: read with `git rev-parse origin/develop` (eb8979b on 2026-11-22).
-- **#579 In Progress, attempt 3**: branch `579/shared-playwright-devices-3`, worktree `../steadyhand-579c`, from develop 81cd465. Tests commit 0bf59fe (unit red seen locally: the range test, the config test, 5 integration-CI pins; the other reds were 1 s timeouts under load). Pushed as draft PR #596; CI run 45051675866 read every new test red by name, and nothing else (coverage only downstream). Code commit bea543f (unit suites green: 4360 extension, 124 Python repo; static checks clean), pushed to PR #596. Its CI run 45052602463 failed the browser suite on Chromium, 5 of 6 journeys: `launchPersistentContext: "deviceScaleFactor" option is not supported with null "viewport"` (the shared projects carry Playwright's desktop descriptors; the journeys open a real window). Fixed test first: `tests/tool-configs.test.ts` expects each project kept to its name and channel (seen red), then `playwright.config.ts` maps each shared project to `{ ...project, use: channel ? { channel } : {} }` (tsc, eslint clean; local unit failures were 1 s timeouts in untouched shell/core files under load). Fix commit 45a2a73: PR #596 fully green (run 45055246806; 6/6/6 tests per browser; evidence on #579). Probe PR #597 done and closed (run 45055941975): the shared checks caught the skip, the dropped test and the untagged group test, and let a failing `test.fail()` through; recorded on #595 and #579; branch and worktree removed. PR #596 stays a draft until #595 is ruled (AC2's guard deletion). Probe branch `579/probe-one-suite-3` (worktree `../steadyhand-579-probe3`) built on bea543f with the plants: push it as a draft PR if not yet pushed, read each one-suite problem line, then close it and delete branch and worktree. Tests: `extension/tests/workspace.test.ts` (exact pins except playwright-devices, which must be `>=x.y.z`), `extension/tests/tool-configs.test.ts`, `extension/tests/browser/journey.spec.ts`, `tests/guards/test_supply_chain.py` (`@playwright/test` peer ceiling), `tests/repo/test_integration_ci.py`; package.json/lock hold 0.1.5 exact as the compile stub. Next: read every new test red by name on the draft PR's CI run, then write the code fresh (steps in Next steps; never copy from the closed attempts), then the probe.
-- Attempts 1 and 2 closed 2026-11-22 as TDD slips: PR #591 (+ probe #592), ci.yml changed before `tests/repo/test_integration_ci.py`; PR #593, the `>=` range before `workspace.test.ts`'s exact-pin test. Branches deleted; never replay from them.
+- `develop`: 2870299 (read 2026-11-24 15:30 WIB), with PR #596 (#579) squash-merged as 2870299.
+- #579 and #595 closed 2026-11-24 with evidence (probes #597, #598; run 45354973082: 6/6/6, 0 skipped). Their branches, worktrees and probe branches are removed.
 - Handover PR #562 (this branch). Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` and `-10-28` (to 2026-11-26/27). Local `239/settings-history-lessons`: leave alone.
 
 ## Running
 
-- 2026-11-24 15:15 WIB: CI on PR #596 (d8343e8) and probe #598 running. Local waiter dies with this session: DEAD; re-run `~/.claude/scripts/pr-verdict.sh 596` and `598` (loop until runs settle). No subagents, Colima, simulator or USB claims. Worktree `../steadyhand-579c` (branch `579/shared-playwright-devices-3`, clean).
-- Board 2026-11-24: EXT first release 24 of 27 stories, 21 points left; open #214, #242, #243, #245, #579, #595.
+- Nothing running (2026-11-24 15:30 WIB shutdown close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD to re-run. One worktree (this one).
+- Board 2026-11-24: EXT first release 24 of 27 stories, 21 points left; open #214 (epic), #242, #243, #245, all waiting on Shyden's broker account.
 
 ## Next steps
 
-1. #586 closed (PR #594 merged, 81cd465).
-2. **#579 (#595 ruled 2026-11-24):** tests commit 128336c red on CI exactly as planned (run 45354338718, four new `one-suite.test.ts` cases). Code commit d8343e8 (skip/fixme patterns removed) pushed to PR #596. Probe PR #598 (branch `579/probe-skips-4`, worktree `../steadyhand-579-probe4`) plants `test.fixme`, `test.describe.skip`, a chromium-only `test.skip`: read the "The same tests on every browser" step for a `skipped` line per plant, record on #595/#579, close #598, delete branch and worktree. Then PR #596 ready, merge on green head, close #595 and #579 with evidence, clean the 579c worktree and branch.
-3. Rest of board: #242/#243/#245 wait on Shyden's broker account; #214 epic.
-4. Refresh the progress page (below) at every close-out.
+1. #242/#243/#245 wait on the broker account; #214 is the epic. Nothing workable until the account exists: check the board for new tickets by Priority (`board-next`) first.
+2. Refresh the progress page (below) at every close-out.
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v55 (2026-11-24 15:45 WIB, #579 code pushed, probe #598 on CI). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v56 (2026-11-24 15:30 WIB, #579/#595 done, shutdown). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
 
 ## Resume steps
 
