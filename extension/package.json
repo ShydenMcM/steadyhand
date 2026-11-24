@@ -31,7 +31,7 @@
     "@shyden-labs/playwright-devices": ">=0.1.5",
     "@types/chrome": "0.3.7",
     "@types/node": "26.6.6",
-    "@vitest/coverage-v8": "5.1.0",
+    "@vitest/coverage-v8": "5.1.1",
     "acorn": "8.19.0",
     "amaro": "1.3.0",
     "ast-v8-to-istanbul": "1.0.8",
@@ -43,7 +43,7 @@
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.2",
     "vite": "8.3.8",
-    "vitest": "5.1.0"
+    "vitest": "5.1.1"
   },
   "overrides": {
     "minimatch": "11.0.1"
