@@ -6,7 +6,7 @@
 
 ## Open with Shyden
 
-- Nothing.
+- Dependabot #600 (vitest group) and #601 (npm minor/patch) are green (6/6/6, 0 skipped) but BEHIND develop after #599 merged; my `@dependabot rebase` comment was refused by the auto-mode classifier. Shyden: comment `@dependabot rebase` on each (or allow it), then they merge on green.
 
 ## Shyden's answers (2026-11-14)
 
@@ -32,13 +32,13 @@
 
 ## Branches and PRs
 
-- `develop`: 2870299 (read 2026-11-24 15:30 WIB), with PR #596 (#579) squash-merged as 2870299.
+- `develop`: 05cf5af (read 2026-11-24 19:44 WIB), Dependabot #599 (setup-uv 10.4.0) squash-merged, CI green 6/6/6 on its head.
 - #579 and #595 closed 2026-11-24 with evidence (probes #597, #598; run 45354973082: 6/6/6, 0 skipped). Their branches, worktrees and probe branches are removed.
 - Handover PR #562 (this branch). Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` and `-10-28` (to 2026-11-26/27). Local `239/settings-history-lessons`: leave alone.
 
 ## Running
 
-- Nothing running (2026-11-24 15:30 WIB shutdown close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD to re-run. One worktree (this one).
+- Nothing running (2026-11-24 19:50 WIB close-out; weekly cleanup done, logged in reference-cleanup.md): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD to re-run. One worktree (this one).
 - Board 2026-11-24: EXT first release 24 of 27 stories, 21 points left; open #214 (epic), #242, #243, #245, all waiting on Shyden's broker account.
 
 ## Next steps
@@ -48,7 +48,7 @@
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v56 (2026-11-24 15:30 WIB, #579/#595 done, shutdown). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v57 (2026-11-24 19:44 WIB, Dependabot #599 merged). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
 
 ## Resume steps
 
