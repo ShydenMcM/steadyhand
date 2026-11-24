@@ -445,3 +445,12 @@ test("Settings keeps the strategy, the goal and the exclusions, offers no langua
     await expect(panel.locator("body")).toHaveAttribute("lang", "en");
   });
 });
+
+// Probe for #579/#595 (never merged): each must show as a one-suite "skipped" line.
+test.fixme("probe: a test to fix later", async () => {});
+test.describe.skip("probe: a described skip", () => {
+  test("probe: inside a described skip", async () => {});
+});
+test("probe: a conditional skip", () => {
+  test.skip(test.info().project.name === "chromium", "probe");
+});
