@@ -6,7 +6,7 @@
 
 ## Open with Shyden
 
-- Dependabot #600 (vitest group) and #601 (npm minor/patch) were BEHIND develop; Shyden allowed the `@dependabot rebase` comments, posted on both 2026-11-25 ~06:10 WIB (old heads 84e30859 / 825ffbf6). A local waiter for the rebase + CI dies with `/clear`: on resume run `~/.claude/scripts/pr-verdict.sh 600` and `601`, and squash-merge each into develop when its head is new, every required check is success, and the browser suite reads 6/6/6 with 0 skipped.
+- Dependabot #600 (vitest group) squash-merged 2026-11-25 06:40 WIB as da0bc298 (rebased head cfe60ba4: every required check success, browsers 6/6/6, 0 skipped). #601 (npm minor/patch): `@dependabot rebase` posted ~06:10 WIB, not yet rebased at 06:40 (old head 825ffbf6). A local waiter dies with `/clear`: on resume run `~/.claude/scripts/pr-verdict.sh 601`; squash-merge into develop when its head is new, every required check is success, and the browser suite reads 6/6/6 with 0 skipped (grep `one-suite:` and `passed (` in the ci run log).
 
 ## Shyden's answers (2026-11-14)
 
