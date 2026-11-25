@@ -38,8 +38,8 @@
 
 ## Running
 
-- Nothing running (2026-11-25 23:27 WIB late close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD to re-run. One worktree (this one).
-- Board 2026-11-25 (read live): EXT first release 24 of 27 stories, 21 points left; open #214 (epic), #242, #243, #245, all waiting on Shyden's broker account. Every post-launch story open (#252, #253, #257, #258, #578) is also blocked through #242/#243, so nothing is workable. Checks at 14:06, 15:30, 21:31 and 23:27 WIB (progress.py re-read, open issues and PRs listed, develop CI green on f314f29) found nothing new: nothing to build.
+- Nothing running (2026-11-26 05:09 WIB shutdown close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD to re-run. One worktree (this one).
+- Board 2026-11-25 (read live): EXT first release 24 of 27 stories, 21 points left; open #214 (epic), #242, #243, #245, all waiting on Shyden's broker account. Every post-launch story open (#252, #253, #257, #258, #578) is also blocked through #242/#243, so nothing is workable. Checks at 14:06, 15:30, 21:31, 23:27 WIB (25 Nov) and 05:09 WIB (26 Nov) (progress.py re-read, open issues and PRs listed, develop CI green on f314f29) found nothing new: nothing to build.
 
 ## Next steps
 
@@ -48,7 +48,7 @@
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v66 (2026-11-25 23:27 WIB, late check, nothing new). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v67 (2026-11-26 05:09 WIB, shutdown check, nothing new). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
 
 ## Resume steps
 
