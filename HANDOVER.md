@@ -32,14 +32,14 @@
 
 ## Branches and PRs
 
-- `develop`: 05cf5af (read 2026-11-24 19:44 WIB), Dependabot #599 (setup-uv 10.4.0) squash-merged, CI green 6/6/6 on its head.
+- `develop`: f314f29 (read 2026-11-25 14:06 WIB), after Dependabot #600 and #601; no open PR but this one.
 - #579 and #595 closed 2026-11-24 with evidence (probes #597, #598; run 45354973082: 6/6/6, 0 skipped). Their branches, worktrees and probe branches are removed.
 - Handover PR #562 (this branch). Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` and `-10-28` (to 2026-11-26/27). Local `239/settings-history-lessons`: leave alone.
 
 ## Running
 
-- Nothing running (2026-11-25 06:05 WIB close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD to re-run. One worktree (this one).
-- Board 2026-11-25 (read live): EXT first release 24 of 27 stories, 21 points left; open #214 (epic), #242, #243, #245, all waiting on Shyden's broker account. Every post-launch story open (#252, #253, #257, #258, #578) is also blocked through #242/#243, so nothing is workable. A relayed "continue, no devices" (2026-11-25) found nothing to build.
+- Nothing running (2026-11-25 14:06 WIB close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD to re-run. One worktree (this one).
+- Board 2026-11-25 (read live): EXT first release 24 of 27 stories, 21 points left; open #214 (epic), #242, #243, #245, all waiting on Shyden's broker account. Every post-launch story open (#252, #253, #257, #258, #578) is also blocked through #242/#243, so nothing is workable. A relayed "continue" (2026-11-25 14:06 WIB) found nothing new on the board: nothing to build.
 
 ## Next steps
 
@@ -48,7 +48,7 @@
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v58 (2026-11-25 06:05 WIB, board check, nothing new). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v63 (2026-11-25 14:06 WIB, board check, nothing new). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
 
 ## Resume steps
 
