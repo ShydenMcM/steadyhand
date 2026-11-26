@@ -38,7 +38,7 @@
 
 ## Running
 
-- Nothing running (2026-11-26 06:26 WIB morning close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD to re-run. One worktree (this one).
+- Nothing running (2026-11-26 21:06 WIB evening close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD to re-run. One worktree (this one).
 - Board 2026-11-25 (read live): EXT first release 24 of 27 stories, 21 points left; open #214 (epic), #242, #243, #245, all waiting on Shyden's broker account. Every post-launch story open (#252, #253, #257, #258, #578) is also blocked through #242/#243, so nothing is workable. Checks at 14:06, 15:30, 21:31, 23:27 WIB (25 Nov) , 05:09 and 06:26 WIB (26 Nov; 06:26 after repo-template relayed "continue, no devices") (progress.py re-read, open issues and PRs listed, develop CI green on f314f29) found nothing new: nothing to build.
 
 ## Next steps
@@ -48,7 +48,7 @@
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v68 (2026-11-26 06:26 WIB, morning check, nothing new). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v69 (2026-11-26 21:06 WIB, evening check: repo-template relayed that real phones are on USB; irrelevant to a desktop extension, nothing new). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
 
 ## Resume steps
 
