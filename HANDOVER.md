@@ -1,5 +1,9 @@
 # Handover: steadyhand
 
+## Shyden's answers (2026-11-27)
+
+- **Broker account (01:4x WIB, before going AFK for over a day):** not ready. Keep idle checks only when woken (no clock-driven polling). #242/#243/#245 stay parked.
+
 ## Shyden's answers (2026-11-24)
 
 - **#595 (#579 AC2):** keep the local one-suite guard, narrowed: drop only its `.skip`/`.fixme` patterns (the shared checks fail a skipped status); keep `test.fail`, `test.slow` and the config/command filters, which the shared checks cannot see (read from 0.1.5 `check.js`; recorded on #595). First answered "test.fail only", re-asked after the read found two more gaps.
@@ -34,21 +38,21 @@
 
 - `develop`: f314f29 (read 2026-11-25 14:06 WIB), after Dependabot #600 and #601; no open PR but this one.
 - #579 and #595 closed 2026-11-24 with evidence (probes #597, #598; run 45354973082: 6/6/6, 0 skipped). Their branches, worktrees and probe branches are removed.
-- Handover PR #562 (this branch). Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-27` and `-10-28` (to 2026-11-26/27). Local `239/settings-history-lessons`: leave alone.
+- Handover PR #562 (this branch). Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-28` (to 2026-11-27; `-10-27` deleted 2026-11-27 after its 30 days). Local `239/settings-history-lessons`: leave alone.
 
 ## Running
 
-- Nothing running (2026-11-26 21:06 WIB evening close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD to re-run. One worktree (this one).
+- Nothing running (2026-11-27 01:46 WIB close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD. One worktree (this one).
 - Board 2026-11-25 (read live): EXT first release 24 of 27 stories, 21 points left; open #214 (epic), #242, #243, #245, all waiting on Shyden's broker account. Every post-launch story open (#252, #253, #257, #258, #578) is also blocked through #242/#243, so nothing is workable. Checks at 14:06, 15:30, 21:31, 23:27 WIB (25 Nov) , 05:09 and 06:26 WIB (26 Nov; 06:26 after repo-template relayed "continue, no devices") (progress.py re-read, open issues and PRs listed, develop CI green on f314f29) found nothing new: nothing to build.
 
 ## Next steps
 
-1. #242/#243/#245 wait on the broker account; #214 is the epic. Nothing workable until the account exists: check the board for new tickets by Priority (`board-next`) first.
+1. From 2026-11-28 delete expired backups `365/exact-values-backup-2026-10-28` and `377/wip-backup-2026-10-28` (`git branch -D`). #242/#243/#245 wait on the broker account; #214 is the epic. Nothing workable until the account exists: check the board for new tickets by Priority (`board-next`) first.
 2. Refresh the progress page (below) at every close-out.
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v69 (2026-11-26 21:06 WIB, evening check: repo-template relayed that real phones are on USB; irrelevant to a desktop extension, nothing new). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v70 (2026-11-27 01:46 WIB: Shyden confirmed the broker account is not ready; expired backup removed). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
 
 ## Resume steps
 
