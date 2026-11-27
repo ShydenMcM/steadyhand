@@ -176,6 +176,8 @@ const withPanel = async (
     });
     await panel.reload();
     await expect(panel.locator("#disclaimer")).toHaveText(DISCLAIMER);
+    // PROBE (#603 AC3, never merged): fail every journey so CI uploads its failure artifact.
+    expect("probe", "planted failure").toBe("not the probe");
 
     let broker: Page | undefined;
     await journey({
