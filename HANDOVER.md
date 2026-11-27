@@ -42,8 +42,8 @@
 
 ## Running
 
-- Nothing running (2026-11-27 01:46 WIB close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD. One worktree (this one).
-- Board 2026-11-25 (read live): EXT first release 24 of 27 stories, 21 points left; open #214 (epic), #242, #243, #245, all waiting on Shyden's broker account. Every post-launch story open (#252, #253, #257, #258, #578) is also blocked through #242/#243, so nothing is workable. Checks at 14:06, 15:30, 21:31, 23:27 WIB (25 Nov) , 05:09 and 06:26 WIB (26 Nov; 06:26 after repo-template relayed "continue, no devices") (progress.py re-read, open issues and PRs listed, develop CI green on f314f29) found nothing new: nothing to build.
+- Nothing running (2026-11-27 18:46 WIB close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD. One worktree (this one).
+- Board 2026-11-25 (read live): EXT first release 24 of 27 stories, 21 points left; open #214 (epic), #242, #243, #245, all waiting on Shyden's broker account. Every post-launch story open (#252, #253, #257, #258, #578) is also blocked through #242/#243, so nothing is workable. Checks at 14:06, 15:30, 21:31, 23:27 WIB (25 Nov) , 05:09 and 06:26 WIB (26 Nov; 06:26 after repo-template relayed "continue, no devices") (progress.py re-read, open issues and PRs listed, develop CI green on f314f29) found nothing new: nothing to build. 27 Nov 18:44 WIB: repo-template relayed "real devices connected via USB"; irrelevant (desktop Chrome extension, no mobile surface); board unchanged (24/27, 21 points).
 
 ## Next steps
 
@@ -52,7 +52,7 @@
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v70 (2026-11-27 01:46 WIB: Shyden confirmed the broker account is not ready; expired backup removed). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v71 (2026-11-27 18:46 WIB: phones connected, nothing to test on them; no other change). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
 
 ## Resume steps
 
