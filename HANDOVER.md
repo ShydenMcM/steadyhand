@@ -34,12 +34,13 @@
 - **#254:** spec §9.1 approved: optional Settings field "Monthly amount you add, in rupiah" (blank = 0); the projection shows under Income goal on the Advice tab.
 - **#255/#256:** the user enters each purchase that reinvests a dividend (a form in the panel).
 
-## In flight: cleanup (2026-11-28, asked by repo-template: "cleanup is extremely important everywhere")
+## In flight: cleanup (2026-11-28 02:50 WIB, asked by repo-template: "cleanup is extremely important everywhere")
 
-- #602 (P0, 1 pt): pytest kept `tmp_path` folders (measured). Draft PR #604, branch `602/pytest-tmp-cleanup` (main worktree): red commit = guard `tests/guards/test_tests_leave_no_temp_folders.py` alone. Next: read `guards` failing by name on that test, then add `tmp_path_retention_policy = "none"` to `[tool.pytest.ini_options]` in a new commit, green CI, ready, squash-merge; then measure 0 files left under `$TMPDIR/pytest-of-$USER` after a real pass and fail (scratch proof already: 0/0).
-- #603 (P0, 2 pt): journeys leave `profile` + `extension` in `test-results/`. Draft PR #605, branch `603/journey-output-cleanup`, worktree `../steadyhand-603`: red commit = `test.afterEach` soft checks in `journey.spec.ts`. Next: read each journey failing on those checks in all 3 browsers, then in `withPanel`'s `finally`, after `context.close()`, `rm(profile)` and `rm(extension)` (recursive, force); green 6/6/6-style totals, 0 skipped; AC3 failing-run artifact probe.
-- Strays removed: `probe506/`, old `dist/` (2026-09-26 wheels). Other temp sites already clean (vitest mkdtemp + rm, TemporaryDirectory, mkstemp unlink, no containers).
-- Waiters (die at /clear): `pr-verdict.sh 604` and `605` loops; re-run: `~/.claude/scripts/pr-verdict.sh <pr>`.
+- #602 done: PR #604 squash-merged as 53017c3 (every required check green on e8f9607a); shut by hand with evidence per AC; branch removed. Next: read develop CI on 53017c3.
+- #603 (P0, 2 pt, In Progress): journeys left `profile` + `extension` in `test-results/`. Draft PR #605, branch `603/journey-output-cleanup`, worktree `../steadyhand-603`. Red on CI by name (run 46057143406: 5 journeys failed on chromium on the afterEach checks). Fix pushed (rm both in `withPanel`'s finally; head in `.superpowers/sdd/603-green-sha`). Next: read green with per-browser totals (chromium, chrome, msedge equal, 0 skipped). AC3: probe PR #606 (branch `603/probe-failure-artifact`, worktree `../steadyhand-603-probe`, planted throw in `openSidePanel`): list the `browser-suite-failure` artifact's files (screen-at-failure.png present, no `profile`/`extension`), then shut PR #606 unmerged and remove its branch and worktree. Then merge #605 and shut #603 by hand with evidence.
+- Strays removed: `probe506/`, old `dist/`. Other temp sites already clean (vitest mkdtemp + rm, TemporaryDirectory, mkstemp unlink, no containers).
+- Waiters (DEAD at /clear): pr-verdict loops on 605 and 606; re-run `~/.claude/scripts/pr-verdict.sh <pr>` in a loop (it returns at once before CI registers).
+- The commit security-review plugin got HTTP 401 (log `~/.claude/security/log.txt`): told Shyden.
 
 ## Branches and PRs
 
@@ -49,7 +50,7 @@
 
 ## Running
 
-- Nothing running (2026-11-28 01:48 WIB close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD. One worktree (this one).
+- 2026-11-28 02:50 WIB: no subagents, Colima, simulator or USB claims. Worktrees: main (develop), `../steadyhand-603`, `../steadyhand-603-probe`, `../steadyhand-handover` (this branch).
 - Board 2026-11-25 (read live): EXT first release 24 of 27 stories, 21 points left; open #214 (epic), #242, #243, #245, all waiting on Shyden's broker account. Every post-launch story open (#252, #253, #257, #258, #578) is also blocked through #242/#243, so nothing is workable. Checks at 14:06, 15:30, 21:31, 23:27 WIB (25 Nov) , 05:09 and 06:26 WIB (26 Nov; 06:26 after repo-template relayed "continue, no devices") (progress.py re-read, open issues and PRs listed, develop CI green on f314f29) found nothing new: nothing to build. 27 Nov 18:44 WIB: repo-template relayed "real devices connected via USB"; irrelevant (desktop Chrome extension, no mobile surface); board unchanged (24/27, 21 points). 28 Nov 01:47 WIB: night check, board unchanged (24/27, 21 points), develop CI green on f314f29.
 
 ## Next steps
@@ -59,7 +60,7 @@
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v72 (2026-11-28 01:48 WIB: night check, nothing new; expired backups removed). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v73 (2026-11-28 02:39 WIB: test runs clean up after themselves). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
 
 ## Resume steps
 
