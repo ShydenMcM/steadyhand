@@ -38,21 +38,21 @@
 
 - `develop`: f314f29 (read 2026-11-25 14:06 WIB), after Dependabot #600 and #601; no open PR but this one.
 - #579 and #595 closed 2026-11-24 with evidence (probes #597, #598; run 45354973082: 6/6/6, 0 skipped). Their branches, worktrees and probe branches are removed.
-- Handover PR #562 (this branch). Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06), `377/wip-backup-2026-10-28` (to 2026-11-27), `365/exact-values-backup-2026-10-28` (to 2026-11-27; `-10-27` deleted 2026-11-27 after its 30 days). Local `239/settings-history-lessons`: leave alone.
+- Handover PR #562 (this branch). Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06); `377/wip-backup-2026-10-28` and `365/exact-values-backup-2026-10-28` deleted 2026-11-28 after their 30 days. Local `239/settings-history-lessons`: leave alone.
 
 ## Running
 
-- Nothing running (2026-11-27 18:46 WIB close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD. One worktree (this one).
-- Board 2026-11-25 (read live): EXT first release 24 of 27 stories, 21 points left; open #214 (epic), #242, #243, #245, all waiting on Shyden's broker account. Every post-launch story open (#252, #253, #257, #258, #578) is also blocked through #242/#243, so nothing is workable. Checks at 14:06, 15:30, 21:31, 23:27 WIB (25 Nov) , 05:09 and 06:26 WIB (26 Nov; 06:26 after repo-template relayed "continue, no devices") (progress.py re-read, open issues and PRs listed, develop CI green on f314f29) found nothing new: nothing to build. 27 Nov 18:44 WIB: repo-template relayed "real devices connected via USB"; irrelevant (desktop Chrome extension, no mobile surface); board unchanged (24/27, 21 points).
+- Nothing running (2026-11-28 01:48 WIB close-out): no subagents, waiters, Colima, simulator or USB claims; nothing DEAD. One worktree (this one).
+- Board 2026-11-25 (read live): EXT first release 24 of 27 stories, 21 points left; open #214 (epic), #242, #243, #245, all waiting on Shyden's broker account. Every post-launch story open (#252, #253, #257, #258, #578) is also blocked through #242/#243, so nothing is workable. Checks at 14:06, 15:30, 21:31, 23:27 WIB (25 Nov) , 05:09 and 06:26 WIB (26 Nov; 06:26 after repo-template relayed "continue, no devices") (progress.py re-read, open issues and PRs listed, develop CI green on f314f29) found nothing new: nothing to build. 27 Nov 18:44 WIB: repo-template relayed "real devices connected via USB"; irrelevant (desktop Chrome extension, no mobile surface); board unchanged (24/27, 21 points). 28 Nov 01:47 WIB: night check, board unchanged (24/27, 21 points), develop CI green on f314f29.
 
 ## Next steps
 
-1. From 2026-11-28 delete expired backups `365/exact-values-backup-2026-10-28` and `377/wip-backup-2026-10-28` (`git branch -D`). #242/#243/#245 wait on the broker account; #214 is the epic. Nothing workable until the account exists: check the board for new tickets by Priority (`board-next`) first.
+1. #242/#243/#245 wait on the broker account; #214 is the epic. Nothing workable until the account exists: check the board for new tickets by Priority (`board-next`) first. Next backup expiry: `239/slip-backup-2026-11-06` from 2026-12-06.
 2. Refresh the progress page (below) at every close-out.
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v71 (2026-11-27 18:46 WIB: phones connected, nothing to test on them; no other change). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v72 (2026-11-28 01:48 WIB: night check, nothing new; expired backups removed). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
 
 ## Resume steps
 
