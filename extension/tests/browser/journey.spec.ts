@@ -1,6 +1,7 @@
 import { chromium, expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { build as esbuild } from "esbuild";
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { BROKER_ORIGINS, build } from "../../build.ts";
@@ -213,6 +214,16 @@ const saveUniverse = async (panel: Page, typed: string, saved: string): Promise<
   await panel.getByRole("button", { name: "Save universe" }).click();
   await expect(panel.locator("#status")).toHaveText(saved);
 };
+
+// A journey leaves nothing behind but what explains a failure (#603): once the browser is closed,
+// pass or fail, its profile and the extension it built are removed; a failure's screen stays.
+test.afterEach(() => {
+  const info = test.info();
+  expect.soft(existsSync(info.outputPath("profile")), "the browser profile is removed").toBe(false);
+  expect
+    .soft(existsSync(info.outputPath("extension")), "the built extension is removed")
+    .toBe(false);
+});
 
 test("a day's reading names the page still missing, gives the orders, and forgetting empties History", async () => {
   await withPanel(async (opened) => {
