@@ -152,6 +152,10 @@ const clickOpen = async (path: string, time: Date): Promise<{ panel: Page; devto
     })),
   );
   click(menu.at);
+  // PROBE (#603 AC3, never merged): fail after the first click so the failure screen is saved.
+  if (menu.at.x >= 0) {
+    throw new Error("planted failure: probe of the failure artifact");
+  }
   // The menu opens below its button; a tile on the toolbar beside the button is not the menu's
   // (Chrome pins the extension on its own, run 42461808760), so only one below that row counts.
   const belowToolbar = menu.at.y + MENU_BELOW_BUTTON_PX;
