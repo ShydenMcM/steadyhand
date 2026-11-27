@@ -36,10 +36,10 @@
 
 ## In flight: cleanup (2026-11-28 02:50 WIB, asked by repo-template: "cleanup is extremely important everywhere")
 
-- #602 done: PR #604 squash-merged as 53017c3 (every required check green on e8f9607a); shut by hand with evidence per AC; branch removed. develop CI on 53017c3 was in progress at 02:55 WIB: read it.
-- #603 (P0, 2 pt, In Progress): journeys left `profile` + `extension` in `test-results/`. Draft PR #605, branch `603/journey-output-cleanup`, worktree `../steadyhand-603`. Red on CI by name (run 46057143406: 5 journeys failed on chromium on the afterEach checks). Fix pushed (rm both in `withPanel`'s finally; head in `.superpowers/sdd/603-green-sha`). Green on 8796d997 (run 46057872748: every required check, 6/6/6 passed, 0 skipped); branch then updated from develop (merge, head c4441178 in `.superpowers/sdd/603-green-sha`): read green again on that head before merging. AC3: probe PR #606 (branch `603/probe-failure-artifact`, worktree `../steadyhand-603-probe`, planted throw in `openSidePanel`): list the `browser-suite-failure` artifact's files (screen-at-failure.png present, no `profile`/`extension`), then shut PR #606 unmerged and remove its branch and worktree. Then merge #605 and shut #603 by hand with evidence.
+- #602 done: PR #604 squash-merged as 53017c3 (every required check green on e8f9607a); shut by hand with evidence per AC; branch removed. develop CI green on 53017c3.
+- #603 (P0, 2 pt, In Progress): journeys left `profile` + `extension` in `test-results/`. Draft PR #605, branch `603/journey-output-cleanup`, worktree `../steadyhand-603`. Red on CI by name (run 46057143406: 5 journeys failed on chromium on the afterEach checks). Fix pushed (rm both in `withPanel`'s finally; head in `.superpowers/sdd/603-green-sha`). Green on 8796d997 (run 46057872748: every required check, 6/6/6 passed, 0 skipped); branch then updated from develop (merge, head c4441178 in `.superpowers/sdd/603-green-sha`): read green again on that head before merging. AC3 proven by probe PR #606 (run 46058104971: artifact 10 files, screens + error-context, no profile/extension); probe shut, branch and worktree removed; evidence on #603. Then merge #605 and shut #603 by hand with evidence.
 - Strays removed: `probe506/`, old `dist/`. Other temp sites already clean (vitest mkdtemp + rm, TemporaryDirectory, mkstemp unlink, no containers).
-- Waiters (DEAD at /clear): pr-verdict loops on 605 and 606; re-run `~/.claude/scripts/pr-verdict.sh <pr>` in a loop (it returns at once before CI registers).
+- Waiters (DEAD at /clear): pr-verdict loop on 605; re-run `~/.claude/scripts/pr-verdict.sh <pr>` in a loop (it returns at once before CI registers).
 - The commit security-review plugin got HTTP 401 (log `~/.claude/security/log.txt`): told Shyden.
 
 ## Branches and PRs
@@ -50,7 +50,7 @@
 
 ## Running
 
-- 2026-11-28 02:50 WIB: no subagents, Colima, simulator or USB claims. Worktrees: main (develop), `../steadyhand-603`, `../steadyhand-603-probe`, `../steadyhand-handover` (this branch).
+- 2026-11-28 02:50 WIB: no subagents, Colima, simulator or USB claims. Worktrees: main (develop), `../steadyhand-603`, `../steadyhand-handover` (this branch).
 - Board 2026-11-25 (read live): EXT first release 24 of 27 stories, 21 points left; open #214 (epic), #242, #243, #245, all waiting on Shyden's broker account. Every post-launch story open (#252, #253, #257, #258, #578) is also blocked through #242/#243, so nothing is workable. Checks at 14:06, 15:30, 21:31, 23:27 WIB (25 Nov) , 05:09 and 06:26 WIB (26 Nov; 06:26 after repo-template relayed "continue, no devices") (progress.py re-read, open issues and PRs listed, develop CI green on f314f29) found nothing new: nothing to build. 27 Nov 18:44 WIB: repo-template relayed "real devices connected via USB"; irrelevant (desktop Chrome extension, no mobile surface); board unchanged (24/27, 21 points). 28 Nov 01:47 WIB: night check, board unchanged (24/27, 21 points), develop CI green on f314f29.
 
 ## Next steps
