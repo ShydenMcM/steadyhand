@@ -34,6 +34,13 @@
 - **#254:** spec §9.1 approved: optional Settings field "Monthly amount you add, in rupiah" (blank = 0); the projection shows under Income goal on the Advice tab.
 - **#255/#256:** the user enters each purchase that reinvests a dividend (a form in the panel).
 
+## In flight: cleanup (2026-11-28, asked by repo-template: "cleanup is extremely important everywhere")
+
+- #602 (P0, 1 pt): pytest kept `tmp_path` folders (measured). Draft PR #604, branch `602/pytest-tmp-cleanup` (main worktree): red commit = guard `tests/guards/test_tests_leave_no_temp_folders.py` alone. Next: read `guards` failing by name on that test, then add `tmp_path_retention_policy = "none"` to `[tool.pytest.ini_options]` in a new commit, green CI, ready, squash-merge; then measure 0 files left under `$TMPDIR/pytest-of-$USER` after a real pass and fail (scratch proof already: 0/0).
+- #603 (P0, 2 pt): journeys leave `profile` + `extension` in `test-results/`. Draft PR #605, branch `603/journey-output-cleanup`, worktree `../steadyhand-603`: red commit = `test.afterEach` soft checks in `journey.spec.ts`. Next: read each journey failing on those checks in all 3 browsers, then in `withPanel`'s `finally`, after `context.close()`, `rm(profile)` and `rm(extension)` (recursive, force); green 6/6/6-style totals, 0 skipped; AC3 failing-run artifact probe.
+- Strays removed: `probe506/`, old `dist/` (2026-09-26 wheels). Other temp sites already clean (vitest mkdtemp + rm, TemporaryDirectory, mkstemp unlink, no containers).
+- Waiters (die at /clear): `pr-verdict.sh 604` and `605` loops; re-run: `~/.claude/scripts/pr-verdict.sh <pr>`.
+
 ## Branches and PRs
 
 - `develop`: f314f29 (read 2026-11-25 14:06 WIB), after Dependabot #600 and #601; no open PR but this one.
