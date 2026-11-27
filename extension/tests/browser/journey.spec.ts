@@ -2,7 +2,7 @@ import { chromium, expect, test, type BrowserContext, type Page } from "@playwri
 import { build as esbuild } from "esbuild";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { BROKER_ORIGINS, build } from "../../build.ts";
 import { CHOICE_LINE, DISCLAIMER } from "../../packages/shell/src/advice-view.ts";
@@ -110,7 +110,7 @@ interface Journey {
 
 /** Build the extension, install it in this project's browser, serve the journey's broker pages,
  * open the real side panel with its clock at `time` and run `journey` on it; then check every
- * request it and the broker's pages made. The browser is closed after, pass or fail. */
+ * request it and the broker's pages made. The browser is closed after, pass or fail, and its profile and the build removed. */
 const withPanel = async (
   journey: (opened: Journey) => Promise<void>,
   time: Date = AFTER_CLOSE,
@@ -195,6 +195,9 @@ const withPanel = async (
     await opened.devtools.close();
   } finally {
     await context.close();
+    // Nothing of the run stays but a failure's screen (#603).
+    await rm(profile, { recursive: true, force: true });
+    await rm(extension, { recursive: true, force: true });
   }
 };
 
