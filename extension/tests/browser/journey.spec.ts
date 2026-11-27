@@ -1,7 +1,8 @@
 import { chromium, expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { build as esbuild } from "esbuild";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { readFile, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { BROKER_ORIGINS, build } from "../../build.ts";
 import { CHOICE_LINE, DISCLAIMER } from "../../packages/shell/src/advice-view.ts";
@@ -109,7 +110,7 @@ interface Journey {
 
 /** Build the extension, install it in this project's browser, serve the journey's broker pages,
  * open the real side panel with its clock at `time` and run `journey` on it; then check every
- * request it and the broker's pages made. The browser is closed after, pass or fail. */
+ * request it and the broker's pages made. The browser is closed after, pass or fail, and its profile and the build removed. */
 const withPanel = async (
   journey: (opened: Journey) => Promise<void>,
   time: Date = AFTER_CLOSE,
@@ -194,6 +195,9 @@ const withPanel = async (
     await opened.devtools.close();
   } finally {
     await context.close();
+    // Nothing of the run stays but a failure's screen (#603).
+    await rm(profile, { recursive: true, force: true });
+    await rm(extension, { recursive: true, force: true });
   }
 };
 
@@ -213,6 +217,16 @@ const saveUniverse = async (panel: Page, typed: string, saved: string): Promise<
   await panel.getByRole("button", { name: "Save universe" }).click();
   await expect(panel.locator("#status")).toHaveText(saved);
 };
+
+// A journey leaves nothing behind but what explains a failure (#603): once the browser is closed,
+// pass or fail, its profile and the extension it built are removed; a failure's screen stays.
+test.afterEach(() => {
+  const info = test.info();
+  expect.soft(existsSync(info.outputPath("profile")), "the browser profile is removed").toBe(false);
+  expect
+    .soft(existsSync(info.outputPath("extension")), "the built extension is removed")
+    .toBe(false);
+});
 
 test("a day's reading names the page still missing, gives the orders, and forgetting empties History", async () => {
   await withPanel(async (opened) => {
