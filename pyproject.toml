@@ -74,6 +74,8 @@ markers = [
 ]
 filterwarnings = ["error"]
 xfail_strict = true
+# Every tmp_path folder is removed when the run ends, pass or fail (#602).
+tmp_path_retention_policy = "none"
 # A parametrize over a population that came out empty fails, never skips (#178).
 empty_parameter_set_mark = "fail_at_collect"
 
