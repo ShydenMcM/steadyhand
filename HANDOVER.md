@@ -1,5 +1,10 @@
 # Handover: steadyhand
 
+## Shyden's answers (2026-11-28)
+
+- **Broker account (09:5x WIB, AskUserQuestion, after repo-template relayed "Shyden is available, ask for the broker account"):** not ready yet. #242/#243/#245 stay parked.
+- Phone cleanup ask (shytalk-fb, 09:31 WIB): steadyhand has never touched a phone. Measured on origin/develop: `git grep` finds 0 hits for adb, simctl, WebDriverAgent or iproxy, and Playwright runs only `desktopProjects(["chromium","chrome","msedge"])`. Nothing to remove; replied to both peers. develop CI green on ea7ff6b (read 09:55 WIB).
+
 ## Shyden's answers (2026-11-27)
 
 - **Broker account (01:4x WIB, before going AFK for over a day):** not ready. Keep idle checks only when woken (no clock-driven polling). #242/#243/#245 stay parked.
@@ -43,7 +48,7 @@
 
 ## Branches and PRs
 
-- `develop`: f314f29 (read 2026-11-25 14:06 WIB), after Dependabot #600 and #601; no open PR but this one.
+- `develop`: ea7ff6b (read 2026-11-28 09:55 WIB, CI green), after #604 and #605; no open PR but this one.
 - #579 and #595 closed 2026-11-24 with evidence (probes #597, #598; run 45354973082: 6/6/6, 0 skipped). Their branches, worktrees and probe branches are removed.
 - Handover PR #562 (this branch). Backups (keep 30 days): `240/slip-backup-2026-11-07` (to 2026-12-07), `239/slip-backup-2026-11-06` (to 2026-12-06); `377/wip-backup-2026-10-28` and `365/exact-values-backup-2026-10-28` deleted 2026-11-28 after their 30 days. Local `239/settings-history-lessons`: leave alone.
 
@@ -59,7 +64,7 @@
 
 ## Progress page
 
-- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v76 (2026-11-28 03:15 WIB: both cleanup fixes merged). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
+- https://claude.ai/artifact/LQUaFm9jQDeEkdqv8tmmqe, v77 (2026-11-28 09:55 WIB: broker account asked again, not ready). Source: `.superpowers/sdd/progress-page/steadyhand-road-to-release.html`. Refresh: `.superpowers/sdd/estimates/progress.py` and `stories.py`, then republish with date, time and "Changed since the last update".
 
 ## Resume steps
 
